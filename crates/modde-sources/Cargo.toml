@@ -1,0 +1,23 @@
+[package]
+name = "modde-sources"
+version = "0.1.0"
+description = "Download source implementations for modde"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+modde-core = { workspace = true }
+reqwest = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+redb = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
+sha2 = { workspace = true }
+xxhash-rust = { workspace = true }
+tracing = { workspace = true }
+zip = "2"

@@ -1,0 +1,67 @@
+{
+  "Name": "Test Modlist",
+  "Author": "TestAuthor",
+  "Description": "A test wabbajack modlist for unit testing.",
+  "Game": "SkyrimSpecialEdition",
+  "Version": "1.0.0",
+  "Archives": [
+    {
+      "Hash": 12345678901234,
+      "Name": "test_mod.7z",
+      "Size": 1048576,
+      "State": {
+        "$type": "NexusDownloader, Wabbajack.Lib",
+        "GameName": "skyrimspecialedition",
+        "ModID": 42,
+        "FileID": 100
+      }
+    },
+    {
+      "Hash": 98765432109876,
+      "Name": "github_asset.zip",
+      "Size": 524288,
+      "State": {
+        "$type": "GitHubDownloader, Wabbajack.Lib",
+        "User": "test-user",
+        "Repo": "test-repo",
+        "Tag": "v1.0.0",
+        "Asset": "release.zip"
+      }
+    },
+    {
+      "Hash": 11111111111111,
+      "Name": "direct_download.zip",
+      "Size": 262144,
+      "State": {
+        "$type": "HttpDownloader, Wabbajack.Lib",
+        "Url": "https://example.com/mod.zip",
+        "Headers": {}
+      }
+    }
+  ],
+  "Directives": [
+    {
+      "$type": "FromArchive, Wabbajack.Lib",
+      "ArchiveHashPath": [12345678901234, "data/textures/test.dds"],
+      "To": "Data/textures/test.dds"
+    },
+    {
+      "$type": "PatchedFromArchive, Wabbajack.Lib",
+      "ArchiveHashPath": [12345678901234, "data/meshes/test.nif"],
+      "To": "Data/meshes/test.nif",
+      "Hash": 55555555555555
+    },
+    {
+      "$type": "CreateBSA, Wabbajack.Lib",
+      "TempID": "bsa_temp_001",
+      "To": "Data/test.bsa",
+      "FileStates": [
+        {
+          "Path": "textures/test.dds",
+          "Hash": 77777777777777,
+          "Size": 65536
+        }
+      ]
+    }
+  ]
+}

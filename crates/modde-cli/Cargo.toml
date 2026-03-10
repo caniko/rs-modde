@@ -1,0 +1,21 @@
+[package]
+name = "modde-cli"
+version = "0.1.0"
+description = "CLI interface for modde"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "modde"
+path = "src/main.rs"
+
+[dependencies]
+modde-core = { workspace = true }
+modde-sources = { path = "../modde-sources" }
+modde-games = { path = "../modde-games" }
+clap = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

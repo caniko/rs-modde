@@ -1,0 +1,44 @@
+{
+  "slug": "test-collection",
+  "name": "Test Collection",
+  "summary": "A test Nexus collection.",
+  "description": "Detailed description of the test collection.",
+  "author": {
+    "name": "TestAuthor",
+    "member_id": 12345
+  },
+  "game": {
+    "id": 1704,
+    "domain_name": "skyrimspecialedition",
+    "name": "Skyrim Special Edition"
+  },
+  "mods": [
+    {
+      "mod_id": 100,
+      "file_id": 200,
+      "name": "Test Mod A",
+      "version": "1.0",
+      "optional": false,
+      "install_order": 0,
+      "patch": null
+    },
+    {
+      "mod_id": 101,
+      "file_id": 201,
+      "name": "Test Mod B",
+      "version": "2.1",
+      "optional": true,
+      "install_order": 1,
+      "patch": {
+        "hash": "abc123",
+        "url": "https://example.com/patch.bin"
+      }
+    }
+  ],
+  "version": {
+    "version": "1.0.0",
+    "created_at": "2025-01-01T00:00:00Z"
+  },
+  "endorsements": 42,
+  "image_url": "https://example.com/thumb.jpg"
+}

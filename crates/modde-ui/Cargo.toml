@@ -1,0 +1,17 @@
+[package]
+name = "modde-ui"
+version = "0.1.0"
+description = "GUI application for modde"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+modde-core = { workspace = true }
+modde-sources = { path = "../modde-sources" }
+modde-games = { path = "../modde-games" }
+iced = { version = "0.13", features = ["tokio", "image", "svg"] }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
