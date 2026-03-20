@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 /// REDmod mod manifest (`info.json`).
 #[derive(Debug, Clone, Deserialize)]
-pub struct RedModdeifest {
+pub struct RedModManifest {
     pub name: String,
     pub version: Option<String>,
     #[serde(default)]
@@ -25,7 +25,7 @@ pub struct ScriptEntry {
     pub path: Option<String>,
 }
 
-impl RedModdeifest {
+impl RedModManifest {
     /// Parse a REDmod `info.json` file.
     pub fn parse(json: &str) -> anyhow::Result<Self> {
         Ok(serde_json::from_str(json)?)

@@ -6,15 +6,20 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 modde-core = { workspace = true }
+fomod-oxide = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-quick-xml = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+smallvec = { workspace = true }
 
 [dev-dependencies]
-pretty_assertions = "1"
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }

@@ -1,13 +1,20 @@
+pub mod db;
 pub mod error;
+pub mod fs;
 pub mod hash;
 pub mod manifest;
+pub mod paths;
 pub mod profile;
 pub mod resolver;
+pub mod save;
+pub mod settings;
 pub mod stock;
 pub mod vfs;
 
+pub use db::{ModdeDb, ProfileSummary, SaveEntry, SnapshotMeta};
 pub use error::{CoreError, Result};
 pub use manifest::collection::CollectionManifest;
 pub use manifest::wabbajack::{DownloadDirective, InstallDirective, WabbajackManifest};
-pub use profile::{EnabledMod, Profile, ProfileSource};
-pub use resolver::{ConflictMap, LoadOrder, ResolvedLoadOrder};
+pub use profile::{ActiveProfileInfo, ActivateResult, EnabledMod, Profile, ProfileSource};
+pub use resolver::{ConflictMap, GameId, ModId, ResolvedLoadOrder};
+pub use save::{FingerprintCheck, SaveFingerprint, SaveSnapshot};

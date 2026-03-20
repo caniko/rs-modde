@@ -6,16 +6,35 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "modde"
 path = "src/main.rs"
 
 [dependencies]
 modde-core = { workspace = true }
-modde-sources = { path = "../modde-sources" }
-modde-games = { path = "../modde-games" }
+modde-sources = { workspace = true }
+modde-games = { workspace = true }
+modde-ui = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+reqwest = { workspace = true }
+xxhash-rust = { workspace = true }
+fomod-oxide = { workspace = true }
+serde = { workspace = true }
+smallvec = { workspace = true }
+zip = { workspace = true }
+url = "2"
+libc = { workspace = true }
+notify = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+assert_cmd = "2"

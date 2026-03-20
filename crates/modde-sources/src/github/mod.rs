@@ -2,14 +2,14 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
 use tracing::info;
 
 use modde_core::manifest::wabbajack::DownloadDirective;
 
-use crate::traits::{DownloadHandle, DownloadSource, VerifiedFile};
+use crate::common::{simple_download, with_retry};
+use crate::traits::{DownloadHandle, DownloadSource, ProgressCallback, VerifiedFile};
 
 /// GitHub Releases download source.
 pub struct GitHubSource {
@@ -36,7 +36,6 @@ impl GitHubSource {
     }
 }
 
-#[async_trait]
 impl DownloadSource for GitHubSource {
     fn can_handle(&self, directive: &DownloadDirective) -> bool {
         matches!(directive, DownloadDirective::GitHub { .. })
@@ -81,9 +80,20 @@ impl DownloadSource for GitHubSource {
         })
     }
 
-    async fn download(&self, handle: DownloadHandle, dest: &Path) -> Result<VerifiedFile> {
-        // TODO: actual download + hash verification
-        let _ = (&handle, dest);
-        todo!("GitHub download not yet implemented")
+    async fn download_with_progress(
+        &self,
+        handle: DownloadHandle,
+        dest: &Path,
+        progress: ProgressCallback,
+    ) -> Result<VerifiedFile> {
+        let client = self.client.clone();
+        let handle_ref = &handle;
+        let dest_ref = dest;
+        let progress_ref = &progress;
+
+        with_retry("GitHub download", || async {
+            simple_download(&client, handle_ref, dest_ref, progress_ref).await
+        })
+        .await
     }
 }

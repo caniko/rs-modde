@@ -1,6 +1,67 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 
-use serde::{Deserialize, Serialize};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::resolver::GameId;
+
+/// Deserialize a Wabbajack hash — accepts base64 string or plain integer.
+fn deserialize_b64_hash<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
+    let val = serde_json::Value::deserialize(deserializer)?;
+    match &val {
+        serde_json::Value::String(s) => {
+            let bytes = BASE64.decode(s).map_err(serde::de::Error::custom)?;
+            if bytes.len() != 8 {
+                return Err(serde::de::Error::custom(format!(
+                    "expected 8 bytes for hash, got {}",
+                    bytes.len()
+                )));
+            }
+            Ok(u64::from_le_bytes(bytes.try_into().unwrap()))
+        }
+        serde_json::Value::Number(n) => n
+            .as_u64()
+            .ok_or_else(|| serde::de::Error::custom("hash number not a valid u64")),
+        _ => Err(serde::de::Error::custom("expected string or number for hash")),
+    }
+}
+
+/// Deserialize Headers field — Wabbajack uses `[]` (empty array) not `{}` (empty object).
+fn deserialize_headers<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<HashMap<String, String>, D::Error> {
+    let val = serde_json::Value::deserialize(deserializer)?;
+    match val {
+        serde_json::Value::Object(map) => {
+            let mut result = HashMap::new();
+            for (k, v) in map {
+                if let Some(s) = v.as_str() {
+                    result.insert(k, s.to_string());
+                }
+            }
+            Ok(result)
+        }
+        serde_json::Value::Array(_) => Ok(HashMap::new()),
+        serde_json::Value::Null => Ok(HashMap::new()),
+        _ => Err(serde::de::Error::custom("expected object or array for Headers")),
+    }
+}
+
+/// Serialize a u64 hash back to Wabbajack base64 format.
+fn serialize_b64_hash<S: Serializer>(val: &u64, serializer: S) -> Result<S::Ok, S::Error> {
+    let encoded = BASE64.encode(val.to_le_bytes());
+    serializer.serialize_str(&encoded)
+}
+
+/// Parse a base64 hash string into u64 (for use outside serde).
+pub fn parse_b64_hash(s: &str) -> Option<u64> {
+    let bytes = BASE64.decode(s).ok()?;
+    if bytes.len() != 8 {
+        return None;
+    }
+    Some(u64::from_le_bytes(bytes.try_into().unwrap()))
+}
 
 /// Top-level manifest from a `.wabbajack` archive (which is a zip containing JSON).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,6 +70,7 @@ pub struct WabbajackManifest {
     pub name: String,
     pub author: String,
     pub description: String,
+    #[serde(alias = "GameType")]
     pub game: String,
     pub version: String,
     #[serde(default)]
@@ -21,6 +83,10 @@ pub struct WabbajackManifest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct ArchiveEntry {
+    #[serde(
+        deserialize_with = "deserialize_b64_hash",
+        serialize_with = "serialize_b64_hash"
+    )]
     pub hash: u64,
     pub name: String,
     pub size: u64,
@@ -66,7 +132,11 @@ pub enum ArchiveState {
     HttpDownloader {
         #[serde(rename = "Url")]
         url: String,
-        #[serde(default, rename = "Headers")]
+        #[serde(
+            default,
+            rename = "Headers",
+            deserialize_with = "deserialize_headers"
+        )]
         headers: HashMap<String, String>,
     },
 }
@@ -82,14 +152,35 @@ pub enum RawDirective {
         #[serde(rename = "To")]
         to: String,
     },
+    #[serde(alias = "InlineFile, Wabbajack.Lib")]
+    InlineFile {
+        #[serde(
+            rename = "Hash",
+            deserialize_with = "deserialize_b64_hash",
+            serialize_with = "serialize_b64_hash"
+        )]
+        hash: u64,
+        #[serde(rename = "Size")]
+        size: u64,
+        #[serde(rename = "SourceDataID")]
+        source_data_id: String,
+        #[serde(rename = "To")]
+        to: String,
+    },
     #[serde(alias = "PatchedFromArchive, Wabbajack.Lib")]
     PatchedFromArchive {
         #[serde(rename = "ArchiveHashPath")]
         archive_hash_path: Vec<serde_json::Value>,
         #[serde(rename = "To")]
         to: String,
-        #[serde(rename = "Hash")]
+        #[serde(
+            rename = "Hash",
+            deserialize_with = "deserialize_b64_hash",
+            serialize_with = "serialize_b64_hash"
+        )]
         hash: u64,
+        #[serde(rename = "PatchID")]
+        patch_id: String,
     },
     #[serde(alias = "CreateBSA, Wabbajack.Lib")]
     CreateBSA {
@@ -108,7 +199,7 @@ pub enum RawDirective {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DownloadDirective {
     Nexus {
-        game_id: String,
+        game_id: GameId,
         mod_id: u64,
         file_id: u64,
         hash: u64,
@@ -135,6 +226,38 @@ pub enum DownloadDirective {
     },
 }
 
+impl DownloadDirective {
+    /// Extract the expected hash from any directive variant.
+    pub fn hash(&self) -> u64 {
+        match self {
+            Self::Nexus { hash, .. }
+            | Self::GitHub { hash, .. }
+            | Self::GoogleDrive { hash, .. }
+            | Self::Mega { hash, .. }
+            | Self::DirectURL { hash, .. } => *hash,
+        }
+    }
+
+    /// Human-readable label for progress/error messages.
+    ///
+    /// Returns `Cow::Borrowed` for variants where the label can be
+    /// computed without allocation (currently none, but future-proofed),
+    /// and `Cow::Owned` when formatting is required.
+    pub fn display_name(&self) -> Cow<'_, str> {
+        match self {
+            Self::Nexus { mod_id, .. } => format!("nexus:{mod_id}").into(),
+            Self::GitHub { repo, .. } => format!("github:{repo}").into(),
+            Self::GoogleDrive { id, .. } => format!("gdrive:{id}").into(),
+            Self::Mega { url, .. } => {
+                format!("mega:{}", &url[..url.len().min(30)]).into()
+            }
+            Self::DirectURL { url, .. } => {
+                format!("http:{}", &url[..url.len().min(30)]).into()
+            }
+        }
+    }
+}
+
 /// Our typed install directive enum.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum InstallDirective {
@@ -143,11 +266,15 @@ pub enum InstallDirective {
         from: String,
         to: String,
     },
+    InlineFile {
+        source_data_id: String,
+        to: String,
+    },
     PatchedFromArchive {
         archive_hash: u64,
         from: String,
         to: String,
-        patch_hash: u64,
+        patch_id: String,
     },
     CreateBSA {
         temp_id: String,
@@ -161,9 +288,23 @@ pub enum InstallDirective {
 #[serde(rename_all = "PascalCase")]
 pub struct BSAFileState {
     pub path: String,
+    #[serde(
+        deserialize_with = "deserialize_b64_hash",
+        serialize_with = "serialize_b64_hash"
+    )]
     pub hash: u64,
     #[serde(default)]
     pub size: u64,
+}
+
+/// Parse a hash from a serde_json::Value — tries base64 string first, then numeric.
+fn parse_hash_value(val: Option<&serde_json::Value>) -> u64 {
+    val.and_then(|v| {
+        v.as_str()
+            .and_then(parse_b64_hash)
+            .or_else(|| v.as_u64())
+    })
+    .unwrap_or(0)
 }
 
 impl WabbajackManifest {
@@ -179,7 +320,7 @@ impl WabbajackManifest {
                         mod_id,
                         file_id,
                     } => DownloadDirective::Nexus {
-                        game_id: game_name.clone(),
+                        game_id: GameId::from(game_name.clone()),
                         mod_id: *mod_id,
                         file_id: *file_id,
                         hash: archive.hash,
@@ -223,10 +364,7 @@ impl WabbajackManifest {
                     archive_hash_path,
                     to,
                 } => {
-                    let hash = archive_hash_path
-                        .first()
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0);
+                    let hash = parse_hash_value(archive_hash_path.first());
                     let from = archive_hash_path
                         .get(1)
                         .and_then(|v| v.as_str())
@@ -238,15 +376,21 @@ impl WabbajackManifest {
                         to: to.clone(),
                     })
                 }
+                RawDirective::InlineFile {
+                    source_data_id,
+                    to,
+                    ..
+                } => Some(InstallDirective::InlineFile {
+                    source_data_id: source_data_id.clone(),
+                    to: to.clone(),
+                }),
                 RawDirective::PatchedFromArchive {
                     archive_hash_path,
                     to,
-                    hash,
+                    patch_id,
+                    ..
                 } => {
-                    let archive_hash = archive_hash_path
-                        .first()
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0);
+                    let archive_hash = parse_hash_value(archive_hash_path.first());
                     let from = archive_hash_path
                         .get(1)
                         .and_then(|v| v.as_str())
@@ -256,7 +400,7 @@ impl WabbajackManifest {
                         archive_hash,
                         from,
                         to: to.clone(),
-                        patch_hash: *hash,
+                        patch_id: patch_id.clone(),
                     })
                 }
                 RawDirective::CreateBSA {

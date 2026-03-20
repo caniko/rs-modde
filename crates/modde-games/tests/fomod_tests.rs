@@ -176,6 +176,7 @@ fn condition_flag_evaluation() {
         file_deps: vec![],
         flag_deps: vec![dep],
         game_deps: vec![],
+        fomm_deps: vec![],
         nested: vec![],
     };
 

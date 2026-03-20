@@ -1,2 +1,9 @@
-// View modules will be expanded as the UI grows.
-// Each view corresponds to a variant of app::View.
+pub mod collections;
+pub mod fomod_wizard;
+pub mod load_order;
+pub mod mod_list;
+pub mod saves;
+pub mod settings;
+pub mod sidebar;
+pub mod verify;
+pub mod wabbajack;

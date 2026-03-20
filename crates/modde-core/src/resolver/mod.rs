@@ -1,4 +1,6 @@
+use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::algo::toposort;
@@ -7,8 +9,99 @@ use serde::{Deserialize, Serialize};
 use crate::error::{CoreError, Result};
 use crate::profile::Profile;
 
-/// Unique identifier for a mod within a profile.
-pub type ModId = String;
+/// Generates a newtype wrapper around `String` with zero-cost `#[repr(transparent)]`
+/// layout. Provides domain-level type safety — you cannot accidentally pass a `ModId`
+/// where a `GameId` is expected, or vice versa.
+///
+/// Each invocation produces a struct with: `Display`, `From<&str>`, `From<String>`,
+/// `Borrow<str>`, `AsRef<str>`, `PartialEq<str>`, and `PartialEq<&str>`.
+macro_rules! define_id_newtype {
+    (
+        $(#[$meta:meta])*
+        $vis:vis struct $Name:ident;
+    ) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+        #[repr(transparent)]
+        $vis struct $Name(pub String);
+
+        impl $Name {
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
+        }
+
+        impl fmt::Display for $Name {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(&self.0)
+            }
+        }
+
+        impl From<&str> for $Name {
+            fn from(s: &str) -> Self {
+                Self(s.to_string())
+            }
+        }
+
+        impl From<String> for $Name {
+            fn from(s: String) -> Self {
+                Self(s)
+            }
+        }
+
+        impl Borrow<str> for $Name {
+            fn borrow(&self) -> &str {
+                &self.0
+            }
+        }
+
+        impl std::ops::Deref for $Name {
+            type Target = str;
+            fn deref(&self) -> &str {
+                &self.0
+            }
+        }
+
+        impl AsRef<str> for $Name {
+            fn as_ref(&self) -> &str {
+                &self.0
+            }
+        }
+
+        impl PartialEq<str> for $Name {
+            fn eq(&self, other: &str) -> bool {
+                self.0 == other
+            }
+        }
+
+        impl PartialEq<&str> for $Name {
+            fn eq(&self, other: &&str) -> bool {
+                self.0 == *other
+            }
+        }
+
+        impl rusqlite::types::ToSql for $Name {
+            fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+                self.0.to_sql()
+            }
+        }
+    };
+}
+
+define_id_newtype! {
+    /// Unique identifier for a mod within a profile.
+    ///
+    /// Prevents accidental use of arbitrary strings where a mod ID is expected.
+    pub struct ModId;
+}
+
+define_id_newtype! {
+    /// Unique identifier for a supported game (e.g. `"skyrim-se"`, `"cyberpunk2077"`).
+    ///
+    /// Prevents mixing up game IDs with profile names, mod IDs, or other strings
+    /// at the type level. Zero runtime cost via `#[repr(transparent)]`.
+    pub struct GameId;
+}
 
 /// A rule constraining load order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,13 +114,6 @@ pub enum LoadOrderRule {
     Incompatible { mod_a: ModId, mod_b: ModId },
 }
 
-/// Ordered load order with LOOT-style rule support.
-#[derive(Debug, Clone)]
-pub struct LoadOrder {
-    pub mods: Vec<ModId>,
-    pub rules: Vec<LoadOrderRule>,
-}
-
 /// Maps each deployed file path to the set of mods that provide it.
 #[derive(Debug, Clone, Default)]
 pub struct ConflictMap {
@@ -35,10 +121,6 @@ pub struct ConflictMap {
 }
 
 impl ConflictMap {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Register that `mod_id` provides `file_path`.
     pub fn register(&mut self, file_path: String, mod_id: ModId) {
         self.files.entry(file_path).or_default().insert(mod_id);
@@ -59,8 +141,6 @@ impl ConflictMap {
 pub struct ResolvedLoadOrder {
     /// Mods in final load order (first = lowest priority).
     pub order: Vec<ModId>,
-    /// File conflict map.
-    pub conflicts: ConflictMap,
 }
 
 /// Resolve a profile into a topologically sorted load order.
@@ -83,7 +163,7 @@ pub fn resolve(profile: &Profile) -> Result<ResolvedLoadOrder> {
             if enabled_set.contains(mod_a.as_str()) && enabled_set.contains(mod_b.as_str()) {
                 return Err(CoreError::FileConflict {
                     path: String::new(),
-                    mods: vec![mod_a.clone(), mod_b.clone()],
+                    mods: Box::new(smallvec::smallvec![mod_a.0.clone(), mod_b.0.clone()]),
                 });
             }
         }
@@ -123,27 +203,24 @@ pub fn resolve(profile: &Profile) -> Result<ResolvedLoadOrder> {
 
     let order: Vec<ModId> = sorted
         .iter()
-        .map(|&idx| graph[idx].to_string())
+        .map(|&idx| ModId::from(graph[idx]))
         .collect();
 
-    // Build conflict map from file mappings
-    let conflicts = ConflictMap::new();
-    // Actual file registration would happen during VFS construction;
-    // here we return an empty map that the caller can populate.
-
-    Ok(ResolvedLoadOrder { order, conflicts })
+    Ok(ResolvedLoadOrder { order })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::profile::{EnabledMod, ProfileSource};
+    use smallvec::{smallvec, SmallVec};
     use std::path::PathBuf;
 
-    fn make_profile(mods: Vec<&str>, rules: Vec<LoadOrderRule>) -> Profile {
+    fn make_profile(mods: Vec<&str>, rules: SmallVec<[LoadOrderRule; 4]>) -> Profile {
         Profile {
+            id: None,
             name: "test".to_string(),
-            game_id: "skyrim-se".to_string(),
+            game_id: GameId::from("skyrim-se"),
             source: ProfileSource::Manual,
             mods: mods
                 .into_iter()
@@ -151,6 +228,7 @@ mod tests {
                     mod_id: id.to_string(),
                     enabled: true,
                     version: None,
+                    fomod_config: None,
                 })
                 .collect(),
             overrides: PathBuf::from("/tmp/overrides"),
@@ -160,7 +238,7 @@ mod tests {
 
     #[test]
     fn test_resolve_simple_order() {
-        let profile = make_profile(vec!["mod_a", "mod_b", "mod_c"], vec![]);
+        let profile = make_profile(vec!["mod_a", "mod_b", "mod_c"], smallvec![]);
         let result = resolve(&profile).unwrap();
         assert_eq!(result.order.len(), 3);
     }
@@ -169,9 +247,9 @@ mod tests {
     fn test_resolve_with_load_after() {
         let profile = make_profile(
             vec!["mod_a", "mod_b", "mod_c"],
-            vec![LoadOrderRule::LoadAfter {
-                mod_id: "mod_c".to_string(),
-                after: "mod_a".to_string(),
+            smallvec![LoadOrderRule::LoadAfter {
+                mod_id: ModId::from("mod_c"),
+                after: ModId::from("mod_a"),
             }],
         );
         let result = resolve(&profile).unwrap();
@@ -184,9 +262,9 @@ mod tests {
     fn test_resolve_with_load_before() {
         let profile = make_profile(
             vec!["mod_a", "mod_b"],
-            vec![LoadOrderRule::LoadBefore {
-                mod_id: "mod_a".to_string(),
-                before: "mod_b".to_string(),
+            smallvec![LoadOrderRule::LoadBefore {
+                mod_id: ModId::from("mod_a"),
+                before: ModId::from("mod_b"),
             }],
         );
         let result = resolve(&profile).unwrap();
@@ -199,14 +277,14 @@ mod tests {
     fn test_resolve_cycle_detection() {
         let profile = make_profile(
             vec!["mod_a", "mod_b"],
-            vec![
+            smallvec![
                 LoadOrderRule::LoadAfter {
-                    mod_id: "mod_b".to_string(),
-                    after: "mod_a".to_string(),
+                    mod_id: ModId::from("mod_b"),
+                    after: ModId::from("mod_a"),
                 },
                 LoadOrderRule::LoadAfter {
-                    mod_id: "mod_a".to_string(),
-                    after: "mod_b".to_string(),
+                    mod_id: ModId::from("mod_a"),
+                    after: ModId::from("mod_b"),
                 },
             ],
         );
@@ -218,9 +296,9 @@ mod tests {
     fn test_resolve_incompatible() {
         let profile = make_profile(
             vec!["mod_a", "mod_b"],
-            vec![LoadOrderRule::Incompatible {
-                mod_a: "mod_a".to_string(),
-                mod_b: "mod_b".to_string(),
+            smallvec![LoadOrderRule::Incompatible {
+                mod_a: ModId::from("mod_a"),
+                mod_b: ModId::from("mod_b"),
             }],
         );
         let result = resolve(&profile);
@@ -229,10 +307,10 @@ mod tests {
 
     #[test]
     fn test_conflict_map() {
-        let mut cm = ConflictMap::new();
-        cm.register("textures/sky.dds".to_string(), "mod_a".to_string());
-        cm.register("textures/sky.dds".to_string(), "mod_b".to_string());
-        cm.register("meshes/tree.nif".to_string(), "mod_a".to_string());
+        let mut cm = ConflictMap::default();
+        cm.register("textures/sky.dds".to_string(), ModId::from("mod_a"));
+        cm.register("textures/sky.dds".to_string(), ModId::from("mod_b"));
+        cm.register("meshes/tree.nif".to_string(), ModId::from("mod_a"));
 
         let conflicts = cm.conflicts();
         assert_eq!(conflicts.len(), 1);
@@ -242,23 +320,26 @@ mod tests {
     #[test]
     fn test_disabled_mods_excluded() {
         let profile = Profile {
+            id: None,
             name: "test".to_string(),
-            game_id: "skyrim-se".to_string(),
+            game_id: GameId::from("skyrim-se"),
             source: ProfileSource::Manual,
             mods: vec![
                 EnabledMod {
                     mod_id: "mod_a".to_string(),
                     enabled: true,
                     version: None,
+                    fomod_config: None,
                 },
                 EnabledMod {
                     mod_id: "mod_b".to_string(),
                     enabled: false,
                     version: None,
+                    fomod_config: None,
                 },
             ],
             overrides: PathBuf::from("/tmp"),
-            load_order_rules: vec![],
+            load_order_rules: smallvec![],
         };
         let result = resolve(&profile).unwrap();
         assert_eq!(result.order.len(), 1);

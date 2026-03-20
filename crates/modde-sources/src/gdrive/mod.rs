@@ -1,19 +1,18 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use anyhow::Result;
-use async_trait::async_trait;
+use anyhow::{Context, Result};
 use reqwest::Client;
+use tracing::debug;
 
 use modde_core::manifest::wabbajack::DownloadDirective;
 
-use crate::traits::{DownloadHandle, DownloadSource, VerifiedFile};
+use crate::common::{ensure_parent, stream_to_file, verify_and_wrap};
+use crate::traits::{DownloadHandle, DownloadSource, ProgressCallback, VerifiedFile};
 
 /// Google Drive download source.
 ///
-/// Uses OAuth2 device flow for headless compatibility.
-/// Tokens are stored in the secret-service keyring.
-#[allow(dead_code)]
+/// Handles the virus scan warning page for large files.
 pub struct GoogleDriveSource {
     client: Client,
 }
@@ -24,7 +23,6 @@ impl GoogleDriveSource {
     }
 }
 
-#[async_trait]
 impl DownloadSource for GoogleDriveSource {
     fn can_handle(&self, directive: &DownloadDirective) -> bool {
         matches!(directive, DownloadDirective::GoogleDrive { .. })
@@ -35,7 +33,6 @@ impl DownloadSource for GoogleDriveSource {
             anyhow::bail!("not a Google Drive directive");
         };
 
-        // TODO: OAuth2 device flow + resolve actual download URL
         let url = format!("https://drive.google.com/uc?id={id}&export=download");
 
         Ok(DownloadHandle {
@@ -46,8 +43,252 @@ impl DownloadSource for GoogleDriveSource {
         })
     }
 
-    async fn download(&self, handle: DownloadHandle, dest: &Path) -> Result<VerifiedFile> {
-        let _ = (&handle, dest);
-        todo!("Google Drive download not yet implemented")
+    async fn download_with_progress(
+        &self,
+        handle: DownloadHandle,
+        dest: &Path,
+        progress: ProgressCallback,
+    ) -> Result<VerifiedFile> {
+        ensure_parent(dest).await?;
+
+        do_download(&self.client, &handle, dest, &progress)
+            .await
+            .context("Google Drive download failed")?;
+
+        verify_and_wrap(dest, handle.expected_hash).await
+    }
+}
+
+async fn do_download(
+    client: &Client,
+    handle: &DownloadHandle,
+    dest: &Path,
+    progress: &ProgressCallback,
+) -> Result<()> {
+    let resp = client.get(&handle.url).send().await?.error_for_status()?;
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+
+    // If Google returns HTML, it's the virus scan warning page
+    if content_type.contains("text/html") {
+        debug!("got virus scan warning page, extracting confirm token");
+        let body = resp.text().await?;
+        let confirm_token = extract_confirm_token(&body)
+            .ok_or_else(|| anyhow::anyhow!("failed to extract confirm token from virus scan page"))?;
+
+        let confirmed_url = format!("{}&confirm={confirm_token}", handle.url);
+        let resp = client.get(&confirmed_url).send().await?.error_for_status()?;
+        stream_to_file(resp, dest, handle.size_hint.unwrap_or(0), progress).await?;
+    } else {
+        stream_to_file(resp, dest, handle.size_hint.unwrap_or(0), progress).await?;
+    }
+    Ok(())
+}
+
+/// Extract the confirm token from Google Drive's virus scan warning HTML.
+fn extract_confirm_token(html: &str) -> Option<String> {
+    // Google uses a form with action containing confirm=TOKEN or an input named confirm
+    // Pattern 1: &confirm=TOKEN&
+    if let Some(pos) = html.find("confirm=") {
+        let rest = &html[pos + 8..];
+        let end = rest.find(|c: char| c == '&' || c == '"' || c == '\'' || c.is_whitespace())?;
+        let token = &rest[..end];
+        if !token.is_empty() {
+            return Some(token.to_string());
+        }
+    }
+    // Pattern 2: name="confirm" value="TOKEN"
+    if let Some(pos) = html.find("name=\"confirm\"") {
+        let rest = &html[pos..];
+        if let Some(val_pos) = rest.find("value=\"") {
+            let val_rest = &rest[val_pos + 7..];
+            let end = val_rest.find('"')?;
+            let token = &val_rest[..end];
+            if !token.is_empty() {
+                return Some(token.to_string());
+            }
+        }
+    }
+    // Pattern 3: id="uc-download-link" with href containing confirm=
+    if let Some(pos) = html.find("id=\"uc-download-link\"") {
+        let rest = &html[pos..];
+        if let Some(href_pos) = rest.find("confirm=") {
+            let val_rest = &rest[href_pos + 8..];
+            let end = val_rest.find(|c: char| c == '&' || c == '"' || c == '\'')?;
+            let token = &val_rest[..end];
+            if !token.is_empty() {
+                return Some(token.to_string());
+            }
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use modde_core::GameId;
+
+    // ── extract_confirm_token: Pattern 1 – &confirm=TOKEN& ───────────────
+
+    #[test]
+    fn confirm_token_pattern1_ampersand_delimited() {
+        let html = r#"<a href="https://drive.google.com/uc?id=ID&confirm=t&export=download">Download</a>"#;
+        assert_eq!(extract_confirm_token(html), Some("t".to_string()));
+    }
+
+    #[test]
+    fn confirm_token_pattern1_long_token() {
+        let html = r#"something confirm=AbCdEfGh1234&rest"#;
+        assert_eq!(
+            extract_confirm_token(html),
+            Some("AbCdEfGh1234".to_string())
+        );
+    }
+
+    #[test]
+    fn confirm_token_pattern1_quote_delimited() {
+        let html = r#"href="https://example.com?confirm=mytoken""#;
+        assert_eq!(extract_confirm_token(html), Some("mytoken".to_string()));
+    }
+
+    #[test]
+    fn confirm_token_pattern1_single_quote_delimited() {
+        let html = r#"href='https://example.com?confirm=tok123'"#;
+        assert_eq!(extract_confirm_token(html), Some("tok123".to_string()));
+    }
+
+    #[test]
+    fn confirm_token_pattern1_whitespace_delimited() {
+        let html = "url?confirm=TOKEN rest of text";
+        assert_eq!(extract_confirm_token(html), Some("TOKEN".to_string()));
+    }
+
+    // ── extract_confirm_token: Pattern 2 – name="confirm" value="TOKEN" ──
+
+    #[test]
+    fn confirm_token_pattern2_input_field() {
+        let html =
+            r#"<input type="hidden" name="confirm" value="SecretVal"><input type="submit">"#;
+        assert_eq!(
+            extract_confirm_token(html),
+            Some("SecretVal".to_string())
+        );
+    }
+
+    #[test]
+    fn confirm_token_pattern2_with_extra_attrs() {
+        let html =
+            r#"<input class="foo" name="confirm" id="bar" value="TOKEN42">"#;
+        assert_eq!(extract_confirm_token(html), Some("TOKEN42".to_string()));
+    }
+
+    // ── extract_confirm_token: Pattern 3 – id="uc-download-link" ─────────
+
+    #[test]
+    fn confirm_token_pattern3_uc_download_link() {
+        let html = r#"<a id="uc-download-link" href="/uc?export=download&confirm=XyZ123&id=abc">Download anyway</a>"#;
+        assert_eq!(extract_confirm_token(html), Some("XyZ123".to_string()));
+    }
+
+    #[test]
+    fn confirm_token_pattern3_uc_download_link_quote_end() {
+        let html =
+            r#"<a id="uc-download-link" href="/uc?export=download&confirm=TOK">"#;
+        assert_eq!(extract_confirm_token(html), Some("TOK".to_string()));
+    }
+
+    // ── extract_confirm_token: non-matching / edge cases ─────────────────
+
+    #[test]
+    fn confirm_token_no_match_random_html() {
+        let html = "<html><body><p>Hello world</p></body></html>";
+        assert_eq!(extract_confirm_token(html), None);
+    }
+
+    #[test]
+    fn confirm_token_no_match_empty_string() {
+        assert_eq!(extract_confirm_token(""), None);
+    }
+
+    #[test]
+    fn confirm_token_no_match_similar_but_not_confirm() {
+        let html = r#"<input name="confirmed" value="nope">"#;
+        // "confirmed" does not match "confirm=" pattern for pattern 1
+        // but it does contain "confirm=" when the 'e' follows... let's check:
+        // "confirmed" contains substring "confirm" so pattern 1 ("confirm=") won't match
+        // because after "confirm" comes "ed" not "=".
+        // But wait, the html also doesn't have "confirm=" anywhere.
+        assert_eq!(extract_confirm_token(html), None);
+    }
+
+    #[test]
+    fn confirm_token_empty_token_returns_none() {
+        // Pattern 1: confirm= followed immediately by &
+        let html = "confirm=&rest";
+        // Token would be "", which is checked: `if !token.is_empty()`
+        assert_eq!(extract_confirm_token(html), None);
+    }
+
+    // ── can_handle for GoogleDriveSource ─────────────────────────────────
+
+    #[test]
+    fn can_handle_google_drive_directive() {
+        let source = GoogleDriveSource::new(Client::new());
+        let directive = DownloadDirective::GoogleDrive {
+            id: "1AbCdEfGh".to_string(),
+            hash: 42,
+        };
+        assert!(source.can_handle(&directive));
+    }
+
+    #[test]
+    fn can_handle_rejects_mega() {
+        let source = GoogleDriveSource::new(Client::new());
+        let directive = DownloadDirective::Mega {
+            url: "https://mega.nz/file/X#Y".to_string(),
+            hash: 0,
+        };
+        assert!(!source.can_handle(&directive));
+    }
+
+    #[test]
+    fn can_handle_rejects_nexus() {
+        let source = GoogleDriveSource::new(Client::new());
+        let directive = DownloadDirective::Nexus {
+            game_id: GameId::from("skyrim"),
+            mod_id: 1,
+            file_id: 1,
+            hash: 0,
+        };
+        assert!(!source.can_handle(&directive));
+    }
+
+    #[test]
+    fn can_handle_rejects_github() {
+        let source = GoogleDriveSource::new(Client::new());
+        let directive = DownloadDirective::GitHub {
+            user: "u".to_string(),
+            repo: "r".to_string(),
+            tag: "t".to_string(),
+            asset: "a".to_string(),
+            hash: 0,
+        };
+        assert!(!source.can_handle(&directive));
+    }
+
+    #[test]
+    fn can_handle_rejects_direct_url() {
+        let source = GoogleDriveSource::new(Client::new());
+        let directive = DownloadDirective::DirectURL {
+            url: "https://example.com/file".to_string(),
+            headers: std::collections::HashMap::new(),
+            hash: 0,
+        };
+        assert!(!source.can_handle(&directive));
     }
 }

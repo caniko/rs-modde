@@ -1,7 +1,7 @@
 /target
-Cargo.lock
 *.swp
 *.swo
 *~
+*.wabbajack
 .direnv/
 result

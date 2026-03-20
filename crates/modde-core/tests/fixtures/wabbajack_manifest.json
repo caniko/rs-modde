@@ -49,7 +49,8 @@
       "$type": "PatchedFromArchive, Wabbajack.Lib",
       "ArchiveHashPath": [12345678901234, "data/meshes/test.nif"],
       "To": "Data/meshes/test.nif",
-      "Hash": 55555555555555
+      "Hash": 55555555555555,
+      "PatchID": "patch_001"
     },
     {
       "$type": "CreateBSA, Wabbajack.Lib",

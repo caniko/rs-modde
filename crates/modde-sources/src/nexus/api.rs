@@ -1,4 +1,5 @@
 use anyhow::{Result, bail};
+use modde_core::manifest::collection::CollectionManifest;
 use reqwest::Client;
 use serde::Deserialize;
 use tracing::warn;
@@ -27,11 +28,51 @@ pub struct NexusModFile {
     pub version: Option<String>,
     pub size_kb: Option<u64>,
     pub file_name: String,
+    /// File category: `"MAIN"`, `"UPDATE"`, `"OPTIONAL"`, `"OLD_VERSION"`, `"MISCELLANEOUS"`.
+    #[serde(default)]
+    pub category_name: Option<String>,
+    /// Upload timestamp (Unix epoch seconds). Used to pick the most-recent MAIN file.
+    #[serde(default)]
+    pub uploaded_timestamp: Option<u64>,
+}
+
+/// Minimal collection metadata returned by the slug-based lookup endpoint.
+///
+/// Used in the two-step collection install flow to discover the game domain
+/// before fetching the full revision manifest.
+#[derive(Debug, Deserialize)]
+pub struct NexusCollectionMeta {
+    pub game: NexusCollectionGame,
+    #[serde(default)]
+    pub latest_published_revision: Option<NexusCollectionRevision>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NexusCollectionGame {
+    pub domain_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NexusCollectionRevision {
+    pub revision_number: u64,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct NexusModFiles {
     pub files: Vec<NexusModFile>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NexusSearchResults {
+    pub results: Vec<NexusMod>,
+    pub total: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NexusUpdatedMod {
+    pub mod_id: u64,
+    pub latest_file_update: u64,
+    pub latest_mod_activity: u64,
 }
 
 impl NexusApi {
@@ -74,5 +115,109 @@ impl NexusApi {
     pub async fn get_mod_files(&self, game_domain: &str, mod_id: u64) -> Result<NexusModFiles> {
         let url = format!("{BASE_URL}/games/{game_domain}/mods/{mod_id}/files.json");
         self.get(&url).await
+    }
+
+    /// Search mods by query string.
+    pub async fn search_mods(
+        &self,
+        game_domain: &str,
+        query: &str,
+        page: u32,
+    ) -> Result<NexusSearchResults> {
+        let url = format!(
+            "{BASE_URL}/games/{game_domain}/mods/search.json?search={query}&page={page}",
+        );
+        self.get(&url).await
+    }
+
+    /// Get trending mods for a game.
+    pub async fn trending_mods(&self, game_domain: &str) -> Result<Vec<NexusMod>> {
+        let url = format!("{BASE_URL}/games/{game_domain}/mods/trending.json");
+        self.get(&url).await
+    }
+
+    /// Get recently updated mods. Period must be `"1d"`, `"1w"`, or `"1m"`.
+    pub async fn updated_mods(
+        &self,
+        game_domain: &str,
+        period: &str,
+    ) -> Result<Vec<NexusUpdatedMod>> {
+        let url = format!("{BASE_URL}/games/{game_domain}/mods/updated.json?period={period}");
+        self.get(&url).await
+    }
+
+    /// Search collections for a game.
+    pub async fn search_collections(
+        &self,
+        game_domain: &str,
+        query: &str,
+    ) -> Result<Vec<CollectionManifest>> {
+        let url = format!(
+            "{BASE_URL}/games/{game_domain}/collections.json?search={query}",
+        );
+        self.get(&url).await
+    }
+
+    /// Get a specific collection by slug.
+    pub async fn get_collection(
+        &self,
+        game_domain: &str,
+        slug: &str,
+    ) -> Result<CollectionManifest> {
+        let url = format!("{BASE_URL}/games/{game_domain}/collections/{slug}.json");
+        self.get(&url).await
+    }
+
+    /// Get a specific revision of a collection.
+    pub async fn get_collection_revision(
+        &self,
+        game_domain: &str,
+        slug: &str,
+        revision: u64,
+    ) -> Result<CollectionManifest> {
+        let url = format!(
+            "{BASE_URL}/games/{game_domain}/collections/{slug}/revisions/{revision}.json"
+        );
+        self.get(&url).await
+    }
+
+    /// Discover a collection's game domain (and latest revision) by slug alone.
+    ///
+    /// Step 1 of the two-step collection install flow.
+    pub async fn get_collection_meta(&self, slug: &str) -> Result<NexusCollectionMeta> {
+        // The collections endpoint accepts a slug without game_domain:
+        //   GET /v1/collections/{slug}.json
+        let url = format!("{BASE_URL}/collections/{slug}.json");
+        self.get(&url).await
+    }
+
+    /// Fetch a collection manifest, discovering the game domain automatically.
+    ///
+    /// If `version` is `Some`, that revision number is used directly.
+    /// Otherwise the latest published revision is queried first (two-step fetch).
+    pub async fn get_collection_by_slug(
+        &self,
+        slug: &str,
+        version: Option<u64>,
+    ) -> Result<CollectionManifest> {
+        let (game_domain, revision) = match version {
+            Some(rev) => {
+                // Still need the game domain; do step-1 but skip revision lookup
+                let meta = self.get_collection_meta(slug).await?;
+                (meta.game.domain_name, rev)
+            }
+            None => {
+                let meta = self.get_collection_meta(slug).await?;
+                let rev = meta
+                    .latest_published_revision
+                    .map(|r| r.revision_number)
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "collection '{slug}' has no published revisions"
+                    ))?;
+                (meta.game.domain_name, rev)
+            }
+        };
+
+        self.get_collection_revision(&game_domain, slug, revision).await
     }
 }
