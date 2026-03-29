@@ -17,6 +17,20 @@ pub const SUPPORTED_GAME_IDS: &[&str] = &[
     "cyberpunk2077",
 ];
 
+/// Map a Wabbajack manifest `game` field (e.g. `"Cyberpunk2077"`, `"SkyrimSpecialEdition"`)
+/// to the internal game_id (e.g. `"cyberpunk2077"`, `"skyrim-se"`).
+///
+/// Returns `None` if the name is not recognized.
+pub fn normalize_wabbajack_game(wj_game: &str) -> Option<&'static str> {
+    match wj_game {
+        "Cyberpunk2077" => Some("cyberpunk2077"),
+        "SkyrimSpecialEdition" => Some("skyrim-se"),
+        "Fallout4" => Some("fallout4"),
+        "Fallout76" => Some("fallout76"),
+        _ => None,
+    }
+}
+
 /// Resolve a game_id string to the corresponding `GamePlugin` implementation.
 pub fn resolve_game_plugin(game_id: &str) -> Option<&'static dyn GamePlugin> {
     match game_id {

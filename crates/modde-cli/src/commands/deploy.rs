@@ -52,7 +52,7 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
         let staging = paths::staging_dir().join(&profile.name);
         info!(staging = %staging.display(), "Wabbajack profile: deploying from staging");
 
-        deploy_mo2_to_game(&staging, &install_dir)
+        deploy_mo2_to_game(&staging, &install_dir, false)
             .await
             .context("Wabbajack deploy from staging failed")?;
 

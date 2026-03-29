@@ -183,8 +183,9 @@ pub async fn handle(source: InstallSource) -> Result<()> {
             path,
             profile,
             game_dir,
+            force,
         } => {
-            handle_wabbajack(path, profile, game_dir).await?;
+            handle_wabbajack(path, profile, game_dir, force).await?;
         }
         InstallSource::Mod { url, profile, .. } => {
             handle_single_mod(url, profile).await?;
@@ -307,6 +308,7 @@ async fn handle_wabbajack(
     path: PathBuf,
     profile_name: Option<String>,
     game_dir: Option<PathBuf>,
+    force: bool,
 ) -> Result<()> {
     info!(path = %path.display(), ?profile_name, "installing Wabbajack modlist");
 
@@ -334,7 +336,9 @@ async fn handle_wabbajack(
     };
 
     let modlist_name = manifest.name.clone();
-    let game_id = manifest.game.clone();
+    let game_id = modde_games::normalize_wabbajack_game(&manifest.game)
+        .map(String::from)
+        .unwrap_or_else(|| manifest.game.to_lowercase());
     let profile_name = profile_name.unwrap_or_else(|| modlist_name.clone());
 
     println!(
@@ -383,53 +387,61 @@ async fn handle_wabbajack(
     // Register direct HTTP download source
     installer.add_source(modde_sources::AnySource::Direct(DirectSource::new(client)));
 
-    let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
+    // Preflight: skip the install pipeline if staging already has all expected files.
+    let skip_install = !force
+        && modde_sources::wabbajack::validator::preflight_staging(&manifest, &staging).await;
 
-    // Spawn a task to print progress
-    let progress_handle = tokio::spawn(async move {
-        while let Some(progress) = progress_rx.recv().await {
-            match progress {
-                InstallProgress::Starting { total_downloads } => {
-                    println!("  Starting install: {total_downloads} downloads");
-                }
-                InstallProgress::DownloadComplete { name } => {
-                    println!("  Downloaded: {name}");
-                }
-                InstallProgress::Applying {
-                    directive_index,
-                    total,
-                } => {
-                    if directive_index % 100 == 0 || directive_index == total - 1 {
-                        println!("  Applying directives: {}/{total}", directive_index + 1);
+    if skip_install {
+        println!("  Staging already complete, skipping install pipeline (use --force to redo)");
+    } else {
+        let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
+
+        // Spawn a task to print progress
+        let progress_handle = tokio::spawn(async move {
+            while let Some(progress) = progress_rx.recv().await {
+                match progress {
+                    InstallProgress::Starting { total_downloads } => {
+                        println!("  Starting install: {total_downloads} downloads");
                     }
+                    InstallProgress::DownloadComplete { name } => {
+                        println!("  Downloaded: {name}");
+                    }
+                    InstallProgress::Applying {
+                        directive_index,
+                        total,
+                    } => {
+                        if directive_index % 100 == 0 || directive_index == total - 1 {
+                            println!("  Applying directives: {}/{total}", directive_index + 1);
+                        }
+                    }
+                    InstallProgress::Patching { name } => {
+                        println!("  Patching: {name}");
+                    }
+                    InstallProgress::CreatingBSA { name } => {
+                        println!("  Creating BSA: {name}");
+                    }
+                    InstallProgress::Complete => {
+                        println!("  Install pipeline complete");
+                    }
+                    InstallProgress::Failed { error } => {
+                        eprintln!("  Install failed: {error}");
+                    }
+                    _ => {}
                 }
-                InstallProgress::Patching { name } => {
-                    println!("  Patching: {name}");
-                }
-                InstallProgress::CreatingBSA { name } => {
-                    println!("  Creating BSA: {name}");
-                }
-                InstallProgress::Complete => {
-                    println!("  Install pipeline complete");
-                }
-                InstallProgress::Failed { error } => {
-                    eprintln!("  Install failed: {error}");
-                }
-                _ => {}
             }
-        }
-    });
+        });
 
-    installer
-        .install(progress_tx)
-        .await
-        .context("wabbajack install pipeline failed")?;
+        installer
+            .install(progress_tx)
+            .await
+            .context("wabbajack install pipeline failed")?;
 
-    progress_handle.await?;
+        progress_handle.await?;
+    }
 
     // Deploy MO2 mods/ layout to game directory
     if let Some(ref game_dir) = game_dir {
-        deploy_mo2_to_game(&staging, game_dir)
+        deploy_mo2_to_game(&staging, game_dir, force)
             .await
             .context("failed to deploy mods to game directory")?;
 
@@ -518,7 +530,7 @@ pub fn configure_wine_overrides(game_id: &str, game_dir: &Path, staging: &Path) 
 ///
 /// Walks `staging/mods/<ModName>/` and hardlinks files into `game_dir`,
 /// preserving the internal directory structure (which is game-relative).
-pub async fn deploy_mo2_to_game(staging: &Path, game_dir: &Path) -> Result<()> {
+pub async fn deploy_mo2_to_game(staging: &Path, game_dir: &Path, force: bool) -> Result<()> {
     let mods_dir = staging.join("mods");
     if !mods_dir.exists() {
         info!("no mods/ directory in staging, skipping deployment");
@@ -566,6 +578,22 @@ pub async fn deploy_mo2_to_game(staging: &Path, game_dir: &Path) -> Result<()> {
                 }
 
                 let dest = game_dir.join(rel_path);
+
+                // Skip files already hardlinked to the source (same inode).
+                if !force {
+                    if let (Ok(src_meta), Ok(dst_meta)) = (
+                        tokio::fs::metadata(&entry_path).await,
+                        tokio::fs::metadata(&dest).await,
+                    ) {
+                        use std::os::unix::fs::MetadataExt;
+                        if src_meta.ino() == dst_meta.ino()
+                            && src_meta.dev() == dst_meta.dev()
+                        {
+                            skipped += 1;
+                            continue;
+                        }
+                    }
+                }
 
                 // Create parent directories
                 if let Some(parent) = dest.parent() {

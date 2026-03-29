@@ -154,6 +154,9 @@ enum InstallSource {
         /// Game installation directory to deploy mods into
         #[arg(long)]
         game_dir: Option<PathBuf>,
+        /// Force full reinstall, skipping preflight checks
+        #[arg(long, default_value_t = false)]
+        force: bool,
     },
     /// Install a single mod from Nexus
     Mod {

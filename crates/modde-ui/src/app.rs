@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use iced::widget::{column, container, row, text};
-use iced::{Element, Length, Task, Theme};
+use iced::widget::{button, column, container, mouse_area, pick_list, row, text};
+use iced::{window, Element, Length, Task, Theme};
 use smallvec::SmallVec;
 
 use modde_core::manifest::collection::CollectionManifest;
@@ -65,6 +65,7 @@ pub struct Modde {
     pub available_games: SmallVec<[(String, String); 6]>,
     pub selected_game: Option<String>,
     pub stock_snapshot_exists: bool,
+    pub window_id: window::Id,
 }
 
 #[derive(Debug, Clone)]
@@ -428,6 +429,13 @@ pub enum Message {
     // Game selection
     SelectGame(String),
 
+    // Window controls (custom title bar)
+    GotWindowId(Option<window::Id>),
+    TitleBarDrag,
+    WindowMinimize,
+    WindowToggleMaximize,
+    WindowClose,
+
     // Mod list
     ToggleMod { mod_id: String, enabled: bool },
     FilterChanged(String),
@@ -563,6 +571,7 @@ impl Modde {
             available_games,
             selected_game,
             stock_snapshot_exists: false,
+            window_id: window::Id::unique(),
         };
 
         // Auto-detect: if no game is selected but profiles exist, pick the first profile's game
@@ -586,7 +595,7 @@ impl Modde {
         }
 
         app.reload_profile();
-        (app, Task::none())
+        (app, window::oldest().map(Message::GotWindowId))
     }
 
     fn title(&self) -> String {
@@ -682,6 +691,24 @@ impl Modde {
                 self.selected_game = Some(game_id.clone());
                 self.settings.selected_game = Some(game_id);
                 self.save_settings();
+            }
+
+            // ── Window controls (custom title bar) ───────────────
+            Message::GotWindowId(Some(id)) => {
+                self.window_id = id;
+            }
+            Message::GotWindowId(None) => {}
+            Message::TitleBarDrag => {
+                return window::drag(self.window_id);
+            }
+            Message::WindowMinimize => {
+                return window::minimize(self.window_id, true);
+            }
+            Message::WindowToggleMaximize => {
+                return window::toggle_maximize(self.window_id);
+            }
+            Message::WindowClose => {
+                return window::close(self.window_id);
             }
 
             // ── Mod list ─────────────────────────────────────────
@@ -1287,8 +1314,7 @@ impl Modde {
             &self.active_profile,
             self.experiment_depth,
             &self.new_profile_name,
-            &self.new_profile_game,
-            &self.available_games,
+            &self.selected_game,
         );
 
         let mods = self.loaded_profile.as_ref().map(|p| p.mods.as_slice()).unwrap_or(&[]);
@@ -1309,9 +1335,70 @@ impl Modde {
             View::Verify => crate::views::verify::view(&self.verify),
         };
 
+        // ── Custom title bar ──
+        let game_names: Vec<String> = self
+            .available_games
+            .iter()
+            .map(|(_, name)| name.clone())
+            .collect();
+        let selected_game_display = self.selected_game.as_ref().and_then(|id| {
+            self.available_games
+                .iter()
+                .find(|(gid, _)| gid == id)
+                .map(|(_, name)| name.clone())
+        });
+        let available_games = self.available_games.clone();
+        let game_picker = pick_list(game_names, selected_game_display, move |name: String| {
+            let game_id = available_games
+                .iter()
+                .find(|(_, n)| *n == name)
+                .map(|(id, _)| id.clone())
+                .unwrap_or(name);
+            Message::SelectGame(game_id)
+        })
+        .placeholder("Select a game")
+        .width(Length::Fixed(200.0));
+
+        let title_label = text("modde").size(14);
+
+        let window_controls = row![
+            button(text("\u{2212}").size(12))
+                .on_press(Message::WindowMinimize)
+                .style(button::secondary)
+                .padding([2, 10]),
+            button(text("\u{25A1}").size(12))
+                .on_press(Message::WindowToggleMaximize)
+                .style(button::secondary)
+                .padding([2, 10]),
+            button(text("\u{2715}").size(12))
+                .on_press(Message::WindowClose)
+                .style(button::danger)
+                .padding([2, 10]),
+        ]
+        .spacing(2);
+
+        let title_bar_content = row![
+            game_picker,
+            iced::widget::Space::new().width(Length::Fill),
+            title_label,
+            iced::widget::Space::new().width(Length::Fill),
+            window_controls,
+        ]
+        .align_y(iced::Alignment::Center)
+        .spacing(8);
+
+        let title_bar = mouse_area(
+            container(title_bar_content)
+                .padding([4, 8])
+                .width(Length::Fill)
+                .style(container::rounded_box),
+        )
+        .on_press(Message::TitleBarDrag);
+
         let status_bar = container(text(&self.status_message).size(12)).padding(5);
 
         let main_layout = column![
+            title_bar,
             row![sidebar, content].spacing(0).height(Length::Fill),
             status_bar,
         ]
@@ -1340,6 +1427,7 @@ pub fn run() -> iced::Result {
     iced::application(Modde::new, Modde::update, Modde::view)
         .title(Modde::title)
         .theme(Modde::theme)
+        .decorations(false)
         .run()
 }
 
@@ -1383,6 +1471,7 @@ mod tests {
             available_games: smallvec::smallvec![("skyrim-se".to_string(), "Skyrim SE".to_string())],
             selected_game: None,
             stock_snapshot_exists: false,
+            window_id: window::Id::unique(),
         }
     }
 

@@ -10,11 +10,8 @@ pub fn view<'a>(
     active_profile: &'a Option<String>,
     experiment_depth: usize,
     new_profile_name: &'a str,
-    new_profile_game: &'a str,
-    available_games: &'a [(String, String)],
+    selected_game: &'a Option<String>,
 ) -> Element<'a, Message> {
-    let title = text("modde").size(28);
-
     let nav_button = |label: &'a str, target: View, current: &View| -> Element<'a, Message> {
         let is_active = std::mem::discriminant(&target) == std::mem::discriminant(current);
         let btn = button(text(label).size(14))
@@ -80,13 +77,7 @@ pub fn view<'a>(
         );
     }
 
-    // ── New profile form ──
-    let game_names: Vec<String> = available_games.iter().map(|(_, name)| name.clone()).collect();
-    let selected_game_name = available_games
-        .iter()
-        .find(|(id, _)| id == new_profile_game)
-        .map(|(_, name)| name.clone());
-
+    // ── New profile form (uses the globally selected game from the title bar) ──
     let new_profile_section = column![
         text("New Profile").size(12),
         text_input("Profile name...", new_profile_name)
@@ -94,32 +85,17 @@ pub fn view<'a>(
             .padding(4)
             .size(13)
             .width(Length::Fill),
-        pick_list(
-            game_names,
-            selected_game_name,
-            |selected_name: String| {
-                // We need to resolve name back to ID — but iced pick_list gives us the display name
-                // So we'll pass the name and resolve in the handler
-                Message::NewProfileGameChanged(selected_name)
-            },
-        )
-        .width(Length::Fill)
-        .placeholder("Game"),
         button(text("Create").size(12))
-            .on_press_maybe(if new_profile_name.is_empty() {
-                None
-            } else {
-                // Resolve game display name to ID
-                let game_id = available_games
-                    .iter()
-                    .find(|(_, name)| name == new_profile_game)
-                    .map(|(id, _)| id.clone())
-                    .unwrap_or_else(|| new_profile_game.to_string());
-                Some(Message::CreateProfile {
-                    name: new_profile_name.to_string(),
-                    game_id,
-                })
-            })
+            .on_press_maybe(
+                if new_profile_name.is_empty() || selected_game.is_none() {
+                    None
+                } else {
+                    Some(Message::CreateProfile {
+                        name: new_profile_name.to_string(),
+                        game_id: selected_game.clone().unwrap(),
+                    })
+                },
+            )
             .style(button::success)
             .padding([4, 12])
             .width(Length::Fill),
@@ -128,7 +104,6 @@ pub fn view<'a>(
 
     // ── Experiment indicator ──
     let mut sections = column![
-        title,
         nav,
         iced::widget::rule::horizontal(1),
         profile_selector,

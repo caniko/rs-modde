@@ -297,9 +297,9 @@ macro_rules! sidebar_test {
             let view = modde_ui::app::View::ModList;
             let profiles = $profiles;
             let active = $active;
-            let games = [("skyrim-se".to_string(), "Skyrim SE".to_string())];
+            let selected_game = Some("skyrim-se".to_string());
             let mut $ui = simulator(modde_ui::views::sidebar::view(
-                &view, &profiles, &active, $depth, "", "skyrim-se", &games,
+                &view, &profiles, &active, $depth, "", &selected_game,
             ));
             $body
         }
@@ -307,7 +307,6 @@ macro_rules! sidebar_test {
 }
 
 sidebar_test!(sidebar_shows_nav_items, profiles = vec![], active = None, depth = 0, |ui| {
-    ui.find("modde").expect("should show app title");
     ui.find("Mod List").expect("nav: Mod List");
     ui.find("Load Order").expect("nav: Load Order");
     ui.find("Saves").expect("nav: Saves");
