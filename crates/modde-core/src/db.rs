@@ -8,7 +8,7 @@ use crate::error::{CoreError, Result};
 use crate::profile::{EnabledMod, Profile, ProfileSource};
 use crate::resolver::{GameId, LoadOrderRule, ModId};
 
-const CURRENT_SCHEMA_VERSION: u32 = 1;
+const CURRENT_SCHEMA_VERSION: u32 = 2;
 
 const SCHEMA_V1: &str = "
 PRAGMA journal_mode = WAL;
@@ -83,6 +83,51 @@ CREATE INDEX IF NOT EXISTS idx_saves_profile ON saves(profile_id);
 CREATE INDEX IF NOT EXISTS idx_experiment_game ON experiment_stack(game_id, depth);
 ";
 
+const SCHEMA_V2: &str = "
+-- Per-file hiding (MO2-style .mohidden equivalent)
+CREATE TABLE IF NOT EXISTS hidden_files (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    mod_id     TEXT NOT NULL,
+    rel_path   TEXT NOT NULL,
+    hidden_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(profile_id, mod_id, rel_path)
+);
+
+-- Independent plugin ordering (separate from mod install priority)
+CREATE TABLE IF NOT EXISTS plugin_order (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id  INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    plugin_name TEXT NOT NULL,
+    sort_index  INTEGER NOT NULL,
+    enabled     INTEGER NOT NULL DEFAULT 1,
+    UNIQUE(profile_id, plugin_name)
+);
+
+-- Mod categories with collapsible separators
+CREATE TABLE IF NOT EXISTS mod_categories (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    color      TEXT,
+    sort_index INTEGER NOT NULL,
+    UNIQUE(profile_id, name)
+);
+
+-- Extend profile_mods with Nexus metadata, categories, notes, tags
+ALTER TABLE profile_mods ADD COLUMN nexus_mod_id INTEGER;
+ALTER TABLE profile_mods ADD COLUMN nexus_file_id INTEGER;
+ALTER TABLE profile_mods ADD COLUMN nexus_game_domain TEXT;
+ALTER TABLE profile_mods ADD COLUMN installed_timestamp INTEGER;
+ALTER TABLE profile_mods ADD COLUMN category_id INTEGER REFERENCES mod_categories(id);
+ALTER TABLE profile_mods ADD COLUMN notes TEXT;
+ALTER TABLE profile_mods ADD COLUMN tags TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_hidden_profile ON hidden_files(profile_id);
+CREATE INDEX IF NOT EXISTS idx_plugin_order_profile ON plugin_order(profile_id);
+CREATE INDEX IF NOT EXISTS idx_categories_profile ON mod_categories(profile_id);
+";
+
 /// Summary view of a profile (without loading all mods).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProfileSummary {
@@ -109,6 +154,30 @@ pub struct SnapshotMeta {
     pub tree_hash: String,
     pub file_count: usize,
     pub created_at: String,
+}
+
+/// A hidden file entry — prevents a specific file from a mod from being deployed.
+#[derive(Debug, Clone)]
+pub struct HiddenFile {
+    pub mod_id: String,
+    pub rel_path: String,
+}
+
+/// A plugin entry in the plugin load order (independent of mod install priority).
+#[derive(Debug, Clone)]
+pub struct PluginEntry {
+    pub plugin_name: String,
+    pub sort_index: i64,
+    pub enabled: bool,
+}
+
+/// A mod category for organizing the mod list.
+#[derive(Debug, Clone)]
+pub struct ModCategory {
+    pub id: Option<i64>,
+    pub name: String,
+    pub color: Option<String>,
+    pub sort_index: i64,
 }
 
 /// SQLite-backed persistent storage for modde.
@@ -147,11 +216,19 @@ impl ModdeDb {
             .conn
             .pragma_query_value(None, "user_version", |row| row.get(0))?;
 
-        if version < CURRENT_SCHEMA_VERSION {
+        if version < 1 {
             self.conn.execute_batch(SCHEMA_V1)?;
+            info!(from = version, to = 1, "database schema migrated to V1");
+        }
+
+        if version < 2 {
+            self.conn.execute_batch(SCHEMA_V2)?;
+            info!(from = version.max(1), to = 2, "database schema migrated to V2");
+        }
+
+        if version < CURRENT_SCHEMA_VERSION {
             self.conn
                 .pragma_update(None, "user_version", CURRENT_SCHEMA_VERSION)?;
-            info!(from = version, to = CURRENT_SCHEMA_VERSION, "database schema migrated");
         }
 
         // Ensure WAL and FK are always on (they reset per-connection).
@@ -593,6 +670,203 @@ impl ModdeDb {
         }
     }
 
+    // ── Hidden Files ─────────────────────────────────────────────
+
+    /// Hide a file from a mod in a profile (prevents deployment).
+    pub fn hide_file(&self, profile_id: i64, mod_id: &str, rel_path: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO hidden_files (profile_id, mod_id, rel_path)
+             VALUES (?1, ?2, ?3)",
+            params![profile_id, mod_id, rel_path],
+        )?;
+        Ok(())
+    }
+
+    /// Unhide a previously hidden file.
+    pub fn unhide_file(&self, profile_id: i64, mod_id: &str, rel_path: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM hidden_files WHERE profile_id = ?1 AND mod_id = ?2 AND rel_path = ?3",
+            params![profile_id, mod_id, rel_path],
+        )?;
+        Ok(())
+    }
+
+    /// List all hidden files for a profile.
+    pub fn list_hidden_files(&self, profile_id: i64) -> Result<Vec<HiddenFile>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT mod_id, rel_path FROM hidden_files WHERE profile_id = ?1",
+        )?;
+        let files = stmt
+            .query_map(params![profile_id], |row| {
+                Ok(HiddenFile {
+                    mod_id: row.get(0)?,
+                    rel_path: row.get(1)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(files)
+    }
+
+    /// List hidden files for a specific mod in a profile.
+    pub fn list_hidden_files_for_mod(&self, profile_id: i64, mod_id: &str) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT rel_path FROM hidden_files WHERE profile_id = ?1 AND mod_id = ?2",
+        )?;
+        let paths = stmt
+            .query_map(params![profile_id, mod_id], |row| row.get(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(paths)
+    }
+
+    // ── Plugin Order ─────────────────────────────────────────────
+
+    /// Set the plugin order for a profile (replaces any existing order).
+    pub fn set_plugin_order(&self, profile_id: i64, plugins: &[PluginEntry]) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM plugin_order WHERE profile_id = ?1",
+            params![profile_id],
+        )?;
+        let mut stmt = self.conn.prepare(
+            "INSERT INTO plugin_order (profile_id, plugin_name, sort_index, enabled)
+             VALUES (?1, ?2, ?3, ?4)",
+        )?;
+        for plugin in plugins {
+            stmt.execute(params![
+                profile_id,
+                plugin.plugin_name,
+                plugin.sort_index,
+                plugin.enabled,
+            ])?;
+        }
+        Ok(())
+    }
+
+    /// Get the plugin order for a profile.
+    pub fn get_plugin_order(&self, profile_id: i64) -> Result<Vec<PluginEntry>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT plugin_name, sort_index, enabled FROM plugin_order
+             WHERE profile_id = ?1 ORDER BY sort_index",
+        )?;
+        let plugins = stmt
+            .query_map(params![profile_id], |row| {
+                Ok(PluginEntry {
+                    plugin_name: row.get(0)?,
+                    sort_index: row.get(1)?,
+                    enabled: row.get(2)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(plugins)
+    }
+
+    /// Toggle a plugin's enabled state.
+    pub fn toggle_plugin(&self, profile_id: i64, plugin_name: &str, enabled: bool) -> Result<()> {
+        self.conn.execute(
+            "UPDATE plugin_order SET enabled = ?1 WHERE profile_id = ?2 AND plugin_name = ?3",
+            params![enabled, profile_id, plugin_name],
+        )?;
+        Ok(())
+    }
+
+    // ── Mod Categories ───────────────────────────────────────────
+
+    /// Create a mod category, returning its ID.
+    pub fn create_category(&self, profile_id: i64, category: &ModCategory) -> Result<i64> {
+        self.conn.execute(
+            "INSERT INTO mod_categories (profile_id, name, color, sort_index)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![profile_id, category.name, category.color, category.sort_index],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Update a category.
+    pub fn update_category(&self, category_id: i64, name: &str, color: Option<&str>, sort_index: i64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE mod_categories SET name = ?1, color = ?2, sort_index = ?3 WHERE id = ?4",
+            params![name, color, sort_index, category_id],
+        )?;
+        Ok(())
+    }
+
+    /// Delete a category (nullifies category_id on affected mods).
+    pub fn delete_category(&self, category_id: i64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profile_mods SET category_id = NULL WHERE category_id = ?1",
+            params![category_id],
+        )?;
+        self.conn.execute(
+            "DELETE FROM mod_categories WHERE id = ?1",
+            params![category_id],
+        )?;
+        Ok(())
+    }
+
+    /// List categories for a profile.
+    pub fn list_categories(&self, profile_id: i64) -> Result<Vec<ModCategory>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, color, sort_index FROM mod_categories
+             WHERE profile_id = ?1 ORDER BY sort_index",
+        )?;
+        let cats = stmt
+            .query_map(params![profile_id], |row| {
+                Ok(ModCategory {
+                    id: Some(row.get(0)?),
+                    name: row.get(1)?,
+                    color: row.get(2)?,
+                    sort_index: row.get(3)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(cats)
+    }
+
+    /// Assign a mod to a category.
+    pub fn set_mod_category(&self, profile_id: i64, mod_id: &str, category_id: Option<i64>) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profile_mods SET category_id = ?1 WHERE profile_id = ?2 AND mod_id = ?3",
+            params![category_id, profile_id, mod_id],
+        )?;
+        Ok(())
+    }
+
+    /// Set notes for a mod.
+    pub fn set_mod_notes(&self, profile_id: i64, mod_id: &str, notes: Option<&str>) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profile_mods SET notes = ?1 WHERE profile_id = ?2 AND mod_id = ?3",
+            params![notes, profile_id, mod_id],
+        )?;
+        Ok(())
+    }
+
+    /// Set tags for a mod (stored as JSON array).
+    pub fn set_mod_tags(&self, profile_id: i64, mod_id: &str, tags: Option<&str>) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profile_mods SET tags = ?1 WHERE profile_id = ?2 AND mod_id = ?3",
+            params![tags, profile_id, mod_id],
+        )?;
+        Ok(())
+    }
+
+    /// Set Nexus metadata for a mod.
+    pub fn set_mod_nexus_meta(
+        &self,
+        profile_id: i64,
+        mod_id: &str,
+        nexus_mod_id: i64,
+        nexus_file_id: i64,
+        nexus_game_domain: &str,
+        installed_timestamp: i64,
+    ) -> Result<()> {
+        self.conn.execute(
+            "UPDATE profile_mods SET nexus_mod_id = ?1, nexus_file_id = ?2,
+                    nexus_game_domain = ?3, installed_timestamp = ?4
+             WHERE profile_id = ?5 AND mod_id = ?6",
+            params![nexus_mod_id, nexus_file_id, nexus_game_domain, installed_timestamp, profile_id, mod_id],
+        )?;
+        Ok(())
+    }
+
     // ── TOML Import ───────────────────────────────────────────────
 
     /// Import existing TOML profile files into the database.
@@ -658,8 +932,10 @@ impl ModdeDb {
 
     fn insert_mods(&self, profile_id: i64, mods: &[EnabledMod]) -> Result<()> {
         let mut stmt = self.conn.prepare(
-            "INSERT INTO profile_mods (profile_id, mod_id, enabled, version, fomod_config, sort_index)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO profile_mods (profile_id, mod_id, enabled, version, fomod_config, sort_index,
+                    nexus_mod_id, nexus_file_id, nexus_game_domain, installed_timestamp,
+                    category_id, notes, tags)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         )?;
 
         for (idx, m) in mods.iter().enumerate() {
@@ -670,6 +946,13 @@ impl ModdeDb {
                 m.version,
                 m.fomod_config,
                 idx as i64,
+                m.nexus_mod_id,
+                m.nexus_file_id,
+                m.nexus_game_domain,
+                m.installed_timestamp,
+                m.category_id,
+                m.notes,
+                m.tags,
             ])?;
         }
 
@@ -696,7 +979,9 @@ impl ModdeDb {
 
     fn load_mods(&self, profile_id: i64) -> Result<Vec<EnabledMod>> {
         let mut stmt = self.conn.prepare(
-            "SELECT mod_id, enabled, version, fomod_config
+            "SELECT mod_id, enabled, version, fomod_config,
+                    nexus_mod_id, nexus_file_id, nexus_game_domain, installed_timestamp,
+                    category_id, notes, tags
              FROM profile_mods WHERE profile_id = ?1 ORDER BY sort_index",
         )?;
 
@@ -707,6 +992,13 @@ impl ModdeDb {
                     enabled: row.get(1)?,
                     version: row.get(2)?,
                     fomod_config: row.get(3)?,
+                    nexus_mod_id: row.get(4)?,
+                    nexus_file_id: row.get(5)?,
+                    nexus_game_domain: row.get(6)?,
+                    installed_timestamp: row.get(7)?,
+                    category_id: row.get(8)?,
+                    notes: row.get(9)?,
+                    tags: row.get(10)?,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -852,13 +1144,13 @@ mod tests {
                     mod_id: "mod_a".to_string(),
                     enabled: true,
                     version: Some("1.0".to_string()),
-                    fomod_config: None,
+                    fomod_config: None, ..Default::default()
                 },
                 EnabledMod {
                     mod_id: "mod_b".to_string(),
                     enabled: false,
                     version: None,
-                    fomod_config: None,
+                    fomod_config: None, ..Default::default()
                 },
             ],
             overrides: PathBuf::from("/tmp/overrides"),
@@ -936,7 +1228,7 @@ mod tests {
             mod_id: "mod_c".to_string(),
             enabled: true,
             version: None,
-            fomod_config: None,
+            fomod_config: None, ..Default::default()
         });
 
         db.update_profile(&profile).unwrap();

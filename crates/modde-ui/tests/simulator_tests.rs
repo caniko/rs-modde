@@ -199,19 +199,19 @@ fn sample_mods() -> Vec<modde_core::profile::EnabledMod> {
             mod_id: "SkyUI".to_string(),
             enabled: true,
             version: Some("5.2".to_string()),
-            fomod_config: None,
+            fomod_config: None, ..Default::default()
         },
         modde_core::profile::EnabledMod {
             mod_id: "USSEP".to_string(),
             enabled: true,
             version: Some("4.2.8".to_string()),
-            fomod_config: None,
+            fomod_config: None, ..Default::default()
         },
         modde_core::profile::EnabledMod {
             mod_id: "EnhancedLights".to_string(),
             enabled: false,
             version: None,
-            fomod_config: None,
+            fomod_config: None, ..Default::default()
         },
     ]
 }

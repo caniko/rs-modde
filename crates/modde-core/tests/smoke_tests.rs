@@ -26,7 +26,7 @@ fn simple_mod(id: &str, enabled: bool) -> EnabledMod {
         mod_id: id.to_string(),
         enabled,
         version: Some("1.0".to_string()),
-        fomod_config: None,
+        fomod_config: None, ..Default::default()
     }
 }
 
@@ -228,7 +228,7 @@ fn smoke_symlink_farm_build() {
         vec![("textures/sky.dds".into(), PathBuf::from("/store/mod_b/sky.dds"))],
     );
 
-    let farm = SymlinkFarm::build("smoke_profile", &resolved, &mod_files, None).unwrap();
+    let farm = SymlinkFarm::build("smoke_profile", &resolved, &mod_files, None, None).unwrap();
     // mod_b wins because it's later in the order
     assert_eq!(farm.links.len(), 1);
     assert_eq!(

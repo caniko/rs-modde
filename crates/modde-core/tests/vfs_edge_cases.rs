@@ -29,7 +29,7 @@ fn test_build_many_mods_many_files() {
         mod_files.insert(ModId::from(mod_id.as_str()), files);
     }
 
-    let farm = SymlinkFarm::build("stress_test", &resolved, &mod_files, None).unwrap();
+    let farm = SymlinkFarm::build("stress_test", &resolved, &mod_files, None, None).unwrap();
     // Last mod wins for each file path, so 10 unique files
     assert_eq!(farm.links.len(), 10);
     // All links should point to mod_49 (last in order)
@@ -51,7 +51,7 @@ fn test_build_override_chain_last_wins() {
         );
     }
 
-    let farm = SymlinkFarm::build("override_chain", &resolved, &mod_files, None).unwrap();
+    let farm = SymlinkFarm::build("override_chain", &resolved, &mod_files, None, None).unwrap();
     assert_eq!(farm.links.len(), 1);
     assert!(farm.links[&shared_file].to_string_lossy().contains("mod_d"));
 }
@@ -70,7 +70,7 @@ fn test_build_partial_overlap() {
         ("file3.txt".into(), PathBuf::from("/store/mod_b/file3.txt")),
     ]);
 
-    let farm = SymlinkFarm::build("partial_overlap", &resolved, &mod_files, None).unwrap();
+    let farm = SymlinkFarm::build("partial_overlap", &resolved, &mod_files, None, None).unwrap();
     assert_eq!(farm.links.len(), 3);
     // file1 from mod_a
     assert!(farm.links["file1.txt"].to_string_lossy().contains("mod_a"));
@@ -88,7 +88,7 @@ fn test_build_empty_order_with_nonempty_mod_files() {
         ("file.txt".into(), PathBuf::from("/store/orphan/file.txt")),
     ]);
 
-    let farm = SymlinkFarm::build("empty_order", &resolved, &mod_files, None).unwrap();
+    let farm = SymlinkFarm::build("empty_order", &resolved, &mod_files, None, None).unwrap();
     assert!(farm.links.is_empty(), "mods not in order should not appear");
 }
 
@@ -97,7 +97,7 @@ fn test_build_staging_dir_path_format() {
     let resolved = make_resolved(vec![]);
     let mod_files: ModFiles = HashMap::new();
 
-    let farm = SymlinkFarm::build("my-profile", &resolved, &mod_files, None).unwrap();
+    let farm = SymlinkFarm::build("my-profile", &resolved, &mod_files, None, None).unwrap();
     assert!(farm.staging_dir.to_string_lossy().contains("my-profile"));
     assert!(farm.staging_dir.to_string_lossy().contains("staging"));
 }
@@ -111,7 +111,7 @@ fn test_build_mod_with_many_files() {
     let mut mod_files: ModFiles = HashMap::new();
     mod_files.insert(ModId::from("big_mod"), files);
 
-    let farm = SymlinkFarm::build("big_mod_test", &resolved, &mod_files, None).unwrap();
+    let farm = SymlinkFarm::build("big_mod_test", &resolved, &mod_files, None, None).unwrap();
     assert_eq!(farm.links.len(), 1000);
 }
 

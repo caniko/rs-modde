@@ -26,7 +26,7 @@ fn simple_mod(id: &str, enabled: bool) -> EnabledMod {
         mod_id: id.to_string(),
         enabled,
         version: Some("1.0".to_string()),
-        fomod_config: None,
+        fomod_config: None, ..Default::default()
     }
 }
 
@@ -501,20 +501,20 @@ fn e2e_disabled_mods_excluded_from_resolution() {
                 mod_id: "disabled_1".to_string(),
                 enabled: false,
                 version: Some("1.0".to_string()),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             simple_mod("also_on", true),
             EnabledMod {
                 mod_id: "disabled_2".to_string(),
                 enabled: false,
                 version: Some("2.0".to_string()),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             EnabledMod {
                 mod_id: "disabled_3".to_string(),
                 enabled: false,
                 version: None,
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             simple_mod("last_enabled", true),
         ],
@@ -904,7 +904,7 @@ fn e2e_incompatible_mods_one_disabled_is_ok() {
                 mod_id: "reshade".to_string(),
                 enabled: false,
                 version: None,
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
         ],
         overrides: PathBuf::from("/tmp"),

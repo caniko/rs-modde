@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -124,7 +124,22 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
         None
     };
 
-    let farm = SymlinkFarm::build(name, &resolved, &mod_files, overrides.as_deref())
+    // Load hidden files for this profile
+    let hidden_set: Option<HashSet<(String, String)>> = profile.id.and_then(|pid| {
+        let hidden = pm.db().list_hidden_files(pid).ok()?;
+        if hidden.is_empty() {
+            None
+        } else {
+            let set: HashSet<(String, String)> = hidden
+                .into_iter()
+                .map(|h| (h.mod_id, h.rel_path))
+                .collect();
+            info!(count = set.len(), "applying hidden file exclusions");
+            Some(set)
+        }
+    });
+
+    let farm = SymlinkFarm::build(name, &resolved, &mod_files, overrides.as_deref(), hidden_set.as_ref())
         .context("failed to build symlink farm")?;
 
     let total_files = farm.links.len();

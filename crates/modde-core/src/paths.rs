@@ -47,6 +47,11 @@ pub fn profiles_dir() -> PathBuf {
     modde_data_dir().join("profiles")
 }
 
+/// Downloads directory: `<modde_data>/downloads/`.
+pub fn downloads_dir() -> PathBuf {
+    modde_data_dir().join("downloads")
+}
+
 /// Stock game snapshots: `<modde_data>/stock/`.
 pub fn stock_dir() -> PathBuf {
     modde_data_dir().join("stock")

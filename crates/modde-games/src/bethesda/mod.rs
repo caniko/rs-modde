@@ -1,6 +1,9 @@
 pub mod archives;
 pub mod fomod;
 pub mod ini;
+pub mod ini_profiles;
+pub mod loot;
+pub mod plugin_header;
 pub mod plugins_txt;
 pub mod saves;
 

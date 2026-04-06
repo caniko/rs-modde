@@ -29,7 +29,7 @@ fn simple_mod(id: &str, enabled: bool) -> EnabledMod {
         mod_id: id.to_string(),
         enabled,
         version: None,
-        fomod_config: None,
+        fomod_config: None, ..Default::default()
     }
 }
 
@@ -214,7 +214,7 @@ fn test_profile_with_many_mods() {
             } else {
                 None
             },
-            fomod_config: None,
+            fomod_config: None, ..Default::default()
         })
         .collect();
 
@@ -239,13 +239,13 @@ fn test_profile_mod_with_version() {
                 mod_id: "skse".to_string(),
                 enabled: true,
                 version: Some("2.2.6".to_string()),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             EnabledMod {
                 mod_id: "ussep".to_string(),
                 enabled: true,
                 version: None,
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
         ],
     );

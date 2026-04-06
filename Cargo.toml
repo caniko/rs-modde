@@ -10,7 +10,7 @@ members = [
 
 [workspace.package]
 edition = "2024"
-license = "MIT OR Apache-2.0"
+license = "GPL-3.0-only"
 repository = "https://codeberg.org/caniko/rs-modde"
 
 [workspace.dependencies]
@@ -19,6 +19,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.9"
 quick-xml = { version = "0.37", features = ["serialize"] }
+serde_yaml_ng = "0.10"
 
 # Async
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "io-util", "net", "time"] }

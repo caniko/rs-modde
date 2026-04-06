@@ -21,7 +21,7 @@ fn simple_mod(id: &str, enabled: bool) -> EnabledMod {
         mod_id: id.to_string(),
         enabled,
         version: None,
-        fomod_config: None,
+        fomod_config: None, ..Default::default()
     }
 }
 
@@ -320,7 +320,7 @@ fn test_vfs_build_100_mods_10_files_each() {
         mod_files.insert(ModId::from(format!("mod_{i}").as_str()), files);
     }
 
-    let farm = SymlinkFarm::build("stress_test", &resolved, &mod_files, None).unwrap();
+    let farm = SymlinkFarm::build("stress_test", &resolved, &mod_files, None, None).unwrap();
     assert_eq!(farm.links.len(), 1000); // 100 mods × 10 unique files each
 }
 
@@ -342,7 +342,7 @@ fn test_vfs_build_override_cascade() {
         );
     }
 
-    let farm = SymlinkFarm::build("cascade", &resolved, &mod_files, None).unwrap();
+    let farm = SymlinkFarm::build("cascade", &resolved, &mod_files, None, None).unwrap();
     assert_eq!(farm.links.len(), 1);
     // The last mod (mod_49) should win
     assert_eq!(
@@ -633,19 +633,19 @@ fn test_profile_with_unicode_mod_names() {
                 mod_id: "日本語モッド".to_string(),
                 enabled: true,
                 version: Some("1.0α".to_string()),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             EnabledMod {
                 mod_id: "Ñoño_Ñuñez".to_string(),
                 enabled: true,
                 version: Some("2.0".to_string()),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             EnabledMod {
                 mod_id: "模组_中文".to_string(),
                 enabled: false,
                 version: None,
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
         ],
         overrides: PathBuf::from("/tmp/overrides"),
@@ -673,7 +673,7 @@ fn test_profile_with_fomod_config_roundtrip() {
             mod_id: "texture_pack".to_string(),
             enabled: true,
             version: Some("3.0".to_string()),
-            fomod_config: Some(fomod_json.to_string()),
+            fomod_config: Some(fomod_json.to_string()), ..Default::default()
         }],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],

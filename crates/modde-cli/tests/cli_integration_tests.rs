@@ -28,13 +28,13 @@ fn test_profile_create_load_modify_save_load() {
                 mod_id: "skyui".to_string(),
                 enabled: true,
                 version: Some("5.2".to_string()),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             EnabledMod {
                 mod_id: "ussep".to_string(),
                 enabled: true,
                 version: Some("4.2.8".to_string()),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
         ],
         overrides: PathBuf::from("/tmp/overrides"),
@@ -59,7 +59,7 @@ fn test_profile_create_load_modify_save_load() {
         mod_id: "enb_helper".to_string(),
         enabled: true,
         version: Some("1.0".to_string()),
-        fomod_config: None,
+        fomod_config: None, ..Default::default()
     });
 
     // Save modified profile (delete + recreate)
@@ -150,31 +150,31 @@ fn test_resolve_complex_mod_dependency_chain() {
                 mod_id: "base".to_string(),
                 enabled: true,
                 version: Some("1.0".to_string()),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             EnabledMod {
                 mod_id: "framework".to_string(),
                 enabled: true,
                 version: None,
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             EnabledMod {
                 mod_id: "visuals".to_string(),
                 enabled: true,
                 version: Some("2.0".to_string()),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             EnabledMod {
                 mod_id: "gameplay".to_string(),
                 enabled: true,
                 version: Some("3.0".to_string()),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             EnabledMod {
                 mod_id: "patch".to_string(),
                 enabled: true,
                 version: Some("1.1".to_string()),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
         ],
         overrides: PathBuf::from("/tmp"),
@@ -229,13 +229,13 @@ fn test_resolve_with_disabled_dependency() {
                 mod_id: "base".to_string(),
                 enabled: false, // disabled
                 version: None,
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             EnabledMod {
                 mod_id: "dependent".to_string(),
                 enabled: true,
                 version: None,
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
         ],
         overrides: PathBuf::from("/tmp"),
@@ -271,13 +271,13 @@ async fn test_deploy_pipeline_end_to_end() {
                 mod_id: "texture_mod".to_string(),
                 enabled: true,
                 version: Some("1.0".to_string()),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             EnabledMod {
                 mod_id: "mesh_mod".to_string(),
                 enabled: true,
                 version: Some("2.0".to_string()),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
         ],
         overrides: PathBuf::from("/tmp"),
@@ -333,7 +333,7 @@ async fn test_deploy_pipeline_end_to_end() {
     );
 
     // Build symlink farm
-    let farm = SymlinkFarm::build("e2e_test", &resolved, &mod_files, None).unwrap();
+    let farm = SymlinkFarm::build("e2e_test", &resolved, &mod_files, None, None).unwrap();
 
     // mesh_mod loads after texture_mod, so it wins for shared.dds
     assert_eq!(
@@ -436,13 +436,13 @@ fn test_profile_wabbajack_source_roundtrip() {
                 mod_id: "wj_mod_1".to_string(),
                 enabled: true,
                 version: Some("1.0".to_string()),
-                fomod_config: Some(r#"{"steps":[]}"#.to_string()),
+                fomod_config: Some(r#"{"steps":[]}"#.to_string()), ..Default::default()
             },
             EnabledMod {
                 mod_id: "wj_mod_2".to_string(),
                 enabled: false,
                 version: None,
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
         ],
         overrides: PathBuf::from("/tmp/overrides"),
@@ -491,7 +491,7 @@ fn test_profile_nexus_collection_source_roundtrip() {
                 mod_id: format!("mod_{i}"),
                 enabled: i % 2 == 0,
                 version: Some(format!("{}.0", i)),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             })
             .collect(),
         overrides: PathBuf::from("/tmp"),

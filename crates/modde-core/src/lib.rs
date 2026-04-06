@@ -11,7 +11,7 @@ pub mod settings;
 pub mod stock;
 pub mod vfs;
 
-pub use db::{ModdeDb, ProfileSummary, SaveEntry, SnapshotMeta};
+pub use db::{HiddenFile, ModCategory, ModdeDb, PluginEntry, ProfileSummary, SaveEntry, SnapshotMeta};
 pub use error::{CoreError, Result};
 pub use manifest::collection::CollectionManifest;
 pub use manifest::wabbajack::{DownloadDirective, InstallDirective, WabbajackManifest};

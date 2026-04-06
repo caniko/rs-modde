@@ -3,11 +3,16 @@ pub mod detect;
 pub mod fomod;
 pub mod import;
 pub mod install;
+pub mod loot;
 pub mod nexus;
+pub mod nxm;
+pub mod play;
 pub mod profile;
 pub mod rollback;
 pub mod save;
 pub mod stock;
+pub mod tool;
+pub mod update;
 pub mod verify;
 
 use std::path::PathBuf;
@@ -15,6 +20,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use modde_core::profile::{Profile, ProfileManager};
+use modde_core::save::SaveFingerprint;
 
 /// Resolve the game's save directory via the GamePlugin trait.
 ///
@@ -38,6 +44,18 @@ pub fn require_save_dir(game_id: &str) -> Result<PathBuf> {
             "save directory not found for game '{game_id}'. \
              The game may not be installed, or save tracking is not supported for this title."
         ))
+}
+
+/// Compute a save fingerprint for a profile by classifying its mods via the game plugin.
+pub fn compute_fingerprint(pm: &ProfileManager, name: &str, game_id: &str) -> Option<SaveFingerprint> {
+    let profile = pm.load(name, Some(game_id)).ok()?;
+    let game_plugin = modde_games::resolve_game_plugin(game_id)?;
+    let staging_dir = ProfileManager::staging_dir(&profile.name);
+
+    Some(SaveFingerprint::compute(&profile.mods, |mod_id| {
+        let mod_path = staging_dir.join(mod_id);
+        game_plugin.classify_mod(&mod_path).affects_saves()
+    }))
 }
 
 /// Load a profile by name (optional) and game (optional), falling back to

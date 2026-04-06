@@ -1,6 +1,7 @@
 pub mod api;
 pub mod auth;
 pub mod cdn;
+pub mod updates;
 
 pub use api::NexusApi;
 

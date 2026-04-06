@@ -273,7 +273,7 @@ async fn handle_nexus_collection(
             mod_id: mod_id_str,
             enabled: !collection_mod.optional,
             version: Some(collection_mod.version.clone()),
-            fomod_config: None,
+            fomod_config: None, ..Default::default()
         });
     }
 
@@ -457,7 +457,7 @@ async fn handle_wabbajack(
             mod_id,
             enabled: true,
             version: None,
-            fomod_config: None,
+            fomod_config: None, ..Default::default()
         });
     }
 
@@ -990,7 +990,7 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
             mod_id: mod_id_str.clone(),
             enabled: true,
             version: None,
-            fomod_config: None,
+            fomod_config: None, ..Default::default()
         });
     }
 

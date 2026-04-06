@@ -436,6 +436,10 @@ pub enum Message {
     WindowToggleMaximize,
     WindowClose,
 
+    // Play (deploy + launch)
+    PlayGame,
+    LaunchComplete(Result<Option<String>, String>),
+
     // Mod list
     ToggleMod { mod_id: String, enabled: bool },
     FilterChanged(String),
@@ -759,7 +763,7 @@ impl Modde {
                                 mod_id: mod_name.clone(),
                                 enabled: true,
                                 version: None,
-                                fomod_config: None,
+                                fomod_config: None, ..Default::default()
                             });
                             let _ = pm.create(&profile).or_else(|_| pm.update(&profile).map(|_| 0));
                             self.status_message = format!("Added mod: {mod_name}");
@@ -815,6 +819,49 @@ impl Modde {
             Message::DeployComplete(result) => match result {
                 Ok(msg) => self.status_message = msg,
                 Err(e) => self.status_message = format!("Deploy failed: {e}"),
+            },
+            Message::PlayGame => {
+                self.status_message = "Deploying and launching...".to_string();
+                if let Some(ref profile) = self.loaded_profile {
+                    let profile_name = profile.name.clone();
+                    let game_id = profile.game_id.clone();
+                    return Task::perform(
+                        async move {
+                            tokio::task::spawn_blocking(move || -> Result<Option<String>, String> {
+                                // Deploy
+                                let pm = ProfileManager::open().map_err(|e| e.to_string())?;
+                                let profile = pm.load(&profile_name, Some(&game_id)).map_err(|e| e.to_string())?;
+                                let resolved = modde_core::resolver::resolve(&profile).map_err(|e| e.to_string())?;
+                                let game_plugin = modde_games::resolve_game_plugin(&game_id)
+                                    .ok_or_else(|| format!("unsupported game: {game_id}"))?;
+                                let install_path = game_plugin.detect_install()
+                                    .ok_or_else(|| format!("could not detect install for {game_id}"))?;
+                                let mod_dir = game_plugin.mod_directory(&install_path);
+                                let staging_dir = ProfileManager::staging_dir(&profile.name);
+                                game_plugin.deploy(&staging_dir, &mod_dir).map_err(|e| e.to_string())?;
+                                game_plugin.post_deploy(&install_path).map_err(|e| e.to_string())?;
+
+                                // Launch
+                                let detected = modde_games::find_detected_game(&game_id)
+                                    .ok_or_else(|| format!("could not detect launcher for '{game_id}'"))?;
+                                let exit_status = detected.source.launch().map_err(|e| e.to_string())?;
+                                match exit_status {
+                                    Some(status) => Ok(Some(format!(
+                                        "Deployed {} mod(s), game exited ({})",
+                                        resolved.order.len(), status,
+                                    ))),
+                                    None => Ok(None),
+                                }
+                            }).await.map_err(|e| e.to_string())?
+                        },
+                        Message::LaunchComplete,
+                    );
+                }
+            }
+            Message::LaunchComplete(result) => match result {
+                Ok(Some(msg)) => self.status_message = msg,
+                Ok(None) => self.status_message = "Game launched via Steam".to_string(),
+                Err(e) => self.status_message = format!("Play failed: {e}"),
             },
 
             // ── Load order ───────────────────────────────────────

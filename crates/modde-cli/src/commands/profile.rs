@@ -5,19 +5,7 @@ use modde_core::profile::{ActivateResult, Profile, ProfileManager, ProfileSource
 use modde_core::save::SaveFingerprint;
 
 use crate::ProfileAction;
-use super::resolve_save_dir;
-
-/// Compute a save fingerprint for a profile by classifying its mods via the game plugin.
-fn compute_fingerprint(pm: &ProfileManager, name: &str, game_id: &str) -> Option<SaveFingerprint> {
-    let profile = pm.load(name, Some(game_id)).ok()?;
-    let game_plugin = modde_games::resolve_game_plugin(game_id)?;
-    let staging_dir = ProfileManager::staging_dir(&profile.name);
-
-    Some(SaveFingerprint::compute(&profile.mods, |mod_id| {
-        let mod_path = staging_dir.join(mod_id);
-        game_plugin.classify_mod(&mod_path).affects_saves()
-    }))
-}
+use super::{compute_fingerprint, resolve_save_dir};
 
 pub fn handle(action: ProfileAction) -> Result<()> {
     let pm = ProfileManager::open().context("failed to open profile database")?;

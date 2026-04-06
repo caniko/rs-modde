@@ -16,6 +16,7 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml_ng = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 smallvec = { workspace = true }

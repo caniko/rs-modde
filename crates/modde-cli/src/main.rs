@@ -24,6 +24,22 @@ enum Commands {
         #[command(subcommand)]
         action: ProfileAction,
     },
+    /// Switch profile, deploy mods, and launch the game
+    Play {
+        /// Profile to activate (uses active profile if omitted)
+        profile: Option<String>,
+        #[arg(long)]
+        game: String,
+        /// Skip mod deployment (just switch + launch)
+        #[arg(long)]
+        no_deploy: bool,
+        /// Skip profile switch (just deploy + launch active)
+        #[arg(long)]
+        no_switch: bool,
+        /// Skip save auto-capture after game exit
+        #[arg(long)]
+        no_capture: bool,
+    },
     /// Deploy mods for the active or specified profile
     Deploy {
         #[arg(long)]
@@ -69,6 +85,26 @@ enum Commands {
     Save {
         #[command(subcommand)]
         action: SaveAction,
+    },
+    /// Check for mod updates from Nexus
+    Update {
+        #[command(subcommand)]
+        action: UpdateAction,
+    },
+    /// LOOT masterlist integration (Bethesda plugin sorting)
+    Loot {
+        #[command(subcommand)]
+        action: LootAction,
+    },
+    /// Run external tools with overwrite capture
+    Tool {
+        #[command(subcommand)]
+        action: ToolAction,
+    },
+    /// Handle nxm:// download links from Nexus Mods
+    Nxm {
+        #[command(subcommand)]
+        action: NxmAction,
     },
     /// Detect installed games across Steam and Heroic launchers
     Detect,
@@ -217,6 +253,71 @@ enum StockAction {
 }
 
 #[derive(Subcommand)]
+enum UpdateAction {
+    /// Check for updates on Nexus Mods
+    Check {
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+        /// Time period to check: "1d", "1w", or "1m"
+        #[arg(long, default_value = "1w")]
+        period: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum LootAction {
+    /// Sort plugins using LOOT masterlist rules
+    Sort {
+        #[arg(long)]
+        game: String,
+        /// Path to game Data directory (auto-detected if omitted)
+        #[arg(long)]
+        data_dir: Option<PathBuf>,
+    },
+    /// Validate plugins for Form 43 and missing master errors
+    Validate {
+        #[arg(long)]
+        game: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ToolAction {
+    /// Run an external tool with overwrite capture
+    Run {
+        /// Path to executable
+        executable: PathBuf,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+        /// Arguments to pass to the tool
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
+    /// List detected tools for a game
+    List {
+        #[arg(long)]
+        game: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum NxmAction {
+    /// Handle an nxm:// download URI
+    Handle {
+        /// The nxm:// URI
+        uri: String,
+        #[arg(long)]
+        profile: Option<String>,
+    },
+    /// Install the nxm:// URI handler for your desktop
+    Install,
+}
+
+#[derive(Subcommand)]
 enum SaveAction {
     /// Assign a save to a profile
     Assign {
@@ -326,11 +427,27 @@ fn main() -> Result<()> {
         Commands::Detect => return commands::detect::handle(),
         Commands::Import => return commands::import::handle(),
         Commands::Fomod { action } => return commands::fomod::handle(action),
+        Commands::Loot { action } => {
+            return match action {
+                LootAction::Sort { game, data_dir } => commands::loot::handle_sort(&game, data_dir),
+                LootAction::Validate { game } => commands::loot::handle_validate(&game),
+            };
+        }
+        Commands::Tool { action: ToolAction::List { game } } => {
+            return commands::tool::handle_list(&game);
+        }
+        Commands::Nxm { action: NxmAction::Install } => {
+            commands::nxm::install_handler()?;
+            return Ok(());
+        }
         _ => {}
     }
 
     tokio::runtime::Runtime::new()?.block_on(async {
         match cli.command {
+            Commands::Play { profile, game, no_deploy, no_switch, no_capture } => {
+                commands::play::handle(profile, game, no_deploy, no_switch, no_capture).await?
+            }
             Commands::Deploy { profile, game } => commands::deploy::handle(profile, game).await?,
             Commands::Rollback { profile, game } => {
                 commands::rollback::handle(profile, game).await?
@@ -342,9 +459,26 @@ fn main() -> Result<()> {
             Commands::Nexus { action } => commands::nexus::handle(action).await?,
             Commands::Stock { action } => commands::stock::handle(action).await?,
             Commands::Save { action } => commands::save::handle(action).await?,
+            Commands::Update { action } => match action {
+                UpdateAction::Check { profile, game, period } => {
+                    commands::update::handle_check(profile, game, period).await?
+                }
+            },
+            Commands::Tool { action } => match action {
+                ToolAction::Run { executable, profile, game, args } => {
+                    commands::tool::handle_run(executable, args, profile, game).await?
+                }
+                ToolAction::List { .. } => unreachable!(),
+            },
+            Commands::Nxm { action } => match action {
+                NxmAction::Handle { uri, profile } => {
+                    commands::nxm::handle(uri, profile).await?
+                }
+                NxmAction::Install => unreachable!(),
+            },
             // Already handled above
             Commands::Profile { .. } | Commands::Detect | Commands::Import
-            | Commands::Fomod { .. } | Commands::Gui => unreachable!(),
+            | Commands::Fomod { .. } | Commands::Loot { .. } | Commands::Gui => unreachable!(),
         }
         Ok(())
     })

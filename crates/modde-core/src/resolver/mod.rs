@@ -134,6 +134,45 @@ impl ConflictMap {
             .map(|(path, mods)| (path.as_str(), mods))
             .collect()
     }
+
+    /// Determine the winner for a given file path based on mod priority order.
+    ///
+    /// `priority_order` lists mods from lowest to highest priority.
+    /// The last mod in the list that provides the file wins.
+    /// Hidden `(mod_id, rel_path)` pairs are excluded.
+    pub fn winner_for(
+        &self,
+        file_path: &str,
+        priority_order: &[ModId],
+        hidden: &HashSet<(String, String)>,
+    ) -> Option<ModId> {
+        let providers = self.files.get(file_path)?;
+        priority_order
+            .iter()
+            .rev()
+            .find(|mod_id| {
+                providers.contains(*mod_id)
+                    && !hidden.contains(&(mod_id.0.clone(), file_path.to_string()))
+            })
+            .cloned()
+    }
+
+    /// Return all conflicts with their resolved winners.
+    ///
+    /// Returns `(file_path, all_providers, winner)` tuples.
+    pub fn resolved_conflicts(
+        &self,
+        priority_order: &[ModId],
+        hidden: &HashSet<(String, String)>,
+    ) -> Vec<(&str, &HashSet<ModId>, Option<ModId>)> {
+        self.conflicts()
+            .into_iter()
+            .map(|(path, providers)| {
+                let winner = self.winner_for(path, priority_order, hidden);
+                (path, providers, winner)
+            })
+            .collect()
+    }
 }
 
 /// The result of resolving a profile's load order.
@@ -228,7 +267,7 @@ mod tests {
                     mod_id: id.to_string(),
                     enabled: true,
                     version: None,
-                    fomod_config: None,
+                    fomod_config: None, ..Default::default()
                 })
                 .collect(),
             overrides: PathBuf::from("/tmp/overrides"),
@@ -329,13 +368,13 @@ mod tests {
                     mod_id: "mod_a".to_string(),
                     enabled: true,
                     version: None,
-                    fomod_config: None,
+                    fomod_config: None, ..Default::default()
                 },
                 EnabledMod {
                     mod_id: "mod_b".to_string(),
                     enabled: false,
                     version: None,
-                    fomod_config: None,
+                    fomod_config: None, ..Default::default()
                 },
             ],
             overrides: PathBuf::from("/tmp"),

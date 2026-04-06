@@ -5,7 +5,7 @@ pub mod generic;
 pub mod launcher;
 pub mod traits;
 
-pub use detection::{scan_installed_games, DetectedGame, LauncherSource};
+pub use detection::{find_detected_game, scan_installed_games, DetectedGame, LauncherSource};
 pub use traits::{GamePlugin, ModClassifyConfig, ModSafety, SaveTracker, classify_mod_by_content};
 
 /// All recognized game IDs, in the order they appear in the match table.

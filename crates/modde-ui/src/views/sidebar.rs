@@ -102,18 +102,38 @@ pub fn view<'a>(
     ]
     .spacing(4);
 
+    // ── Play button ──
+    let play_button: Option<Element<'a, Message>> =
+        if active_profile.is_some() && selected_game.is_some() {
+            Some(
+                button(text("Play").size(14))
+                    .on_press(Message::PlayGame)
+                    .style(button::success)
+                    .padding([8, 14])
+                    .width(Length::Fill)
+                    .into(),
+            )
+        } else {
+            None
+        };
+
     // ── Experiment indicator ──
     let mut sections = column![
         nav,
         iced::widget::rule::horizontal(1),
         profile_selector,
         profile_actions,
-        iced::widget::rule::horizontal(1),
-        new_profile_section,
     ]
     .spacing(10)
     .padding(12)
     .width(Length::Fixed(190.0));
+
+    if let Some(play_btn) = play_button {
+        sections = sections.push(play_btn);
+    }
+
+    sections = sections.push(iced::widget::rule::horizontal(1));
+    sections = sections.push(new_profile_section);
 
     if experiment_depth > 0 {
         let experiment_section = column![

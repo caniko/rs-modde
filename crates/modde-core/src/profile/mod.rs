@@ -10,7 +10,7 @@ use crate::resolver::{GameId, LoadOrderRule};
 use crate::save::{SaveFingerprint, SaveManager};
 
 /// A mod entry within a profile.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EnabledMod {
     pub mod_id: String,
     pub enabled: bool,
@@ -22,6 +22,25 @@ pub struct EnabledMod {
     /// re-applied during deployment to reproduce the same FOMOD selections.
     #[serde(default)]
     pub fomod_config: Option<String>,
+
+    // ── Nexus metadata (V2) ──────────────────────────────────────
+    #[serde(default)]
+    pub nexus_mod_id: Option<i64>,
+    #[serde(default)]
+    pub nexus_file_id: Option<i64>,
+    #[serde(default)]
+    pub nexus_game_domain: Option<String>,
+    #[serde(default)]
+    pub installed_timestamp: Option<i64>,
+
+    // ── Organization (V2) ────────────────────────────────────────
+    #[serde(default)]
+    pub category_id: Option<i64>,
+    #[serde(default)]
+    pub notes: Option<String>,
+    /// JSON-encoded array of tag strings.
+    #[serde(default)]
+    pub tags: Option<String>,
 }
 
 /// Source from which a profile was created.

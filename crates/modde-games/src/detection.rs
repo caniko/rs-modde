@@ -5,9 +5,11 @@
 //! to present a "pick your game" experience without manual path entry.
 
 use std::path::{Path, PathBuf};
+use std::process::{Command, ExitStatus, Stdio};
 
+use anyhow::{Context, Result};
 use serde_json::Value;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use modde_core::paths;
 
@@ -49,6 +51,42 @@ impl LauncherSource {
             LauncherSource::HeroicGog { app_id } => ("Heroic/GOG", app_id),
             LauncherSource::HeroicEpic { app_id } => ("Heroic/Epic", app_id),
             LauncherSource::HeroicSideload { app_id } => ("Heroic/Sideload", app_id),
+        }
+    }
+
+    /// Launch the game via its detected launcher.
+    ///
+    /// Returns `Ok(Some(ExitStatus))` if we could wait for the game process to exit
+    /// (Heroic), or `Ok(None)` for fire-and-forget launchers (Steam).
+    pub fn launch(&self) -> Result<Option<ExitStatus>> {
+        match self {
+            LauncherSource::Steam { app_id, .. } => {
+                let url = format!("steam://rungameid/{app_id}");
+                info!(%url, "launching via Steam");
+                Command::new("steam")
+                    .arg(&url)
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .with_context(|| format!("failed to launch Steam (steam {url})"))?;
+                Ok(None)
+            }
+            LauncherSource::HeroicGog { app_id }
+            | LauncherSource::HeroicEpic { app_id }
+            | LauncherSource::HeroicSideload { app_id } => {
+                let (bin, base_args) = heroic_command()
+                    .context("Heroic Games Launcher not found (checked flatpak and PATH)")?;
+                info!(%bin, %app_id, "launching via Heroic");
+                let mut cmd = Command::new(&bin);
+                for arg in &base_args {
+                    cmd.arg(arg);
+                }
+                let status = cmd
+                    .args(["--no-gui", "--launch", app_id])
+                    .status()
+                    .with_context(|| format!("failed to launch Heroic ({bin} --no-gui --launch {app_id})"))?;
+                Ok(Some(status))
+            }
         }
     }
 }
@@ -113,6 +151,53 @@ const KNOWN_GAMES: &[KnownGame] = &[
         epic_app_id: Some("Ginger"),
     },
 ];
+
+/// Detect the Heroic Games Launcher binary (flatpak or native).
+///
+/// Returns `(binary, base_args)` — e.g. `("flatpak", ["run", "com.heroicgameslauncher.hgl"])`
+/// or `("heroic", [])`.
+fn heroic_command() -> Option<(String, Vec<String>)> {
+    // Check flatpak first (common on NixOS / immutable distros)
+    if Command::new("flatpak")
+        .args(["info", "com.heroicgameslauncher.hgl"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .ok()
+        .map(|s| s.success())
+        .unwrap_or(false)
+    {
+        return Some((
+            "flatpak".to_string(),
+            vec!["run".to_string(), "com.heroicgameslauncher.hgl".to_string()],
+        ));
+    }
+
+    // Check native binary
+    if Command::new("which")
+        .arg("heroic")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .ok()
+        .map(|s| s.success())
+        .unwrap_or(false)
+    {
+        return Some(("heroic".to_string(), vec![]));
+    }
+
+    None
+}
+
+/// Find a detected game by its modde game_id.
+///
+/// Convenience wrapper around [`scan_installed_games`] that returns the first
+/// match. Used by both CLI and UI to resolve the launcher for a game.
+pub fn find_detected_game(game_id: &str) -> Option<DetectedGame> {
+    scan_installed_games()
+        .into_iter()
+        .find(|g| g.game_id == game_id)
+}
 
 /// Scan all known launchers for installed games.
 ///
