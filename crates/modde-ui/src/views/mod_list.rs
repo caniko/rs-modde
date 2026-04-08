@@ -1,75 +1,19 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 use iced::widget::{button, checkbox, column, container, row, scrollable, text, text_input};
-use iced::{Alignment, Color, Element, Length};
+use iced::{Alignment, Element, Length};
 
-use modde_core::filter::{FilterCriterion, FilterKind, FilterMode, TriState};
 use modde_core::profile::EnabledMod;
 
-use crate::app::{ConflictStatus, Message};
-
-/// Color for the conflict status dot.
-fn conflict_color(status: ConflictStatus) -> Color {
-    match status {
-        ConflictStatus::None => Color::TRANSPARENT,
-        ConflictStatus::Winning => Color::from_rgb(0.2, 0.8, 0.2),   // green
-        ConflictStatus::Losing => Color::from_rgb(0.9, 0.2, 0.2),    // red
-        ConflictStatus::Mixed => Color::from_rgb(0.9, 0.6, 0.1),     // orange
-    }
-}
-
-/// Human-readable label for a filter kind.
-fn filter_kind_label(kind: &FilterKind) -> &'static str {
-    match kind {
-        FilterKind::Enabled => "Enabled",
-        FilterKind::HasCategory(_) => "Category",
-        FilterKind::HasNotes => "Has Notes",
-        FilterKind::HasNexusId => "Has Nexus ID",
-        FilterKind::HasUpdate => "Has Update",
-        FilterKind::TextSearch(_) => "Text",
-    }
-}
-
-/// Human-readable label for a filter mode.
-fn filter_mode_label(mode: FilterMode) -> &'static str {
-    match mode {
-        FilterMode::And => "AND",
-        FilterMode::Or => "OR",
-    }
-}
-
-/// Toggle filter mode between And and Or.
-fn toggle_filter_mode(mode: FilterMode) -> FilterMode {
-    match mode {
-        FilterMode::And => FilterMode::Or,
-        FilterMode::Or => FilterMode::And,
-    }
-}
-
-/// Label for a filter button reflecting its current tri-state.
-fn filter_button_label(kind: FilterKind, criteria: &[FilterCriterion]) -> String {
-    let state = criteria
-        .iter()
-        .find(|c| c.kind == kind)
-        .map(|c| c.state)
-        .unwrap_or(TriState::Ignore);
-
-    let suffix = match state {
-        TriState::Ignore => "",
-        TriState::Include => " [+]",
-        TriState::Exclude => " [-]",
-    };
-    format!("{}{suffix}", filter_kind_label(&kind))
-}
+use crate::app::Message;
 
 /// Render the mod list view.
 pub fn view<'a>(
     mods: &'a [EnabledMod],
     filter: &'a str,
     selected_index: Option<usize>,
-    conflict_status: &'a HashMap<String, ConflictStatus>,
-    filter_criteria: &'a [FilterCriterion],
-    filter_mode: FilterMode,
+    collapsed_categories: &'a HashSet<Option<i64>>,
+    categories: &'a [(Option<i64>, String)],
 ) -> Element<'a, Message> {
     let toolbar = row![
         button(text("Add Mod").size(14))
@@ -89,36 +33,13 @@ pub fn view<'a>(
     .spacing(8)
     .align_y(Alignment::Center);
 
-    // ── Filter toolbar ──────────────────────────────────────────
-    let filter_toolbar = row![
-        text("Filters:").size(12),
-        button(text(filter_button_label(FilterKind::Enabled, filter_criteria)).size(12))
-            .on_press(Message::ToggleFilter(FilterKind::Enabled))
-            .padding([4, 8]),
-        button(text(filter_button_label(FilterKind::HasNexusId, filter_criteria)).size(12))
-            .on_press(Message::ToggleFilter(FilterKind::HasNexusId))
-            .padding([4, 8]),
-        button(text(filter_button_label(FilterKind::HasNotes, filter_criteria)).size(12))
-            .on_press(Message::ToggleFilter(FilterKind::HasNotes))
-            .padding([4, 8]),
-        button(text(filter_mode_label(filter_mode)).size(12))
-            .on_press(Message::SetFilterMode(toggle_filter_mode(filter_mode)))
-            .padding([4, 8]),
-        button(text("Clear").size(12))
-            .on_press(Message::ClearFilters)
-            .padding([4, 8]),
-    ]
-    .spacing(6)
-    .align_y(Alignment::Center);
-
     let search = text_input("Filter mods...", filter)
         .on_input(Message::FilterChanged)
         .padding(6)
         .width(Length::Fill);
 
     let header = row![
-        text("").width(Length::Fixed(18.0)),   // conflict dot column
-        text("").width(Length::Fixed(32.0)),    // priority
+        text("").width(Length::Fixed(32.0)),
         text("Enabled").size(12).width(Length::Fixed(60.0)),
         text("Mod Name").size(12).width(Length::Fill),
         text("Version").size(12).width(Length::Fixed(80.0)),
@@ -132,14 +53,39 @@ pub fn view<'a>(
         .iter()
         .enumerate()
         .filter(|(_, m)| filter_lower.is_empty() || m.mod_id.to_lowercase().contains(&filter_lower))
-        .filter(|(_, m)| {
-            let single = std::slice::from_ref(*m);
-            let indices = modde_core::filter::apply_filters(single, filter_criteria, filter_mode);
-            !indices.is_empty()
-        })
         .collect();
 
     let mod_count = filtered_mods.len();
+
+    // Build a category name lookup. All mods currently have category_id = None,
+    // so they land in "Uncategorized". When category support is wired to the DB,
+    // this will group correctly.
+    let category_name = |cat_id: &Option<i64>| -> String {
+        categories
+            .iter()
+            .find(|(id, _)| id == cat_id)
+            .map(|(_, name)| name.clone())
+            .unwrap_or_else(|| match cat_id {
+                Some(id) => format!("Category {id}"),
+                None => "Uncategorized".to_string(),
+            })
+    };
+
+    // Group filtered mods by category. Since EnabledMod has no category_id field
+    // yet, all mods go to `None` (Uncategorized).
+    let groups: Vec<(Option<i64>, Vec<(usize, &EnabledMod)>)> = {
+        let mut ordered: Vec<(Option<i64>, Vec<(usize, &EnabledMod)>)> = Vec::new();
+        for item in &filtered_mods {
+            // All mods are uncategorized for now (category_id = None).
+            let cat_id: Option<i64> = None;
+            if let Some(group) = ordered.iter_mut().find(|(id, _)| *id == cat_id) {
+                group.1.push(*item);
+            } else {
+                ordered.push((cat_id, vec![*item]));
+            }
+        }
+        ordered
+    };
 
     let mod_rows: Element<Message> = if filtered_mods.is_empty() {
         container(
@@ -151,26 +97,35 @@ pub fn view<'a>(
         .center_x(Length::Fill)
         .into()
     } else {
-        let rows = filtered_mods
-            .into_iter()
-            .fold(column![].spacing(2), |col, (idx, entry)| {
+        let mut rows = column![].spacing(2);
+
+        for (cat_id, group_mods) in &groups {
+            let is_collapsed = collapsed_categories.contains(cat_id);
+            let arrow = if is_collapsed { ">" } else { "v" };
+            let name = category_name(cat_id);
+            let count = group_mods.len();
+
+            let separator = button(
+                row![
+                    text(arrow).size(14),
+                    text(format!("{name}  ({count})")).size(13),
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center),
+            )
+            .on_press(Message::ToggleSeparator(*cat_id))
+            .style(button::secondary)
+            .padding([4, 10])
+            .width(Length::Fill);
+
+            rows = rows.push(separator);
+
+            if is_collapsed {
+                continue;
+            }
+
+            for &(idx, entry) in group_mods {
                 let is_selected = selected_index == Some(idx);
-
-                // Conflict status indicator
-                let status = conflict_status
-                    .get(&entry.mod_id)
-                    .copied()
-                    .unwrap_or(ConflictStatus::None);
-
-                let conflict_dot: Element<Message> = if status == ConflictStatus::None {
-                    text(" ").size(14).width(Length::Fixed(18.0)).into()
-                } else {
-                    text("\u{25CF}")  // ●
-                        .size(14)
-                        .color(conflict_color(status))
-                        .width(Length::Fixed(18.0))
-                        .into()
-                };
 
                 let up_btn = button(text("^").size(12))
                     .on_press_maybe(if idx > 0 {
@@ -215,11 +170,20 @@ pub fn view<'a>(
                     })
                     .padding([2, 4]);
 
+                // Version color-coding: green if present, gray if absent
                 let version_str = entry.version.as_deref().unwrap_or("-");
-                let version = text(version_str).size(12).width(Length::Fixed(80.0));
+                let version_text = if entry.version.is_some() {
+                    text(version_str)
+                        .size(12)
+                        .color(iced::Color::from_rgb(0.3, 0.8, 0.3))
+                } else {
+                    text(version_str)
+                        .size(12)
+                        .color(iced::Color::from_rgb(0.5, 0.5, 0.5))
+                };
+                let version = version_text.width(Length::Fixed(80.0));
 
                 let mod_row = row![
-                    conflict_dot,
                     priority,
                     container(cb).width(Length::Fixed(60.0)),
                     container(name).width(Length::Fill),
@@ -230,15 +194,16 @@ pub fn view<'a>(
                 .align_y(Alignment::Center)
                 .padding([4, 8]);
 
-                col.push(mod_row)
-            });
+                rows = rows.push(mod_row);
+            }
+        }
 
         scrollable(rows).height(Length::Fill).into()
     };
 
     let status = text(format!("{mod_count} mod(s) shown")).size(12);
 
-    column![toolbar, filter_toolbar, search, header, iced::widget::rule::horizontal(1), mod_rows, status]
+    column![toolbar, search, header, iced::widget::rule::horizontal(1), mod_rows, status,]
         .spacing(8)
         .padding(16)
         .width(Length::Fill)

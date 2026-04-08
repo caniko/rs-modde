@@ -1,5 +1,7 @@
-use iced::widget::{button, column, container, row, scrollable, text};
-use iced::{color, Alignment, Element, Length};
+use iced::widget::{column, container, row, text};
+use iced::{color, Element, Length};
+
+use modde_games::traits::{ContentCategory, ContentSummary};
 
 use crate::app::Message;
 
@@ -9,25 +11,28 @@ pub struct ModInfoState {
     pub mod_id: String,
     pub version: Option<String>,
     pub enabled: bool,
-    pub has_fomod_config: bool,
+    pub content_summary: Option<ContentSummary>,
 }
 
-/// Render the mod info overlay panel.
-pub fn view(state: &ModInfoState) -> Element<'_, Message> {
-    let title_bar = row![
-        text(&state.mod_id).size(20),
-        iced::widget::space::horizontal(),
-        button(text("Close").size(14))
-            .on_press(Message::CloseModInfo)
-            .style(button::secondary)
-            .padding([6, 14]),
-    ]
-    .align_y(Alignment::Center);
+/// Color for a content category in the UI.
+fn category_color(cat: ContentCategory) -> iced::Color {
+    match cat {
+        ContentCategory::Plugin => color!(0xFF8844),    // orange — important
+        ContentCategory::Script => color!(0xFF6666),    // red — save-breaking
+        ContentCategory::Binary => color!(0xFF4444),    // bright red
+        ContentCategory::Texture => color!(0x88CC88),   // green — cosmetic
+        ContentCategory::Mesh => color!(0x88CCAA),      // teal — cosmetic
+        ContentCategory::Sound => color!(0x88AACC),     // blue-grey
+        ContentCategory::Interface => color!(0xCCCC88), // yellow-ish
+        ContentCategory::Archive => color!(0xAAAACC),   // lavender
+        ContentCategory::Config => color!(0xAAAA88),    // khaki
+        ContentCategory::Other => color!(0xAAAAAA),     // grey
+    }
+}
 
-    let version_text = state
-        .version
-        .as_deref()
-        .unwrap_or("Unknown");
+/// Render the mod info panel.
+pub fn view(state: &ModInfoState) -> Element<'_, Message> {
+    let version_text = state.version.as_deref().unwrap_or("Unknown");
 
     let status_color = if state.enabled {
         color!(0x88CC88)
@@ -35,7 +40,7 @@ pub fn view(state: &ModInfoState) -> Element<'_, Message> {
         color!(0xFF8844)
     };
 
-    let details = column![
+    let mut details = column![
         row![
             text("Version:").size(14),
             text(version_text).size(14),
@@ -48,45 +53,30 @@ pub fn view(state: &ModInfoState) -> Element<'_, Message> {
                 .color(status_color),
         ]
         .spacing(8),
-        row![
-            text("FOMOD Config:").size(14),
-            text(if state.has_fomod_config { "Yes" } else { "No" }).size(14),
-        ]
-        .spacing(8),
     ]
     .spacing(8);
 
-    let actions = row![
-        button(text("Toggle").size(13))
-            .on_press(Message::ToggleMod {
-                mod_id: state.mod_id.clone(),
-                enabled: !state.enabled,
-            })
-            .style(if state.enabled {
-                button::secondary
-            } else {
-                button::primary
-            })
-            .padding([6, 14]),
-    ]
-    .spacing(8);
+    // Content summary section
+    if let Some(ref summary) = state.content_summary {
+        let sorted = summary.sorted_counts();
+        if !sorted.is_empty() {
+            let mut content_row = row![text("Content:").size(14)].spacing(8);
+            // Build a row with colored segments for each category
+            let mut segments = row![].spacing(4);
+            for (i, (cat, count)) in sorted.iter().enumerate() {
+                let suffix = if i < sorted.len() - 1 { "," } else { "" };
+                segments = segments.push(
+                    text(format!("{} {}{}", count, cat.label(), suffix))
+                        .size(14)
+                        .color(category_color(*cat)),
+                );
+            }
+            content_row = content_row.push(segments);
+            details = details.push(content_row);
+        }
+    }
 
-    let content = scrollable(
-        column![details, iced::widget::rule::horizontal(1), actions]
-            .spacing(16)
-            .padding(16),
-    )
-    .height(Length::Fill);
-
-    container(
-        column![title_bar, iced::widget::rule::horizontal(1), content]
-            .spacing(8)
-            .padding(16)
-            .width(Length::Fill)
-            .height(Length::Fill),
-    )
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .style(container::rounded_box)
-    .into()
+    container(details.padding(16).width(Length::Fill))
+        .width(Length::Fill)
+        .into()
 }

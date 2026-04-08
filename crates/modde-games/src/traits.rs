@@ -1,9 +1,89 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use anyhow::Result;
 use smallvec::SmallVec;
+
+/// Content types a game can have.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ContentCategory {
+    Plugin,    // .esp, .esm, .esl
+    Texture,   // .dds, .png, .tga
+    Mesh,      // .nif
+    Sound,     // .wav, .xwm, .fuz
+    Script,    // .pex, .psc, .reds, .lua
+    Interface, // .swf
+    Archive,   // .bsa, .ba2, .archive
+    Config,    // .ini, .json, .yaml, .xml
+    Binary,    // .dll
+    Other,
+}
+
+impl ContentCategory {
+    /// Human-readable label for display.
+    pub fn label(self) -> &'static str {
+        match self {
+            ContentCategory::Plugin => "plugins",
+            ContentCategory::Texture => "textures",
+            ContentCategory::Mesh => "meshes",
+            ContentCategory::Sound => "sounds",
+            ContentCategory::Script => "scripts",
+            ContentCategory::Interface => "interfaces",
+            ContentCategory::Archive => "archives",
+            ContentCategory::Config => "configs",
+            ContentCategory::Binary => "binaries",
+            ContentCategory::Other => "other",
+        }
+    }
+
+    /// Display order (lower = shown first).
+    pub fn order(self) -> u8 {
+        match self {
+            ContentCategory::Plugin => 0,
+            ContentCategory::Script => 1,
+            ContentCategory::Binary => 2,
+            ContentCategory::Texture => 3,
+            ContentCategory::Mesh => 4,
+            ContentCategory::Sound => 5,
+            ContentCategory::Interface => 6,
+            ContentCategory::Archive => 7,
+            ContentCategory::Config => 8,
+            ContentCategory::Other => 9,
+        }
+    }
+}
+
+/// Summary of content types found in a mod.
+#[derive(Debug, Clone, Default)]
+pub struct ContentSummary {
+    pub counts: HashMap<ContentCategory, usize>,
+}
+
+impl ContentSummary {
+    /// Return counts sorted by display order, excluding zero counts.
+    pub fn sorted_counts(&self) -> Vec<(ContentCategory, usize)> {
+        let mut entries: Vec<_> = self.counts.iter()
+            .filter(|(_, count)| **count > 0)
+            .map(|(cat, count)| (*cat, *count))
+            .collect();
+        entries.sort_by_key(|(cat, _)| cat.order());
+        entries
+    }
+
+    /// Format as a human-readable string like "5 textures, 2 meshes, 1 plugin".
+    pub fn display_string(&self) -> String {
+        let parts: Vec<String> = self.sorted_counts().iter()
+            .map(|(cat, count)| format!("{} {}", count, cat.label()))
+            .collect();
+        if parts.is_empty() {
+            "No files".to_string()
+        } else {
+            parts.join(", ")
+        }
+    }
+}
 
 /// Whether a mod is safe to add/remove without breaking existing saves.
 ///
@@ -96,25 +176,53 @@ pub trait GamePlugin: Send + Sync {
         install.to_path_buf()
     }
 
-    // ── DRY trait methods (generic → game-specific via data) ─────
-
-    /// INI file names managed per-profile (e.g., ["Skyrim.ini", "SkyrimPrefs.ini"]).
+    // ── DRY trait methods ─────────────────────────────────────────
     fn ini_file_names(&self) -> &[&str] { &[] }
-
-    /// Archive file extensions this game uses (e.g., ["bsa", "ba2"]).
     fn archive_extensions(&self) -> &[&str] { &[] }
-
-    /// Whether this game has a plugin/load order system (ESP/ESM/ESL).
     fn has_plugin_system(&self) -> bool { false }
-
-    /// Steam app ID for Proton prefix path resolution.
     fn steam_app_id_u32(&self) -> Option<u32> { None }
-
-    /// Game folder name in Proton's AppData/Local for plugins.txt.
     fn plugins_txt_folder(&self) -> Option<&str> { None }
-
-    /// Nexus Mods game domain name for API calls.
     fn nexus_game_domain(&self) -> Option<&str> { None }
+
+    /// Classify a file extension into a content category.
+    fn classify_extension(&self, ext: &str) -> ContentCategory {
+        match ext {
+            "esp" | "esm" | "esl" => ContentCategory::Plugin,
+            "dds" | "png" | "tga" | "jpg" => ContentCategory::Texture,
+            "nif" => ContentCategory::Mesh,
+            "wav" | "xwm" | "fuz" | "mp3" | "ogg" => ContentCategory::Sound,
+            "pex" | "psc" | "reds" | "lua" => ContentCategory::Script,
+            "swf" => ContentCategory::Interface,
+            "bsa" | "ba2" | "archive" => ContentCategory::Archive,
+            "ini" | "json" | "yaml" | "xml" | "toml" => ContentCategory::Config,
+            "dll" | "so" => ContentCategory::Binary,
+            _ => ContentCategory::Other,
+        }
+    }
+
+    /// Scan a mod directory and return a content summary.
+    fn summarize_content(&self, mod_dir: &Path) -> ContentSummary {
+        let mut summary = ContentSummary::default();
+        let mut stack = vec![mod_dir.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            let entries = match std::fs::read_dir(&dir) {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    let cat = self.classify_extension(&ext.to_lowercase());
+                    *summary.counts.entry(cat).or_insert(0) += 1;
+                }
+            }
+        }
+        summary
+    }
 }
 
 /// A detected save file or directory within a game's save directory.
@@ -297,6 +405,3 @@ pub fn slug(s: &str) -> String {
         .trim_matches('-')
         .to_string()
 }
-
-// ── DRY trait extensions ────────────────────────────────────────
-// (New GamePlugin methods are added via the trait above)

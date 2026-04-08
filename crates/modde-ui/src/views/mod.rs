@@ -1,6 +1,7 @@
 pub mod collections;
 pub mod data_tab;
 pub mod diagnostics;
+pub mod downloads;
 pub mod fomod_wizard;
 pub mod load_order;
 pub mod mod_info;

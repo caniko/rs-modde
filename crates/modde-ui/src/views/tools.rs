@@ -121,7 +121,7 @@ fn tool_card(entry: &ToolUiEntry) -> Element<'_, Message> {
     // Status message
     if let Some(ref msg) = entry.status_message {
         body = body.push(
-            text(msg.clone())
+            text(msg.as_str())
                 .size(12)
                 .color(color!(0x88CC88)),
         );

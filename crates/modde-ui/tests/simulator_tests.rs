@@ -219,8 +219,7 @@ fn sample_mods() -> Vec<modde_core::profile::EnabledMod> {
 #[test]
 fn mod_list_empty_shows_placeholder() {
     let mods: Vec<modde_core::profile::EnabledMod> = vec![];
-    let empty_conflicts = std::collections::HashMap::new();
-    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &empty_conflicts, &[], modde_core::filter::FilterMode::And));
+    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &std::collections::HashSet::new(), &[(None, "Uncategorized".to_string())]));
     ui.find("No mods found. Click 'Add Mod' to get started.")
         .expect("should show empty placeholder");
 }
@@ -228,8 +227,7 @@ fn mod_list_empty_shows_placeholder() {
 #[test]
 fn mod_list_shows_toolbar_buttons() {
     let mods = sample_mods();
-    let empty_conflicts = std::collections::HashMap::new();
-    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &empty_conflicts, &[], modde_core::filter::FilterMode::And));
+    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &std::collections::HashSet::new(), &[(None, "Uncategorized".to_string())]));
     ui.find("Add Mod").expect("should show 'Add Mod' button");
     ui.find("Remove").expect("should show 'Remove' button");
     ui.find("Deploy").expect("should show 'Deploy' button");
@@ -238,8 +236,7 @@ fn mod_list_shows_toolbar_buttons() {
 #[test]
 fn mod_list_shows_mod_names() {
     let mods = sample_mods();
-    let empty_conflicts = std::collections::HashMap::new();
-    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &empty_conflicts, &[], modde_core::filter::FilterMode::And));
+    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &std::collections::HashSet::new(), &[(None, "Uncategorized".to_string())]));
     ui.find("SkyUI").expect("should show SkyUI");
     ui.find("USSEP").expect("should show USSEP");
     ui.find("EnhancedLights")
@@ -249,16 +246,14 @@ fn mod_list_shows_mod_names() {
 #[test]
 fn mod_list_shows_mod_count() {
     let mods = sample_mods();
-    let empty_conflicts = std::collections::HashMap::new();
-    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &empty_conflicts, &[], modde_core::filter::FilterMode::And));
+    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &std::collections::HashSet::new(), &[(None, "Uncategorized".to_string())]));
     ui.find("3 mod(s) shown").expect("should show mod count");
 }
 
 #[test]
 fn mod_list_click_add_mod_emits_message() {
     let mods = sample_mods();
-    let empty_conflicts = std::collections::HashMap::new();
-    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &empty_conflicts, &[], modde_core::filter::FilterMode::And));
+    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &std::collections::HashSet::new(), &[(None, "Uncategorized".to_string())]));
     ui.click("Add Mod").expect("should click 'Add Mod'");
     let messages: Vec<_> = ui.into_messages().collect();
     assert!(
@@ -270,8 +265,7 @@ fn mod_list_click_add_mod_emits_message() {
 #[test]
 fn mod_list_click_deploy_emits_message() {
     let mods = sample_mods();
-    let empty_conflicts = std::collections::HashMap::new();
-    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &empty_conflicts, &[], modde_core::filter::FilterMode::And));
+    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &std::collections::HashSet::new(), &[(None, "Uncategorized".to_string())]));
     ui.click("Deploy").expect("should click 'Deploy'");
     let messages: Vec<_> = ui.into_messages().collect();
     assert!(
@@ -283,8 +277,7 @@ fn mod_list_click_deploy_emits_message() {
 #[test]
 fn mod_list_click_mod_name_emits_select() {
     let mods = sample_mods();
-    let empty_conflicts = std::collections::HashMap::new();
-    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &empty_conflicts, &[], modde_core::filter::FilterMode::And));
+    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &std::collections::HashSet::new(), &[(None, "Uncategorized".to_string())]));
     ui.click("USSEP").expect("should click 'USSEP'");
     let messages: Vec<_> = ui.into_messages().collect();
     assert!(

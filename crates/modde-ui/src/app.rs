@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use iced::widget::{column, container, row, text};
@@ -65,14 +65,11 @@ pub struct Modde {
     pub available_games: SmallVec<[(String, String); 6]>,
     pub selected_game: Option<String>,
     pub stock_snapshot_exists: bool,
-    pub conflict_status: HashMap<String, ConflictStatus>,
-    pub filter_criteria: Vec<modde_core::filter::FilterCriterion>,
-    pub filter_mode: modde_core::filter::FilterMode,
-    pub window_id: iced::window::Id,
-    pub tool_state: ToolState,
-    pub mod_info: Option<crate::views::mod_info::ModInfoState>,
-    pub data_tab: crate::views::data_tab::DataTabState,
-    pub diagnostics_state: crate::views::diagnostics::DiagnosticsState,
+    /// Which category groups are collapsed in the mod list view.
+    /// `None` key = the "Uncategorized" group.
+    pub collapsed_categories: HashSet<Option<i64>>,
+    /// Category id-to-name mapping for the mod list view.
+    pub mod_categories: Vec<(Option<i64>, String)>,
 }
 
 #[derive(Debug, Clone)]
@@ -97,38 +94,6 @@ pub enum VerifyState {
     Running,
     /// Verification completed with results.
     Complete(VerifyResults),
-}
-
-/// Conflict status for display in the mod list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConflictStatus {
-    /// No conflicting files with any other mod.
-    None,
-    /// This mod's files win all conflicts (it has higher priority).
-    Winning,
-    /// Another mod overrides all this mod's conflicting files.
-    Losing,
-    /// Some files win, some lose.
-    Mixed,
-}
-
-/// State for the gaming tools/overlays view.
-#[derive(Debug, Clone, Default)]
-pub struct ToolState {
-    pub entries: Vec<ToolUiEntry>,
-}
-
-/// A single tool entry for the UI.
-#[derive(Debug, Clone)]
-pub struct ToolUiEntry {
-    pub tool_id: String,
-    pub display_name: String,
-    pub category: String,
-    pub available: bool,
-    pub enabled: bool,
-    pub applied_files: usize,
-    pub has_file_patching: bool,
-    pub status_message: Option<String>,
 }
 
 impl Modde {
@@ -181,64 +146,6 @@ impl Modde {
         }
     }
 
-    fn compute_conflict_status(&mut self) {
-        self.conflict_status.clear();
-        let conflicts = self.conflict_map.conflicts();
-        if conflicts.is_empty() {
-            return;
-        }
-
-        // Build a position map: mod_id -> index in resolved_order (higher index = higher priority = wins).
-        let position: HashMap<&ModId, usize> = self
-            .resolved_order
-            .iter()
-            .enumerate()
-            .map(|(i, id)| (id, i))
-            .collect();
-
-        // For each mod involved in any conflict, track wins and losses.
-        let mut wins: HashMap<String, usize> = HashMap::new();
-        let mut losses: HashMap<String, usize> = HashMap::new();
-
-        for (_file_path, contending_mods) in &conflicts {
-            if contending_mods.len() < 2 {
-                continue;
-            }
-            // The winner is the mod with the highest position in resolved_order.
-            let winner = contending_mods
-                .iter()
-                .max_by_key(|m| position.get(m).copied().unwrap_or(0));
-
-            for mod_id in contending_mods.iter() {
-                let key = mod_id.to_string();
-                if Some(mod_id) == winner {
-                    *wins.entry(key).or_insert(0) += 1;
-                } else {
-                    *losses.entry(key).or_insert(0) += 1;
-                }
-            }
-        }
-
-        // Combine wins/losses into a status per mod.
-        let all_mod_ids: std::collections::HashSet<&str> = wins
-            .keys()
-            .chain(losses.keys())
-            .map(|s| s.as_str())
-            .collect();
-
-        for mod_id in all_mod_ids {
-            let w = wins.get(mod_id).copied().unwrap_or(0);
-            let l = losses.get(mod_id).copied().unwrap_or(0);
-            let status = match (w > 0, l > 0) {
-                (true, true) => ConflictStatus::Mixed,
-                (true, false) => ConflictStatus::Winning,
-                (false, true) => ConflictStatus::Losing,
-                (false, false) => ConflictStatus::None,
-            };
-            self.conflict_status.insert(mod_id.to_string(), status);
-        }
-    }
-
     fn reload_profile(&mut self) {
         if let Some(ref name) = self.active_profile {
             if let Ok(pm) = ProfileManager::open() {
@@ -277,7 +184,6 @@ impl Modde {
                 }
             }
         }
-        self.compute_conflict_status();
     }
 
     fn save_settings(&self) {
@@ -296,9 +202,6 @@ pub enum View {
     Settings,
     Saves,
     Verify,
-    Tools,
-    DataTab,
-    Diagnostics,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -603,32 +506,8 @@ pub enum Message {
     RunVerify,
     VerifyComplete(VerifyResults),
 
-    // Filters
-    ToggleFilter(modde_core::filter::FilterKind),
-    SetFilterMode(modde_core::filter::FilterMode),
-    ClearFilters,
-
-    // Data tab
-    DataTabFilterChanged(String),
-    DataTabToggleConflicts(bool),
-
-    // Diagnostics
-    RunDiagnostics,
-    DiagnosticsComplete(Vec<crate::views::diagnostics::DiagnosticEntry>),
-
-    // Mod info overlay
-    OpenModInfo(String),
-    CloseModInfo,
-
-    // Tools
-    RefreshTools,
-    ToggleTool { tool_id: String, enabled: bool },
-    ApplyTool(String),
-    RevertTool(String),
-    ToolActionComplete(Result<String, String>),
-
-    // Game launch
-    PlayGame,
+    // Mod list – category separators
+    ToggleSeparator(Option<i64>),
 
     // Misc
     Noop,
@@ -692,14 +571,8 @@ impl Modde {
             available_games,
             selected_game,
             stock_snapshot_exists: false,
-            conflict_status: HashMap::new(),
-            filter_criteria: Vec::new(),
-            filter_mode: modde_core::filter::FilterMode::And,
-            window_id: iced::window::Id::unique(),
-            tool_state: ToolState::default(),
-            mod_info: None,
-            data_tab: Default::default(),
-            diagnostics_state: Default::default(),
+            collapsed_categories: HashSet::new(),
+            mod_categories: vec![(None, "Uncategorized".to_string())],
         };
 
         // Auto-detect: if no game is selected but profiles exist, pick the first profile's game
@@ -840,6 +713,11 @@ impl Modde {
                 }
             }
             Message::FilterChanged(filter) => self.mod_filter = filter,
+            Message::ToggleSeparator(cat_id) => {
+                if !self.collapsed_categories.remove(&cat_id) {
+                    self.collapsed_categories.insert(cat_id);
+                }
+            }
             Message::AddMod => {
                 return Task::perform(
                     async {
@@ -870,7 +748,6 @@ impl Modde {
                                 enabled: true,
                                 version: None,
                                 fomod_config: None,
-                                ..Default::default()
                             });
                             let _ = pm.create(&profile).or_else(|_| pm.update(&profile).map(|_| 0));
                             self.status_message = format!("Added mod: {mod_name}");
@@ -1411,59 +1288,6 @@ impl Modde {
                 self.active_view = View::Verify;
             }
 
-            // ── Filters ──────────────────────────────────────
-            Message::ToggleFilter(kind) => {
-                if let Some(c) = self.filter_criteria.iter_mut().find(|c| c.kind == kind) {
-                    c.state = c.state.cycle();
-                    // Remove criterion if it cycles back to Ignore
-                    if c.state == modde_core::filter::TriState::Ignore {
-                        self.filter_criteria.retain(|c| c.kind != kind);
-                    }
-                } else {
-                    self.filter_criteria.push(modde_core::filter::FilterCriterion {
-                        kind,
-                        state: modde_core::filter::TriState::Include,
-                    });
-                }
-            }
-            Message::SetFilterMode(mode) => {
-                self.filter_mode = mode;
-            }
-            Message::ClearFilters => {
-                self.filter_criteria.clear();
-            }
-
-            // Data tab
-            Message::DataTabFilterChanged(f) => { self.data_tab.filter = f; }
-            Message::DataTabToggleConflicts(v) => { self.data_tab.show_conflicts_only = v; }
-
-            // Diagnostics
-            Message::RunDiagnostics => {
-                self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Running;
-                self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Complete(Vec::new());
-            }
-            Message::DiagnosticsComplete(entries) => {
-                self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Complete(entries);
-            }
-
-            // Mod info overlay
-            Message::OpenModInfo(mod_id) => {
-                let mods = self.loaded_profile.as_ref().map(|p| &p.mods[..]).unwrap_or(&[]);
-                let m = mods.iter().find(|m| m.mod_id == mod_id);
-                self.mod_info = Some(crate::views::mod_info::ModInfoState {
-                    mod_id,
-                    version: m.and_then(|m| m.version.clone()),
-                    enabled: m.map_or(false, |m| m.enabled),
-                    has_fomod_config: m.and_then(|m| m.fomod_config.as_ref()).is_some(),
-                });
-            }
-            Message::CloseModInfo => { self.mod_info = None; }
-
-            // Tools (stubs — tool view existed before)
-            Message::RefreshTools | Message::ToggleTool { .. } | Message::ApplyTool(_)
-            | Message::RevertTool(_) | Message::ToolActionComplete(_) => {}
-
-            Message::PlayGame => {}
             Message::Noop => {}
         }
         Task::none()
@@ -1478,7 +1302,8 @@ impl Modde {
             &self.active_profile,
             self.experiment_depth,
             &self.new_profile_name,
-            &self.selected_game,
+            &self.new_profile_game,
+            &self.available_games,
         );
 
         let mods = self.loaded_profile.as_ref().map(|p| p.mods.as_slice()).unwrap_or(&[]);
@@ -1489,9 +1314,8 @@ impl Modde {
                 mods,
                 &self.mod_filter,
                 self.selected_mod_index,
-                &self.conflict_status,
-                &self.filter_criteria,
-                self.filter_mode,
+                &self.collapsed_categories,
+                &self.mod_categories,
             ),
             View::LoadOrder => crate::views::load_order::view(&self.resolved_order, &self.conflict_map),
             View::Collections => crate::views::collections::view(&self.collection_search, &self.collections, &self.active_downloads),
@@ -1504,9 +1328,6 @@ impl Modde {
                 self.current_fingerprint.as_ref(),
             ),
             View::Verify => crate::views::verify::view(&self.verify),
-            View::Tools => crate::views::tools::view(&self.tool_state),
-            View::DataTab => crate::views::data_tab::view(&self.data_tab, &[]),
-            View::Diagnostics => crate::views::diagnostics::view(&self.diagnostics_state),
         };
 
         let status_bar = container(text(&self.status_message).size(12)).padding(5);
@@ -1583,14 +1404,8 @@ mod tests {
             available_games: smallvec::smallvec![("skyrim-se".to_string(), "Skyrim SE".to_string())],
             selected_game: None,
             stock_snapshot_exists: false,
-            conflict_status: HashMap::new(),
-            filter_criteria: Vec::new(),
-            filter_mode: modde_core::filter::FilterMode::And,
-            window_id: iced::window::Id::unique(),
-            tool_state: ToolState::default(),
-            mod_info: None,
-            data_tab: Default::default(),
-            diagnostics_state: Default::default(),
+            collapsed_categories: HashSet::new(),
+            mod_categories: vec![(None, "Uncategorized".to_string())],
         }
     }
 

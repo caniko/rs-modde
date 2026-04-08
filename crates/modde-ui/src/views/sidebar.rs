@@ -10,8 +10,11 @@ pub fn view<'a>(
     active_profile: &'a Option<String>,
     experiment_depth: usize,
     new_profile_name: &'a str,
-    selected_game: &'a Option<String>,
+    new_profile_game: &'a str,
+    available_games: &'a [(String, String)],
 ) -> Element<'a, Message> {
+    let title = text("modde").size(28);
+
     let nav_button = |label: &'a str, target: View, current: &View| -> Element<'a, Message> {
         let is_active = std::mem::discriminant(&target) == std::mem::discriminant(current);
         let btn = button(text(label).size(14))
@@ -36,8 +39,8 @@ pub fn view<'a>(
             View::WabbajackInstaller(Default::default()),
             active_view,
         ),
+        nav_button("Downloads", View::Downloads, active_view),
         nav_button("Verify", View::Verify, active_view),
-        nav_button("Tools", View::Tools, active_view),
         nav_button("Settings", View::Settings, active_view),
     ]
     .spacing(4);
@@ -78,7 +81,13 @@ pub fn view<'a>(
         );
     }
 
-    // ── New profile form (uses the globally selected game from the title bar) ──
+    // ── New profile form ──
+    let game_names: Vec<String> = available_games.iter().map(|(_, name)| name.clone()).collect();
+    let selected_game_name = available_games
+        .iter()
+        .find(|(id, _)| id == new_profile_game)
+        .map(|(_, name)| name.clone());
+
     let new_profile_section = column![
         text("New Profile").size(12),
         text_input("Profile name...", new_profile_name)
@@ -86,55 +95,51 @@ pub fn view<'a>(
             .padding(4)
             .size(13)
             .width(Length::Fill),
+        pick_list(
+            game_names,
+            selected_game_name,
+            |selected_name: String| {
+                // We need to resolve name back to ID — but iced pick_list gives us the display name
+                // So we'll pass the name and resolve in the handler
+                Message::NewProfileGameChanged(selected_name)
+            },
+        )
+        .width(Length::Fill)
+        .placeholder("Game"),
         button(text("Create").size(12))
-            .on_press_maybe(
-                if new_profile_name.is_empty() || selected_game.is_none() {
-                    None
-                } else {
-                    Some(Message::CreateProfile {
-                        name: new_profile_name.to_string(),
-                        game_id: selected_game.clone().unwrap(),
-                    })
-                },
-            )
+            .on_press_maybe(if new_profile_name.is_empty() {
+                None
+            } else {
+                // Resolve game display name to ID
+                let game_id = available_games
+                    .iter()
+                    .find(|(_, name)| name == new_profile_game)
+                    .map(|(id, _)| id.clone())
+                    .unwrap_or_else(|| new_profile_game.to_string());
+                Some(Message::CreateProfile {
+                    name: new_profile_name.to_string(),
+                    game_id,
+                })
+            })
             .style(button::success)
             .padding([4, 12])
             .width(Length::Fill),
     ]
     .spacing(4);
 
-    // ── Play button ──
-    let play_button: Option<Element<'a, Message>> =
-        if active_profile.is_some() && selected_game.is_some() {
-            Some(
-                button(text("Play").size(14))
-                    .on_press(Message::PlayGame)
-                    .style(button::success)
-                    .padding([8, 14])
-                    .width(Length::Fill)
-                    .into(),
-            )
-        } else {
-            None
-        };
-
     // ── Experiment indicator ──
     let mut sections = column![
+        title,
         nav,
         iced::widget::rule::horizontal(1),
         profile_selector,
         profile_actions,
+        iced::widget::rule::horizontal(1),
+        new_profile_section,
     ]
     .spacing(10)
     .padding(12)
     .width(Length::Fixed(190.0));
-
-    if let Some(play_btn) = play_button {
-        sections = sections.push(play_btn);
-    }
-
-    sections = sections.push(iced::widget::rule::horizontal(1));
-    sections = sections.push(new_profile_section);
 
     if experiment_depth > 0 {
         let experiment_section = column![
