@@ -8,7 +8,7 @@ use crate::error::{CoreError, Result};
 use crate::profile::{EnabledMod, Profile, ProfileSource};
 use crate::resolver::{GameId, LoadOrderRule, ModId};
 
-const CURRENT_SCHEMA_VERSION: u32 = 2;
+const CURRENT_SCHEMA_VERSION: u32 = 3;
 
 const SCHEMA_V1: &str = "
 PRAGMA journal_mode = WAL;
@@ -128,6 +128,32 @@ CREATE INDEX IF NOT EXISTS idx_plugin_order_profile ON plugin_order(profile_id);
 CREATE INDEX IF NOT EXISTS idx_categories_profile ON mod_categories(profile_id);
 ";
 
+const SCHEMA_V3: &str = "
+-- Per-game tool/overlay configurations (MangoHud, vkBasalt, GameMode, etc.)
+CREATE TABLE IF NOT EXISTS game_tools (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id     TEXT NOT NULL,
+    tool_id     TEXT NOT NULL,
+    enabled     INTEGER NOT NULL DEFAULT 0,
+    settings    TEXT NOT NULL DEFAULT '{}',
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(game_id, tool_id)
+);
+
+-- Files applied by tools to game directories (for revert tracking)
+CREATE TABLE IF NOT EXISTS tool_applied_files (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id     TEXT NOT NULL,
+    tool_id     TEXT NOT NULL,
+    rel_path    TEXT NOT NULL,
+    applied_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(game_id, tool_id, rel_path)
+);
+
+CREATE INDEX IF NOT EXISTS idx_game_tools_game ON game_tools(game_id);
+CREATE INDEX IF NOT EXISTS idx_tool_files_game ON tool_applied_files(game_id, tool_id);
+";
+
 /// Summary view of a profile (without loading all mods).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProfileSummary {
@@ -224,6 +250,11 @@ impl ModdeDb {
         if version < 2 {
             self.conn.execute_batch(SCHEMA_V2)?;
             info!(from = version.max(1), to = 2, "database schema migrated to V2");
+        }
+
+        if version < 3 {
+            self.conn.execute_batch(SCHEMA_V3)?;
+            info!(from = version.max(2), to = 3, "database schema migrated to V3");
         }
 
         if version < CURRENT_SCHEMA_VERSION {
@@ -1122,6 +1153,141 @@ fn decode_source(source_type: &str, source_data: Option<&str>) -> Result<Profile
         other => Err(CoreError::Other(format!(
             "unknown profile source type: {other}"
         ).into())),
+    }
+}
+
+// ── Tool config types (re-exported from modde_games::tools) ──────────
+
+/// Per-game tool configuration stored in the database.
+///
+/// This is a DB-layer representation; the full `ToolConfig` with
+/// `serde_json::Value` settings lives in `modde_games::tools`.
+#[derive(Debug, Clone)]
+pub struct ToolConfigRow {
+    pub tool_id: String,
+    pub enabled: bool,
+    pub settings_json: String,
+}
+
+/// A file applied by a tool to a game directory.
+#[derive(Debug, Clone)]
+pub struct ToolAppliedFileRow {
+    pub tool_id: String,
+    pub rel_path: String,
+}
+
+impl ModdeDb {
+    // ── Game Tool CRUD ────────────────────────────────────────────
+
+    /// Save (insert or update) a tool configuration for a game.
+    pub fn save_tool_config(
+        &self,
+        game_id: &str,
+        tool_id: &str,
+        enabled: bool,
+        settings_json: &str,
+    ) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO game_tools (game_id, tool_id, enabled, settings, updated_at)
+             VALUES (?1, ?2, ?3, ?4, datetime('now'))
+             ON CONFLICT(game_id, tool_id) DO UPDATE SET
+                 enabled = excluded.enabled,
+                 settings = excluded.settings,
+                 updated_at = excluded.updated_at",
+            params![game_id, tool_id, enabled as i32, settings_json],
+        )?;
+        Ok(())
+    }
+
+    /// Load all tool configurations for a game.
+    pub fn load_tool_configs(&self, game_id: &str) -> Result<Vec<ToolConfigRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT tool_id, enabled, settings FROM game_tools WHERE game_id = ?1",
+        )?;
+
+        let rows = stmt
+            .query_map(params![game_id], |row| {
+                Ok(ToolConfigRow {
+                    tool_id: row.get(0)?,
+                    enabled: row.get::<_, i32>(1)? != 0,
+                    settings_json: row.get(2)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(rows)
+    }
+
+    /// Load a single tool configuration for a game.
+    pub fn load_tool_config(
+        &self,
+        game_id: &str,
+        tool_id: &str,
+    ) -> Result<Option<ToolConfigRow>> {
+        let result = self.conn.query_row(
+            "SELECT tool_id, enabled, settings FROM game_tools
+             WHERE game_id = ?1 AND tool_id = ?2",
+            params![game_id, tool_id],
+            |row| {
+                Ok(ToolConfigRow {
+                    tool_id: row.get(0)?,
+                    enabled: row.get::<_, i32>(1)? != 0,
+                    settings_json: row.get(2)?,
+                })
+            },
+        );
+
+        match result {
+            Ok(row) => Ok(Some(row)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Record files applied by a tool to a game directory.
+    pub fn save_applied_files(
+        &self,
+        game_id: &str,
+        tool_id: &str,
+        rel_paths: &[String],
+    ) -> Result<()> {
+        let mut stmt = self.conn.prepare(
+            "INSERT OR IGNORE INTO tool_applied_files (game_id, tool_id, rel_path)
+             VALUES (?1, ?2, ?3)",
+        )?;
+
+        for path in rel_paths {
+            stmt.execute(params![game_id, tool_id, path])?;
+        }
+
+        Ok(())
+    }
+
+    /// Load files previously applied by a tool.
+    pub fn load_applied_files(
+        &self,
+        game_id: &str,
+        tool_id: &str,
+    ) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT rel_path FROM tool_applied_files
+             WHERE game_id = ?1 AND tool_id = ?2",
+        )?;
+
+        let rows = stmt
+            .query_map(params![game_id, tool_id], |row| row.get(0))?
+            .collect::<std::result::Result<Vec<String>, _>>()?;
+
+        Ok(rows)
+    }
+
+    /// Clear all applied file records for a tool on a game.
+    pub fn clear_applied_files(&self, game_id: &str, tool_id: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM tool_applied_files WHERE game_id = ?1 AND tool_id = ?2",
+            params![game_id, tool_id],
+        )?;
+        Ok(())
     }
 }
 

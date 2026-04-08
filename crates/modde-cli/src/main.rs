@@ -302,6 +302,49 @@ enum ToolAction {
         #[arg(long)]
         game: String,
     },
+    /// Show status of all gaming tools/overlays for a game
+    Status {
+        #[arg(long)]
+        game: String,
+    },
+    /// Enable a gaming tool/overlay for a game
+    Enable {
+        /// Tool ID (mangohud, vkbasalt, gamemode, reshade, optiscaler)
+        tool_id: String,
+        #[arg(long)]
+        game: String,
+    },
+    /// Disable a gaming tool/overlay for a game
+    Disable {
+        /// Tool ID
+        tool_id: String,
+        #[arg(long)]
+        game: String,
+    },
+    /// Configure a gaming tool's settings
+    Configure {
+        /// Tool ID
+        tool_id: String,
+        #[arg(long)]
+        game: String,
+        /// Setting key=value pairs
+        #[arg(last = true)]
+        settings: Vec<String>,
+    },
+    /// Apply tool patches to the game directory (ReShade DLLs, OptiScaler, etc.)
+    Apply {
+        /// Tool ID
+        tool_id: String,
+        #[arg(long)]
+        game: String,
+    },
+    /// Revert tool patches from the game directory
+    Revert {
+        /// Tool ID
+        tool_id: String,
+        #[arg(long)]
+        game: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -436,6 +479,24 @@ fn main() -> Result<()> {
         Commands::Tool { action: ToolAction::List { game } } => {
             return commands::tool::handle_list(&game);
         }
+        Commands::Tool { action: ToolAction::Status { game } } => {
+            return commands::tool::handle_status(&game);
+        }
+        Commands::Tool { action: ToolAction::Enable { tool_id, game } } => {
+            return commands::tool::handle_enable(&tool_id, &game);
+        }
+        Commands::Tool { action: ToolAction::Disable { tool_id, game } } => {
+            return commands::tool::handle_disable(&tool_id, &game);
+        }
+        Commands::Tool { action: ToolAction::Configure { tool_id, game, settings } } => {
+            return commands::tool::handle_configure(&tool_id, &game, &settings);
+        }
+        Commands::Tool { action: ToolAction::Apply { tool_id, game } } => {
+            return commands::tool::handle_apply(&tool_id, &game);
+        }
+        Commands::Tool { action: ToolAction::Revert { tool_id, game } } => {
+            return commands::tool::handle_revert(&tool_id, &game);
+        }
         Commands::Nxm { action: NxmAction::Install } => {
             commands::nxm::install_handler()?;
             return Ok(());
@@ -468,7 +529,13 @@ fn main() -> Result<()> {
                 ToolAction::Run { executable, profile, game, args } => {
                     commands::tool::handle_run(executable, args, profile, game).await?
                 }
-                ToolAction::List { .. } => unreachable!(),
+                ToolAction::List { .. }
+                | ToolAction::Status { .. }
+                | ToolAction::Enable { .. }
+                | ToolAction::Disable { .. }
+                | ToolAction::Configure { .. }
+                | ToolAction::Apply { .. }
+                | ToolAction::Revert { .. } => unreachable!(),
             },
             Commands::Nxm { action } => match action {
                 NxmAction::Handle { uri, profile } => {

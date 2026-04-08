@@ -518,8 +518,14 @@ pub fn configure_wine_overrides(game_id: &str, game_dir: &Path, staging: &Path) 
     // Set WINEDLLOVERRIDES in the launcher config
     modde_games::launcher::apply_wine_overrides(&launcher, &overrides)?;
 
-    // Generate a launch wrapper that restores mod DLLs deleted by fgmod
-    if let Some(wrapper_path) = modde_games::launcher::generate_launch_wrapper(game_dir, staging, game_id)? {
+    // Collect tool env vars for the launch wrapper
+    let tool_env_vars = match modde_core::db::ModdeDb::open() {
+        Ok(db) => modde_games::launcher::collect_tool_env_vars(game_id, &db).unwrap_or_default(),
+        Err(_) => Vec::new(),
+    };
+
+    // Generate a launch wrapper that restores mod DLLs deleted by fgmod + exports tool env vars
+    if let Some(wrapper_path) = modde_games::launcher::generate_launch_wrapper(game_dir, staging, game_id, &tool_env_vars)? {
         modde_games::launcher::register_heroic_wrapper(&launcher, &wrapper_path)?;
     }
 

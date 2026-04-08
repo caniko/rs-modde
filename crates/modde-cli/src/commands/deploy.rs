@@ -166,6 +166,28 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     )
     .context("Wine DLL override configuration failed")?;
 
+    // Generate per-game tool configs and apply tool environment to launcher
+    if let Ok(db) = modde_core::db::ModdeDb::open() {
+        // Generate config files (MangoHud.conf, vkBasalt.conf, etc.)
+        if let Err(e) = modde_games::launcher::generate_tool_configs(&profile.game_id, &db) {
+            warn!(error = %e, "failed to generate tool configs");
+        }
+
+        // Apply tool env vars + wrappers to Heroic launcher config
+        let launcher = modde_games::launcher::detect_launcher(&install_dir);
+        if let modde_games::launcher::Launcher::Heroic { ref config_path, ref game_id } = launcher {
+            let env_vars = modde_games::launcher::collect_tool_env_vars(&profile.game_id, &db)
+                .unwrap_or_default();
+            let wrappers = modde_games::launcher::collect_tool_wrappers(&profile.game_id, &db)
+                .unwrap_or_default();
+            if let Err(e) = modde_games::launcher::apply_tool_environment_heroic(
+                config_path, game_id, &env_vars, &wrappers,
+            ) {
+                warn!(error = %e, "failed to apply tool environment to Heroic");
+            }
+        }
+    }
+
     println!("Deployed profile: {name}");
     println!("  Game: {} ({})", game_plugin.display_name(), profile.game_id);
     println!("  Install dir: {}", install_dir.display());

@@ -5,5 +5,6 @@ pub mod mod_list;
 pub mod saves;
 pub mod settings;
 pub mod sidebar;
+pub mod tools;
 pub mod verify;
 pub mod wabbajack;

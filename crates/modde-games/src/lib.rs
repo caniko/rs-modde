@@ -3,6 +3,7 @@ pub mod cyberpunk;
 pub mod detection;
 pub mod generic;
 pub mod launcher;
+pub mod tools;
 pub mod traits;
 
 pub use detection::{find_detected_game, scan_installed_games, DetectedGame, LauncherSource};

@@ -37,6 +37,7 @@ pub fn view<'a>(
             active_view,
         ),
         nav_button("Verify", View::Verify, active_view),
+        nav_button("Tools", View::Tools, active_view),
         nav_button("Settings", View::Settings, active_view),
     ]
     .spacing(4);

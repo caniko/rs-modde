@@ -5,6 +5,7 @@ use std::process::Command;
 use anyhow::{Context, Result};
 use tracing::{info, warn};
 
+use modde_core::db::ModdeDb;
 use modde_core::fs::walk_files_relative;
 use modde_core::paths;
 use modde_core::profile::ProfileManager;
@@ -142,6 +143,273 @@ pub fn handle_list(game_id: &str) -> Result<()> {
     }
 
     println!("\nRun tools with: modde tool run <executable> [-- args...]");
+
+    Ok(())
+}
+
+// ── Gaming tool/overlay management ──────────────────────────────────────
+
+/// Show status of all gaming tools for a game.
+pub fn handle_status(game_id: &str) -> Result<()> {
+    let db = ModdeDb::open().context("failed to open database")?;
+    let stored = db.load_tool_configs(game_id)?;
+
+    println!("Game: {game_id}\n");
+    println!("{:<14} {:<14} {:<10} {}", "Tool", "Category", "Status", "Available");
+    println!("{}", "-".repeat(60));
+
+    for tool in modde_games::tools::all_tools() {
+        let avail = tool.detect_available();
+        let avail_str = match &avail {
+            modde_games::tools::ToolAvailability::Available { version } => {
+                match version {
+                    Some(v) => format!("yes ({v})"),
+                    None => "yes".into(),
+                }
+            }
+            modde_games::tools::ToolAvailability::NotInstalled { .. } => "not installed".into(),
+        };
+
+        let enabled = stored
+            .iter()
+            .find(|r| r.tool_id == tool.tool_id())
+            .map_or(false, |r| r.enabled);
+
+        let status = if enabled { "enabled" } else { "disabled" };
+
+        // Check if files are applied
+        let applied_count = db
+            .load_applied_files(game_id, tool.tool_id())
+            .map(|f| f.len())
+            .unwrap_or(0);
+
+        let status_str = if applied_count > 0 {
+            format!("{status} ({applied_count} files)")
+        } else {
+            status.to_string()
+        };
+
+        println!(
+            "{:<14} {:<14} {:<10} {}",
+            tool.display_name(),
+            tool.category(),
+            status_str,
+            avail_str,
+        );
+    }
+
+    Ok(())
+}
+
+/// Enable a tool for a game.
+pub fn handle_enable(tool_id: &str, game_id: &str) -> Result<()> {
+    let tool = modde_games::tools::resolve_tool(tool_id)
+        .ok_or_else(|| anyhow::anyhow!(
+            "unknown tool: '{tool_id}'\nAvailable: {}",
+            modde_games::tools::all_tools()
+                .iter()
+                .map(|t| t.tool_id())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))?;
+
+    let db = ModdeDb::open().context("failed to open database")?;
+
+    // Load existing or use defaults
+    let mut config = match db.load_tool_config(game_id, tool_id)? {
+        Some(row) => modde_games::tools::ToolConfig {
+            tool_id: row.tool_id,
+            enabled: true,
+            settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+        },
+        None => {
+            let mut cfg = tool.default_config();
+            cfg.enabled = true;
+            cfg
+        }
+    };
+
+    config.enabled = true;
+
+    let settings_json = serde_json::to_string(&config.settings)?;
+    db.save_tool_config(game_id, tool_id, true, &settings_json)?;
+
+    println!("Enabled {} for {game_id}", tool.display_name());
+
+    // Generate config file if applicable
+    config.set("_game_id", serde_json::json!(game_id));
+    if let Some(generated) = tool.generate_config(&config) {
+        if let Some(parent) = generated.path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&generated.path, &generated.content)?;
+        println!("  Config: {}", generated.path.display());
+    }
+
+    Ok(())
+}
+
+/// Disable a tool for a game.
+pub fn handle_disable(tool_id: &str, game_id: &str) -> Result<()> {
+    let tool = modde_games::tools::resolve_tool(tool_id)
+        .ok_or_else(|| anyhow::anyhow!("unknown tool: '{tool_id}'"))?;
+
+    let db = ModdeDb::open().context("failed to open database")?;
+
+    // Load existing config to preserve settings
+    let settings_json = db
+        .load_tool_config(game_id, tool_id)?
+        .map(|r| r.settings_json)
+        .unwrap_or_else(|| "{}".into());
+
+    db.save_tool_config(game_id, tool_id, false, &settings_json)?;
+
+    println!("Disabled {} for {game_id}", tool.display_name());
+
+    Ok(())
+}
+
+/// Configure a tool's settings.
+pub fn handle_configure(tool_id: &str, game_id: &str, settings: &[String]) -> Result<()> {
+    let tool = modde_games::tools::resolve_tool(tool_id)
+        .ok_or_else(|| anyhow::anyhow!("unknown tool: '{tool_id}'"))?;
+
+    let db = ModdeDb::open().context("failed to open database")?;
+
+    // Load existing or defaults
+    let mut config = match db.load_tool_config(game_id, tool_id)? {
+        Some(row) => modde_games::tools::ToolConfig {
+            tool_id: row.tool_id,
+            enabled: row.enabled,
+            settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+        },
+        None => tool.default_config(),
+    };
+
+    // Parse key=value pairs
+    for setting in settings {
+        let (key, value) = setting
+            .split_once('=')
+            .ok_or_else(|| anyhow::anyhow!("invalid setting format: '{setting}' (expected key=value)"))?;
+
+        // Try to parse as bool, number, or fallback to string
+        let json_value = if value == "true" {
+            serde_json::json!(true)
+        } else if value == "false" {
+            serde_json::json!(false)
+        } else if let Ok(n) = value.parse::<f64>() {
+            serde_json::json!(n)
+        } else {
+            serde_json::json!(value)
+        };
+
+        config.set(key, json_value);
+        println!("  {key} = {value}");
+    }
+
+    let settings_json = serde_json::to_string(&config.settings)?;
+    db.save_tool_config(game_id, tool_id, config.enabled, &settings_json)?;
+
+    // Regenerate config file
+    config.set("_game_id", serde_json::json!(game_id));
+    if let Some(generated) = tool.generate_config(&config) {
+        if let Some(parent) = generated.path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&generated.path, &generated.content)?;
+        println!("  Config written: {}", generated.path.display());
+    }
+
+    println!("Updated {} config for {game_id}", tool.display_name());
+
+    Ok(())
+}
+
+/// Apply tool patches to the game directory.
+pub fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
+    let tool = modde_games::tools::resolve_tool(tool_id)
+        .ok_or_else(|| anyhow::anyhow!("unknown tool: '{tool_id}'"))?;
+
+    let game_plugin = modde_games::resolve_game_plugin(game_id)
+        .ok_or_else(|| anyhow::anyhow!("unsupported game: '{game_id}'"))?;
+
+    let install_dir = game_plugin
+        .detect_install()
+        .ok_or_else(|| anyhow::anyhow!("could not detect install dir for {}", game_plugin.display_name()))?;
+
+    let db = ModdeDb::open().context("failed to open database")?;
+
+    let config = match db.load_tool_config(game_id, tool_id)? {
+        Some(row) => modde_games::tools::ToolConfig {
+            tool_id: row.tool_id,
+            enabled: row.enabled,
+            settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+        },
+        None => tool.default_config(),
+    };
+
+    let applied = tool.apply(&install_dir, &config)?;
+
+    if applied.files.is_empty() {
+        println!("No files to apply for {}", tool.display_name());
+        return Ok(());
+    }
+
+    // Record applied files in the database
+    let rel_paths: Vec<String> = applied
+        .files
+        .iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+
+    db.save_applied_files(game_id, tool_id, &rel_paths)?;
+
+    println!(
+        "Applied {} ({} files) to {}",
+        tool.display_name(),
+        applied.files.len(),
+        install_dir.display(),
+    );
+    for f in &applied.files {
+        println!("  {}", f.display());
+    }
+
+    Ok(())
+}
+
+/// Revert tool patches from the game directory.
+pub fn handle_revert(tool_id: &str, game_id: &str) -> Result<()> {
+    let tool = modde_games::tools::resolve_tool(tool_id)
+        .ok_or_else(|| anyhow::anyhow!("unknown tool: '{tool_id}'"))?;
+
+    let game_plugin = modde_games::resolve_game_plugin(game_id)
+        .ok_or_else(|| anyhow::anyhow!("unsupported game: '{game_id}'"))?;
+
+    let install_dir = game_plugin
+        .detect_install()
+        .ok_or_else(|| anyhow::anyhow!("could not detect install dir for {}", game_plugin.display_name()))?;
+
+    let db = ModdeDb::open().context("failed to open database")?;
+
+    let files = db.load_applied_files(game_id, tool_id)?;
+    if files.is_empty() {
+        println!("No applied files to revert for {}", tool.display_name());
+        return Ok(());
+    }
+
+    let applied = modde_games::tools::AppliedFiles {
+        files: files.iter().map(PathBuf::from).collect(),
+    };
+
+    tool.revert(&install_dir, &applied)?;
+    db.clear_applied_files(game_id, tool_id)?;
+
+    println!(
+        "Reverted {} ({} files) from {}",
+        tool.display_name(),
+        files.len(),
+        install_dir.display(),
+    );
 
     Ok(())
 }

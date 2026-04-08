@@ -66,6 +66,7 @@ pub struct Modde {
     pub selected_game: Option<String>,
     pub stock_snapshot_exists: bool,
     pub window_id: window::Id,
+    pub tool_state: ToolState,
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +75,25 @@ pub struct VerifyResults {
     pub hash_mismatches: Vec<(PathBuf, String, String)>,
     pub broken_symlinks: SmallVec<[PathBuf; 8]>,
     pub ok_count: usize,
+}
+
+/// State for the gaming tools/overlays view.
+#[derive(Debug, Clone, Default)]
+pub struct ToolState {
+    pub entries: Vec<ToolUiEntry>,
+}
+
+/// A single tool entry for UI display.
+#[derive(Debug, Clone)]
+pub struct ToolUiEntry {
+    pub tool_id: String,
+    pub display_name: String,
+    pub category: String,
+    pub available: bool,
+    pub enabled: bool,
+    pub applied_files: usize,
+    pub has_file_patching: bool,
+    pub status_message: Option<String>,
 }
 
 /// Compile-time–friendly state machine for the verification pipeline.
@@ -182,6 +202,56 @@ impl Modde {
         }
     }
 
+    fn refresh_tools(&mut self) {
+        let game_id = match self.selected_game.as_deref() {
+            Some(id) => id,
+            None => {
+                self.tool_state = ToolState::default();
+                return;
+            }
+        };
+
+        let db = match modde_core::db::ModdeDb::open() {
+            Ok(db) => db,
+            Err(_) => return,
+        };
+
+        let stored = db.load_tool_configs(game_id).unwrap_or_default();
+
+        self.tool_state.entries = modde_games::tools::all_tools()
+            .iter()
+            .map(|tool| {
+                let avail = tool.detect_available();
+                let enabled = stored
+                    .iter()
+                    .find(|r| r.tool_id == tool.tool_id())
+                    .map_or(false, |r| r.enabled);
+
+                let applied_files = db
+                    .load_applied_files(game_id, tool.tool_id())
+                    .map(|f| f.len())
+                    .unwrap_or(0);
+
+                let has_file_patching = matches!(
+                    tool.category(),
+                    modde_games::tools::ToolCategory::PostProcess
+                    | modde_games::tools::ToolCategory::Upscaler
+                );
+
+                ToolUiEntry {
+                    tool_id: tool.tool_id().to_string(),
+                    display_name: tool.display_name().to_string(),
+                    category: tool.category().to_string(),
+                    available: avail.is_available(),
+                    enabled,
+                    applied_files,
+                    has_file_patching,
+                    status_message: None,
+                }
+            })
+            .collect();
+    }
+
     fn save_settings(&self) {
         self.settings.save();
     }
@@ -198,6 +268,7 @@ pub enum View {
     Settings,
     Saves,
     Verify,
+    Tools,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -513,6 +584,13 @@ pub enum Message {
     RunVerify,
     VerifyComplete(VerifyResults),
 
+    // Tools
+    RefreshTools,
+    ToggleTool { tool_id: String, enabled: bool },
+    ApplyTool(String),
+    RevertTool(String),
+    ToolActionComplete(Result<String, String>),
+
     // Misc
     Noop,
 }
@@ -576,6 +654,7 @@ impl Modde {
             selected_game,
             stock_snapshot_exists: false,
             window_id: window::Id::unique(),
+            tool_state: ToolState::default(),
         };
 
         // Auto-detect: if no game is selected but profiles exist, pick the first profile's game
@@ -1347,6 +1426,103 @@ impl Modde {
                 self.active_view = View::Verify;
             }
 
+            // ── Tools ──────────────────────────────────────────────
+            Message::RefreshTools => {
+                self.refresh_tools();
+            }
+            Message::ToggleTool { tool_id, enabled } => {
+                if let Ok(db) = modde_core::db::ModdeDb::open() {
+                    let game_id = self
+                        .selected_game
+                        .as_deref()
+                        .unwrap_or("");
+
+                    if let Some(tool) = modde_games::tools::resolve_tool(&tool_id) {
+                        let settings_json = db
+                            .load_tool_config(game_id, &tool_id)
+                            .ok()
+                            .flatten()
+                            .map(|r| r.settings_json)
+                            .unwrap_or_else(|| {
+                                serde_json::to_string(&tool.default_config().settings)
+                                    .unwrap_or_else(|_| "{}".into())
+                            });
+
+                        let _ = db.save_tool_config(game_id, &tool_id, enabled, &settings_json);
+                        self.status_message = format!(
+                            "{} {} for {game_id}",
+                            if enabled { "Enabled" } else { "Disabled" },
+                            tool.display_name(),
+                        );
+                    }
+                }
+                self.refresh_tools();
+            }
+            Message::ApplyTool(tool_id) => {
+                let game_id = self.selected_game.clone().unwrap_or_default();
+                self.status_message = format!("Applying {tool_id}...");
+                return Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || -> Result<String, String> {
+                            let tool = modde_games::tools::resolve_tool(&tool_id)
+                                .ok_or_else(|| format!("unknown tool: {tool_id}"))?;
+                            let game_plugin = modde_games::resolve_game_plugin(&game_id)
+                                .ok_or_else(|| format!("unsupported game: {game_id}"))?;
+                            let install_dir = game_plugin.detect_install()
+                                .ok_or_else(|| format!("cannot detect install dir for {}", game_plugin.display_name()))?;
+                            let db = modde_core::db::ModdeDb::open().map_err(|e| e.to_string())?;
+                            let config = db.load_tool_config(&game_id, &tool_id)
+                                .map_err(|e| e.to_string())?
+                                .map(|r| modde_games::tools::ToolConfig {
+                                    tool_id: r.tool_id,
+                                    enabled: r.enabled,
+                                    settings: serde_json::from_str(&r.settings_json).unwrap_or_default(),
+                                })
+                                .unwrap_or_else(|| tool.default_config());
+                            let applied = tool.apply(&install_dir, &config).map_err(|e| e.to_string())?;
+                            let rel_paths: Vec<String> = applied.files.iter()
+                                .map(|p| p.to_string_lossy().to_string())
+                                .collect();
+                            db.save_applied_files(&game_id, &tool_id, &rel_paths).map_err(|e| e.to_string())?;
+                            Ok(format!("Applied {} ({} files)", tool.display_name(), applied.files.len()))
+                        }).await.unwrap_or_else(|e| Err(e.to_string()))
+                    },
+                    Message::ToolActionComplete,
+                );
+            }
+            Message::RevertTool(tool_id) => {
+                let game_id = self.selected_game.clone().unwrap_or_default();
+                self.status_message = format!("Reverting {tool_id}...");
+                return Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || -> Result<String, String> {
+                            let tool = modde_games::tools::resolve_tool(&tool_id)
+                                .ok_or_else(|| format!("unknown tool: {tool_id}"))?;
+                            let game_plugin = modde_games::resolve_game_plugin(&game_id)
+                                .ok_or_else(|| format!("unsupported game: {game_id}"))?;
+                            let install_dir = game_plugin.detect_install()
+                                .ok_or_else(|| format!("cannot detect install dir for {}", game_plugin.display_name()))?;
+                            let db = modde_core::db::ModdeDb::open().map_err(|e| e.to_string())?;
+                            let files = db.load_applied_files(&game_id, &tool_id).map_err(|e| e.to_string())?;
+                            let applied = modde_games::tools::AppliedFiles {
+                                files: files.iter().map(std::path::PathBuf::from).collect(),
+                            };
+                            tool.revert(&install_dir, &applied).map_err(|e| e.to_string())?;
+                            db.clear_applied_files(&game_id, &tool_id).map_err(|e| e.to_string())?;
+                            Ok(format!("Reverted {} ({} files)", tool.display_name(), files.len()))
+                        }).await.unwrap_or_else(|e| Err(e.to_string()))
+                    },
+                    Message::ToolActionComplete,
+                );
+            }
+            Message::ToolActionComplete(result) => {
+                match result {
+                    Ok(msg) => self.status_message = msg,
+                    Err(msg) => self.status_message = format!("Error: {msg}"),
+                }
+                self.refresh_tools();
+            }
+
             Message::Noop => {}
         }
         Task::none()
@@ -1380,6 +1556,7 @@ impl Modde {
                 self.current_fingerprint.as_ref(),
             ),
             View::Verify => crate::views::verify::view(&self.verify),
+            View::Tools => crate::views::tools::view(&self.tool_state),
         };
 
         // ── Custom title bar ──
