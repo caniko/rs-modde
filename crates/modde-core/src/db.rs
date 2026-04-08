@@ -8,7 +8,7 @@ use crate::error::{CoreError, Result};
 use crate::profile::{EnabledMod, Profile, ProfileSource};
 use crate::resolver::{GameId, LoadOrderRule, ModId};
 
-const CURRENT_SCHEMA_VERSION: u32 = 3;
+const CURRENT_SCHEMA_VERSION: u32 = 6;
 
 const SCHEMA_V1: &str = "
 PRAGMA journal_mode = WAL;
@@ -255,6 +255,17 @@ impl ModdeDb {
         if version < 3 {
             self.conn.execute_batch(SCHEMA_V3)?;
             info!(from = version.max(2), to = 3, "database schema migrated to V3");
+        }
+
+        if version < 6 {
+            // Add display_name column if it doesn't already exist.
+            let has_display_name = self.conn
+                .prepare("SELECT display_name FROM profile_mods LIMIT 0")
+                .is_ok();
+            if !has_display_name {
+                self.conn.execute_batch("ALTER TABLE profile_mods ADD COLUMN display_name TEXT;")?;
+            }
+            info!(from = version.max(5), to = 6, "database schema migrated to V6");
         }
 
         if version < CURRENT_SCHEMA_VERSION {
@@ -963,16 +974,17 @@ impl ModdeDb {
 
     fn insert_mods(&self, profile_id: i64, mods: &[EnabledMod]) -> Result<()> {
         let mut stmt = self.conn.prepare(
-            "INSERT INTO profile_mods (profile_id, mod_id, enabled, version, fomod_config, sort_index,
+            "INSERT INTO profile_mods (profile_id, mod_id, display_name, enabled, version, fomod_config, sort_index,
                     nexus_mod_id, nexus_file_id, nexus_game_domain, installed_timestamp,
                     category_id, notes, tags)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         )?;
 
         for (idx, m) in mods.iter().enumerate() {
             stmt.execute(params![
                 profile_id,
                 m.mod_id,
+                m.display_name,
                 m.enabled,
                 m.version,
                 m.fomod_config,
@@ -1010,7 +1022,7 @@ impl ModdeDb {
 
     fn load_mods(&self, profile_id: i64) -> Result<Vec<EnabledMod>> {
         let mut stmt = self.conn.prepare(
-            "SELECT mod_id, enabled, version, fomod_config,
+            "SELECT mod_id, display_name, enabled, version, fomod_config,
                     nexus_mod_id, nexus_file_id, nexus_game_domain, installed_timestamp,
                     category_id, notes, tags
              FROM profile_mods WHERE profile_id = ?1 ORDER BY sort_index",
@@ -1020,16 +1032,17 @@ impl ModdeDb {
             .query_map(params![profile_id], |row| {
                 Ok(EnabledMod {
                     mod_id: row.get(0)?,
-                    enabled: row.get(1)?,
-                    version: row.get(2)?,
-                    fomod_config: row.get(3)?,
-                    nexus_mod_id: row.get(4)?,
-                    nexus_file_id: row.get(5)?,
-                    nexus_game_domain: row.get(6)?,
-                    installed_timestamp: row.get(7)?,
-                    category_id: row.get(8)?,
-                    notes: row.get(9)?,
-                    tags: row.get(10)?,
+                    display_name: row.get(1)?,
+                    enabled: row.get(2)?,
+                    version: row.get(3)?,
+                    fomod_config: row.get(4)?,
+                    nexus_mod_id: row.get(5)?,
+                    nexus_file_id: row.get(6)?,
+                    nexus_game_domain: row.get(7)?,
+                    installed_timestamp: row.get(8)?,
+                    category_id: row.get(9)?,
+                    notes: row.get(10)?,
+                    tags: row.get(11)?,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;

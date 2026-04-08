@@ -175,6 +175,9 @@ pub fn masterlist_url(game_id: &str) -> Option<&'static str> {
         "fallout76" => Some(
             "https://raw.githubusercontent.com/loot/fallout76/master/masterlist.yaml",
         ),
+        "starfield" => Some(
+            "https://raw.githubusercontent.com/loot/starfield/master/masterlist.yaml",
+        ),
         _ => {
             warn!(game_id, "no LOOT masterlist URL known for game");
             None

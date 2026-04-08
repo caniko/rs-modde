@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use tracing::{info, warn};
 
+use modde_core::collision;
 use modde_core::fs::walk_files_relative;
 use modde_core::paths;
 use modde_core::profile::{ProfileManager, ProfileSource};
@@ -77,29 +78,53 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     println!("Load order: {} enabled mods", resolved.order.len());
 
     let store = paths::store_dir();
-    let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
-    let mut conflict_map = ConflictMap::default();
-    let mut conflict_count: usize = 0;
 
+    // Build archive-aware conflict map using the collision system.
+    let classifier = modde_games::resolve_collision_classifier(&profile.game_id);
+
+    let (conflict_map, _origins) = if let Some(ref cls) = classifier {
+        collision::build_full_conflict_map(
+            &store,
+            &resolved.order,
+            cls.as_ref(),
+        )
+        .context("failed to build conflict map")?
+    } else {
+        // Fallback: build a loose-files-only conflict map (no classifier available).
+        let mut cm = ConflictMap::default();
+        let origins = collision::OriginMap::new();
+        for mod_id in &resolved.order {
+            let mod_dir = store.join(mod_id.as_str());
+            if !mod_dir.exists() {
+                continue;
+            }
+            if let Ok(files) = walk_files_relative(&mod_dir) {
+                for (rel_path, _) in &files {
+                    cm.register(rel_path.clone(), mod_id.clone());
+                }
+            }
+        }
+        (cm, origins)
+    };
+
+    // Walk store files for the symlink farm (still needs absolute paths).
+    let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
+    let mut conflict_count: usize = 0;
     for mod_id in &resolved.order {
         let mod_dir_path = store.join(mod_id.as_str());
-
         if !mod_dir_path.exists() {
             warn!(%mod_id, "mod directory not found in store, skipping");
             continue;
         }
-
         let files = walk_files_relative(&mod_dir_path)
             .with_context(|| format!("failed to walk files for mod {mod_id}"))?;
-
         for (rel_path, _) in &files {
-            if conflict_map.files.contains_key(rel_path) {
-                conflict_count += 1;
-                info!(file = %rel_path, mod_id = %mod_id, "file override: later mod wins");
+            if let Some(providers) = conflict_map.files.get(rel_path) {
+                if providers.len() > 1 {
+                    conflict_count += 1;
+                }
             }
-            conflict_map.register(rel_path.clone(), mod_id.clone());
         }
-
         mod_files.insert(mod_id.clone(), files);
     }
 

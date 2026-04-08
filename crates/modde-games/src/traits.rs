@@ -95,6 +95,26 @@ pub trait GamePlugin: Send + Sync {
     fn executable_dir(&self, install: &Path) -> PathBuf {
         install.to_path_buf()
     }
+
+    // ── DRY trait methods (generic → game-specific via data) ─────
+
+    /// INI file names managed per-profile (e.g., ["Skyrim.ini", "SkyrimPrefs.ini"]).
+    fn ini_file_names(&self) -> &[&str] { &[] }
+
+    /// Archive file extensions this game uses (e.g., ["bsa", "ba2"]).
+    fn archive_extensions(&self) -> &[&str] { &[] }
+
+    /// Whether this game has a plugin/load order system (ESP/ESM/ESL).
+    fn has_plugin_system(&self) -> bool { false }
+
+    /// Steam app ID for Proton prefix path resolution.
+    fn steam_app_id_u32(&self) -> Option<u32> { None }
+
+    /// Game folder name in Proton's AppData/Local for plugins.txt.
+    fn plugins_txt_folder(&self) -> Option<&str> { None }
+
+    /// Nexus Mods game domain name for API calls.
+    fn nexus_game_domain(&self) -> Option<&str> { None }
 }
 
 /// A detected save file or directory within a game's save directory.

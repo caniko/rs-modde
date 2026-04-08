@@ -13,6 +13,7 @@ pub struct PluginEntry {
 pub const SKYRIM_SE_APP_ID: u32 = 489830;
 pub const FALLOUT4_APP_ID: u32 = 377160;
 pub const FALLOUT76_APP_ID: u32 = 1151340;
+pub const STARFIELD_APP_ID: u32 = 1716740;
 
 /// Read plugins.txt for a Bethesda game running under Steam Proton.
 pub fn read_plugins_txt(app_id: u32, game_name: &str) -> Result<Vec<PluginEntry>> {

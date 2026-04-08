@@ -105,6 +105,41 @@ impl NexusApi {
         Ok(body)
     }
 
+    async fn post<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T> {
+        let resp = self
+            .client
+            .post(url)
+            .header("apikey", &self.api_key)
+            .send()
+            .await?;
+
+        if let Some(remaining) = resp.headers().get("x-rl-hourly-remaining") {
+            if let Ok(val) = remaining.to_str().unwrap_or("").parse::<u32>() {
+                if val < 10 {
+                    warn!(remaining = val, "Nexus API hourly rate limit running low");
+                }
+            }
+        }
+
+        if resp.status() == 429 {
+            bail!("Nexus API rate limit exceeded. Please wait before retrying.");
+        }
+
+        let body = resp.error_for_status()?.json().await?;
+        Ok(body)
+    }
+
+    async fn delete_req(&self, url: &str, form: &[(&str, &str)]) -> Result<()> {
+        self.client
+            .delete(url)
+            .header("apikey", &self.api_key)
+            .form(form)
+            .send()
+            .await?
+            .error_for_status()?;
+        Ok(())
+    }
+
     /// Get mod details.
     pub async fn get_mod(&self, game_domain: &str, mod_id: u64) -> Result<NexusMod> {
         let url = format!("{BASE_URL}/games/{game_domain}/mods/{mod_id}.json");
@@ -189,6 +224,49 @@ impl NexusApi {
         //   GET /v1/collections/{slug}.json
         let url = format!("{BASE_URL}/collections/{slug}.json");
         self.get(&url).await
+    }
+
+    /// Endorse a mod on Nexus.
+    pub async fn endorse_mod(&self, game_domain: &str, mod_id: u64) -> Result<()> {
+        let url = format!("{BASE_URL}/games/{game_domain}/mods/{mod_id}/endorse.json");
+        let _: serde_json::Value = self.post(&url).await?;
+        Ok(())
+    }
+
+    /// Abstain from endorsing (won't be asked again).
+    pub async fn abstain_mod(&self, game_domain: &str, mod_id: u64) -> Result<()> {
+        let url = format!("{BASE_URL}/games/{game_domain}/mods/{mod_id}/abstain.json");
+        let _: serde_json::Value = self.post(&url).await?;
+        Ok(())
+    }
+
+    /// Track a mod (receive Nexus notifications).
+    pub async fn track_mod(&self, game_domain: &str, mod_id: u64) -> Result<()> {
+        let url = format!("{BASE_URL}/user/tracked_mods.json");
+        self.client
+            .post(&url)
+            .header("apikey", &self.api_key)
+            .form(&[
+                ("domain_name", game_domain),
+                ("mod_id", &mod_id.to_string()),
+            ])
+            .send()
+            .await?
+            .error_for_status()?;
+        Ok(())
+    }
+
+    /// Stop tracking a mod.
+    pub async fn untrack_mod(&self, game_domain: &str, mod_id: u64) -> Result<()> {
+        let url = format!("{BASE_URL}/user/tracked_mods.json");
+        self.delete_req(
+            &url,
+            &[
+                ("domain_name", game_domain),
+                ("mod_id", &mod_id.to_string()),
+            ],
+        )
+        .await
     }
 
     /// Fetch a collection manifest, discovering the game domain automatically.

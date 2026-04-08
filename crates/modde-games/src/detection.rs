@@ -143,6 +143,14 @@ const KNOWN_GAMES: &[KnownGame] = &[
         epic_app_id: None,
     },
     KnownGame {
+        game_id: "starfield",
+        display_name: "Starfield",
+        steam_app_id: Some("1716740"),
+        steam_dir: Some("Starfield"),
+        gog_app_id: None,
+        epic_app_id: None,
+    },
+    KnownGame {
         game_id: "cyberpunk2077",
         display_name: "Cyberpunk 2077",
         steam_app_id: Some("1091500"),

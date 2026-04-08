@@ -1,5 +1,9 @@
+pub mod backup;
+pub mod collisions;
 pub mod deploy;
 pub mod detect;
+pub mod diagnostics;
+pub mod export;
 pub mod fomod;
 pub mod import;
 pub mod install;
@@ -10,6 +14,7 @@ pub mod play;
 pub mod profile;
 pub mod rollback;
 pub mod save;
+pub mod scan;
 pub mod stock;
 pub mod tool;
 pub mod update;

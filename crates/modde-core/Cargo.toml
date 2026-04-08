@@ -25,6 +25,7 @@ tracing = { workspace = true }
 rusqlite = { workspace = true }
 git2 = { workspace = true }
 libc = "0.2"
+zip = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

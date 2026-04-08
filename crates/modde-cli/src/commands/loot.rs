@@ -111,6 +111,7 @@ fn read_active_plugins(game_id: &str) -> Result<Vec<String>> {
         "skyrim-se" | "skyrim-ae" => (plugins_txt::SKYRIM_SE_APP_ID, "Skyrim Special Edition"),
         "fallout4" => (plugins_txt::FALLOUT4_APP_ID, "Fallout4"),
         "fallout76" => (plugins_txt::FALLOUT76_APP_ID, "Fallout76"),
+        "starfield" => (plugins_txt::STARFIELD_APP_ID, "Starfield"),
         _ => {
             return Ok(Vec::new());
         }

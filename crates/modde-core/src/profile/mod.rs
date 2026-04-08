@@ -13,6 +13,9 @@ use crate::save::{SaveFingerprint, SaveManager};
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EnabledMod {
     pub mod_id: String,
+    /// Human-readable display name shown in UI (falls back to mod_id if None).
+    #[serde(default)]
+    pub display_name: Option<String>,
     pub enabled: bool,
     #[serde(default)]
     pub version: Option<String>,

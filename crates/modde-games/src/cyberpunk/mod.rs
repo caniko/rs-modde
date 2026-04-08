@@ -1,6 +1,8 @@
+pub mod collision;
 pub mod manifest;
 pub mod redmod;
 pub mod saves;
+pub mod scanner;
 
 use std::path::{Path, PathBuf};
 
@@ -158,6 +160,18 @@ impl GamePlugin for Cyberpunk2077 {
 
     fn executable_dir(&self, install: &Path) -> PathBuf {
         install.join("bin").join("x64")
+    }
+
+    fn archive_extensions(&self) -> &[&str] {
+        &["archive"]
+    }
+
+    fn steam_app_id_u32(&self) -> Option<u32> {
+        Some(1091500)
+    }
+
+    fn nexus_game_domain(&self) -> Option<&str> {
+        Some("cyberpunk2077")
     }
 }
 

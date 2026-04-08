@@ -106,12 +106,94 @@ enum Commands {
         #[command(subcommand)]
         action: NxmAction,
     },
+    /// Scan game directory for installed mods
+    Scan {
+        #[arg(long)]
+        game: String,
+        /// Path to game installation (auto-detected if omitted)
+        #[arg(long)]
+        game_dir: Option<PathBuf>,
+        /// Path to .wabbajack file for manifest matching
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        /// Import discovered mods into this profile
+        #[arg(long)]
+        import_to: Option<String>,
+        /// Minimum file presence fraction (0.0-1.0)
+        #[arg(long, default_value = "0.5")]
+        threshold: f32,
+        /// Report only, don't write to database
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Analyse mod collisions and suggest optimisations
+    Collisions {
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+        /// Show all collisions including cosmetic ones
+        #[arg(long)]
+        all: bool,
+        /// Suggest hide commands for redundant files
+        #[arg(long)]
+        suggest_hides: bool,
+    },
+    /// Run diagnostics to detect common modding issues
+    Diagnostics {
+        #[arg(long)]
+        game: String,
+        #[arg(long)]
+        profile: Option<String>,
+    },
+    /// Export mod list to CSV
+    Export {
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+        /// Comma-separated columns
+        #[arg(long)]
+        columns: Option<String>,
+        /// Output file (stdout if omitted)
+        #[arg(long)]
+        output: Option<String>,
+    },
+    /// Manage mod and plugin order backups
+    Backup {
+        #[command(subcommand)]
+        action: BackupAction,
+    },
     /// Detect installed games across Steam and Heroic launchers
     Detect,
     /// Import existing TOML profiles into the database
     Import,
     /// Launch the graphical user interface
     Gui,
+}
+
+#[derive(Subcommand)]
+enum BackupAction {
+    /// Create a backup of a mod
+    Create { mod_id: String },
+    /// Restore a mod from its latest backup
+    Restore { mod_id: String },
+    /// List available backups for a mod
+    List { mod_id: String },
+    /// Backup current plugin load order
+    Plugins {
+        #[arg(long)]
+        profile: String,
+        #[arg(long)]
+        game: String,
+    },
+    /// Restore plugin load order from backup
+    RestorePlugins {
+        #[arg(long)]
+        profile: String,
+        #[arg(long)]
+        game: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -467,6 +549,18 @@ fn main() -> Result<()> {
     // Sync commands that don't need the tokio runtime
     match cli.command {
         Commands::Profile { action } => return commands::profile::handle(action),
+        Commands::Scan { game, game_dir, manifest, import_to, threshold, dry_run } => {
+            return commands::scan::handle(game, game_dir, manifest, import_to, threshold, dry_run);
+        }
+        Commands::Diagnostics { game, profile } => {
+            return commands::diagnostics::handle(&game, profile);
+        }
+        Commands::Export { profile, game, columns, output } => {
+            return commands::export::handle(profile, game, columns, output);
+        }
+        Commands::Backup { action } => {
+            return commands::backup::handle(action);
+        }
         Commands::Detect => return commands::detect::handle(),
         Commands::Import => return commands::import::handle(),
         Commands::Fomod { action } => return commands::fomod::handle(action),
@@ -510,6 +604,9 @@ fn main() -> Result<()> {
                 commands::play::handle(profile, game, no_deploy, no_switch, no_capture).await?
             }
             Commands::Deploy { profile, game } => commands::deploy::handle(profile, game).await?,
+            Commands::Collisions { profile, game, all, suggest_hides } => {
+                commands::collisions::handle(profile, game, all, suggest_hides).await?
+            }
             Commands::Rollback { profile, game } => {
                 commands::rollback::handle(profile, game).await?
             }
@@ -544,7 +641,8 @@ fn main() -> Result<()> {
                 NxmAction::Install => unreachable!(),
             },
             // Already handled above
-            Commands::Profile { .. } | Commands::Detect | Commands::Import
+            Commands::Profile { .. } | Commands::Scan { .. } | Commands::Detect | Commands::Import
+            | Commands::Backup { .. } | Commands::Diagnostics { .. } | Commands::Export { .. }
             | Commands::Fomod { .. } | Commands::Loot { .. } | Commands::Gui => unreachable!(),
         }
         Ok(())

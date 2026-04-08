@@ -49,7 +49,8 @@
       "/home/can/.local/share/modde/tmp",
       "/home/can/.local/share/modde",
       "/tmp/nix-shell.*",
-      "/home/can/.config/heroic/GamesConfig"
+      "/home/can/.config/heroic/GamesConfig",
+      "/tmp"
     ]
   }
 }

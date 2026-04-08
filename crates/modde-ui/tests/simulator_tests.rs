@@ -199,19 +199,19 @@ fn sample_mods() -> Vec<modde_core::profile::EnabledMod> {
             mod_id: "SkyUI".to_string(),
             enabled: true,
             version: Some("5.2".to_string()),
-            fomod_config: None, ..Default::default()
+            fomod_config: None,
         },
         modde_core::profile::EnabledMod {
             mod_id: "USSEP".to_string(),
             enabled: true,
             version: Some("4.2.8".to_string()),
-            fomod_config: None, ..Default::default()
+            fomod_config: None,
         },
         modde_core::profile::EnabledMod {
             mod_id: "EnhancedLights".to_string(),
             enabled: false,
             version: None,
-            fomod_config: None, ..Default::default()
+            fomod_config: None,
         },
     ]
 }
@@ -219,7 +219,8 @@ fn sample_mods() -> Vec<modde_core::profile::EnabledMod> {
 #[test]
 fn mod_list_empty_shows_placeholder() {
     let mods: Vec<modde_core::profile::EnabledMod> = vec![];
-    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None));
+    let empty_conflicts = std::collections::HashMap::new();
+    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &empty_conflicts, &[], modde_core::filter::FilterMode::And));
     ui.find("No mods found. Click 'Add Mod' to get started.")
         .expect("should show empty placeholder");
 }
@@ -227,7 +228,8 @@ fn mod_list_empty_shows_placeholder() {
 #[test]
 fn mod_list_shows_toolbar_buttons() {
     let mods = sample_mods();
-    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None));
+    let empty_conflicts = std::collections::HashMap::new();
+    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &empty_conflicts, &[], modde_core::filter::FilterMode::And));
     ui.find("Add Mod").expect("should show 'Add Mod' button");
     ui.find("Remove").expect("should show 'Remove' button");
     ui.find("Deploy").expect("should show 'Deploy' button");
@@ -236,7 +238,8 @@ fn mod_list_shows_toolbar_buttons() {
 #[test]
 fn mod_list_shows_mod_names() {
     let mods = sample_mods();
-    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None));
+    let empty_conflicts = std::collections::HashMap::new();
+    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &empty_conflicts, &[], modde_core::filter::FilterMode::And));
     ui.find("SkyUI").expect("should show SkyUI");
     ui.find("USSEP").expect("should show USSEP");
     ui.find("EnhancedLights")
@@ -246,14 +249,16 @@ fn mod_list_shows_mod_names() {
 #[test]
 fn mod_list_shows_mod_count() {
     let mods = sample_mods();
-    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None));
+    let empty_conflicts = std::collections::HashMap::new();
+    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &empty_conflicts, &[], modde_core::filter::FilterMode::And));
     ui.find("3 mod(s) shown").expect("should show mod count");
 }
 
 #[test]
 fn mod_list_click_add_mod_emits_message() {
     let mods = sample_mods();
-    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None));
+    let empty_conflicts = std::collections::HashMap::new();
+    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &empty_conflicts, &[], modde_core::filter::FilterMode::And));
     ui.click("Add Mod").expect("should click 'Add Mod'");
     let messages: Vec<_> = ui.into_messages().collect();
     assert!(
@@ -265,7 +270,8 @@ fn mod_list_click_add_mod_emits_message() {
 #[test]
 fn mod_list_click_deploy_emits_message() {
     let mods = sample_mods();
-    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None));
+    let empty_conflicts = std::collections::HashMap::new();
+    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &empty_conflicts, &[], modde_core::filter::FilterMode::And));
     ui.click("Deploy").expect("should click 'Deploy'");
     let messages: Vec<_> = ui.into_messages().collect();
     assert!(
@@ -277,7 +283,8 @@ fn mod_list_click_deploy_emits_message() {
 #[test]
 fn mod_list_click_mod_name_emits_select() {
     let mods = sample_mods();
-    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None));
+    let empty_conflicts = std::collections::HashMap::new();
+    let mut ui = simulator(modde_ui::views::mod_list::view(&mods, "", None, &empty_conflicts, &[], modde_core::filter::FilterMode::And));
     ui.click("USSEP").expect("should click 'USSEP'");
     let messages: Vec<_> = ui.into_messages().collect();
     assert!(
@@ -297,9 +304,9 @@ macro_rules! sidebar_test {
             let view = modde_ui::app::View::ModList;
             let profiles = $profiles;
             let active = $active;
-            let selected_game = Some("skyrim-se".to_string());
+            let games = [("skyrim-se".to_string(), "Skyrim SE".to_string())];
             let mut $ui = simulator(modde_ui::views::sidebar::view(
-                &view, &profiles, &active, $depth, "", &selected_game,
+                &view, &profiles, &active, $depth, "", "skyrim-se", &games,
             ));
             $body
         }
@@ -307,6 +314,7 @@ macro_rules! sidebar_test {
 }
 
 sidebar_test!(sidebar_shows_nav_items, profiles = vec![], active = None, depth = 0, |ui| {
+    ui.find("modde").expect("should show app title");
     ui.find("Mod List").expect("nav: Mod List");
     ui.find("Load Order").expect("nav: Load Order");
     ui.find("Saves").expect("nav: Saves");

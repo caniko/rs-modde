@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use iced::widget::{button, column, container, mouse_area, pick_list, row, text};
-use iced::{window, Element, Length, Task, Theme};
+use iced::widget::{column, container, row, text};
+use iced::{Element, Length, Task, Theme};
 use smallvec::SmallVec;
 
 use modde_core::manifest::collection::CollectionManifest;
@@ -65,8 +65,14 @@ pub struct Modde {
     pub available_games: SmallVec<[(String, String); 6]>,
     pub selected_game: Option<String>,
     pub stock_snapshot_exists: bool,
-    pub window_id: window::Id,
+    pub conflict_status: HashMap<String, ConflictStatus>,
+    pub filter_criteria: Vec<modde_core::filter::FilterCriterion>,
+    pub filter_mode: modde_core::filter::FilterMode,
+    pub window_id: iced::window::Id,
     pub tool_state: ToolState,
+    pub mod_info: Option<crate::views::mod_info::ModInfoState>,
+    pub data_tab: crate::views::data_tab::DataTabState,
+    pub diagnostics_state: crate::views::diagnostics::DiagnosticsState,
 }
 
 #[derive(Debug, Clone)]
@@ -75,25 +81,6 @@ pub struct VerifyResults {
     pub hash_mismatches: Vec<(PathBuf, String, String)>,
     pub broken_symlinks: SmallVec<[PathBuf; 8]>,
     pub ok_count: usize,
-}
-
-/// State for the gaming tools/overlays view.
-#[derive(Debug, Clone, Default)]
-pub struct ToolState {
-    pub entries: Vec<ToolUiEntry>,
-}
-
-/// A single tool entry for UI display.
-#[derive(Debug, Clone)]
-pub struct ToolUiEntry {
-    pub tool_id: String,
-    pub display_name: String,
-    pub category: String,
-    pub available: bool,
-    pub enabled: bool,
-    pub applied_files: usize,
-    pub has_file_patching: bool,
-    pub status_message: Option<String>,
 }
 
 /// Compile-time–friendly state machine for the verification pipeline.
@@ -110,6 +97,19 @@ pub enum VerifyState {
     Running,
     /// Verification completed with results.
     Complete(VerifyResults),
+}
+
+/// Conflict status for display in the mod list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConflictStatus {
+    /// No conflicting files with any other mod.
+    None,
+    /// This mod's files win all conflicts (it has higher priority).
+    Winning,
+    /// Another mod overrides all this mod's conflicting files.
+    Losing,
+    /// Some files win, some lose.
+    Mixed,
 }
 
 impl Modde {
@@ -162,6 +162,64 @@ impl Modde {
         }
     }
 
+    fn compute_conflict_status(&mut self) {
+        self.conflict_status.clear();
+        let conflicts = self.conflict_map.conflicts();
+        if conflicts.is_empty() {
+            return;
+        }
+
+        // Build a position map: mod_id -> index in resolved_order (higher index = higher priority = wins).
+        let position: HashMap<&ModId, usize> = self
+            .resolved_order
+            .iter()
+            .enumerate()
+            .map(|(i, id)| (id, i))
+            .collect();
+
+        // For each mod involved in any conflict, track wins and losses.
+        let mut wins: HashMap<String, usize> = HashMap::new();
+        let mut losses: HashMap<String, usize> = HashMap::new();
+
+        for (_file_path, contending_mods) in &conflicts {
+            if contending_mods.len() < 2 {
+                continue;
+            }
+            // The winner is the mod with the highest position in resolved_order.
+            let winner = contending_mods
+                .iter()
+                .max_by_key(|m| position.get(m).copied().unwrap_or(0));
+
+            for mod_id in contending_mods.iter() {
+                let key = mod_id.to_string();
+                if Some(mod_id) == winner {
+                    *wins.entry(key).or_insert(0) += 1;
+                } else {
+                    *losses.entry(key).or_insert(0) += 1;
+                }
+            }
+        }
+
+        // Combine wins/losses into a status per mod.
+        let all_mod_ids: std::collections::HashSet<&str> = wins
+            .keys()
+            .chain(losses.keys())
+            .map(|s| s.as_str())
+            .collect();
+
+        for mod_id in all_mod_ids {
+            let w = wins.get(mod_id).copied().unwrap_or(0);
+            let l = losses.get(mod_id).copied().unwrap_or(0);
+            let status = match (w > 0, l > 0) {
+                (true, true) => ConflictStatus::Mixed,
+                (true, false) => ConflictStatus::Winning,
+                (false, true) => ConflictStatus::Losing,
+                (false, false) => ConflictStatus::None,
+            };
+            self.conflict_status.insert(mod_id.to_string(), status);
+        }
+    }
+
     fn reload_profile(&mut self) {
         if let Some(ref name) = self.active_profile {
             if let Ok(pm) = ProfileManager::open() {
@@ -200,56 +258,7 @@ impl Modde {
                 }
             }
         }
-    }
-
-    fn refresh_tools(&mut self) {
-        let game_id = match self.selected_game.as_deref() {
-            Some(id) => id,
-            None => {
-                self.tool_state = ToolState::default();
-                return;
-            }
-        };
-
-        let db = match modde_core::db::ModdeDb::open() {
-            Ok(db) => db,
-            Err(_) => return,
-        };
-
-        let stored = db.load_tool_configs(game_id).unwrap_or_default();
-
-        self.tool_state.entries = modde_games::tools::all_tools()
-            .iter()
-            .map(|tool| {
-                let avail = tool.detect_available();
-                let enabled = stored
-                    .iter()
-                    .find(|r| r.tool_id == tool.tool_id())
-                    .map_or(false, |r| r.enabled);
-
-                let applied_files = db
-                    .load_applied_files(game_id, tool.tool_id())
-                    .map(|f| f.len())
-                    .unwrap_or(0);
-
-                let has_file_patching = matches!(
-                    tool.category(),
-                    modde_games::tools::ToolCategory::PostProcess
-                    | modde_games::tools::ToolCategory::Upscaler
-                );
-
-                ToolUiEntry {
-                    tool_id: tool.tool_id().to_string(),
-                    display_name: tool.display_name().to_string(),
-                    category: tool.category().to_string(),
-                    available: avail.is_available(),
-                    enabled,
-                    applied_files,
-                    has_file_patching,
-                    status_message: None,
-                }
-            })
-            .collect();
+        self.compute_conflict_status();
     }
 
     fn save_settings(&self) {
@@ -269,6 +278,8 @@ pub enum View {
     Saves,
     Verify,
     Tools,
+    DataTab,
+    Diagnostics,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -500,17 +511,6 @@ pub enum Message {
     // Game selection
     SelectGame(String),
 
-    // Window controls (custom title bar)
-    GotWindowId(Option<window::Id>),
-    TitleBarDrag,
-    WindowMinimize,
-    WindowToggleMaximize,
-    WindowClose,
-
-    // Play (deploy + launch)
-    PlayGame,
-    LaunchComplete(Result<Option<String>, String>),
-
     // Mod list
     ToggleMod { mod_id: String, enabled: bool },
     FilterChanged(String),
@@ -584,6 +584,23 @@ pub enum Message {
     RunVerify,
     VerifyComplete(VerifyResults),
 
+    // Filters
+    ToggleFilter(modde_core::filter::FilterKind),
+    SetFilterMode(modde_core::filter::FilterMode),
+    ClearFilters,
+
+    // Data tab
+    DataTabFilterChanged(String),
+    DataTabToggleConflicts(bool),
+
+    // Diagnostics
+    RunDiagnostics,
+    DiagnosticsComplete(Vec<crate::views::diagnostics::DiagnosticEntry>),
+
+    // Mod info overlay
+    OpenModInfo(String),
+    CloseModInfo,
+
     // Tools
     RefreshTools,
     ToggleTool { tool_id: String, enabled: bool },
@@ -653,8 +670,14 @@ impl Modde {
             available_games,
             selected_game,
             stock_snapshot_exists: false,
-            window_id: window::Id::unique(),
+            conflict_status: HashMap::new(),
+            filter_criteria: Vec::new(),
+            filter_mode: modde_core::filter::FilterMode::And,
+            window_id: iced::window::Id::unique(),
             tool_state: ToolState::default(),
+            mod_info: None,
+            data_tab: Default::default(),
+            diagnostics_state: Default::default(),
         };
 
         // Auto-detect: if no game is selected but profiles exist, pick the first profile's game
@@ -678,7 +701,7 @@ impl Modde {
         }
 
         app.reload_profile();
-        (app, window::oldest().map(Message::GotWindowId))
+        (app, Task::none())
     }
 
     fn title(&self) -> String {
@@ -776,24 +799,6 @@ impl Modde {
                 self.save_settings();
             }
 
-            // ── Window controls (custom title bar) ───────────────
-            Message::GotWindowId(Some(id)) => {
-                self.window_id = id;
-            }
-            Message::GotWindowId(None) => {}
-            Message::TitleBarDrag => {
-                return window::drag(self.window_id);
-            }
-            Message::WindowMinimize => {
-                return window::minimize(self.window_id, true);
-            }
-            Message::WindowToggleMaximize => {
-                return window::toggle_maximize(self.window_id);
-            }
-            Message::WindowClose => {
-                return window::close(self.window_id);
-            }
-
             // ── Mod list ─────────────────────────────────────────
             Message::ToggleMod { mod_id, enabled } => {
                 if let Some(ref profile_name) = self.active_profile {
@@ -842,7 +847,7 @@ impl Modde {
                                 mod_id: mod_name.clone(),
                                 enabled: true,
                                 version: None,
-                                fomod_config: None, ..Default::default()
+                                fomod_config: None,
                             });
                             let _ = pm.create(&profile).or_else(|_| pm.update(&profile).map(|_| 0));
                             self.status_message = format!("Added mod: {mod_name}");
@@ -898,49 +903,6 @@ impl Modde {
             Message::DeployComplete(result) => match result {
                 Ok(msg) => self.status_message = msg,
                 Err(e) => self.status_message = format!("Deploy failed: {e}"),
-            },
-            Message::PlayGame => {
-                self.status_message = "Deploying and launching...".to_string();
-                if let Some(ref profile) = self.loaded_profile {
-                    let profile_name = profile.name.clone();
-                    let game_id = profile.game_id.clone();
-                    return Task::perform(
-                        async move {
-                            tokio::task::spawn_blocking(move || -> Result<Option<String>, String> {
-                                // Deploy
-                                let pm = ProfileManager::open().map_err(|e| e.to_string())?;
-                                let profile = pm.load(&profile_name, Some(&game_id)).map_err(|e| e.to_string())?;
-                                let resolved = modde_core::resolver::resolve(&profile).map_err(|e| e.to_string())?;
-                                let game_plugin = modde_games::resolve_game_plugin(&game_id)
-                                    .ok_or_else(|| format!("unsupported game: {game_id}"))?;
-                                let install_path = game_plugin.detect_install()
-                                    .ok_or_else(|| format!("could not detect install for {game_id}"))?;
-                                let mod_dir = game_plugin.mod_directory(&install_path);
-                                let staging_dir = ProfileManager::staging_dir(&profile.name);
-                                game_plugin.deploy(&staging_dir, &mod_dir).map_err(|e| e.to_string())?;
-                                game_plugin.post_deploy(&install_path).map_err(|e| e.to_string())?;
-
-                                // Launch
-                                let detected = modde_games::find_detected_game(&game_id)
-                                    .ok_or_else(|| format!("could not detect launcher for '{game_id}'"))?;
-                                let exit_status = detected.source.launch().map_err(|e| e.to_string())?;
-                                match exit_status {
-                                    Some(status) => Ok(Some(format!(
-                                        "Deployed {} mod(s), game exited ({})",
-                                        resolved.order.len(), status,
-                                    ))),
-                                    None => Ok(None),
-                                }
-                            }).await.map_err(|e| e.to_string())?
-                        },
-                        Message::LaunchComplete,
-                    );
-                }
-            }
-            Message::LaunchComplete(result) => match result {
-                Ok(Some(msg)) => self.status_message = msg,
-                Ok(None) => self.status_message = "Game launched via Steam".to_string(),
-                Err(e) => self.status_message = format!("Play failed: {e}"),
             },
 
             // ── Load order ───────────────────────────────────────
@@ -1426,102 +1388,57 @@ impl Modde {
                 self.active_view = View::Verify;
             }
 
-            // ── Tools ──────────────────────────────────────────────
-            Message::RefreshTools => {
-                self.refresh_tools();
-            }
-            Message::ToggleTool { tool_id, enabled } => {
-                if let Ok(db) = modde_core::db::ModdeDb::open() {
-                    let game_id = self
-                        .selected_game
-                        .as_deref()
-                        .unwrap_or("");
-
-                    if let Some(tool) = modde_games::tools::resolve_tool(&tool_id) {
-                        let settings_json = db
-                            .load_tool_config(game_id, &tool_id)
-                            .ok()
-                            .flatten()
-                            .map(|r| r.settings_json)
-                            .unwrap_or_else(|| {
-                                serde_json::to_string(&tool.default_config().settings)
-                                    .unwrap_or_else(|_| "{}".into())
-                            });
-
-                        let _ = db.save_tool_config(game_id, &tool_id, enabled, &settings_json);
-                        self.status_message = format!(
-                            "{} {} for {game_id}",
-                            if enabled { "Enabled" } else { "Disabled" },
-                            tool.display_name(),
-                        );
+            // ── Filters ──────────────────────────────────────
+            Message::ToggleFilter(kind) => {
+                if let Some(c) = self.filter_criteria.iter_mut().find(|c| c.kind == kind) {
+                    c.state = c.state.cycle();
+                    // Remove criterion if it cycles back to Ignore
+                    if c.state == modde_core::filter::TriState::Ignore {
+                        self.filter_criteria.retain(|c| c.kind != kind);
                     }
+                } else {
+                    self.filter_criteria.push(modde_core::filter::FilterCriterion {
+                        kind,
+                        state: modde_core::filter::TriState::Include,
+                    });
                 }
-                self.refresh_tools();
             }
-            Message::ApplyTool(tool_id) => {
-                let game_id = self.selected_game.clone().unwrap_or_default();
-                self.status_message = format!("Applying {tool_id}...");
-                return Task::perform(
-                    async move {
-                        tokio::task::spawn_blocking(move || -> Result<String, String> {
-                            let tool = modde_games::tools::resolve_tool(&tool_id)
-                                .ok_or_else(|| format!("unknown tool: {tool_id}"))?;
-                            let game_plugin = modde_games::resolve_game_plugin(&game_id)
-                                .ok_or_else(|| format!("unsupported game: {game_id}"))?;
-                            let install_dir = game_plugin.detect_install()
-                                .ok_or_else(|| format!("cannot detect install dir for {}", game_plugin.display_name()))?;
-                            let db = modde_core::db::ModdeDb::open().map_err(|e| e.to_string())?;
-                            let config = db.load_tool_config(&game_id, &tool_id)
-                                .map_err(|e| e.to_string())?
-                                .map(|r| modde_games::tools::ToolConfig {
-                                    tool_id: r.tool_id,
-                                    enabled: r.enabled,
-                                    settings: serde_json::from_str(&r.settings_json).unwrap_or_default(),
-                                })
-                                .unwrap_or_else(|| tool.default_config());
-                            let applied = tool.apply(&install_dir, &config).map_err(|e| e.to_string())?;
-                            let rel_paths: Vec<String> = applied.files.iter()
-                                .map(|p| p.to_string_lossy().to_string())
-                                .collect();
-                            db.save_applied_files(&game_id, &tool_id, &rel_paths).map_err(|e| e.to_string())?;
-                            Ok(format!("Applied {} ({} files)", tool.display_name(), applied.files.len()))
-                        }).await.unwrap_or_else(|e| Err(e.to_string()))
-                    },
-                    Message::ToolActionComplete,
-                );
+            Message::SetFilterMode(mode) => {
+                self.filter_mode = mode;
             }
-            Message::RevertTool(tool_id) => {
-                let game_id = self.selected_game.clone().unwrap_or_default();
-                self.status_message = format!("Reverting {tool_id}...");
-                return Task::perform(
-                    async move {
-                        tokio::task::spawn_blocking(move || -> Result<String, String> {
-                            let tool = modde_games::tools::resolve_tool(&tool_id)
-                                .ok_or_else(|| format!("unknown tool: {tool_id}"))?;
-                            let game_plugin = modde_games::resolve_game_plugin(&game_id)
-                                .ok_or_else(|| format!("unsupported game: {game_id}"))?;
-                            let install_dir = game_plugin.detect_install()
-                                .ok_or_else(|| format!("cannot detect install dir for {}", game_plugin.display_name()))?;
-                            let db = modde_core::db::ModdeDb::open().map_err(|e| e.to_string())?;
-                            let files = db.load_applied_files(&game_id, &tool_id).map_err(|e| e.to_string())?;
-                            let applied = modde_games::tools::AppliedFiles {
-                                files: files.iter().map(std::path::PathBuf::from).collect(),
-                            };
-                            tool.revert(&install_dir, &applied).map_err(|e| e.to_string())?;
-                            db.clear_applied_files(&game_id, &tool_id).map_err(|e| e.to_string())?;
-                            Ok(format!("Reverted {} ({} files)", tool.display_name(), files.len()))
-                        }).await.unwrap_or_else(|e| Err(e.to_string()))
-                    },
-                    Message::ToolActionComplete,
-                );
+            Message::ClearFilters => {
+                self.filter_criteria.clear();
             }
-            Message::ToolActionComplete(result) => {
-                match result {
-                    Ok(msg) => self.status_message = msg,
-                    Err(msg) => self.status_message = format!("Error: {msg}"),
-                }
-                self.refresh_tools();
+
+            // Data tab
+            Message::DataTabFilterChanged(f) => { self.data_tab.filter = f; }
+            Message::DataTabToggleConflicts(v) => { self.data_tab.show_conflicts_only = v; }
+
+            // Diagnostics
+            Message::RunDiagnostics => {
+                self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Running;
+                self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Complete(Vec::new());
             }
+            Message::DiagnosticsComplete(entries) => {
+                self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Complete(entries);
+            }
+
+            // Mod info overlay
+            Message::OpenModInfo(mod_id) => {
+                let mods = self.loaded_profile.as_ref().map(|p| &p.mods[..]).unwrap_or(&[]);
+                let m = mods.iter().find(|m| m.mod_id == mod_id);
+                self.mod_info = Some(crate::views::mod_info::ModInfoState {
+                    mod_id,
+                    version: m.and_then(|m| m.version.clone()),
+                    enabled: m.map_or(false, |m| m.enabled),
+                    has_fomod_config: m.and_then(|m| m.fomod_config.as_ref()).is_some(),
+                });
+            }
+            Message::CloseModInfo => { self.mod_info = None; }
+
+            // Tools (stubs — tool view existed before)
+            Message::RefreshTools | Message::ToggleTool { .. } | Message::ApplyTool(_)
+            | Message::RevertTool(_) | Message::ToolActionComplete(_) => {}
 
             Message::Noop => {}
         }
@@ -1537,14 +1454,22 @@ impl Modde {
             &self.active_profile,
             self.experiment_depth,
             &self.new_profile_name,
-            &self.selected_game,
+            &self.new_profile_game,
+            &self.available_games,
         );
 
         let mods = self.loaded_profile.as_ref().map(|p| p.mods.as_slice()).unwrap_or(&[]);
         let settings_state = self.settings_state();
 
         let content: Element<Message> = match &self.active_view {
-            View::ModList => crate::views::mod_list::view(mods, &self.mod_filter, self.selected_mod_index),
+            View::ModList => crate::views::mod_list::view(
+                mods,
+                &self.mod_filter,
+                self.selected_mod_index,
+                &self.conflict_status,
+                &self.filter_criteria,
+                self.filter_mode,
+            ),
             View::LoadOrder => crate::views::load_order::view(&self.resolved_order, &self.conflict_map),
             View::Collections => crate::views::collections::view(&self.collection_search, &self.collections, &self.active_downloads),
             View::FOMODWizard(_) => crate::views::fomod_wizard::view(self),
@@ -1557,72 +1482,13 @@ impl Modde {
             ),
             View::Verify => crate::views::verify::view(&self.verify),
             View::Tools => crate::views::tools::view(&self.tool_state),
+            View::DataTab => crate::views::data_tab::view(&self.data_tab, &[]),
+            View::Diagnostics => crate::views::diagnostics::view(&self.diagnostics_state),
         };
-
-        // ── Custom title bar ──
-        let game_names: Vec<String> = self
-            .available_games
-            .iter()
-            .map(|(_, name)| name.clone())
-            .collect();
-        let selected_game_display = self.selected_game.as_ref().and_then(|id| {
-            self.available_games
-                .iter()
-                .find(|(gid, _)| gid == id)
-                .map(|(_, name)| name.clone())
-        });
-        let available_games = self.available_games.clone();
-        let game_picker = pick_list(game_names, selected_game_display, move |name: String| {
-            let game_id = available_games
-                .iter()
-                .find(|(_, n)| *n == name)
-                .map(|(id, _)| id.clone())
-                .unwrap_or(name);
-            Message::SelectGame(game_id)
-        })
-        .placeholder("Select a game")
-        .width(Length::Fixed(200.0));
-
-        let title_label = text("modde").size(14);
-
-        let window_controls = row![
-            button(text("\u{2212}").size(12))
-                .on_press(Message::WindowMinimize)
-                .style(button::secondary)
-                .padding([2, 10]),
-            button(text("\u{25A1}").size(12))
-                .on_press(Message::WindowToggleMaximize)
-                .style(button::secondary)
-                .padding([2, 10]),
-            button(text("\u{2715}").size(12))
-                .on_press(Message::WindowClose)
-                .style(button::danger)
-                .padding([2, 10]),
-        ]
-        .spacing(2);
-
-        let title_bar_content = row![
-            game_picker,
-            iced::widget::Space::new().width(Length::Fill),
-            title_label,
-            iced::widget::Space::new().width(Length::Fill),
-            window_controls,
-        ]
-        .align_y(iced::Alignment::Center)
-        .spacing(8);
-
-        let title_bar = mouse_area(
-            container(title_bar_content)
-                .padding([4, 8])
-                .width(Length::Fill)
-                .style(container::rounded_box),
-        )
-        .on_press(Message::TitleBarDrag);
 
         let status_bar = container(text(&self.status_message).size(12)).padding(5);
 
         let main_layout = column![
-            title_bar,
             row![sidebar, content].spacing(0).height(Length::Fill),
             status_bar,
         ]
@@ -1651,7 +1517,6 @@ pub fn run() -> iced::Result {
     iced::application(Modde::new, Modde::update, Modde::view)
         .title(Modde::title)
         .theme(Modde::theme)
-        .decorations(false)
         .run()
 }
 
@@ -1695,7 +1560,14 @@ mod tests {
             available_games: smallvec::smallvec![("skyrim-se".to_string(), "Skyrim SE".to_string())],
             selected_game: None,
             stock_snapshot_exists: false,
-            window_id: window::Id::unique(),
+            conflict_status: HashMap::new(),
+            filter_criteria: Vec::new(),
+            filter_mode: modde_core::filter::FilterMode::And,
+            window_id: iced::window::Id::unique(),
+            tool_state: ToolState::default(),
+            mod_info: None,
+            data_tab: Default::default(),
+            diagnostics_state: Default::default(),
         }
     }
 
