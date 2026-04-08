@@ -70,6 +70,10 @@ pub struct Modde {
     pub collapsed_categories: HashSet<Option<i64>>,
     /// Category id-to-name mapping for the mod list view.
     pub mod_categories: Vec<(Option<i64>, String)>,
+    pub data_tab_state: crate::views::data_tab::DataTabState,
+    pub data_tab_conflicts: Vec<(String, Vec<String>)>,
+    pub diagnostics_state: crate::views::diagnostics::DiagnosticsState,
+    pub tool_state: ToolState,
 }
 
 #[derive(Debug, Clone)]
@@ -202,6 +206,27 @@ pub enum View {
     Settings,
     Saves,
     Verify,
+    Downloads,
+    DataTab,
+    Diagnostics,
+    Tools,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ToolState {
+    pub entries: Vec<ToolUiEntry>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ToolUiEntry {
+    pub tool_id: String,
+    pub display_name: String,
+    pub category: String,
+    pub available: bool,
+    pub enabled: bool,
+    pub applied_files: usize,
+    pub has_file_patching: bool,
+    pub status_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -509,6 +534,19 @@ pub enum Message {
     // Mod list – category separators
     ToggleSeparator(Option<i64>),
 
+    // Data tab
+    DataTabFilterChanged(String),
+    DataTabToggleConflicts(bool),
+
+    // Diagnostics
+    RunDiagnostics,
+
+    // Tools
+    RefreshTools,
+    ToggleTool { tool_id: String, enabled: bool },
+    ApplyTool(String),
+    RevertTool(String),
+
     // Misc
     Noop,
 }
@@ -573,6 +611,10 @@ impl Modde {
             stock_snapshot_exists: false,
             collapsed_categories: HashSet::new(),
             mod_categories: vec![(None, "Uncategorized".to_string())],
+            data_tab_state: Default::default(),
+            data_tab_conflicts: Vec::new(),
+            diagnostics_state: Default::default(),
+            tool_state: Default::default(),
         };
 
         // Auto-detect: if no game is selected but profiles exist, pick the first profile's game
@@ -748,6 +790,14 @@ impl Modde {
                                 enabled: true,
                                 version: None,
                                 fomod_config: None,
+                                display_name: None,
+                                nexus_mod_id: None,
+                                nexus_file_id: None,
+                                nexus_game_domain: None,
+                                installed_timestamp: None,
+                                category_id: None,
+                                notes: None,
+                                tags: None,
                             });
                             let _ = pm.create(&profile).or_else(|_| pm.update(&profile).map(|_| 0));
                             self.status_message = format!("Added mod: {mod_name}");
@@ -1288,6 +1338,30 @@ impl Modde {
                 self.active_view = View::Verify;
             }
 
+            Message::DataTabFilterChanged(f) => {
+                self.data_tab_state.filter = f;
+            }
+            Message::DataTabToggleConflicts(v) => {
+                self.data_tab_state.show_conflicts_only = v;
+            }
+            Message::RunDiagnostics => {
+                self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Running;
+                self.status_message = "Running diagnostics...".to_string();
+            }
+            Message::RefreshTools => {
+                self.status_message = "Refreshing tools...".to_string();
+            }
+            Message::ToggleTool { tool_id, enabled } => {
+                if let Some(entry) = self.tool_state.entries.iter_mut().find(|e| e.tool_id == tool_id) {
+                    entry.enabled = enabled;
+                }
+            }
+            Message::ApplyTool(id) => {
+                self.status_message = format!("Applying tool: {id}");
+            }
+            Message::RevertTool(id) => {
+                self.status_message = format!("Reverting tool: {id}");
+            }
             Message::Noop => {}
         }
         Task::none()
@@ -1328,6 +1402,10 @@ impl Modde {
                 self.current_fingerprint.as_ref(),
             ),
             View::Verify => crate::views::verify::view(&self.verify),
+            View::Downloads => container(text("Downloads view").size(14)).padding(20).width(Length::Fill).into(),
+            View::DataTab => crate::views::data_tab::view(&self.data_tab_state, &self.data_tab_conflicts),
+            View::Diagnostics => crate::views::diagnostics::view(&self.diagnostics_state),
+            View::Tools => crate::views::tools::view(&self.tool_state),
         };
 
         let status_bar = container(text(&self.status_message).size(12)).padding(5);
