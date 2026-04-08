@@ -18,6 +18,34 @@ fn conflict_color(status: ConflictStatus) -> Color {
     }
 }
 
+/// Human-readable label for a filter kind.
+fn filter_kind_label(kind: &FilterKind) -> &'static str {
+    match kind {
+        FilterKind::Enabled => "Enabled",
+        FilterKind::HasCategory(_) => "Category",
+        FilterKind::HasNotes => "Has Notes",
+        FilterKind::HasNexusId => "Has Nexus ID",
+        FilterKind::HasUpdate => "Has Update",
+        FilterKind::TextSearch(_) => "Text",
+    }
+}
+
+/// Human-readable label for a filter mode.
+fn filter_mode_label(mode: FilterMode) -> &'static str {
+    match mode {
+        FilterMode::And => "AND",
+        FilterMode::Or => "OR",
+    }
+}
+
+/// Toggle filter mode between And and Or.
+fn toggle_filter_mode(mode: FilterMode) -> FilterMode {
+    match mode {
+        FilterMode::And => FilterMode::Or,
+        FilterMode::Or => FilterMode::And,
+    }
+}
+
 /// Label for a filter button reflecting its current tri-state.
 fn filter_button_label(kind: FilterKind, criteria: &[FilterCriterion]) -> String {
     let state = criteria
@@ -31,7 +59,7 @@ fn filter_button_label(kind: FilterKind, criteria: &[FilterCriterion]) -> String
         TriState::Include => " [+]",
         TriState::Exclude => " [-]",
     };
-    format!("{}{suffix}", kind.label())
+    format!("{}{suffix}", filter_kind_label(&kind))
 }
 
 /// Render the mod list view.
@@ -67,14 +95,14 @@ pub fn view<'a>(
         button(text(filter_button_label(FilterKind::Enabled, filter_criteria)).size(12))
             .on_press(Message::ToggleFilter(FilterKind::Enabled))
             .padding([4, 8]),
-        button(text(filter_button_label(FilterKind::HasVersion, filter_criteria)).size(12))
-            .on_press(Message::ToggleFilter(FilterKind::HasVersion))
+        button(text(filter_button_label(FilterKind::HasNexusId, filter_criteria)).size(12))
+            .on_press(Message::ToggleFilter(FilterKind::HasNexusId))
             .padding([4, 8]),
-        button(text(filter_button_label(FilterKind::HasFomodConfig, filter_criteria)).size(12))
-            .on_press(Message::ToggleFilter(FilterKind::HasFomodConfig))
+        button(text(filter_button_label(FilterKind::HasNotes, filter_criteria)).size(12))
+            .on_press(Message::ToggleFilter(FilterKind::HasNotes))
             .padding([4, 8]),
-        button(text(filter_mode.label()).size(12))
-            .on_press(Message::SetFilterMode(filter_mode.toggle()))
+        button(text(filter_mode_label(filter_mode)).size(12))
+            .on_press(Message::SetFilterMode(toggle_filter_mode(filter_mode)))
             .padding([4, 8]),
         button(text("Clear").size(12))
             .on_press(Message::ClearFilters)
@@ -104,7 +132,11 @@ pub fn view<'a>(
         .iter()
         .enumerate()
         .filter(|(_, m)| filter_lower.is_empty() || m.mod_id.to_lowercase().contains(&filter_lower))
-        .filter(|(_, m)| modde_core::filter::apply_filters(m, filter_criteria, filter_mode))
+        .filter(|(_, m)| {
+            let single = std::slice::from_ref(*m);
+            let indices = modde_core::filter::apply_filters(single, filter_criteria, filter_mode);
+            !indices.is_empty()
+        })
         .collect();
 
     let mod_count = filtered_mods.len();

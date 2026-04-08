@@ -88,8 +88,6 @@ pub fn handle(
     // ── Filesystem scanning ─────────────────────────────────────────
     let ctx = ScanContext {
         install_dir: &install_dir,
-        wabbajack_manifest: None,
-        stock_files: None,
     };
 
     let fs_mods = scanner
@@ -140,7 +138,7 @@ pub fn handle(
                     &m.mod_id,
                     &m.display_name,
                     m.version.as_deref(),
-                    m.confidence,
+                    m.confidence as f32,
                 ));
             }
         }

@@ -235,3 +235,68 @@ pub trait SaveTracker: Send + Sync {
         }
     }
 }
+
+// ── Mod Scanner ─────────────────────────────────────────────────
+
+pub struct ScanContext<'a> {
+    pub install_dir: &'a Path,
+}
+
+#[derive(Debug, Clone)]
+pub struct DiscoveredFile {
+    pub rel_path: String,
+    pub size: u64,
+}
+
+#[derive(Debug, Clone)]
+pub enum ModSource {
+    Filesystem { location: String },
+    Archive { archive_name: String },
+}
+
+#[derive(Debug, Clone)]
+pub struct DiscoveredMod {
+    pub mod_id: String,
+    pub display_name: String,
+    pub version: Option<String>,
+    pub files: Vec<DiscoveredFile>,
+    pub source: ModSource,
+    pub confidence: f64,
+}
+
+pub trait ModScanner: Send + Sync {
+    fn scan_directories(&self) -> &[&str];
+    fn scan_filesystem(&self, ctx: &ScanContext<'_>) -> anyhow::Result<Vec<DiscoveredMod>>;
+}
+
+pub fn walk_files_relative(base: &Path, dir: &Path) -> Vec<DiscoveredFile> {
+    let mut result = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                result.extend(walk_files_relative(base, &path));
+            } else if let Ok(meta) = path.metadata() {
+                if let Ok(rel) = path.strip_prefix(base) {
+                    result.push(DiscoveredFile {
+                        rel_path: rel.to_string_lossy().to_string(),
+                        size: meta.len(),
+                    });
+                }
+            }
+        }
+    }
+    result
+}
+
+pub fn slug(s: &str) -> String {
+    s.to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string()
+}
+
+// ── DRY trait extensions ────────────────────────────────────────
+// (New GamePlugin methods are added via the trait above)

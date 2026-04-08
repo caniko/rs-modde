@@ -24,7 +24,7 @@ pub fn view<'a>(state: &'a ToolState) -> Element<'a, Message> {
         .center_x(Length::Fill)
         .into()
     } else {
-        let cards = state.entries.iter().fold(column![].spacing(8), |col, entry| {
+        let cards = state.entries.iter().fold(column![].spacing(8), |col: iced::widget::Column<'_, Message>, entry| {
             col.push(tool_card(entry))
         });
 
@@ -121,7 +121,7 @@ fn tool_card(entry: &ToolUiEntry) -> Element<'_, Message> {
     // Status message
     if let Some(ref msg) = entry.status_message {
         body = body.push(
-            text(msg.as_str())
+            text(msg.clone())
                 .size(12)
                 .color(color!(0x88CC88)),
         );

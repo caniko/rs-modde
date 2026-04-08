@@ -112,6 +112,25 @@ pub enum ConflictStatus {
     Mixed,
 }
 
+/// State for the gaming tools/overlays view.
+#[derive(Debug, Clone, Default)]
+pub struct ToolState {
+    pub entries: Vec<ToolUiEntry>,
+}
+
+/// A single tool entry for the UI.
+#[derive(Debug, Clone)]
+pub struct ToolUiEntry {
+    pub tool_id: String,
+    pub display_name: String,
+    pub category: String,
+    pub available: bool,
+    pub enabled: bool,
+    pub applied_files: usize,
+    pub has_file_patching: bool,
+    pub status_message: Option<String>,
+}
+
 impl Modde {
     pub fn settings_state(&self) -> SettingsState {
         SettingsState {
@@ -608,6 +627,9 @@ pub enum Message {
     RevertTool(String),
     ToolActionComplete(Result<String, String>),
 
+    // Game launch
+    PlayGame,
+
     // Misc
     Noop,
 }
@@ -848,6 +870,7 @@ impl Modde {
                                 enabled: true,
                                 version: None,
                                 fomod_config: None,
+                                ..Default::default()
                             });
                             let _ = pm.create(&profile).or_else(|_| pm.update(&profile).map(|_| 0));
                             self.status_message = format!("Added mod: {mod_name}");
@@ -1440,6 +1463,7 @@ impl Modde {
             Message::RefreshTools | Message::ToggleTool { .. } | Message::ApplyTool(_)
             | Message::RevertTool(_) | Message::ToolActionComplete(_) => {}
 
+            Message::PlayGame => {}
             Message::Noop => {}
         }
         Task::none()
@@ -1454,8 +1478,7 @@ impl Modde {
             &self.active_profile,
             self.experiment_depth,
             &self.new_profile_name,
-            &self.new_profile_game,
-            &self.available_games,
+            &self.selected_game,
         );
 
         let mods = self.loaded_profile.as_ref().map(|p| p.mods.as_slice()).unwrap_or(&[]);
