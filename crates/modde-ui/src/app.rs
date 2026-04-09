@@ -558,6 +558,10 @@ pub enum Message {
     TrackMod { mod_id: String, game_domain: String, nexus_mod_id: u64 },
     UntrackMod { mod_id: String, game_domain: String, nexus_mod_id: u64 },
 
+    // Overwrite management
+    ClearOverwrite,
+    MoveOverwriteToMod(String),
+
     // Misc
     Noop,
 }
@@ -1388,6 +1392,34 @@ impl Modde {
             Message::EndorseMod { .. } | Message::AbstainMod { .. }
             | Message::TrackMod { .. } | Message::UntrackMod { .. } => {
                 self.status_message = "Endorsement/tracking: API not yet wired".to_string();
+            }
+
+            // Overwrite management
+            Message::ClearOverwrite => {
+                if let Some(profile) = &self.loaded_profile {
+                    let _ = std::fs::remove_dir_all(&profile.overrides);
+                    let _ = std::fs::create_dir_all(&profile.overrides);
+                    self.status_message = "Overrides cleared".to_string();
+                }
+            }
+            Message::MoveOverwriteToMod(mod_name) => {
+                if let Some(profile) = &self.loaded_profile {
+                    let store = modde_core::paths::store_dir();
+                    let dest = store.join(&mod_name);
+                    if profile.overrides.exists() {
+                        let _ = std::fs::create_dir_all(&dest);
+                        if let Ok(files) = modde_core::fs::walk_files_relative(&profile.overrides) {
+                            for (rel, src) in &files {
+                                let dst = dest.join(rel);
+                                if let Some(parent) = dst.parent() {
+                                    let _ = std::fs::create_dir_all(parent);
+                                }
+                                let _ = std::fs::rename(src, &dst);
+                            }
+                        }
+                        self.status_message = format!("Moved overrides to mod '{mod_name}'");
+                    }
+                }
             }
 
             Message::Noop => {}

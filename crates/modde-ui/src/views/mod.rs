@@ -6,6 +6,7 @@ pub mod fomod_wizard;
 pub mod load_order;
 pub mod mod_info;
 pub mod mod_list;
+pub mod overwrite;
 pub mod saves;
 pub mod settings;
 pub mod sidebar;

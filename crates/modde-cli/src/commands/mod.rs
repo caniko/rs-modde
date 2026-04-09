@@ -7,6 +7,7 @@ pub mod export;
 pub mod fomod;
 pub mod import;
 pub mod install;
+pub mod instance;
 pub mod loot;
 pub mod nexus;
 pub mod nxm;

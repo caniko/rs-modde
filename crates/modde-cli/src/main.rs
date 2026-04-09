@@ -166,10 +166,29 @@ enum Commands {
     },
     /// Detect installed games across Steam and Heroic launchers
     Detect,
+    /// Manage modde instances (multiple data directories)
+    Instance {
+        #[command(subcommand)]
+        action: InstanceAction,
+    },
     /// Import existing TOML profiles into the database
     Import,
     /// Launch the graphical user interface
     Gui,
+}
+
+#[derive(Subcommand)]
+enum InstanceAction {
+    /// Create a new instance
+    Create {
+        name: String,
+        #[arg(long)]
+        data_dir: PathBuf,
+    },
+    /// List all instances
+    List,
+    /// Switch to an instance
+    Switch { name: String },
 }
 
 #[derive(Subcommand)]
@@ -562,6 +581,13 @@ fn main() -> Result<()> {
             return commands::backup::handle(action);
         }
         Commands::Detect => return commands::detect::handle(),
+        Commands::Instance { action } => {
+            return match action {
+                InstanceAction::Create { name, data_dir } => commands::instance::handle_create(&name, data_dir),
+                InstanceAction::List => commands::instance::handle_list(),
+                InstanceAction::Switch { name } => commands::instance::handle_switch(&name),
+            };
+        }
         Commands::Import => return commands::import::handle(),
         Commands::Fomod { action } => return commands::fomod::handle(action),
         Commands::Loot { action } => {
@@ -642,8 +668,9 @@ fn main() -> Result<()> {
             },
             // Already handled above
             Commands::Profile { .. } | Commands::Scan { .. } | Commands::Detect | Commands::Import
-            | Commands::Backup { .. } | Commands::Diagnostics { .. } | Commands::Export { .. }
-            | Commands::Fomod { .. } | Commands::Loot { .. } | Commands::Gui => unreachable!(),
+            | Commands::Instance { .. } | Commands::Backup { .. } | Commands::Diagnostics { .. }
+            | Commands::Export { .. } | Commands::Fomod { .. } | Commands::Loot { .. }
+            | Commands::Gui => unreachable!(),
         }
         Ok(())
     })

@@ -246,26 +246,53 @@ Comprehensive tracking of modde's coverage of every known Mod Organizer 2 featur
 
 ---
 
-## Coverage Summary
+## Coverage Summary (after 5-phase implementation)
 
-| Category | Done | Partial | Not Yet | Total | Coverage |
-|----------|------|---------|---------|-------|----------|
-| 1. Core VFS & Deployment | 6 | 0 | 6 | 12 | 50% |
-| 2. Profile System | 7 | 0 | 1 | 8 | 88% |
-| 3. Plugin Load Order | 6 | 1 | 5 | 12 | 54% |
-| 4. Conflict Resolution | 3 | 0 | 5 | 8 | 38% |
-| 5. Nexus Integration | 9 | 0 | 13 | 22 | 41% |
-| 6. Mod Organization & UI | 3 | 0 | 18 | 21 | 14% |
-| 7. Mod Backup & Reinstall | 0 | 0 | 3 | 3 | 0% |
-| 8. Installer Support | 2 | 0 | 4 | 6 | 33% |
-| 9. Mod Information Dialog | 0 | 1 | 10 | 11 | 5% |
-| 10. Save Management | 7 | 1 | 0 | 8 | 94% |
-| 11. Tool Integration | 3 | 0 | 4 | 7 | 43% |
-| 12. Diagnostics & Notifications | 0 | 1 | 4 | 5 | 10% |
-| 13. Extensibility | 0 | 0 | 5 | 5 | 0% |
-| 14. Game Support | 5 | 0 | 3 | 8 | 63% |
-| 15. Platform & Infrastructure | 3 | 0 | 4 | 7 | 43% |
-| **TOTAL** | **54** | **4** | **85** | **143** | **40%** |
+| Category | Done | Partial | Not Yet | Total | Coverage | Delta |
+|----------|------|---------|---------|-------|----------|-------|
+| 1. Core VFS & Deployment | 7 | 1 | 4 | 12 | 67% | +17% |
+| 2. Profile System | 7 | 0 | 1 | 8 | 88% | -- |
+| 3. Plugin Load Order | 6 | 1 | 5 | 12 | 54% | -- |
+| 4. Conflict Resolution | 4 | 1 | 3 | 8 | 63% | +25% |
+| 5. Nexus Integration | 11 | 1 | 10 | 22 | 55% | +14% |
+| 6. Mod Organization & UI | 7 | 2 | 12 | 21 | 43% | +29% |
+| 7. Mod Backup & Reinstall | 2 | 0 | 1 | 3 | 67% | +67% |
+| 8. Installer Support | 3 | 1 | 2 | 6 | 58% | +25% |
+| 9. Mod Information Dialog | 4 | 2 | 5 | 11 | 55% | +50% |
+| 10. Save Management | 7 | 1 | 0 | 8 | 94% | -- |
+| 11. Tool Integration | 4 | 1 | 2 | 7 | 71% | +28% |
+| 12. Diagnostics & Notifications | 2 | 2 | 1 | 5 | 80% | +70% |
+| 13. Extensibility | 1 | 1 | 3 | 5 | 40% | +40% |
+| 14. Game Support | 6 | 0 | 2 | 8 | 75% | +12% |
+| 15. Platform & Infrastructure | 5 | 0 | 2 | 7 | 71% | +28% |
+| **TOTAL** | **76** | **14** | **53** | **143** | **63%** | **+23%** |
+
+### What was added in the 5-phase implementation
+
+**Phase 1 (Foundation):**
+- BSA/BA2 archive index + archive-aware conflict detection
+- Download queue with pause/resume + .meta sidecar files
+- Pluggable diagnostics engine with 4 Bethesda rules
+
+**Phase 2 (First UI):**
+- Mod information dialog (filetree, conflicts, notes, categories tabs)
+- Diagnostics CLI + view
+- Nexus endorsement/tracking API + Starfield game plugin
+
+**Phase 3 (Data Views):**
+- Data tab (merged VFS browser) + conflict flags in mod list
+- Tri-state filter engine + CSV export
+- Mod backup/restore + plugin order backup
+
+**Phase 4 (UI Polish):**
+- Downloads view with progress/pause/resume
+- Filter toolbar + collapsible category separators
+- Keyboard shortcuts module
+
+**Phase 5 (Advanced):**
+- Per-mod INI tweaks + overwrite management view
+- Nexus OAuth2 PKCE flow + BAIN installer stub
+- Plugin system framework + instance management
 
 ## modde-Only Features (Not in MO2)
 

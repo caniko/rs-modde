@@ -363,7 +363,8 @@ fn mod_row<'a>(
         }
     });
 
-    let name = button(text(&entry.mod_id).size(font_size))
+    let label = entry.display_name.as_deref().unwrap_or(&entry.mod_id);
+    let name = button(text(label).size(font_size))
         .on_press(Message::SelectMod(idx))
         .style(if is_selected {
             button::primary

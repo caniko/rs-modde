@@ -5,6 +5,7 @@ pub mod diagnostics;
 pub mod fomod;
 pub mod ini;
 pub mod ini_profiles;
+pub mod ini_tweaks;
 pub mod loot;
 pub mod plugin_header;
 pub mod plugins_txt;

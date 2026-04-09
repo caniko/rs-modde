@@ -271,6 +271,7 @@ async fn handle_nexus_collection(
         let mod_id_str = format!("{game_domain}_{mod_id}_{file_id}");
         enabled_mods.push(EnabledMod {
             mod_id: mod_id_str,
+            display_name: Some(collection_mod.name.clone()),
             enabled: !collection_mod.optional,
             version: Some(collection_mod.version.clone()),
             fomod_config: None, ..Default::default()
@@ -935,7 +936,12 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
         }
     };
 
-    println!("Installing mod: {game_domain}/mods/{mod_id} (file {file_id})");
+    // Fetch mod metadata from Nexus for the display name.
+    let api = NexusApi::new(client.clone(), api_key.clone());
+    let mod_info = api.get_mod(&game_domain, mod_id).await
+        .context("failed to fetch mod info from Nexus")?;
+
+    println!("Installing mod: {} ({game_domain}/mods/{mod_id}, file {file_id})", mod_info.name);
 
     let store = paths::store_dir();
     let mod_store_dir = store.join(format!("{game_domain}_{mod_id}_{file_id}"));
@@ -994,8 +1000,12 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
     if !profile.mods.iter().any(|m| m.mod_id == mod_id_str) {
         profile.mods.push(EnabledMod {
             mod_id: mod_id_str.clone(),
+            display_name: Some(mod_info.name.clone()),
             enabled: true,
-            version: None,
+            version: Some(mod_info.version.clone()),
+            nexus_mod_id: Some(mod_id as i64),
+            nexus_file_id: Some(file_id as i64),
+            nexus_game_domain: Some(game_domain.clone()),
             fomod_config: None, ..Default::default()
         });
     }
