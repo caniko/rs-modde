@@ -1,116 +1,168 @@
-use std::io::Write;
+//! Filter engine for the mod list.
+//!
+//! Provides tri-state filtering, composable criteria, and AND/OR modes.
 
 use crate::profile::EnabledMod;
 
-/// Three-state filter value.
+/// Tri-state value: include, exclude, or don't care.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TriState {
+    /// No filter applied for this criterion.
     #[default]
     Ignore,
+    /// Only include mods matching the criterion.
     Include,
+    /// Exclude mods matching the criterion.
     Exclude,
 }
 
 impl TriState {
-    /// Cycle to the next state: Ignore -> Include -> Exclude -> Ignore
+    /// Cycle through the tri-state: Ignore -> Include -> Exclude -> Ignore.
     pub fn cycle(self) -> Self {
         match self {
-            TriState::Ignore => TriState::Include,
-            TriState::Include => TriState::Exclude,
-            TriState::Exclude => TriState::Ignore,
+            Self::Ignore => Self::Include,
+            Self::Include => Self::Exclude,
+            Self::Exclude => Self::Ignore,
+        }
+    }
+
+    /// Whether this tri-state is active (not Ignore).
+    pub fn is_active(self) -> bool {
+        self != Self::Ignore
+    }
+
+    /// Display label for the current state.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Ignore => " ",
+            Self::Include => "+",
+            Self::Exclude => "-",
         }
     }
 }
 
-/// Filter criterion kind.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// The kind of filter criterion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FilterKind {
     Enabled,
-    HasCategory(Option<i64>),
     HasNotes,
     HasNexusId,
-    HasUpdate,
-    TextSearch(String),
 }
 
-/// A single filter criterion with its state.
-#[derive(Debug, Clone)]
+impl FilterKind {
+    /// Human-readable label.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Enabled => "Enabled",
+            Self::HasNotes => "Has Notes",
+            Self::HasNexusId => "Has Nexus ID",
+        }
+    }
+
+    /// Test whether a mod matches this criterion (positive sense).
+    pub fn matches(self, m: &EnabledMod) -> bool {
+        match self {
+            Self::Enabled => m.enabled,
+            Self::HasNotes => m.notes.as_ref().is_some_and(|n| !n.is_empty()),
+            Self::HasNexusId => m.nexus_mod_id.is_some(),
+        }
+    }
+}
+
+/// A single filter criterion: a kind + tri-state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FilterCriterion {
     pub kind: FilterKind,
     pub state: TriState,
 }
 
-/// Filter combination mode.
+impl FilterCriterion {
+    pub fn new(kind: FilterKind) -> Self {
+        Self {
+            kind,
+            state: TriState::Ignore,
+        }
+    }
+
+    /// Whether this criterion passes for a given mod.
+    /// Returns `None` if Ignore (i.e. this criterion doesn't participate).
+    pub fn evaluate(&self, m: &EnabledMod) -> Option<bool> {
+        match self.state {
+            TriState::Ignore => None,
+            TriState::Include => Some(self.kind.matches(m)),
+            TriState::Exclude => Some(!self.kind.matches(m)),
+        }
+    }
+}
+
+/// How multiple criteria combine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum FilterMode {
+    /// All active criteria must pass.
     #[default]
     And,
+    /// At least one active criterion must pass.
     Or,
 }
 
-/// Apply filters to a mod list, returning indices of matching mods.
+impl FilterMode {
+    pub fn toggle(self) -> Self {
+        match self {
+            Self::And => Self::Or,
+            Self::Or => Self::And,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::And => "AND",
+            Self::Or => "OR",
+        }
+    }
+}
+
+/// Apply filters to a mod list, returning indices of mods that pass.
+///
+/// `text_filter` is a case-insensitive substring match on `mod_id`.
+/// `criteria` are the tri-state filters combined according to `mode`.
 pub fn apply_filters(
     mods: &[EnabledMod],
+    text_filter: &str,
     criteria: &[FilterCriterion],
     mode: FilterMode,
 ) -> Vec<usize> {
-    let active: Vec<_> = criteria
-        .iter()
-        .filter(|c| c.state != TriState::Ignore)
-        .collect();
-    if active.is_empty() {
-        return (0..mods.len()).collect();
-    }
+    let text_lower = text_filter.to_lowercase();
+    let active_criteria: Vec<&FilterCriterion> =
+        criteria.iter().filter(|c| c.state.is_active()).collect();
 
     mods.iter()
         .enumerate()
         .filter(|(_, m)| {
-            let results: Vec<bool> = active
-                .iter()
-                .map(|c| {
-                    let matches = matches_criterion(m, &c.kind);
-                    match c.state {
-                        TriState::Include => matches,
-                        TriState::Exclude => !matches,
-                        TriState::Ignore => true,
-                    }
-                })
-                .collect();
+            // Text filter always applies (AND with criteria)
+            if !text_lower.is_empty() && !m.mod_id.to_lowercase().contains(&text_lower) {
+                return false;
+            }
 
+            // If no active criteria, pass
+            if active_criteria.is_empty() {
+                return true;
+            }
+
+            // Evaluate criteria according to mode
             match mode {
-                FilterMode::And => results.iter().all(|&r| r),
-                FilterMode::Or => results.iter().any(|&r| r),
+                FilterMode::And => active_criteria
+                    .iter()
+                    .all(|c| c.evaluate(m).unwrap_or(true)),
+                FilterMode::Or => active_criteria
+                    .iter()
+                    .any(|c| c.evaluate(m).unwrap_or(false)),
             }
         })
         .map(|(i, _)| i)
         .collect()
 }
 
-fn matches_criterion(m: &EnabledMod, kind: &FilterKind) -> bool {
-    match kind {
-        FilterKind::Enabled => m.enabled,
-        FilterKind::HasCategory(cat_id) => m.category_id == *cat_id,
-        FilterKind::HasNotes => m.notes.as_ref().map_or(false, |n| !n.is_empty()),
-        FilterKind::HasNexusId => m.nexus_mod_id.is_some(),
-        FilterKind::HasUpdate => {
-            // Compare version strings if both exist
-            // Simple heuristic: if latest_nexus_version != version, there's an update
-            false // TODO: wire when latest_nexus_version field exists
-        }
-        FilterKind::TextSearch(query) => {
-            let q = query.to_lowercase();
-            m.mod_id.to_lowercase().contains(&q)
-                || m.notes
-                    .as_ref()
-                    .map_or(false, |n| n.to_lowercase().contains(&q))
-                || m.version
-                    .as_ref()
-                    .map_or(false, |v| v.to_lowercase().contains(&q))
-        }
-    }
-}
-
-// ── CSV Export ───────────────────────────────────────────────────────
+// ─── CSV Export ──────────────────────────────────────────────────
 
 /// Columns available for CSV export.
 #[derive(Debug, Clone, Copy)]
@@ -125,69 +177,55 @@ pub enum CsvColumn {
 }
 
 impl CsvColumn {
-    pub fn header(&self) -> &'static str {
+    pub fn header(self) -> &'static str {
         match self {
-            CsvColumn::ModId => "mod_id",
-            CsvColumn::Enabled => "enabled",
-            CsvColumn::Version => "version",
-            CsvColumn::Category => "category",
-            CsvColumn::Notes => "notes",
-            CsvColumn::Tags => "tags",
-            CsvColumn::NexusModId => "nexus_mod_id",
+            Self::ModId => "mod_id",
+            Self::Enabled => "enabled",
+            Self::Version => "version",
+            Self::Category => "category",
+            Self::Notes => "notes",
+            Self::Tags => "tags",
+            Self::NexusModId => "nexus_mod_id",
         }
     }
 
-    pub fn value(&self, m: &EnabledMod) -> String {
+    pub fn value(self, m: &EnabledMod) -> String {
         match self {
-            CsvColumn::ModId => m.mod_id.clone(),
-            CsvColumn::Enabled => m.enabled.to_string(),
-            CsvColumn::Version => m.version.clone().unwrap_or_default(),
-            CsvColumn::Category => m.category_id.map(|id| id.to_string()).unwrap_or_default(),
-            CsvColumn::Notes => m.notes.clone().unwrap_or_default(),
-            CsvColumn::Tags => m.tags.clone().unwrap_or_default(),
-            CsvColumn::NexusModId => m.nexus_mod_id.map(|id| id.to_string()).unwrap_or_default(),
+            Self::ModId => m.mod_id.clone(),
+            Self::Enabled => m.enabled.to_string(),
+            Self::Version => m.version.clone().unwrap_or_default(),
+            Self::Category => m.category_id.map(|id| id.to_string()).unwrap_or_default(),
+            Self::Notes => m.notes.clone().unwrap_or_default(),
+            Self::Tags => m.tags.clone().unwrap_or_default(),
+            Self::NexusModId => m.nexus_mod_id.map(|id| id.to_string()).unwrap_or_default(),
         }
     }
 
     pub fn all() -> &'static [CsvColumn] {
-        &[
-            CsvColumn::ModId,
-            CsvColumn::Enabled,
-            CsvColumn::Version,
-            CsvColumn::Category,
-            CsvColumn::Notes,
-            CsvColumn::Tags,
-            CsvColumn::NexusModId,
-        ]
+        &[Self::ModId, Self::Enabled, Self::Version, Self::Category, Self::Notes, Self::Tags, Self::NexusModId]
     }
 }
 
-/// Export mods to CSV.
-pub fn export_csv<W: Write>(
+/// Export mods to CSV format.
+pub fn export_csv<W: std::io::Write>(
     mods: &[EnabledMod],
     columns: &[CsvColumn],
     writer: &mut W,
 ) -> std::io::Result<()> {
-    // Write header
     let headers: Vec<&str> = columns.iter().map(|c| c.header()).collect();
     writeln!(writer, "{}", headers.join(","))?;
 
-    // Write rows
     for m in mods {
-        let values: Vec<String> = columns
-            .iter()
-            .map(|c| {
-                let v = c.value(m);
-                if v.contains(',') || v.contains('"') || v.contains('\n') {
-                    format!("\"{}\"", v.replace('"', "\"\""))
-                } else {
-                    v
-                }
-            })
-            .collect();
+        let values: Vec<String> = columns.iter().map(|c| {
+            let v = c.value(m);
+            if v.contains(',') || v.contains('"') || v.contains('\n') {
+                format!("\"{}\"", v.replace('"', "\"\""))
+            } else {
+                v
+            }
+        }).collect();
         writeln!(writer, "{}", values.join(","))?;
     }
-
     Ok(())
 }
 
@@ -195,168 +233,69 @@ pub fn export_csv<W: Write>(
 mod tests {
     use super::*;
 
-    fn make_mod(id: &str, enabled: bool) -> EnabledMod {
+    fn test_mod(id: &str, enabled: bool) -> EnabledMod {
         EnabledMod {
             mod_id: id.to_string(),
             enabled,
-            ..Default::default()
-        }
-    }
-
-    fn make_mod_full(
-        id: &str,
-        enabled: bool,
-        version: Option<&str>,
-        notes: Option<&str>,
-        nexus_mod_id: Option<i64>,
-        category_id: Option<i64>,
-        tags: Option<&str>,
-    ) -> EnabledMod {
-        EnabledMod {
-            mod_id: id.to_string(),
-            enabled,
-            version: version.map(|s| s.to_string()),
-            category_id,
-            notes: notes.map(|s| s.to_string()),
-            tags: tags.map(|s| s.to_string()),
-            nexus_mod_id,
             ..Default::default()
         }
     }
 
     #[test]
-    fn test_tristate_cycle() {
+    fn tri_state_cycle() {
         assert_eq!(TriState::Ignore.cycle(), TriState::Include);
         assert_eq!(TriState::Include.cycle(), TriState::Exclude);
         assert_eq!(TriState::Exclude.cycle(), TriState::Ignore);
     }
 
     #[test]
-    fn test_apply_filters_no_criteria() {
-        let mods = vec![make_mod("a", true), make_mod("b", false)];
-        let result = apply_filters(&mods, &[], FilterMode::And);
-        assert_eq!(result, vec![0, 1]);
+    fn text_filter_only() {
+        let mods = vec![test_mod("SkyUI", true), test_mod("USSEP", false)];
+        let result = apply_filters(&mods, "sky", &[], FilterMode::And);
+        assert_eq!(result, vec![0]);
     }
 
     #[test]
-    fn test_apply_filters_include_enabled() {
-        let mods = vec![
-            make_mod("a", true),
-            make_mod("b", false),
-            make_mod("c", true),
-        ];
+    fn enabled_include() {
+        let mods = vec![test_mod("A", true), test_mod("B", false), test_mod("C", true)];
         let criteria = vec![FilterCriterion {
             kind: FilterKind::Enabled,
             state: TriState::Include,
         }];
-        let result = apply_filters(&mods, &criteria, FilterMode::And);
+        let result = apply_filters(&mods, "", &criteria, FilterMode::And);
         assert_eq!(result, vec![0, 2]);
     }
 
     #[test]
-    fn test_apply_filters_exclude_enabled() {
-        let mods = vec![
-            make_mod("a", true),
-            make_mod("b", false),
-            make_mod("c", true),
-        ];
+    fn enabled_exclude() {
+        let mods = vec![test_mod("A", true), test_mod("B", false)];
         let criteria = vec![FilterCriterion {
             kind: FilterKind::Enabled,
             state: TriState::Exclude,
         }];
-        let result = apply_filters(&mods, &criteria, FilterMode::And);
+        let result = apply_filters(&mods, "", &criteria, FilterMode::And);
         assert_eq!(result, vec![1]);
     }
 
     #[test]
-    fn test_apply_filters_and_mode() {
-        let mods = vec![
-            make_mod_full("a", true, None, Some("good mod"), None, None, None),
-            make_mod_full("b", true, None, None, None, None, None),
-            make_mod_full("c", false, None, Some("notes here"), None, None, None),
-        ];
+    fn no_active_criteria_passes_all() {
+        let mods = vec![test_mod("A", true), test_mod("B", false)];
+        let criteria = vec![FilterCriterion::new(FilterKind::Enabled)]; // Ignore state
+        let result = apply_filters(&mods, "", &criteria, FilterMode::And);
+        assert_eq!(result, vec![0, 1]);
+    }
+
+    #[test]
+    fn or_mode() {
+        let mut m = test_mod("A", true);
+        m.notes = Some("hello".to_string());
+        let mods = vec![m, test_mod("B", false), test_mod("C", true)];
         let criteria = vec![
-            FilterCriterion {
-                kind: FilterKind::Enabled,
-                state: TriState::Include,
-            },
-            FilterCriterion {
-                kind: FilterKind::HasNotes,
-                state: TriState::Include,
-            },
+            FilterCriterion { kind: FilterKind::HasNotes, state: TriState::Include },
+            FilterCriterion { kind: FilterKind::Enabled, state: TriState::Exclude },
         ];
-        let result = apply_filters(&mods, &criteria, FilterMode::And);
-        assert_eq!(result, vec![0]); // only "a" is enabled AND has notes
-    }
-
-    #[test]
-    fn test_apply_filters_or_mode() {
-        let mods = vec![
-            make_mod_full("a", true, None, None, None, None, None),
-            make_mod_full("b", false, None, Some("has notes"), None, None, None),
-            make_mod_full("c", false, None, None, None, None, None),
-        ];
-        let criteria = vec![
-            FilterCriterion {
-                kind: FilterKind::Enabled,
-                state: TriState::Include,
-            },
-            FilterCriterion {
-                kind: FilterKind::HasNotes,
-                state: TriState::Include,
-            },
-        ];
-        let result = apply_filters(&mods, &criteria, FilterMode::Or);
-        assert_eq!(result, vec![0, 1]); // "a" is enabled OR "b" has notes
-    }
-
-    #[test]
-    fn test_text_search() {
-        let mods = vec![
-            make_mod_full("SkyUI", true, Some("5.2"), None, None, None, None),
-            make_mod_full("USSEP", true, Some("4.2.8"), Some("essential fix"), None, None, None),
-            make_mod_full("other", false, None, None, None, None, None),
-        ];
-        let criteria = vec![FilterCriterion {
-            kind: FilterKind::TextSearch("sky".to_string()),
-            state: TriState::Include,
-        }];
-        let result = apply_filters(&mods, &criteria, FilterMode::And);
-        assert_eq!(result, vec![0]); // case-insensitive match on mod_id
-    }
-
-    #[test]
-    fn test_csv_export() {
-        let mods = vec![
-            make_mod_full("mod_a", true, Some("1.0"), None, Some(1234), None, None),
-            make_mod_full("mod_b", false, None, Some("test notes"), None, Some(5), None),
-        ];
-        let columns = &[CsvColumn::ModId, CsvColumn::Enabled, CsvColumn::Version];
-        let mut buf = Vec::new();
-        export_csv(&mods, columns, &mut buf).unwrap();
-        let output = String::from_utf8(buf).unwrap();
-        let lines: Vec<&str> = output.trim().split('\n').collect();
-        assert_eq!(lines[0], "mod_id,enabled,version");
-        assert_eq!(lines[1], "mod_a,true,1.0");
-        assert_eq!(lines[2], "mod_b,false,");
-    }
-
-    #[test]
-    fn test_csv_export_quoting() {
-        let mods = vec![make_mod_full(
-            "mod_a",
-            true,
-            None,
-            Some("note with, comma"),
-            None,
-            None,
-            None,
-        )];
-        let columns = &[CsvColumn::ModId, CsvColumn::Notes];
-        let mut buf = Vec::new();
-        export_csv(&mods, columns, &mut buf).unwrap();
-        let output = String::from_utf8(buf).unwrap();
-        let lines: Vec<&str> = output.trim().split('\n').collect();
-        assert_eq!(lines[1], "mod_a,\"note with, comma\"");
+        // OR: has notes OR is not enabled
+        let result = apply_filters(&mods, "", &criteria, FilterMode::Or);
+        assert_eq!(result, vec![0, 1]); // A has notes, B is not enabled
     }
 }

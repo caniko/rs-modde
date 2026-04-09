@@ -43,7 +43,8 @@
       "Bash(do)",
       "Bash(jq .installed[0])",
       "Bash(nix-shell -p sqlite --run 'sqlite3 ~/.local/share/modde/modde.db \"\"SELECT name, game_id FROM profiles;\"\"')",
-      "Bash(grep -c \"#\\\\[test\\\\]\" /data/nvme0/can/Projects/rs-modde/crates/modde-cli/tests/*.rs)"
+      "Bash(grep -c \"#\\\\[test\\\\]\" /data/nvme0/can/Projects/rs-modde/crates/modde-cli/tests/*.rs)",
+      "Bash(ln -s /data/nvme0/can/Projects/rs-fomod-oxide /data/nvme0/can/Projects/rs-modde/.claude/worktrees/rs-fomod-oxide)"
     ],
     "additionalDirectories": [
       "/home/can/.local/share/modde/tmp",

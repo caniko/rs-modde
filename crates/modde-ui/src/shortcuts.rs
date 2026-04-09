@@ -1,21 +1,175 @@
-use iced::keyboard;
+//! Keyboard shortcut definitions for modde.
+//!
+//! Shortcuts are defined as static mappings. The app's subscription
+//! system calls `handle_key_event()` to convert key events into Messages.
 
-use crate::app::Message;
+use iced::keyboard::{key::Named, Key, Modifiers};
 
-/// Map a keyboard event to an app message, if it matches a shortcut.
-pub fn handle_key_event(
-    key: keyboard::Key,
-    modifiers: keyboard::Modifiers,
-) -> Option<Message> {
-    match (modifiers, &key) {
-        // F5 = refresh / reload profile
-        (m, keyboard::Key::Named(keyboard::key::Named::F5)) if m.is_empty() => {
-            Some(Message::Noop) // TODO: wire to actual refresh
+/// A keyboard shortcut definition.
+#[derive(Debug, Clone)]
+pub struct Shortcut {
+    pub key: Key,
+    pub modifiers: Modifiers,
+    pub description: &'static str,
+    pub action: &'static str, // human-readable action name
+}
+
+/// All registered shortcuts.
+pub fn all_shortcuts() -> Vec<Shortcut> {
+    vec![
+        Shortcut {
+            key: Key::Character("d".into()),
+            modifiers: Modifiers::CTRL,
+            description: "Deploy mods",
+            action: "deploy",
+        },
+        Shortcut {
+            key: Key::Character("f".into()),
+            modifiers: Modifiers::CTRL,
+            description: "Focus filter",
+            action: "focus_filter",
+        },
+        Shortcut {
+            key: Key::Named(Named::F5),
+            modifiers: Modifiers::empty(),
+            description: "Refresh",
+            action: "refresh",
+        },
+        Shortcut {
+            key: Key::Named(Named::Delete),
+            modifiers: Modifiers::empty(),
+            description: "Remove selected mod",
+            action: "remove_selected",
+        },
+        Shortcut {
+            key: Key::Named(Named::Space),
+            modifiers: Modifiers::empty(),
+            description: "Toggle selected mod",
+            action: "toggle_selected",
+        },
+        Shortcut {
+            key: Key::Character("s".into()),
+            modifiers: Modifiers::CTRL,
+            description: "Save settings",
+            action: "save_settings",
+        },
+        Shortcut {
+            key: Key::Character("i".into()),
+            modifiers: Modifiers::CTRL,
+            description: "Open mod info",
+            action: "open_info",
+        },
+        Shortcut {
+            key: Key::Character("e".into()),
+            modifiers: Modifiers::CTRL,
+            description: "Export mod list",
+            action: "export",
+        },
+    ]
+}
+
+/// Match a key event against registered shortcuts.
+/// Returns the action name if a shortcut matches, None otherwise.
+pub fn match_shortcut(key: &Key, modifiers: Modifiers) -> Option<&'static str> {
+    for shortcut in all_shortcuts() {
+        if keys_match(key, &shortcut.key) && modifiers == shortcut.modifiers {
+            return Some(shortcut.action);
         }
-        // Escape = cancel current overlay (e.g. FOMOD wizard)
-        (m, keyboard::Key::Named(keyboard::key::Named::Escape)) if m.is_empty() => {
-            Some(Message::FOMODCancel)
+    }
+    None
+}
+
+fn keys_match(a: &Key, b: &Key) -> bool {
+    match (a, b) {
+        (Key::Character(a), Key::Character(b)) => a == b,
+        (Key::Named(a), Key::Named(b)) => a == b,
+        _ => false,
+    }
+}
+
+/// Format all shortcuts as a human-readable help string.
+pub fn help_text() -> String {
+    let mut lines = vec!["Keyboard Shortcuts:".to_string(), String::new()];
+    for s in all_shortcuts() {
+        let mod_str = format_modifiers(s.modifiers);
+        let key_str = format_key(&s.key);
+        let combo = if mod_str.is_empty() {
+            key_str
+        } else {
+            format!("{mod_str}+{key_str}")
+        };
+        lines.push(format!("  {:<20} {}", combo, s.description));
+    }
+    lines.join("\n")
+}
+
+fn format_modifiers(m: Modifiers) -> String {
+    let mut parts = Vec::new();
+    if m.control() {
+        parts.push("Ctrl");
+    }
+    if m.shift() {
+        parts.push("Shift");
+    }
+    if m.alt() {
+        parts.push("Alt");
+    }
+    parts.join("+")
+}
+
+fn format_key(key: &Key) -> String {
+    match key {
+        Key::Character(c) => c.to_uppercase(),
+        Key::Named(n) => format!("{n:?}"),
+        _ => "?".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_match_ctrl_d() {
+        let key = Key::Character("d".into());
+        let result = match_shortcut(&key, Modifiers::CTRL);
+        assert_eq!(result, Some("deploy"));
+    }
+
+    #[test]
+    fn test_match_f5() {
+        let key = Key::Named(Named::F5);
+        let result = match_shortcut(&key, Modifiers::empty());
+        assert_eq!(result, Some("refresh"));
+    }
+
+    #[test]
+    fn test_no_match() {
+        let key = Key::Character("z".into());
+        let result = match_shortcut(&key, Modifiers::empty());
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_help_text() {
+        let text = help_text();
+        assert!(!text.is_empty());
+        assert!(text.contains("Ctrl+D"));
+        assert!(text.contains("Deploy mods"));
+        assert!(text.contains("F5"));
+        assert!(text.contains("Refresh"));
+    }
+
+    #[test]
+    fn test_all_shortcuts_unique() {
+        let shortcuts = all_shortcuts();
+        let mut seen = std::collections::HashSet::new();
+        for s in &shortcuts {
+            let key_repr = format!("{:?}+{:?}", s.modifiers, s.key);
+            assert!(
+                seen.insert(key_repr.clone()),
+                "Duplicate shortcut: {key_repr}"
+            );
         }
-        _ => None,
     }
 }

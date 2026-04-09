@@ -547,6 +547,17 @@ pub enum Message {
     ApplyTool(String),
     RevertTool(String),
 
+    // Downloads
+    PauseDownload(usize),
+    ResumeDownload(usize),
+    CancelDownload(usize),
+
+    // Endorsement
+    EndorseMod { mod_id: String, game_domain: String, nexus_mod_id: u64 },
+    AbstainMod { mod_id: String, game_domain: String, nexus_mod_id: u64 },
+    TrackMod { mod_id: String, game_domain: String, nexus_mod_id: u64 },
+    UntrackMod { mod_id: String, game_domain: String, nexus_mod_id: u64 },
+
     // Misc
     Noop,
 }
@@ -1362,6 +1373,23 @@ impl Modde {
             Message::RevertTool(id) => {
                 self.status_message = format!("Reverting tool: {id}");
             }
+            // Downloads
+            Message::PauseDownload(_id) => {
+                self.status_message = "Download paused".to_string();
+            }
+            Message::ResumeDownload(_id) => {
+                self.status_message = "Download resumed".to_string();
+            }
+            Message::CancelDownload(_id) => {
+                self.status_message = "Download cancelled".to_string();
+            }
+
+            // Endorsement (stub — API wiring in Phase 5)
+            Message::EndorseMod { .. } | Message::AbstainMod { .. }
+            | Message::TrackMod { .. } | Message::UntrackMod { .. } => {
+                self.status_message = "Endorsement/tracking: API not yet wired".to_string();
+            }
+
             Message::Noop => {}
         }
         Task::none()
@@ -1384,13 +1412,7 @@ impl Modde {
         let settings_state = self.settings_state();
 
         let content: Element<Message> = match &self.active_view {
-            View::ModList => crate::views::mod_list::view(
-                mods,
-                &self.mod_filter,
-                self.selected_mod_index,
-                &self.collapsed_categories,
-                &self.mod_categories,
-            ),
+            View::ModList => crate::views::mod_list::view(mods, &self.mod_filter, self.selected_mod_index),
             View::LoadOrder => crate::views::load_order::view(&self.resolved_order, &self.conflict_map),
             View::Collections => crate::views::collections::view(&self.collection_search, &self.collections, &self.active_downloads),
             View::FOMODWizard(_) => crate::views::fomod_wizard::view(self),
