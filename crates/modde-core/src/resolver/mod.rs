@@ -1,9 +1,8 @@
 use std::borrow::Borrow;
-use std::collections::{HashMap, HashSet};
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fmt;
 
-use petgraph::graph::{DiGraph, NodeIndex};
-use petgraph::algo::toposort;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{CoreError, Result};
@@ -184,9 +183,41 @@ pub struct ResolvedLoadOrder {
 
 /// Resolve a profile into a topologically sorted load order.
 ///
-/// Uses petgraph to build a DAG from mods and load order rules,
-/// then performs a topological sort.
+/// **Stability contract:** the output preserves `profile.mods` input order
+/// wherever possible, deviating *only* when a `LoadAfter` / `LoadBefore`
+/// rule would otherwise be violated. This means:
+///
+/// 1. **No rules → exact input order.** `resolve(profile).order` equals the
+///    enabled subset of `profile.mods` in the same sequence.
+/// 2. **Round-trip via swap.** Swapping two adjacent mods in `profile.mods`
+///    produces a resolved order with those two mods swapped, as long as no
+///    rule spans the swap. This is what makes `Message::ReorderMod` visible
+///    in the load_order view — without stability, reordering could
+///    silently vanish.
+/// 3. **Minimal change under rules.** When a rule *does* force movement,
+///    only the rule-involved pair shifts; unrelated neighbors stay put.
+/// 4. **Deterministic.** Identical inputs always produce identical outputs;
+///    we don't rely on `HashMap` iteration order anywhere.
+///
+/// ## Algorithm
+///
+/// Stable Kahn's with input-position tiebreaking:
+///
+/// 1. Collect enabled mods, recording each `mod_id → input_pos`.
+/// 2. Build adjacency + in-degree from `LoadAfter` / `LoadBefore` rules,
+///    silently dropping edges whose endpoints aren't enabled (matches
+///    the old behaviour).
+/// 3. Seed a min-heap (`BinaryHeap<Reverse<(input_pos, mod_id)>>`) with
+///    every node whose in-degree is 0.
+/// 4. Pop the smallest-input-position ready node, emit it, decrement the
+///    in-degree of its successors, pushing any that hit 0.
+/// 5. If fewer nodes come out than went in, there's a cycle — pick any
+///    remaining node to name in `CoreError::DependencyCycle`.
+///
+/// `Incompatible` rules are checked up-front and short-circuit the
+/// resolution with a `FileConflict` error (unchanged from the old impl).
 pub fn resolve(profile: &Profile) -> Result<ResolvedLoadOrder> {
+    // Enabled mods, in input order. `input_pos[mod_id] = index in this Vec`.
     let enabled_mods: Vec<&str> = profile
         .mods
         .iter()
@@ -194,9 +225,14 @@ pub fn resolve(profile: &Profile) -> Result<ResolvedLoadOrder> {
         .map(|m| m.mod_id.as_str())
         .collect();
 
+    let input_pos: HashMap<&str, usize> = enabled_mods
+        .iter()
+        .enumerate()
+        .map(|(i, &m)| (m, i))
+        .collect();
     let enabled_set: HashSet<&str> = enabled_mods.iter().copied().collect();
 
-    // Check for incompatible mods
+    // Check for incompatible mods — must fail before we try to resolve.
     for rule in &profile.load_order_rules {
         if let LoadOrderRule::Incompatible { mod_a, mod_b } = rule {
             if enabled_set.contains(mod_a.as_str()) && enabled_set.contains(mod_b.as_str()) {
@@ -208,42 +244,64 @@ pub fn resolve(profile: &Profile) -> Result<ResolvedLoadOrder> {
         }
     }
 
-    // Build DAG
-    let mut graph = DiGraph::<&str, ()>::new();
-    let mut node_map: HashMap<&str, NodeIndex> = HashMap::new();
+    // Build adjacency + in-degree. `successors[u] = [v, ...]` means "u must
+    // be emitted before v".
+    let mut successors: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut in_degree: HashMap<&str, usize> =
+        enabled_mods.iter().map(|&m| (m, 0usize)).collect();
 
-    for mod_id in &enabled_mods {
-        let idx = graph.add_node(mod_id);
-        node_map.insert(mod_id, idx);
+    for rule in &profile.load_order_rules {
+        let (from, to) = match rule {
+            // `mod_id must load after after` → `after` must come before `mod_id`
+            LoadOrderRule::LoadAfter { mod_id, after } => (after.as_str(), mod_id.as_str()),
+            // `mod_id must load before before` → `mod_id` must come before `before`
+            LoadOrderRule::LoadBefore { mod_id, before } => (mod_id.as_str(), before.as_str()),
+            LoadOrderRule::Incompatible { .. } => continue,
+        };
+        // Silently drop rules referencing disabled / unknown mods, matching
+        // the old petgraph-based implementation.
+        if !enabled_set.contains(from) || !enabled_set.contains(to) {
+            continue;
+        }
+        successors.entry(from).or_default().push(to);
+        *in_degree.get_mut(to).expect("to is enabled") += 1;
     }
 
-    // Add edges from load order rules
-    for rule in &profile.load_order_rules {
-        match rule {
-            LoadOrderRule::LoadAfter { mod_id, after } => {
-                if let (Some(&from), Some(&to)) = (node_map.get(after.as_str()), node_map.get(mod_id.as_str())) {
-                    graph.add_edge(from, to, ());
-                }
-            }
-            LoadOrderRule::LoadBefore { mod_id, before } => {
-                if let (Some(&from), Some(&to)) = (node_map.get(mod_id.as_str()), node_map.get(before.as_str())) {
-                    graph.add_edge(from, to, ());
-                }
-            }
-            LoadOrderRule::Incompatible { .. } => {} // Already handled above
+    // Min-heap keyed on input position. `Reverse` flips the default max-heap
+    // to a min-heap; ties on `input_pos` are impossible because positions
+    // are unique, but we include the mod_id in the tuple for total ordering.
+    let mut ready: BinaryHeap<Reverse<(usize, &str)>> = BinaryHeap::new();
+    for &m in &enabled_mods {
+        if in_degree[m] == 0 {
+            ready.push(Reverse((input_pos[m], m)));
         }
     }
 
-    // Topological sort
-    let sorted = toposort(&graph, None).map_err(|cycle| {
-        let mod_id = graph[cycle.node_id()];
-        CoreError::DependencyCycle(mod_id.to_string())
-    })?;
+    let mut order: Vec<ModId> = Vec::with_capacity(enabled_mods.len());
+    while let Some(Reverse((_, m))) = ready.pop() {
+        order.push(ModId::from(m));
+        if let Some(succs) = successors.get(m) {
+            for &s in succs {
+                let d = in_degree.get_mut(s).expect("successor is enabled");
+                *d -= 1;
+                if *d == 0 {
+                    ready.push(Reverse((input_pos[s], s)));
+                }
+            }
+        }
+    }
 
-    let order: Vec<ModId> = sorted
-        .iter()
-        .map(|&idx| ModId::from(graph[idx]))
-        .collect();
+    // Cycle detection: if any node still has in_degree > 0, it's part of a
+    // cycle. Name one of the surviving nodes in the error message, matching
+    // the old `toposort` behaviour.
+    if order.len() != enabled_mods.len() {
+        let offender = enabled_mods
+            .iter()
+            .find(|m| in_degree.get(**m).copied().unwrap_or(0) > 0)
+            .copied()
+            .unwrap_or("<unknown>");
+        return Err(CoreError::DependencyCycle(offender.to_string()));
+    }
 
     Ok(ResolvedLoadOrder { order })
 }
@@ -272,6 +330,7 @@ mod tests {
                 .collect(),
             overrides: PathBuf::from("/tmp/overrides"),
             load_order_rules: rules,
+            load_order_lock: None,
         }
     }
 
@@ -379,9 +438,140 @@ mod tests {
             ],
             overrides: PathBuf::from("/tmp"),
             load_order_rules: smallvec![],
+            load_order_lock: None,
         };
         let result = resolve(&profile).unwrap();
         assert_eq!(result.order.len(), 1);
         assert_eq!(result.order[0], "mod_a");
+    }
+
+    // ── Stability tests ──────────────────────────────────────────
+    //
+    // These pin down the "resolve is stable wrt profile.mods input order"
+    // contract that makes `Message::ReorderMod` visible in the load_order
+    // view. Before the Kahn's rewrite, `petgraph::toposort` could return
+    // any valid order — so reordering profile.mods without a rule change
+    // didn't necessarily shift anything in `resolved_order`.
+
+    fn ids(order: &[ModId]) -> Vec<&str> {
+        order.iter().map(|m| m.as_str()).collect()
+    }
+
+    #[test]
+    fn stable_no_rules_preserves_input_order() {
+        let profile = make_profile(vec!["c", "a", "b"], smallvec![]);
+        let result = resolve(&profile).unwrap();
+        assert_eq!(
+            ids(&result.order),
+            vec!["c", "a", "b"],
+            "with no rules, resolver must emit mods in their profile.mods order"
+        );
+    }
+
+    #[test]
+    fn stable_after_swap_round_trips() {
+        // Model what `Message::ReorderMod` does: swap two adjacent
+        // entries in profile.mods, then re-resolve. The new resolved
+        // order must reflect the swap.
+        let mut profile = make_profile(vec!["a", "b", "c"], smallvec![]);
+        let before = resolve(&profile).unwrap();
+        assert_eq!(ids(&before.order), vec!["a", "b", "c"]);
+
+        profile.mods.swap(0, 1); // [b, a, c]
+        let after = resolve(&profile).unwrap();
+        assert_eq!(ids(&after.order), vec!["b", "a", "c"]);
+    }
+
+    #[test]
+    fn stable_with_rule_only_preserves_unrelated_neighbors() {
+        // [c, b, a] with rule "a must load after c" — the rule is
+        // already satisfied (a is after c), so nothing needs to move.
+        // Critically, `b` must not drift even though it has no
+        // constraints.
+        let profile = make_profile(
+            vec!["c", "b", "a"],
+            smallvec![LoadOrderRule::LoadAfter {
+                mod_id: ModId::from("a"),
+                after: ModId::from("c"),
+            }],
+        );
+        let result = resolve(&profile).unwrap();
+        assert_eq!(ids(&result.order), vec!["c", "b", "a"]);
+    }
+
+    #[test]
+    fn stable_with_rule_forcing_reorder_is_minimal() {
+        // [c, b, a] with rule "b must load after a" forces b→after a.
+        // The minimal stable fix: emit `c` first (no deps, lowest input
+        // pos), then `a` (in_degree becomes 0 once c is emitted — wait,
+        // no; a has no incoming edges at all in this graph, its input
+        // pos is 2, so after c at 0 we look at the next ready node).
+        // Expected: [c, a, b] — a moves up ahead of b to satisfy the
+        // rule, c stays at position 0 because nothing constrains it.
+        let profile = make_profile(
+            vec!["c", "b", "a"],
+            smallvec![LoadOrderRule::LoadAfter {
+                mod_id: ModId::from("b"),
+                after: ModId::from("a"),
+            }],
+        );
+        let result = resolve(&profile).unwrap();
+        assert_eq!(
+            ids(&result.order),
+            vec!["c", "a", "b"],
+            "c should stay first; a must come before b due to rule"
+        );
+    }
+
+    #[test]
+    fn stable_resolve_is_deterministic() {
+        // Guards against HashMap iteration order sneaking in. Resolve
+        // the same profile twice and assert identical output. Run with
+        // a largeish mod set to give HashMap iteration a chance to
+        // scramble things.
+        let mods: Vec<&str> = vec![
+            "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota",
+            "kappa", "lambda", "mu", "nu", "xi", "omicron",
+        ];
+        let profile = make_profile(mods.clone(), smallvec![]);
+        let a = resolve(&profile).unwrap();
+        let b = resolve(&profile).unwrap();
+        assert_eq!(ids(&a.order), ids(&b.order));
+        assert_eq!(ids(&a.order), mods);
+    }
+
+    #[test]
+    fn stable_disabled_mod_in_middle_preserves_others_input_order() {
+        // profile.mods = [a, b(disabled), c] — the output should be
+        // [a, c], both in input-position order. The old toposort could
+        // return [c, a] depending on graph iteration.
+        let profile = Profile {
+            id: None,
+            name: "test".to_string(),
+            game_id: GameId::from("skyrim-se"),
+            source: ProfileSource::Manual,
+            mods: vec![
+                EnabledMod {
+                    mod_id: "a".to_string(),
+                    enabled: true,
+                    ..Default::default()
+                },
+                EnabledMod {
+                    mod_id: "b".to_string(),
+                    enabled: false,
+                    ..Default::default()
+                },
+                EnabledMod {
+                    mod_id: "c".to_string(),
+                    enabled: true,
+                    ..Default::default()
+                },
+            ],
+            overrides: PathBuf::from("/tmp"),
+            load_order_rules: smallvec![],
+            load_order_lock: None,
+        };
+        let result = resolve(&profile).unwrap();
+        assert_eq!(ids(&result.order), vec!["a", "c"]);
     }
 }

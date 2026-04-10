@@ -14,6 +14,7 @@ fn make_profile(game_id: &str, mods: Vec<EnabledMod>, overrides: PathBuf) -> Pro
         mods,
         overrides,
         load_order_rules: smallvec![],
+        load_order_lock: None,
     }
 }
 

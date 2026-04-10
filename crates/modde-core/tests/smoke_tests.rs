@@ -42,6 +42,7 @@ fn make_profile(name: &str, mods: Vec<&str>, rules: smallvec::SmallVec<[LoadOrde
             .collect(),
         overrides: PathBuf::from("/tmp/overrides"),
         load_order_rules: rules,
+        load_order_lock: None,
     }
 }
 
@@ -67,6 +68,7 @@ fn smoke_profile_roundtrip() {
             mod_id: ModId::from("mod_b"),
             after: ModId::from("mod_a"),
         }],
+        load_order_lock: None,
     };
 
     pm.create(&profile).unwrap();
@@ -96,6 +98,7 @@ fn smoke_profile_nexus_collection_source_roundtrip() {
         mods: vec![],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     pm.create(&profile).unwrap();

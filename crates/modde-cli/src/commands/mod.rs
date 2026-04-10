@@ -18,6 +18,7 @@ pub mod save;
 pub mod scan;
 pub mod stock;
 pub mod tool;
+pub mod uninstall;
 pub mod update;
 pub mod verify;
 

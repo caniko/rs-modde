@@ -65,6 +65,12 @@ pub fn all_shortcuts() -> Vec<Shortcut> {
             description: "Export mod list",
             action: "export",
         },
+        Shortcut {
+            key: Key::Named(Named::Escape),
+            modifiers: Modifiers::empty(),
+            description: "Dismiss modal / cancel",
+            action: "dismiss_modal",
+        },
     ]
 }
 
@@ -141,6 +147,13 @@ mod tests {
         let key = Key::Named(Named::F5);
         let result = match_shortcut(&key, Modifiers::empty());
         assert_eq!(result, Some("refresh"));
+    }
+
+    #[test]
+    fn test_match_escape() {
+        let key = Key::Named(Named::Escape);
+        let result = match_shortcut(&key, Modifiers::empty());
+        assert_eq!(result, Some("dismiss_modal"));
     }
 
     #[test]

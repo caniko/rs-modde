@@ -5,6 +5,7 @@ pub mod generic;
 pub mod launcher;
 pub mod tools;
 pub mod traits;
+pub mod ue4;
 
 pub use detection::{find_detected_game, scan_installed_games, DetectedGame, LauncherSource};
 pub use traits::{
@@ -12,6 +13,28 @@ pub use traits::{
     DiscoveredFile, DiscoveredMod, ModScanner, ModSource, ScanContext,
     walk_files_relative, slug,
 };
+
+/// Build an [`modde_core::installer::InstallProbe`] that delegates to a
+/// game plugin's [`GamePlugin::analyze_mod_archive`] and
+/// [`GamePlugin::recognizes_bare_layout`] hooks.
+///
+/// Only `&'static dyn GamePlugin` is accepted because all registered
+/// plugins are `static` (see [`resolve_game_plugin`]), and the probe's
+/// closures need `'static` captures to cross async task boundaries.
+///
+/// ```ignore
+/// let plugin = resolve_game_plugin("skyrim-se").unwrap();
+/// let probe = game_probe(plugin);
+/// let plan = modde_core::installer::analyze(&extracted, &probe, hash)?;
+/// ```
+pub fn game_probe(
+    plugin: &'static dyn GamePlugin,
+) -> modde_core::installer::InstallProbe {
+    modde_core::installer::InstallProbe::new(
+        move |dir: &std::path::Path| plugin.analyze_mod_archive(dir),
+        move |dir: &std::path::Path| plugin.recognizes_bare_layout(dir),
+    )
+}
 
 /// All recognized game IDs, in the order they appear in the match table.
 pub const SUPPORTED_GAME_IDS: &[&str] = &[
@@ -21,6 +44,7 @@ pub const SUPPORTED_GAME_IDS: &[&str] = &[
     "fallout76",
     "starfield",
     "cyberpunk2077",
+    "stellar-blade",
 ];
 
 /// Map a Wabbajack manifest `game` field (e.g. `"Cyberpunk2077"`, `"SkyrimSpecialEdition"`)
@@ -47,6 +71,7 @@ pub fn resolve_game_plugin(game_id: &str) -> Option<&'static dyn GamePlugin> {
         "fallout76" => Some(&bethesda::FALLOUT76),
         "starfield" => Some(&bethesda::STARFIELD),
         "cyberpunk2077" => Some(&cyberpunk::CYBERPUNK2077),
+        "stellar-blade" => Some(&ue4::STELLAR_BLADE),
         _ => None,
     }
 }
@@ -58,6 +83,7 @@ pub fn resolve_mod_scanner(game_id: &str) -> Option<&'static dyn ModScanner> {
         "skyrim-se" | "skyrim-ae" => Some(&bethesda::scanner::SKYRIM_SCANNER),
         "fallout4" => Some(&bethesda::scanner::FALLOUT4_SCANNER),
         "starfield" => Some(&bethesda::scanner::STARFIELD_SCANNER),
+        "stellar-blade" => Some(&ue4::scanner::STELLAR_BLADE_SCANNER),
         _ => None,
     }
 }

@@ -44,14 +44,123 @@ pub struct EnabledMod {
     /// JSON-encoded array of tag strings.
     #[serde(default)]
     pub tags: Option<String>,
+
+    // ── Load order lock (V7) ─────────────────────────────────────
+    /// Per-mod lock: when `Some`, this mod's position cannot be changed via
+    /// `Message::ReorderMod`. Other mods may still move around it. See the
+    /// profile-level `load_order_lock` on `Profile` for the whole-profile
+    /// lock that takes precedence.
+    #[serde(default)]
+    pub lock: Option<LockReason>,
+
+    // ── Installer metadata (V8) ──────────────────────────────────
+    /// The detected install method for this mod, serialized as TOML
+    /// (matching the `lock_reason` convention). `None` for mods that
+    /// predate the installer pipeline or were installed via paths
+    /// that bypass analysis (Wabbajack directives).
+    #[serde(default)]
+    pub install_method: Option<String>,
+
+    /// xxh64 hex digest of the source archive. Lets uninstall and dossier
+    /// dumps correlate a mod row back to the original download.
+    #[serde(default)]
+    pub source_archive_hash: Option<String>,
+
+    /// Where this mod is in the install lifecycle. `None` means legacy
+    /// (pre-V8) — treat as `Installed` for display purposes.
+    #[serde(default)]
+    pub install_status: Option<String>,
 }
 
 /// Source from which a profile was created.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// This is now *provenance-only* metadata. Load-order business logic
+/// (preventing reorder of Wabbajack / Collection / TOML-imported profiles)
+/// is driven by [`LoadOrderLock`] on the profile, not by this field.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum ProfileSource {
+    #[default]
     Manual,
     NexusCollection { slug: String, version: String },
     Wabbajack { manifest_hash: String },
+}
+
+/// Why a profile's load order (or an individual mod) is locked.
+///
+/// Stored both at the profile level (inside [`LoadOrderLock`]) and, for
+/// per-mod pins, directly on [`EnabledMod::lock`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum LockReason {
+    /// Locked because the profile was installed from a Wabbajack modlist.
+    /// `manifest_hash` identifies which manifest so scans can verify
+    /// provenance.
+    Wabbajack { manifest_hash: String },
+    /// Locked because the profile was installed from a Nexus Collection.
+    NexusCollection { slug: String, version: String },
+    /// Locked because the profile was imported from an authoritative TOML
+    /// file (e.g. shared between machines). `source_path` records where it
+    /// came from at import time.
+    TomlImport { source_path: String },
+    /// Locked explicitly by the user via the UI or CLI.
+    Manual {
+        #[serde(default)]
+        note: Option<String>,
+    },
+}
+
+/// A profile-level load order lock.
+///
+/// When `Profile::load_order_lock` is `Some(_)`, the entire mod order is
+/// frozen: reorder attempts are refused by the UI message handler and
+/// reorder buttons are disabled in the views. The user must explicitly
+/// unlock the profile (or fork it with `--unlock`) to make changes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LoadOrderLock {
+    pub reason: LockReason,
+    /// ISO-8601 UTC timestamp captured at lock time (e.g. `"2026-04-10T14:23:00Z"`).
+    pub locked_at: String,
+}
+
+impl LoadOrderLock {
+    /// Construct a new lock with `locked_at` set to the current UTC time.
+    pub fn now(reason: LockReason) -> Self {
+        Self {
+            reason,
+            locked_at: current_utc_timestamp(),
+        }
+    }
+}
+
+/// Return an ISO-8601 UTC timestamp for "now", suitable for
+/// [`LoadOrderLock::locked_at`]. Uses only `std::time` + integer math so we
+/// don't take a chrono dependency for a single field. Produces values like
+/// `"2026-04-10T14:23:07Z"` — stable, sortable, and widely-parseable.
+fn current_utc_timestamp() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+
+    // Break into (date, time-of-day).
+    let days = secs.div_euclid(86_400);
+    let sod = secs.rem_euclid(86_400) as u32;
+    let (h, rem) = (sod / 3600, sod % 3600);
+    let (m, s) = (rem / 60, rem % 60);
+
+    // Howard Hinnant's civil_from_days (days since 1970-01-01 → Y-M-D).
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as u32;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y_off = era * 400 + yoe as i64;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m_civ = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m_civ <= 2 { y_off + 1 } else { y_off };
+
+    format!("{y:04}-{m_civ:02}-{d:02}T{h:02}:{m:02}:{s:02}Z")
 }
 
 /// A modding profile containing an ordered list of mods.
@@ -69,6 +178,104 @@ pub struct Profile {
     /// `SmallVec<[_; 4]>` keeps ≤4 rules inline (no heap allocation).
     #[serde(default)]
     pub load_order_rules: SmallVec<[LoadOrderRule; 4]>,
+    /// Profile-level load order lock (V7). When `Some`, the entire mod
+    /// order is frozen and reorder operations are refused until the user
+    /// explicitly unlocks the profile. See [`LoadOrderLock`] for details.
+    #[serde(default)]
+    pub load_order_lock: Option<LoadOrderLock>,
+}
+
+// ── Reorder enforcement ──────────────────────────────────────────
+//
+// Pure logic shared by the UI handler and the CLI/test harnesses for
+// attempting to move a mod one step up or down within a profile. All
+// enforcement rules (profile-level lock, per-mod lock, adjacent pin,
+// list boundary) live here so every caller refuses identically.
+
+/// Direction for [`try_reorder`]. Mirrors the UI message variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReorderDirection {
+    Up,
+    Down,
+}
+
+/// Why [`try_reorder`] refused to move a mod. Callers render these into
+/// status messages / CLI errors as they see fit — the enum carries enough
+/// structure to explain *why* without string-matching.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReorderError {
+    /// The whole profile is locked (Wabbajack/Collection/TomlImport/Manual).
+    ProfileLocked { reason: LockReason },
+    /// The target mod itself carries a per-mod pin.
+    ModPinned { mod_id: String, reason: LockReason },
+    /// The mod_id does not exist in `profile.mods`.
+    ModNotFound { mod_id: String },
+    /// The swap partner (one step up/down) is pinned — moving would
+    /// shift it, violating its per-mod pin contract.
+    AdjacentPinned {
+        neighbor_id: String,
+        reason: LockReason,
+    },
+    /// The mod is already at the top/bottom of the list.
+    AtBoundary,
+}
+
+/// Attempt to move `mod_id` one step `direction` within `profile.mods`.
+///
+/// On success, mutates `profile.mods` in place (swap with the adjacent
+/// entry) and returns `Ok(())`. On refusal, returns a structured
+/// [`ReorderError`] without touching the profile.
+///
+/// Enforcement precedence (short-circuits on the first match):
+/// 1. Profile-level `load_order_lock` → `ProfileLocked`
+/// 2. Mod not found → `ModNotFound`
+/// 3. Target mod has `lock` → `ModPinned`
+/// 4. Target direction goes out of bounds → `AtBoundary`
+/// 5. Adjacent (swap-partner) mod has `lock` → `AdjacentPinned`
+///
+/// The UI handler and `modde profile reorder` CLI path (if/when added)
+/// both call this; see `crates/modde-ui/src/app.rs::Message::ReorderMod`.
+pub fn try_reorder(
+    profile: &mut Profile,
+    mod_id: &str,
+    direction: ReorderDirection,
+) -> std::result::Result<(), ReorderError> {
+    if let Some(lock) = profile.load_order_lock.as_ref() {
+        return Err(ReorderError::ProfileLocked {
+            reason: lock.reason.clone(),
+        });
+    }
+
+    let idx = profile
+        .mods
+        .iter()
+        .position(|m| m.mod_id == mod_id)
+        .ok_or_else(|| ReorderError::ModNotFound {
+            mod_id: mod_id.to_string(),
+        })?;
+
+    if let Some(reason) = profile.mods[idx].lock.as_ref() {
+        return Err(ReorderError::ModPinned {
+            mod_id: mod_id.to_string(),
+            reason: reason.clone(),
+        });
+    }
+
+    let target_idx = match direction {
+        ReorderDirection::Up if idx > 0 => idx - 1,
+        ReorderDirection::Down if idx + 1 < profile.mods.len() => idx + 1,
+        _ => return Err(ReorderError::AtBoundary),
+    };
+
+    if let Some(reason) = profile.mods[target_idx].lock.as_ref() {
+        return Err(ReorderError::AdjacentPinned {
+            neighbor_id: profile.mods[target_idx].mod_id.clone(),
+            reason: reason.clone(),
+        });
+    }
+
+    profile.mods.swap(idx, target_idx);
+    Ok(())
 }
 
 /// Validate that a profile name is safe for use as a filesystem directory
@@ -362,23 +569,53 @@ impl ProfileManager {
     }
 
     /// Fork a profile: clone its mods, load order rules, and save branch.
+    ///
+    /// By default this is a **faithful copy** — both the profile-level
+    /// `load_order_lock` and every per-mod pin ride along. Use
+    /// [`Self::fork_with_options`] (or `modde profile fork --unlock`) for
+    /// the "fork to diverge" workflow where the new profile starts
+    /// unlocked so it can be freely reorganised.
     pub fn fork(
         &self,
         source_name: &str,
         new_name: &str,
         game_id: &str,
     ) -> Result<i64> {
+        self.fork_with_options(source_name, new_name, game_id, ForkOptions::default())
+    }
+
+    /// Fork a profile with explicit control over whether the new profile
+    /// inherits locks. See [`ForkOptions`] for the flags.
+    pub fn fork_with_options(
+        &self,
+        source_name: &str,
+        new_name: &str,
+        game_id: &str,
+        options: ForkOptions,
+    ) -> Result<i64> {
         validate_profile_name(new_name)?;
         let source = self.db.load_profile(source_name, game_id)?;
+
+        // Clone then optionally strip. Done in two steps so the decision
+        // logic is obvious — one place to look when auditing lock flow.
+        let mut mods = source.mods.clone();
+        let mut load_order_lock = source.load_order_lock.clone();
+        if options.unlock {
+            load_order_lock = None;
+            for m in &mut mods {
+                m.lock = None;
+            }
+        }
 
         let new_profile = Profile {
             id: None,
             name: new_name.to_string(),
             game_id: GameId::from(game_id),
             source: source.source.clone(),
-            mods: source.mods.clone(),
+            mods,
             overrides: Self::default_overrides(new_name),
             load_order_rules: source.load_order_rules.clone(),
+            load_order_lock,
         };
 
         let new_id = self.db.create_profile(&new_profile)?;
@@ -388,6 +625,19 @@ impl ProfileManager {
 
         Ok(new_id)
     }
+}
+
+/// Options for [`ProfileManager::fork_with_options`].
+///
+/// Default is a faithful copy (all fields false). Flags opt INTO
+/// divergence from the source.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ForkOptions {
+    /// If `true`, strip both `Profile::load_order_lock` and every
+    /// `EnabledMod.lock` from the new profile. The source is untouched.
+    /// Use this for the "fork to diverge" workflow where the user wants
+    /// to freely reorder a clone of a Wabbajack/Collection profile.
+    pub unlock: bool,
 }
 
 /// Information about the currently active profile.

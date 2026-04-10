@@ -59,6 +59,11 @@ enum Commands {
         #[command(subcommand)]
         source: InstallSource,
     },
+    /// Manage individual mods (remove, diagnose unknown-type dossiers)
+    Mod {
+        #[command(subcommand)]
+        action: ModAction,
+    },
     /// Verify installed file integrity
     Verify {
         #[arg(long)]
@@ -125,6 +130,13 @@ enum Commands {
         /// Report only, don't write to database
         #[arg(long)]
         dry_run: bool,
+        /// Before merging, remove any pre-existing filesystem-scanner
+        /// rows (cet/*, reds/*, tweak/*, archive/*, redmod/*) from the
+        /// target profile that the manifest already covers. Requires
+        /// `--manifest` and `--import-to`. See `modde profile dedup`
+        /// for the standalone equivalent.
+        #[arg(long)]
+        prune_duplicates: bool,
     },
     /// Analyse mod collisions and suggest optimisations
     Collisions {
@@ -270,6 +282,104 @@ enum ProfileAction {
         name: String,
         #[arg(long)]
         game: String,
+        /// Fork unlocked: strip the profile-level load order lock AND
+        /// all per-mod pins from the new profile. Use this when you
+        /// want to diverge from a Wabbajack / Collection install and
+        /// freely reorder mods in the fork.
+        #[arg(long)]
+        unlock: bool,
+    },
+    /// Apply a manual profile-level load order lock
+    Lock {
+        name: String,
+        #[arg(long)]
+        game: Option<String>,
+        /// Optional free-text note explaining why
+        #[arg(long)]
+        note: Option<String>,
+    },
+    /// Clear the profile-level load order lock
+    Unlock {
+        name: String,
+        #[arg(long)]
+        game: Option<String>,
+    },
+    /// Show lock status for a profile
+    LockInfo {
+        name: String,
+        #[arg(long)]
+        game: Option<String>,
+    },
+    /// Pin an individual mod in place (per-mod lock).
+    LockMod {
+        /// Profile name
+        name: String,
+        /// Mod ID to pin
+        mod_id: String,
+        #[arg(long)]
+        game: Option<String>,
+        /// Optional free-text note explaining why
+        #[arg(long)]
+        note: Option<String>,
+    },
+    /// Release an individual mod's per-mod pin.
+    UnlockMod {
+        /// Profile name
+        name: String,
+        /// Mod ID to unpin
+        mod_id: String,
+        #[arg(long)]
+        game: Option<String>,
+    },
+    /// Detect (and optionally remove) filesystem-scanner rows in a
+    /// profile that duplicate mods the Wabbajack manifest already
+    /// installs. See `plans/greedy-shimmying-pine.md` for background.
+    ///
+    /// Two modes:
+    ///   * Without `--manifest`: layer-1 heuristic — list any
+    ///     filesystem-scanner rows (cet/*, reds/*, tweak/*, archive/*,
+    ///     redmod/*) on a locked profile. Read-only; a no-`--apply`
+    ///     report of "suspects".
+    ///   * With `--manifest <path>`: layer-2 classification — use the
+    ///     manifest's install directives to classify each suspect as
+    ///     LEAKED (safe to delete) or GENUINE (user addition, keep).
+    ///     Pass `--apply` to delete the LEAKED rows.
+    Dedup {
+        /// Profile name
+        name: String,
+        #[arg(long)]
+        game: Option<String>,
+        /// Path to a .wabbajack file to use as the authoritative
+        /// reference for classification. If omitted, only the
+        /// layer-1 heuristic runs.
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        /// Actually delete the rows classified as LEAKED. Without this
+        /// flag the command is a dry-run report.
+        #[arg(long)]
+        apply: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ModAction {
+    /// Remove an installed mod from a profile and unlink its staged
+    /// files. Uses the V8 `installed_mod_files` manifest so removal is
+    /// precise — no orphaned files, no collateral damage.
+    Remove {
+        /// Mod id as stored in the profile (usually
+        /// `<domain>_<mod_id>_<file_id>` for Nexus installs).
+        mod_id: String,
+        /// Profile to remove from. Defaults to the active / unambiguous
+        /// one.
+        #[arg(long)]
+        profile: Option<String>,
+    },
+    /// Print the skill dossier path and inline prompt for a mod whose
+    /// install type could not be detected. Handy for piping into
+    /// `claude` or pasting into a chat manually.
+    Diagnose {
+        mod_id: String,
     },
 }
 
@@ -568,8 +678,16 @@ fn main() -> Result<()> {
     // Sync commands that don't need the tokio runtime
     match cli.command {
         Commands::Profile { action } => return commands::profile::handle(action),
-        Commands::Scan { game, game_dir, manifest, import_to, threshold, dry_run } => {
-            return commands::scan::handle(game, game_dir, manifest, import_to, threshold, dry_run);
+        Commands::Scan { game, game_dir, manifest, import_to, threshold, dry_run, prune_duplicates } => {
+            return commands::scan::handle(
+                game,
+                game_dir,
+                manifest,
+                import_to,
+                threshold,
+                dry_run,
+                prune_duplicates,
+            );
         }
         Commands::Diagnostics { game, profile } => {
             return commands::diagnostics::handle(&game, profile);
@@ -637,6 +755,14 @@ fn main() -> Result<()> {
                 commands::rollback::handle(profile, game).await?
             }
             Commands::Install { source } => commands::install::handle(source).await?,
+            Commands::Mod { action } => match action {
+                ModAction::Remove { mod_id, profile } => {
+                    commands::uninstall::handle(mod_id, profile).await?
+                }
+                ModAction::Diagnose { mod_id } => {
+                    commands::uninstall::handle_diagnose(mod_id).await?
+                }
+            },
             Commands::Verify { profile, game } => {
                 commands::verify::handle(profile, game).await?
             }

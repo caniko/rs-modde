@@ -158,6 +158,16 @@ const KNOWN_GAMES: &[KnownGame] = &[
         gog_app_id: Some("1423049311"),
         epic_app_id: Some("Ginger"),
     },
+    KnownGame {
+        game_id: "stellar-blade",
+        display_name: "Stellar Blade",
+        steam_app_id: Some("3489700"),
+        // Steam installs under `steamapps/common/Stellar Blade` — if your
+        // install uses the trademark glyph ("Stellar Blade™"), update this.
+        steam_dir: Some("Stellar Blade"),
+        gog_app_id: None,
+        epic_app_id: None,
+    },
 ];
 
 /// Detect the Heroic Games Launcher binary (flatpak or native).

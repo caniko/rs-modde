@@ -21,6 +21,7 @@ fn make_manual_profile(name: &str, game_id: &str, mods: Vec<EnabledMod>) -> Prof
         mods,
         overrides: PathBuf::from("/tmp/overrides"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     }
 }
 
@@ -114,6 +115,7 @@ fn test_profile_with_nexus_collection_source() {
         mods: vec![simple_mod("skse", true)],
         overrides: PathBuf::from("/tmp/overrides"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     pm.create(&profile).unwrap();
@@ -145,6 +147,7 @@ fn test_profile_with_wabbajack_source() {
         mods: vec![simple_mod("engine-fixes", true)],
         overrides: PathBuf::from("/data/overrides"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     pm.create(&profile).unwrap();
@@ -192,6 +195,7 @@ fn test_profile_with_load_order_rules() {
         ],
         overrides: PathBuf::from("/tmp/overrides"),
         load_order_rules: rules,
+        load_order_lock: None,
     };
 
     pm.create(&profile).unwrap();

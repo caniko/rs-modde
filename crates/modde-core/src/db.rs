@@ -5,10 +5,11 @@ use smallvec::SmallVec;
 use tracing::info;
 
 use crate::error::{CoreError, Result};
-use crate::profile::{EnabledMod, Profile, ProfileSource};
+use crate::installer::{InstallMethod, InstallPlan, InstallStatus, StagedFile};
+use crate::profile::{EnabledMod, LoadOrderLock, LockReason, Profile, ProfileSource};
 use crate::resolver::{GameId, LoadOrderRule, ModId};
 
-const CURRENT_SCHEMA_VERSION: u32 = 6;
+const CURRENT_SCHEMA_VERSION: u32 = 8;
 
 const SCHEMA_V1: &str = "
 PRAGMA journal_mode = WAL;
@@ -154,6 +155,35 @@ CREATE INDEX IF NOT EXISTS idx_game_tools_game ON game_tools(game_id);
 CREATE INDEX IF NOT EXISTS idx_tool_files_game ON tool_applied_files(game_id, tool_id);
 ";
 
+// Schema V8 adds the installer pipeline's state:
+//
+// * Three new columns on `profile_mods` capturing how a mod was installed:
+//   `install_method` (TOML-serialized `InstallMethod`), `source_archive_hash`
+//   (xxh64 of the downloaded archive), and `install_status` (one of
+//   `installed | unknown | pending_user_input | failed`).
+//
+// * A new `installed_mod_files` table that records the concrete file
+//   manifest for every installed mod so uninstall can remove exactly the
+//   files it staged — no orphaned files, no collateral damage. The
+//   `merge_group` column is reserved for the future script-merge feature;
+//   it is written but not read by current code.
+const SCHEMA_V8: &str = "
+CREATE TABLE IF NOT EXISTS installed_mod_files (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id          INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    mod_id              TEXT NOT NULL,
+    rel_path            TEXT NOT NULL,
+    origin_rel_path     TEXT NOT NULL,
+    size                INTEGER NOT NULL,
+    merge_group         TEXT,
+    UNIQUE(profile_id, mod_id, rel_path)
+);
+
+CREATE INDEX IF NOT EXISTS idx_imf_profile_mod ON installed_mod_files(profile_id, mod_id);
+CREATE INDEX IF NOT EXISTS idx_imf_merge_group ON installed_mod_files(merge_group)
+    WHERE merge_group IS NOT NULL;
+";
+
 /// Summary view of a profile (without loading all mods).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProfileSummary {
@@ -268,6 +298,61 @@ impl ModdeDb {
             info!(from = version.max(5), to = 6, "database schema migrated to V6");
         }
 
+        if version < 7 {
+            // Load order lock (V7): profile-level + per-mod locks. See
+            // `crates/modde-core/src/profile/mod.rs` for `LoadOrderLock` /
+            // `LockReason`. Columns are TOML-encoded to match the existing
+            // `source_data` convention.
+            let has_load_order_lock = self.conn
+                .prepare("SELECT load_order_lock FROM profiles LIMIT 0")
+                .is_ok();
+            if !has_load_order_lock {
+                self.conn.execute_batch("ALTER TABLE profiles ADD COLUMN load_order_lock TEXT;")?;
+            }
+            let has_lock_reason = self.conn
+                .prepare("SELECT lock_reason FROM profile_mods LIMIT 0")
+                .is_ok();
+            if !has_lock_reason {
+                self.conn.execute_batch("ALTER TABLE profile_mods ADD COLUMN lock_reason TEXT;")?;
+            }
+            info!(from = version.max(6), to = 7, "database schema migrated to V7");
+        }
+
+        if version < 8 {
+            // Installer pipeline (V8): per-mod install method + file
+            // manifest. See `crates/modde-core/src/installer/` for the
+            // pipeline that produces these values.
+            let has_install_method = self
+                .conn
+                .prepare("SELECT install_method FROM profile_mods LIMIT 0")
+                .is_ok();
+            if !has_install_method {
+                self.conn.execute_batch(
+                    "ALTER TABLE profile_mods ADD COLUMN install_method TEXT;",
+                )?;
+            }
+            let has_source_archive_hash = self
+                .conn
+                .prepare("SELECT source_archive_hash FROM profile_mods LIMIT 0")
+                .is_ok();
+            if !has_source_archive_hash {
+                self.conn.execute_batch(
+                    "ALTER TABLE profile_mods ADD COLUMN source_archive_hash TEXT;",
+                )?;
+            }
+            let has_install_status = self
+                .conn
+                .prepare("SELECT install_status FROM profile_mods LIMIT 0")
+                .is_ok();
+            if !has_install_status {
+                self.conn.execute_batch(
+                    "ALTER TABLE profile_mods ADD COLUMN install_status TEXT;",
+                )?;
+            }
+            self.conn.execute_batch(SCHEMA_V8)?;
+            info!(from = version.max(7), to = 8, "database schema migrated to V8");
+        }
+
         if version < CURRENT_SCHEMA_VERSION {
             self.conn
                 .pragma_update(None, "user_version", CURRENT_SCHEMA_VERSION)?;
@@ -284,16 +369,18 @@ impl ModdeDb {
     /// Create a new profile, returning its database ID.
     pub fn create_profile(&self, profile: &Profile) -> Result<i64> {
         let (source_type, source_data) = encode_source(&profile.source);
+        let load_order_lock = encode_lock(profile.load_order_lock.as_ref());
 
         self.conn.execute(
-            "INSERT INTO profiles (name, game_id, source_type, source_data, overrides)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO profiles (name, game_id, source_type, source_data, overrides, load_order_lock)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 profile.name,
                 profile.game_id,
                 source_type,
                 source_data,
                 profile.overrides.to_string_lossy().as_ref(),
+                load_order_lock,
             ],
         )?;
 
@@ -307,10 +394,10 @@ impl ModdeDb {
 
     /// Load a profile by name and game_id.
     pub fn load_profile(&self, name: &str, game_id: &str) -> Result<Profile> {
-        let (id, source_type, source_data, overrides) = self
+        let (id, source_type, source_data, overrides, load_order_lock) = self
             .conn
             .query_row(
-                "SELECT id, source_type, source_data, overrides FROM profiles
+                "SELECT id, source_type, source_data, overrides, load_order_lock FROM profiles
                  WHERE name = ?1 AND game_id = ?2",
                 params![name, game_id],
                 |row| {
@@ -319,6 +406,7 @@ impl ModdeDb {
                         row.get::<_, String>(1)?,
                         row.get::<_, Option<String>>(2)?,
                         row.get::<_, String>(3)?,
+                        row.get::<_, Option<String>>(4)?,
                     ))
                 },
             )
@@ -329,16 +417,24 @@ impl ModdeDb {
                 other => CoreError::Database(other),
             })?;
 
-        self.assemble_profile(id, name, game_id, &source_type, source_data.as_deref(), &overrides)
+        self.assemble_profile(
+            id,
+            name,
+            game_id,
+            &source_type,
+            source_data.as_deref(),
+            &overrides,
+            load_order_lock.as_deref(),
+        )
     }
 
     /// Load a profile by its database ID.
     pub fn load_profile_by_id(&self, id: i64) -> Result<Profile> {
-        let (name, game_id, source_type, source_data, overrides) = self
+        let (name, game_id, source_type, source_data, overrides, load_order_lock) = self
             .conn
             .query_row(
-                "SELECT name, game_id, source_type, source_data, overrides FROM profiles
-                 WHERE id = ?1",
+                "SELECT name, game_id, source_type, source_data, overrides, load_order_lock
+                 FROM profiles WHERE id = ?1",
                 params![id],
                 |row| {
                     Ok((
@@ -347,6 +443,7 @@ impl ModdeDb {
                         row.get::<_, String>(2)?,
                         row.get::<_, Option<String>>(3)?,
                         row.get::<_, String>(4)?,
+                        row.get::<_, Option<String>>(5)?,
                     ))
                 },
             )
@@ -357,16 +454,25 @@ impl ModdeDb {
                 other => CoreError::Database(other),
             })?;
 
-        self.assemble_profile(id, &name, &game_id, &source_type, source_data.as_deref(), &overrides)
+        self.assemble_profile(
+            id,
+            &name,
+            &game_id,
+            &source_type,
+            source_data.as_deref(),
+            &overrides,
+            load_order_lock.as_deref(),
+        )
     }
 
     /// Load a profile by name only. Errors with `AmbiguousProfile` if multiple games match.
     pub fn load_profile_by_name(&self, name: &str) -> Result<Profile> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, game_id, source_type, source_data, overrides FROM profiles WHERE name = ?1",
+            "SELECT id, game_id, source_type, source_data, overrides, load_order_lock
+             FROM profiles WHERE name = ?1",
         )?;
 
-        let rows: Vec<(i64, String, String, Option<String>, String)> = stmt
+        let rows: Vec<(i64, String, String, Option<String>, String, Option<String>)> = stmt
             .query_map(params![name], |row| {
                 Ok((
                     row.get(0)?,
@@ -374,6 +480,7 @@ impl ModdeDb {
                     row.get(2)?,
                     row.get(3)?,
                     row.get(4)?,
+                    row.get(5)?,
                 ))
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -381,11 +488,22 @@ impl ModdeDb {
         match rows.len() {
             0 => Err(CoreError::ProfileNotFound(name.to_string())),
             1 => {
-                let (id, game_id, source_type, source_data, overrides) = &rows[0];
-                self.assemble_profile(*id, name, game_id, source_type, source_data.as_deref(), overrides)
+                let (id, game_id, source_type, source_data, overrides, load_order_lock) = &rows[0];
+                self.assemble_profile(
+                    *id,
+                    name,
+                    game_id,
+                    source_type,
+                    source_data.as_deref(),
+                    overrides,
+                    load_order_lock.as_deref(),
+                )
             }
             _ => {
-                let games: SmallVec<[GameId; 4]> = rows.iter().map(|(_, g, _, _, _)| GameId::from(g.clone())).collect();
+                let games: SmallVec<[GameId; 4]> = rows
+                    .iter()
+                    .map(|(_, g, _, _, _, _)| GameId::from(g.clone()))
+                    .collect();
                 Err(CoreError::AmbiguousProfile {
                     name: name.to_string(),
                     games,
@@ -397,6 +515,7 @@ impl ModdeDb {
     /// Update an existing profile (identified by name + game_id).
     pub fn update_profile(&self, profile: &Profile) -> Result<()> {
         let (source_type, source_data) = encode_source(&profile.source);
+        let load_order_lock = encode_lock(profile.load_order_lock.as_ref());
 
         let profile_id: i64 = self
             .conn
@@ -414,12 +533,13 @@ impl ModdeDb {
 
         self.conn.execute(
             "UPDATE profiles SET source_type = ?1, source_data = ?2, overrides = ?3,
-                    updated_at = datetime('now')
-             WHERE id = ?4",
+                    load_order_lock = ?4, updated_at = datetime('now')
+             WHERE id = ?5",
             params![
                 source_type,
                 source_data,
                 profile.overrides.to_string_lossy().as_ref(),
+                load_order_lock,
                 profile_id,
             ],
         )?;
@@ -909,6 +1029,155 @@ impl ModdeDb {
         Ok(())
     }
 
+    // ── Installer tracking (V8) ───────────────────────────────────
+
+    /// Persist an installer's decision and file manifest for a single
+    /// mod row, atomically.
+    ///
+    /// Steps in one transaction:
+    /// 1. Write the encoded `install_method`, `source_archive_hash`, and
+    ///    `install_status` back to `profile_mods`.
+    /// 2. Wipe any previous `installed_mod_files` rows for this mod
+    ///    (so retries don't leave orphans in the manifest).
+    /// 3. Insert one row per `plan.staged_files`.
+    ///
+    /// Callers are expected to have already written the EnabledMod into
+    /// the profile (via `update_profile` / `create_profile`); this method
+    /// just enriches the existing row with install metadata and files.
+    pub fn record_install(
+        &mut self,
+        profile_id: i64,
+        mod_id: &str,
+        plan: &InstallPlan,
+        status: InstallStatus,
+    ) -> Result<()> {
+        let tx = self.conn.transaction()?;
+
+        let method_toml = encode_install_method(&plan.method)?;
+        tx.execute(
+            "UPDATE profile_mods
+                SET install_method = ?1,
+                    source_archive_hash = ?2,
+                    install_status = ?3
+              WHERE profile_id = ?4 AND mod_id = ?5",
+            params![
+                method_toml,
+                plan.source_archive_hash,
+                status.as_str(),
+                profile_id,
+                mod_id,
+            ],
+        )?;
+
+        tx.execute(
+            "DELETE FROM installed_mod_files WHERE profile_id = ?1 AND mod_id = ?2",
+            params![profile_id, mod_id],
+        )?;
+
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO installed_mod_files
+                    (profile_id, mod_id, rel_path, origin_rel_path, size, merge_group)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            )?;
+            for file in &plan.staged_files {
+                stmt.execute(params![
+                    profile_id,
+                    mod_id,
+                    file.rel_path,
+                    file.origin_rel_path,
+                    file.size as i64,
+                    file.merge_group,
+                ])?;
+            }
+        }
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Return every file staged by `mod_id` in `profile_id`, sorted by
+    /// relative path for deterministic uninstall order.
+    pub fn installed_files_for_mod(
+        &self,
+        profile_id: i64,
+        mod_id: &str,
+    ) -> Result<Vec<StagedFile>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT rel_path, origin_rel_path, size, merge_group
+               FROM installed_mod_files
+              WHERE profile_id = ?1 AND mod_id = ?2
+           ORDER BY rel_path",
+        )?;
+        let files = stmt
+            .query_map(params![profile_id, mod_id], |row| {
+                let size_i: i64 = row.get(2)?;
+                Ok(StagedFile {
+                    rel_path: row.get(0)?,
+                    origin_rel_path: row.get(1)?,
+                    size: size_i.max(0) as u64,
+                    merge_group: row.get(3)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(files)
+    }
+
+    /// Remove a mod from `profile_mods` and return its staged files so
+    /// the caller can unlink them from the store / deploy dir. Runs in
+    /// one transaction — either the manifest and row both disappear or
+    /// neither does.
+    pub fn remove_installed_mod(
+        &mut self,
+        profile_id: i64,
+        mod_id: &str,
+    ) -> Result<Vec<StagedFile>> {
+        let files = self.installed_files_for_mod(profile_id, mod_id)?;
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "DELETE FROM installed_mod_files WHERE profile_id = ?1 AND mod_id = ?2",
+            params![profile_id, mod_id],
+        )?;
+        tx.execute(
+            "DELETE FROM profile_mods WHERE profile_id = ?1 AND mod_id = ?2",
+            params![profile_id, mod_id],
+        )?;
+        tx.commit()?;
+        Ok(files)
+    }
+
+    /// Return every file tagged with `merge_group`, across all mods in
+    /// `profile_id`. Reserved for the future script-merge feature —
+    /// unused by current code, but exposed now so the V8 schema can
+    /// carry a stable query shape.
+    pub fn files_in_merge_group(
+        &self,
+        profile_id: i64,
+        merge_group: &str,
+    ) -> Result<Vec<(String, StagedFile)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT mod_id, rel_path, origin_rel_path, size, merge_group
+               FROM installed_mod_files
+              WHERE profile_id = ?1 AND merge_group = ?2
+           ORDER BY mod_id, rel_path",
+        )?;
+        let rows = stmt
+            .query_map(params![profile_id, merge_group], |row| {
+                let size_i: i64 = row.get(3)?;
+                Ok((
+                    row.get::<_, String>(0)?,
+                    StagedFile {
+                        rel_path: row.get(1)?,
+                        origin_rel_path: row.get(2)?,
+                        size: size_i.max(0) as u64,
+                        merge_group: row.get(4)?,
+                    },
+                ))
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
     // ── TOML Import ───────────────────────────────────────────────
 
     /// Import existing TOML profile files into the database.
@@ -940,13 +1209,25 @@ impl ModdeDb {
             };
 
             #[allow(deprecated)]
-            let profile: Profile = match toml::from_str(&content) {
+            let mut profile: Profile = match toml::from_str(&content) {
                 Ok(p) => p,
                 Err(e) => {
                     tracing::warn!(path = %toml_path.display(), error = %e, "skipping unparseable profile");
                     continue;
                 }
             };
+
+            // Preserve-before-overwrite: if the TOML file already carried
+            // a lock (e.g. a Wabbajack-installed profile that was previously
+            // exported), honor that provenance. Only stamp a fresh
+            // `TomlImport` lock when the parsed profile has no lock — so
+            // round-tripping an already-locked profile through TOML doesn't
+            // destroy its origin.
+            if profile.load_order_lock.is_none() {
+                profile.load_order_lock = Some(LoadOrderLock::now(LockReason::TomlImport {
+                    source_path: toml_path.display().to_string(),
+                }));
+            }
 
             // Skip if already in DB
             let exists: bool = self
@@ -976,11 +1257,13 @@ impl ModdeDb {
         let mut stmt = self.conn.prepare(
             "INSERT INTO profile_mods (profile_id, mod_id, display_name, enabled, version, fomod_config, sort_index,
                     nexus_mod_id, nexus_file_id, nexus_game_domain, installed_timestamp,
-                    category_id, notes, tags)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                    category_id, notes, tags, lock_reason,
+                    install_method, source_archive_hash, install_status)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
         )?;
 
         for (idx, m) in mods.iter().enumerate() {
+            let lock_reason = encode_lock_reason(m.lock.as_ref());
             stmt.execute(params![
                 profile_id,
                 m.mod_id,
@@ -996,6 +1279,10 @@ impl ModdeDb {
                 m.category_id,
                 m.notes,
                 m.tags,
+                lock_reason,
+                m.install_method,
+                m.source_archive_hash,
+                m.install_status,
             ])?;
         }
 
@@ -1024,12 +1311,14 @@ impl ModdeDb {
         let mut stmt = self.conn.prepare(
             "SELECT mod_id, display_name, enabled, version, fomod_config,
                     nexus_mod_id, nexus_file_id, nexus_game_domain, installed_timestamp,
-                    category_id, notes, tags
+                    category_id, notes, tags, lock_reason,
+                    install_method, source_archive_hash, install_status
              FROM profile_mods WHERE profile_id = ?1 ORDER BY sort_index",
         )?;
 
         let mods = stmt
             .query_map(params![profile_id], |row| {
+                let lock_reason_raw: Option<String> = row.get(12)?;
                 Ok(EnabledMod {
                     mod_id: row.get(0)?,
                     display_name: row.get(1)?,
@@ -1043,6 +1332,11 @@ impl ModdeDb {
                     category_id: row.get(9)?,
                     notes: row.get(10)?,
                     tags: row.get(11)?,
+                    lock: decode_lock_reason(lock_reason_raw.as_deref())
+                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?,
+                    install_method: row.get(13)?,
+                    source_archive_hash: row.get(14)?,
+                    install_status: row.get(15)?,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -1098,10 +1392,12 @@ impl ModdeDb {
         source_type: &str,
         source_data: Option<&str>,
         overrides: &str,
+        load_order_lock_raw: Option<&str>,
     ) -> Result<Profile> {
         let source = decode_source(source_type, source_data)?;
         let mods = self.load_mods(id)?;
         let load_order_rules = self.load_rules(id)?;
+        let load_order_lock = decode_lock(load_order_lock_raw)?;
 
         Ok(Profile {
             id: Some(id),
@@ -1111,6 +1407,7 @@ impl ModdeDb {
             mods,
             overrides: PathBuf::from(overrides),
             load_order_rules,
+            load_order_lock,
         })
     }
 }
@@ -1166,6 +1463,63 @@ fn decode_source(source_type: &str, source_data: Option<&str>) -> Result<Profile
         other => Err(CoreError::Other(format!(
             "unknown profile source type: {other}"
         ).into())),
+    }
+}
+
+// ── Load order lock encoding ─────────────────────────────────
+//
+// Lock state lives in TEXT columns (TOML-encoded) to match the existing
+// `source_data` convention above. A NULL column means "no lock".
+
+fn encode_lock(lock: Option<&LoadOrderLock>) -> Option<String> {
+    lock.map(|l| toml::to_string(l).expect("LoadOrderLock should always serialize"))
+}
+
+fn decode_lock(raw: Option<&str>) -> Result<Option<LoadOrderLock>> {
+    match raw {
+        None => Ok(None),
+        Some(s) if s.is_empty() => Ok(None),
+        Some(s) => toml::from_str::<LoadOrderLock>(s)
+            .map(Some)
+            .map_err(|e| CoreError::Other(format!("failed to parse load_order_lock: {e}").into())),
+    }
+}
+
+fn encode_lock_reason(reason: Option<&LockReason>) -> Option<String> {
+    reason.map(|r| toml::to_string(r).expect("LockReason should always serialize"))
+}
+
+fn decode_lock_reason(raw: Option<&str>) -> Result<Option<LockReason>> {
+    match raw {
+        None => Ok(None),
+        Some(s) if s.is_empty() => Ok(None),
+        Some(s) => toml::from_str::<LockReason>(s)
+            .map(Some)
+            .map_err(|e| CoreError::Other(format!("failed to parse lock_reason: {e}").into())),
+    }
+}
+
+// ── Installer method encoding (V8) ───────────────────────────
+//
+// `InstallMethod` is a serde-friendly enum, so we TOML-encode it like
+// the other metadata blobs stored on `profile_mods`. Decoding is
+// surfaced via `crate::installer::InstallMethod`'s own deserialize
+// — callers decode directly when they need a typed value.
+
+fn encode_install_method(method: &InstallMethod) -> Result<String> {
+    toml::to_string(method)
+        .map_err(|e| CoreError::Other(format!("failed to encode install_method: {e}").into()))
+}
+
+/// Parse the TOML-encoded `install_method` column back into a typed
+/// [`InstallMethod`]. Returns `None` for NULL / empty strings.
+pub fn decode_install_method(raw: Option<&str>) -> Result<Option<InstallMethod>> {
+    match raw {
+        None => Ok(None),
+        Some(s) if s.is_empty() => Ok(None),
+        Some(s) => toml::from_str::<InstallMethod>(s)
+            .map(Some)
+            .map_err(|e| CoreError::Other(format!("failed to parse install_method: {e}").into())),
     }
 }
 
@@ -1337,6 +1691,7 @@ mod tests {
                 mod_id: ModId::from("mod_b"),
                 after: ModId::from("mod_a"),
             }],
+            load_order_lock: None,
         }
     }
 

@@ -79,6 +79,24 @@ pub struct WabbajackManifest {
     pub directives: Vec<RawDirective>,
 }
 
+/// Compute a stable identifier for a Wabbajack manifest, derived from its
+/// `name` + `version`. Used as the `manifest_hash` field on
+/// [`crate::profile::LockReason::Wabbajack`] so install and retroactive-scan
+/// flows produce identical IDs for the same modlist.
+///
+/// The hashing scheme is `DefaultHasher::hash(name) + hash(version)` rendered
+/// in lowercase hex — matching the scheme previously inlined at
+/// `crates/modde-cli/src/commands/install.rs:361-367`. Extracted here so
+/// `scan --manifest` can produce bit-identical hashes during retroactive
+/// lock assignment.
+pub fn compute_manifest_hash(manifest: &WabbajackManifest) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    manifest.name.hash(&mut hasher);
+    manifest.version.hash(&mut hasher);
+    format!("{:x}", hasher.finish())
+}
+
 /// An archive entry referenced by hash in download/install directives.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]

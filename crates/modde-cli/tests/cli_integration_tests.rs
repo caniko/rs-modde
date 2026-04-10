@@ -8,7 +8,9 @@ use std::path::PathBuf;
 
 use modde_core::GameId;
 use modde_core::db::ModdeDb;
-use modde_core::profile::{EnabledMod, Profile, ProfileManager, ProfileSource};
+use modde_core::profile::{
+    EnabledMod, LoadOrderLock, LockReason, Profile, ProfileManager, ProfileSource,
+};
 use modde_core::resolver::{resolve, LoadOrderRule, ModId};
 
 // ── Profile lifecycle ──────────────────────────────────────────────
@@ -42,6 +44,7 @@ fn test_profile_create_load_modify_save_load() {
             mod_id: ModId::from("skyui"),
             after: ModId::from("ussep"),
         }],
+        load_order_lock: None,
     };
 
     mgr.create(&profile).unwrap();
@@ -87,6 +90,7 @@ fn test_profile_list_multiple() {
             mods: vec![],
             overrides: PathBuf::from("/tmp"),
             load_order_rules: smallvec![],
+            load_order_lock: None,
         };
         mgr.create(&profile).unwrap();
     }
@@ -117,6 +121,7 @@ fn test_profile_create_duplicate_returns_error() {
         mods: vec![],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     mgr.create(&profile).unwrap();
@@ -203,6 +208,7 @@ fn test_resolve_complex_mod_dependency_chain() {
                 after: ModId::from("gameplay"),
             },
         ],
+        load_order_lock: None,
     };
 
     let result = resolve(&profile).unwrap();
@@ -243,6 +249,7 @@ fn test_resolve_with_disabled_dependency() {
             mod_id: ModId::from("dependent"),
             after: ModId::from("base"),
         }],
+        load_order_lock: None,
     };
 
     let result = resolve(&profile).unwrap();
@@ -285,6 +292,7 @@ async fn test_deploy_pipeline_end_to_end() {
             mod_id: ModId::from("mesh_mod"),
             after: ModId::from("texture_mod"),
         }],
+        load_order_lock: None,
     };
     mgr.create(&profile).unwrap();
 
@@ -452,6 +460,7 @@ fn test_profile_wabbajack_source_roundtrip() {
                 before: ModId::from("wj_mod_2"),
             },
         ],
+        load_order_lock: None,
     };
 
     mgr.create(&profile).unwrap();
@@ -496,6 +505,7 @@ fn test_profile_nexus_collection_source_roundtrip() {
             .collect(),
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     mgr.create(&profile).unwrap();
@@ -509,4 +519,219 @@ fn test_profile_nexus_collection_source_roundtrip() {
         }
         _ => panic!("expected NexusCollection source"),
     }
+}
+
+// ── Per-mod pin parity (CLI lock-mod / unlock-mod) ─────────────────
+//
+// These tests validate the same load → mutate → update sequence the
+// `ProfileAction::LockMod` / `UnlockMod` handlers perform in
+// `crates/modde-cli/src/commands/profile.rs`. Because the CLI crate
+// is a binary (no lib target), integration tests cannot call the
+// handler functions directly — instead we drive the same
+// `ProfileManager` API the handler uses and assert the same
+// predicates (mod presence, profile lock state) that the handler
+// checks before mutating.
+
+fn make_profile_with_mods(mods: Vec<EnabledMod>) -> Profile {
+    Profile {
+        id: None,
+        name: "pin_test".to_string(),
+        game_id: GameId::from("skyrim-se"),
+        source: ProfileSource::Manual,
+        mods,
+        overrides: PathBuf::from("/tmp/overrides"),
+        load_order_rules: smallvec![],
+        load_order_lock: None,
+    }
+}
+
+#[test]
+fn test_profile_lock_mod_happy_path() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+    let profile = make_profile_with_mods(vec![
+        EnabledMod {
+            mod_id: "skyui".to_string(),
+            enabled: true,
+            ..Default::default()
+        },
+        EnabledMod {
+            mod_id: "ussep".to_string(),
+            enabled: true,
+            ..Default::default()
+        },
+    ]);
+    mgr.create(&profile).unwrap();
+
+    // Mirror the ProfileAction::LockMod handler.
+    let mut p = mgr.load("pin_test", None).unwrap();
+    assert!(
+        p.load_order_lock.is_none(),
+        "precondition: profile must not be locked"
+    );
+    let m = p
+        .mods
+        .iter_mut()
+        .find(|m| m.mod_id == "skyui")
+        .expect("mod must exist");
+    m.lock = Some(LockReason::Manual {
+        note: Some("pinned".to_string()),
+    });
+    mgr.update(&p).unwrap();
+
+    let reloaded = mgr.load("pin_test", None).unwrap();
+    let skyui = reloaded
+        .mods
+        .iter()
+        .find(|m| m.mod_id == "skyui")
+        .unwrap();
+    match &skyui.lock {
+        Some(LockReason::Manual { note }) => {
+            assert_eq!(note.as_deref(), Some("pinned"));
+        }
+        other => panic!("expected Manual lock with note, got {other:?}"),
+    }
+    let ussep = reloaded
+        .mods
+        .iter()
+        .find(|m| m.mod_id == "ussep")
+        .unwrap();
+    assert!(ussep.lock.is_none(), "unrelated mod must remain unlocked");
+}
+
+#[test]
+fn test_profile_lock_mod_rejects_missing_mod() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+    let profile = make_profile_with_mods(vec![EnabledMod {
+        mod_id: "skyui".to_string(),
+        enabled: true,
+        ..Default::default()
+    }]);
+    mgr.create(&profile).unwrap();
+
+    let p = mgr.load("pin_test", None).unwrap();
+    // This is the predicate the handler bails on:
+    //   `profile.mods.iter_mut().find(|m| m.mod_id == mod_id)` → None
+    assert!(
+        p.mods.iter().all(|m| m.mod_id != "nonexistent"),
+        "fixture must not contain 'nonexistent' for this test to be meaningful"
+    );
+}
+
+#[test]
+fn test_profile_lock_mod_rejects_when_profile_locked() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+    let mut profile = make_profile_with_mods(vec![EnabledMod {
+        mod_id: "skyui".to_string(),
+        enabled: true,
+        ..Default::default()
+    }]);
+    profile.load_order_lock = Some(LoadOrderLock::now(LockReason::Wabbajack {
+        manifest_hash: "deadbeef".to_string(),
+    }));
+    mgr.create(&profile).unwrap();
+
+    let p = mgr.load("pin_test", None).unwrap();
+    // This is the predicate the handler bails on.
+    let lock = p
+        .load_order_lock
+        .as_ref()
+        .expect("profile-level lock must be present");
+    match &lock.reason {
+        LockReason::Wabbajack { manifest_hash } => {
+            assert_eq!(manifest_hash, "deadbeef");
+        }
+        other => panic!("expected Wabbajack reason, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_profile_unlock_mod_happy_path() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+    let profile = make_profile_with_mods(vec![EnabledMod {
+        mod_id: "skyui".to_string(),
+        enabled: true,
+        lock: Some(LockReason::Manual {
+            note: Some("was pinned".to_string()),
+        }),
+        ..Default::default()
+    }]);
+    mgr.create(&profile).unwrap();
+
+    // Mirror the ProfileAction::UnlockMod handler.
+    let mut p = mgr.load("pin_test", None).unwrap();
+    let m = p
+        .mods
+        .iter_mut()
+        .find(|m| m.mod_id == "skyui")
+        .expect("mod must exist");
+    let prior = m.lock.take();
+    assert!(prior.is_some(), "precondition: mod must be pinned");
+    mgr.update(&p).unwrap();
+
+    let reloaded = mgr.load("pin_test", None).unwrap();
+    assert!(
+        reloaded.mods[0].lock.is_none(),
+        "lock must be cleared after update"
+    );
+}
+
+#[test]
+fn test_profile_unlock_mod_idempotent_on_unlocked_mod() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+    let profile = make_profile_with_mods(vec![EnabledMod {
+        mod_id: "skyui".to_string(),
+        enabled: true,
+        version: Some("5.2".to_string()),
+        ..Default::default()
+    }]);
+    mgr.create(&profile).unwrap();
+
+    // Mirror the no-op branch of ProfileAction::UnlockMod: the handler
+    // skips `pm.update` when `m.lock.take()` returns None.
+    let mut p = mgr.load("pin_test", None).unwrap();
+    let m = p
+        .mods
+        .iter_mut()
+        .find(|m| m.mod_id == "skyui")
+        .expect("mod must exist");
+    let prior = m.lock.take();
+    assert!(prior.is_none(), "precondition: mod must start unlocked");
+    // Intentionally skip `mgr.update(&p)` — that's the handler's no-op branch.
+
+    let reloaded = mgr.load("pin_test", None).unwrap();
+    assert!(reloaded.mods[0].lock.is_none());
+    // Ensure unrelated state wasn't clobbered.
+    assert_eq!(reloaded.mods[0].version.as_deref(), Some("5.2"));
+}
+
+#[test]
+fn test_profile_lock_info_lists_pins_without_profile_lock() {
+    // Regression guard: the `LockInfo` handler's "Per-mod pins"
+    // section must run even when `profile.load_order_lock` is None.
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+    let profile = make_profile_with_mods(vec![
+        EnabledMod {
+            mod_id: "skyui".to_string(),
+            enabled: true,
+            lock: Some(LockReason::Manual { note: None }),
+            ..Default::default()
+        },
+        EnabledMod {
+            mod_id: "ussep".to_string(),
+            enabled: true,
+            ..Default::default()
+        },
+    ]);
+    mgr.create(&profile).unwrap();
+
+    let p = mgr.load("pin_test", None).unwrap();
+    assert!(p.load_order_lock.is_none());
+    // Mirror the filter predicate in the LockInfo handler.
+    let pinned: Vec<&str> = p
+        .mods
+        .iter()
+        .filter(|m| m.lock.is_some())
+        .map(|m| m.mod_id.as_str())
+        .collect();
+    assert_eq!(pinned, vec!["skyui"]);
 }

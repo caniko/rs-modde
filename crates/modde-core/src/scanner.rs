@@ -1,7 +1,32 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::manifest::wabbajack::{ArchiveState, InstallDirective, WabbajackManifest};
-use crate::profile::EnabledMod;
+use crate::manifest::wabbajack::{
+    compute_manifest_hash, ArchiveEntry, ArchiveState, InstallDirective, WabbajackManifest,
+};
+use crate::profile::{EnabledMod, LoadOrderLock, LockReason, Profile};
+
+/// Canonical `mod_id` derivation for a Wabbajack archive entry.
+///
+/// Used by **both** the scanner and the Wabbajack installer so that a
+/// profile installed via `modde install wabbajack` and the same modlist
+/// re-scanned via `modde scan --manifest` produce identical `mod_id`
+/// strings — otherwise retroactive-lock flows would create duplicates
+/// rather than matching existing mods.
+///
+/// - Nexus-sourced archives: `nexus_{game_domain}_{mod_id}_{file_id}`
+/// - Everything else:        `wj_{archive_hash}`
+pub fn archive_mod_id(archive: &ArchiveEntry) -> String {
+    if let Some(ArchiveState::NexusDownloader {
+        game_name,
+        mod_id,
+        file_id,
+    }) = archive.state.as_ref()
+    {
+        format!("nexus_{game_name}_{mod_id}_{file_id}")
+    } else {
+        format!("wj_{}", archive.hash)
+    }
+}
 
 /// A mod discovered by matching a Wabbajack manifest against files on disk.
 pub struct ManifestMatch {
@@ -122,13 +147,11 @@ pub fn match_wabbajack_manifest(
             })
             .unwrap_or((None, None, None));
 
-        // mod_id: use Nexus identity (stable, unique) or fall back to archive hash.
-        let mod_id = if let (Some(domain), Some(nmod_id), Some(nfile_id)) =
-            (&nexus_game_domain, nexus_mod_id, nexus_file_id)
-        {
-            format!("nexus_{domain}_{nmod_id}_{nfile_id}")
-        } else {
-            format!("wj_{hash}")
+        // Canonical mod_id — must match `archive_mod_id` exactly so Wabbajack
+        // installs + retroactive scans dedup correctly.
+        let mod_id = match archive {
+            Some(a) => archive_mod_id(a),
+            None => format!("wj_{hash}"),
         };
 
         results.push(ManifestMatch {
@@ -222,6 +245,267 @@ fn clean_archive_name(name: &str) -> String {
     } else {
         stem.replace('_', " ")
     }
+}
+
+/// Compute the canonical mod order from a Wabbajack manifest's install
+/// directives.
+///
+/// `WabbajackManifest.archives` is an unordered JSON array — not a load
+/// order. The *directive* list, however, is the sequence Wabbajack applies
+/// on install, so the first-appearance order of each archive in the
+/// directives is the closest reproducible approximation of "load order".
+///
+/// Returns a `Vec<String>` of canonical `mod_id`s (as produced by
+/// [`archive_mod_id`]) in the order the corresponding archives first
+/// appear in the install directives. Archives that never appear in a
+/// [`InstallDirective::FromArchive`] / [`InstallDirective::PatchedFromArchive`]
+/// are omitted.
+pub fn manifest_directive_order(manifest: &WabbajackManifest) -> Vec<String> {
+    let archive_by_hash: HashMap<u64, &ArchiveEntry> =
+        manifest.archives.iter().map(|a| (a.hash, a)).collect();
+
+    let mut seen: HashSet<u64> = HashSet::new();
+    let mut order: Vec<String> = Vec::new();
+    for d in manifest.install_directives() {
+        let hash = match d {
+            InstallDirective::FromArchive { archive_hash, .. }
+            | InstallDirective::PatchedFromArchive { archive_hash, .. } => archive_hash,
+            _ => continue,
+        };
+        if !seen.insert(hash) {
+            continue;
+        }
+        if let Some(archive) = archive_by_hash.get(&hash) {
+            order.push(archive_mod_id(archive));
+        }
+    }
+    order
+}
+
+/// Report from [`apply_wabbajack_lock`] — what the in-place reorder did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WabbajackLockApplied {
+    /// `manifest_hash` recorded on the new lock. Matches
+    /// `ProfileSource::Wabbajack { manifest_hash }` on installs.
+    pub manifest_hash: String,
+    /// Number of mods whose `mod_id` is present in the manifest order
+    /// (these end up at the front of the mod list).
+    pub matched: usize,
+    /// Number of pre-existing profile mods not mentioned by the
+    /// manifest (these are appended after, preserving relative order).
+    pub unmatched: usize,
+    /// Whether the profile already carried a lock that was overwritten.
+    pub replaced_existing_lock: bool,
+}
+
+/// Reorder `profile.mods` to follow the manifest's install-directive
+/// order and stamp a `LockReason::Wabbajack` lock onto the profile.
+///
+/// This is the pure helper that powers `modde scan --manifest` and is
+/// the recommended way to retroactively lock an existing profile to a
+/// Wabbajack modlist. Extracted from `scan.rs` so it can be unit-tested
+/// without touching the filesystem scanner.
+///
+/// Invariants:
+///
+/// 1. **Mod count is preserved** — no mod is ever dropped. Matched mods
+///    move to the front in manifest order; unmatched mods retain their
+///    original relative order and are appended after.
+/// 2. **Matched mods are sorted by first-appearance in install
+///    directives** — see [`manifest_directive_order`] for the semantic.
+/// 3. **`profile.load_order_lock` is overwritten** — any prior lock
+///    (including a stale Wabbajack or Manual lock) is replaced. The
+///    return value's `replaced_existing_lock` field lets callers surface
+///    this to the user.
+pub fn apply_wabbajack_lock(
+    profile: &mut Profile,
+    manifest: &WabbajackManifest,
+) -> WabbajackLockApplied {
+    let manifest_order = manifest_directive_order(manifest);
+    let manifest_rank: HashMap<String, usize> = manifest_order
+        .iter()
+        .enumerate()
+        .map(|(i, mid)| (mid.clone(), i))
+        .collect();
+
+    // Stable partition: matched first (in manifest order), unmatched
+    // after (original relative order preserved).
+    let (mut matched, unmatched): (Vec<EnabledMod>, Vec<EnabledMod>) =
+        std::mem::take(&mut profile.mods)
+            .into_iter()
+            .partition(|m| manifest_rank.contains_key(&m.mod_id));
+
+    matched.sort_by_key(|m| manifest_rank.get(&m.mod_id).copied().unwrap_or(usize::MAX));
+
+    let matched_count = matched.len();
+    let unmatched_count = unmatched.len();
+    profile.mods = matched;
+    profile.mods.extend(unmatched);
+
+    let manifest_hash = compute_manifest_hash(manifest);
+    let replaced_existing_lock = profile.load_order_lock.is_some();
+    profile.load_order_lock = Some(LoadOrderLock::now(LockReason::Wabbajack {
+        manifest_hash: manifest_hash.clone(),
+    }));
+
+    WabbajackLockApplied {
+        manifest_hash,
+        matched: matched_count,
+        unmatched: unmatched_count,
+        replaced_existing_lock,
+    }
+}
+
+/// The filesystem footprint of a mod discovered by a game-specific
+/// filesystem scanner.
+///
+/// Game scanners produce mod_ids in schemes like `cet/<name>`,
+/// `archive/<stem>`, etc. To correlate those rows against a Wabbajack
+/// manifest's install directives, we need to know what portion of the
+/// game directory each mod owns. That's what this enum expresses.
+///
+/// - [`ModFootprint::Directory`] — the mod owns everything under a
+///   subtree of the game install (e.g. `bin/x64/plugins/cyber_engine_tweaks/mods/<name>/`).
+/// - [`ModFootprint::File`] — the mod *is* a single file (e.g. a
+///   loose `.archive` under `archive/pc/mod/`).
+///
+/// Paths are lowercased, use forward slashes, and (for `Directory`)
+/// end with a trailing `/`. This matches the conventions used by
+/// [`dir_prefixes`](crate::scanner) and the manifest-covered-dirs set
+/// built in `modde-cli::commands::scan`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModFootprint {
+    /// A directory subtree owned by the mod. Compared against the set of
+    /// directories the manifest writes into.
+    Directory(String),
+    /// A single file owned by the mod. Compared against the set of
+    /// `To` paths in the manifest's install directives.
+    File(String),
+}
+
+/// Result of [`detect_stale_duplicates`] — a partition of a profile's
+/// filesystem-scanner rows into "covered by the manifest" (leaked
+/// duplicates) and "not covered" (genuine additions).
+///
+/// mod_ids whose footprint cannot be determined by the supplied
+/// `mod_id_to_footprint` closure (typically `nexus_*`, `wj_*`, or any
+/// non-filesystem-scheme row) are **not** included in either list —
+/// they're skipped silently because they aren't candidates for this
+/// kind of dedup.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DuplicateReport {
+    /// Filesystem-scanner mod_ids whose footprint is covered by the
+    /// manifest. These are safe to delete from the profile: a
+    /// manifest-authored row (usually `nexus_*`) already deploys the
+    /// same files under a different ID.
+    pub leaked: Vec<String>,
+    /// Filesystem-scanner mod_ids whose footprint is **not** covered
+    /// by the manifest. These are genuine additions the user made on
+    /// top of the Wabbajack modlist and must be preserved.
+    pub genuine: Vec<String>,
+}
+
+/// Classify a profile's filesystem-scanner rows against a Wabbajack
+/// manifest into "leaked duplicates" and "genuine additions".
+///
+/// This is the pure helper that powers `modde profile dedup` and the
+/// `--prune-duplicates` flag on `modde scan`. See
+/// `/home/can/.claude/plans/greedy-shimmying-pine.md` and the companion
+/// discussion in `docs/` (if present) for the design rationale.
+///
+/// The `mod_id_to_footprint` closure is the game-specific bridge: it
+/// maps a filesystem-scanner mod_id (e.g. `cet/ImmersiveHealing`) back
+/// to the directory or file the mod owns in the game install. For
+/// Cyberpunk 2077 this is
+/// [`modde_games::cyberpunk::scanner::mod_id_footprint`]. Profiles
+/// spanning multiple games aren't supported — each profile is tied to
+/// a single game via `profile.game_id`, so callers wire up a
+/// per-game closure.
+///
+/// Classification rules:
+///
+/// 1. If the closure returns `None` for a mod_id, the row is **not a
+///    candidate** — it's skipped silently. `nexus_*` and `wj_*` rows
+///    are manifest-authored and shouldn't be classified as duplicates
+///    of themselves.
+/// 2. If the footprint is [`ModFootprint::Directory`] and the manifest
+///    writes any file under that directory → **LEAKED** (the nexus
+///    archive that deployed those files is already tracked under its
+///    `nexus_*` ID).
+/// 3. If the footprint is [`ModFootprint::File`] and the exact file
+///    path appears in the manifest's install directives → **LEAKED**.
+/// 4. Otherwise → **GENUINE**: the user added this mod on top of the
+///    Wabbajack and it must not be deleted.
+///
+/// Case and slash-normalization: paths are lowercased and
+/// forward-slashed internally, so callers don't need to pre-normalize.
+///
+/// Complexity: O(D × A + M) where D is manifest directive count,
+/// A is average path depth, and M is profile mod count. For a typical
+/// CP2077 modlist (≈7k directives, ≈700 mods) this runs in well under
+/// a millisecond.
+pub fn detect_stale_duplicates<F>(
+    profile: &Profile,
+    manifest: &WabbajackManifest,
+    mod_id_to_footprint: F,
+) -> DuplicateReport
+where
+    F: Fn(&str) -> Option<ModFootprint>,
+{
+    // Build the manifest's covered file set + covered directory set
+    // from its install directives. Only `FromArchive` /
+    // `PatchedFromArchive` directives are "physical" file placements
+    // we can compare against — `CreateBSA` and `InlineFile` don't map
+    // cleanly to a single on-disk file at scan time.
+    //
+    // Wabbajack `To` paths are MO2-staged: they look like
+    // `mods\<MO2 Mod Name>\<game-relative-path>`. We must strip the
+    // `mods/<name>/` prefix before comparing against game-relative
+    // footprints — this mirrors what `match_wabbajack_manifest` does
+    // via `strip_mo2_prefix`. Without this step, every directive path
+    // in a CP2077 modlist begins with `mods/<big mod name>/`, which
+    // never overlaps with a `bin/x64/...` or `archive/pc/mod/...`
+    // footprint, and `detect_stale_duplicates` silently classifies
+    // every row as GENUINE. See profile 3077 for the failure mode.
+    let mut covered_files: HashSet<String> = HashSet::new();
+    for d in manifest.install_directives() {
+        let to = match d {
+            InstallDirective::FromArchive { to, .. }
+            | InstallDirective::PatchedFromArchive { to, .. } => to,
+            _ => continue,
+        };
+        let normalized = to.replace('\\', "/").to_lowercase();
+        covered_files.insert(strip_mo2_prefix(&normalized));
+    }
+
+    // Expand each covered file into its ancestor-directory prefixes so
+    // the Directory footprint check becomes a single O(1) HashSet lookup.
+    let mut covered_dirs: HashSet<String> = HashSet::new();
+    for f in &covered_files {
+        let mut cur = f.as_str();
+        while let Some(idx) = cur.rfind('/') {
+            cur = &cur[..idx];
+            covered_dirs.insert(format!("{cur}/"));
+        }
+    }
+
+    let mut report = DuplicateReport::default();
+    for m in &profile.mods {
+        let footprint = match mod_id_to_footprint(&m.mod_id) {
+            Some(fp) => fp,
+            None => continue, // Not a filesystem-scanner row; skip.
+        };
+        let covered = match &footprint {
+            ModFootprint::Directory(d) => covered_dirs.contains(d),
+            ModFootprint::File(f) => covered_files.contains(f),
+        };
+        if covered {
+            report.leaked.push(m.mod_id.clone());
+        } else {
+            report.genuine.push(m.mod_id.clone());
+        }
+    }
+    report
 }
 
 /// Convert a filesystem-discovered mod into an `EnabledMod`.

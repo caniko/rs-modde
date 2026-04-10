@@ -200,6 +200,7 @@ mod tests {
             mods: vec![],
             overrides: PathBuf::from("/tmp/overrides"),
             load_order_rules: smallvec![],
+            load_order_lock: None,
         };
         let conflict_map = ConflictMap::default();
         let store = tempfile::tempdir().unwrap();

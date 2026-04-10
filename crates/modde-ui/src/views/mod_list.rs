@@ -52,6 +52,7 @@ pub fn view<'a>(
     mods: &'a [EnabledMod],
     filter_text: &'a str,
     selected_index: Option<usize>,
+    profile_locked: bool,
 ) -> Element<'a, Message> {
     view_filtered(
         mods,
@@ -62,10 +63,17 @@ pub fn view<'a>(
         &EMPTY_COLLAPSED,
         &[],
         false,
+        profile_locked,
     )
 }
 
 /// Render the mod list view with filter toolbar and collapsible category separators.
+///
+/// `profile_locked` is `true` when the containing profile carries a
+/// `Profile::load_order_lock`; it disables *all* reorder buttons at the
+/// view layer, complementing the `Message::ReorderMod` handler's own
+/// refusal check (defense in depth — the view won't let the user try a
+/// gesture the handler will reject).
 pub fn view_filtered<'a>(
     mods: &'a [EnabledMod],
     filter_text: &'a str,
@@ -75,6 +83,7 @@ pub fn view_filtered<'a>(
     collapsed_categories: &'a HashSet<i64>,
     categories: &'a [(i64, String)],
     compact: bool,
+    profile_locked: bool,
 ) -> Element<'a, Message> {
     // ── Action toolbar ──
     let toolbar = row![
@@ -181,7 +190,7 @@ pub fn view_filtered<'a>(
         .into()
     } else if categories.is_empty() {
         // No categories defined — flat list
-        let rows = build_flat_mod_rows(&filtered_indices, mods, selected_index, compact);
+        let rows = build_flat_mod_rows(&filtered_indices, mods, selected_index, compact, profile_locked);
         scrollable(rows).height(Length::Fill).into()
     } else {
         // Categorized list with collapsible separators
@@ -191,6 +200,7 @@ pub fn view_filtered<'a>(
             selected_index,
             collapsed_categories,
             compact,
+            profile_locked,
         );
         scrollable(rows).height(Length::Fill).into()
     };
@@ -270,9 +280,10 @@ fn build_flat_mod_rows<'a>(
     mods: &'a [EnabledMod],
     selected_index: Option<usize>,
     compact: bool,
+    profile_locked: bool,
 ) -> iced::widget::Column<'a, Message> {
     indices.iter().fold(column![].spacing(2), |col, &idx| {
-        col.push(mod_row(idx, &mods[idx], selected_index, mods.len(), compact))
+        col.push(mod_row(idx, &mods[idx], selected_index, mods.len(), compact, profile_locked))
     })
 }
 
@@ -283,6 +294,7 @@ fn build_categorized_rows<'a>(
     selected_index: Option<usize>,
     collapsed: &HashSet<i64>,
     compact: bool,
+    profile_locked: bool,
 ) -> iced::widget::Column<'a, Message> {
     let mut col = column![].spacing(2);
 
@@ -309,7 +321,7 @@ fn build_categorized_rows<'a>(
 
         if !is_collapsed {
             for &idx in indices {
-                col = col.push(mod_row(idx, &mods[idx], selected_index, mods.len(), compact));
+                col = col.push(mod_row(idx, &mods[idx], selected_index, mods.len(), compact, profile_locked));
             }
         }
     }
@@ -318,22 +330,30 @@ fn build_categorized_rows<'a>(
 }
 
 /// Render a single mod row.
+///
+/// `profile_locked` disables the reorder buttons for *every* row when the
+/// containing profile has a `Profile::load_order_lock`. `entry.lock`
+/// disables only this one row (per-mod pin), independent of the profile
+/// lock.
 fn mod_row<'a>(
     idx: usize,
     entry: &'a EnabledMod,
     selected_index: Option<usize>,
     total: usize,
     compact: bool,
+    profile_locked: bool,
 ) -> Element<'a, Message> {
     let is_selected = selected_index == Some(idx);
     let font_size: f32 = if compact { 12.0 } else { 14.0 };
     let row_pad: u16 = if compact { 2 } else { 4 };
 
+    let row_blocked = profile_locked || entry.lock.is_some();
+
     let up_btn = button(text("^").size(12))
-        .on_press_maybe(if idx > 0 {
+        .on_press_maybe(if !row_blocked && idx > 0 {
             Some(Message::ReorderMod {
-                from: idx,
-                to: idx - 1,
+                mod_id: entry.mod_id.clone(),
+                direction: crate::app::ReorderDirection::Up,
             })
         } else {
             None
@@ -341,10 +361,10 @@ fn mod_row<'a>(
         .padding([2, 6]);
 
     let down_btn = button(text("v").size(12))
-        .on_press_maybe(if idx < total - 1 {
+        .on_press_maybe(if !row_blocked && idx < total - 1 {
             Some(Message::ReorderMod {
-                from: idx,
-                to: idx + 1,
+                mod_id: entry.mod_id.clone(),
+                direction: crate::app::ReorderDirection::Down,
             })
         } else {
             None
@@ -363,8 +383,16 @@ fn mod_row<'a>(
         }
     });
 
-    let label = entry.display_name.as_deref().unwrap_or(&entry.mod_id);
-    let name = button(text(label).size(font_size))
+    // Prefix per-mod-pinned rows with a marker, matching load_order.rs.
+    let label_owned: String = {
+        let base = entry.display_name.as_deref().unwrap_or(&entry.mod_id);
+        if entry.lock.is_some() {
+            format!("[pinned] {base}")
+        } else {
+            base.to_string()
+        }
+    };
+    let name = button(text(label_owned).size(font_size))
         .on_press(Message::SelectMod(idx))
         .style(if is_selected {
             button::primary

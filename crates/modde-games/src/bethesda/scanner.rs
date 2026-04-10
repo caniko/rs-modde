@@ -149,6 +149,16 @@ impl ModScanner for BethesdaScanner {
 
         Ok(mods)
     }
+
+    fn mod_id_footprint(&self, mod_id: &str) -> Option<modde_core::scanner::ModFootprint> {
+        // Inverse of the `plugin/<filename>` scheme produced by `scan_filesystem`.
+        // Footprint is Data-relative because MO2 Bethesda mod folders mirror
+        // `Data/` (not the game install root), so the manifest paths we compare
+        // against are Data-relative after `strip_mo2_prefix` in
+        // `detect_stale_duplicates`.
+        let filename = mod_id.strip_prefix("plugin/")?.to_lowercase();
+        Some(modde_core::scanner::ModFootprint::File(filename))
+    }
 }
 
 fn make_data_file(install_root: &Path, file_path: &Path) -> DiscoveredFile {

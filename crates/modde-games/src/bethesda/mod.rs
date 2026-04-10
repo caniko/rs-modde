@@ -184,4 +184,59 @@ impl GamePlugin for BethesdaGame {
     fn nexus_game_domain(&self) -> Option<&str> {
         Some(self.nexus_domain)
     }
+
+    fn nexus_game_id_u32(&self) -> Option<u32> {
+        // Nexus Mods v2 GraphQL numeric game IDs.
+        // Source: https://api.nexusmods.com/v1/games.json
+        match self.game_id {
+            "skyrim-se" => Some(1704),
+            "skyrim-ae" => Some(1704), // Skyrim SE/AE share the same Nexus domain
+            "fallout4" => Some(1151),
+            "fallout76" => Some(2590),
+            "starfield" => Some(4187),
+            _ => None,
+        }
+    }
+
+    fn recognizes_bare_layout(&self, extracted_dir: &Path) -> bool {
+        // Bethesda bare layouts:
+        //   - top-level `Data/` (case-insensitive, since some archives
+        //     mirror the game's capitalization and others don't)
+        //   - top-level `meshes/`, `textures/`, `scripts/`, `interface/`,
+        //     `sound/`, `materials/` (loose Data/* contents at root)
+        //   - any top-level `.esp`/`.esm`/`.esl` file
+        let Ok(entries) = std::fs::read_dir(extracted_dir) else {
+            return false;
+        };
+        let asset_dirs = [
+            "data",
+            "meshes",
+            "textures",
+            "scripts",
+            "interface",
+            "sound",
+            "music",
+            "materials",
+            "seq",
+            "shadersfx",
+            "strings",
+        ];
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let name = entry.file_name().to_string_lossy().to_lowercase();
+                if asset_dirs.iter().any(|d| *d == name) {
+                    return true;
+                }
+            } else if path.is_file() {
+                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    let ext_lc = ext.to_lowercase();
+                    if matches!(ext_lc.as_str(), "esp" | "esm" | "esl" | "bsa" | "ba2") {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
 }

@@ -12,13 +12,50 @@ pub struct NexusApi {
     api_key: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct NexusMod {
     pub mod_id: u64,
     pub name: String,
     pub summary: Option<String>,
     pub version: String,
     pub author: String,
+    /// Primary thumbnail URL (full-size picture shown at the top of the mod page).
+    #[serde(default)]
+    pub picture_url: Option<String>,
+    /// Long-form HTML description. May contain BBCode-derived markup.
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Nexus game domain the mod belongs to (e.g. `"skyrimspecialedition"`).
+    #[serde(default)]
+    pub domain_name: Option<String>,
+    /// The current user's endorsement relationship to this mod. Only
+    /// populated on authenticated requests. Absent otherwise.
+    #[serde(default)]
+    pub endorsement: Option<NexusEndorsement>,
+    /// Total endorsements the mod has received (not user-specific).
+    #[serde(default)]
+    pub endorsement_count: u64,
+}
+
+/// The current user's endorsement status for a mod.
+///
+/// `endorse_status` values returned by Nexus v1: `"Undecided"`, `"Abstained"`,
+/// `"Endorsed"`. See `node-nexus-api/lib/types.d.ts` (`EndorsedStatus`) for the
+/// canonical enum.
+#[derive(Debug, Clone, Deserialize)]
+pub struct NexusEndorsement {
+    pub endorse_status: String,
+    #[serde(default)]
+    pub timestamp: Option<u64>,
+    #[serde(default)]
+    pub version: Option<String>,
+}
+
+/// A single entry in the user's tracked-mods list.
+#[derive(Debug, Clone, Deserialize)]
+pub struct NexusTrackedMod {
+    pub mod_id: u64,
+    pub domain_name: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -105,30 +142,6 @@ impl NexusApi {
         Ok(body)
     }
 
-    async fn post<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T> {
-        let resp = self
-            .client
-            .post(url)
-            .header("apikey", &self.api_key)
-            .send()
-            .await?;
-
-        if let Some(remaining) = resp.headers().get("x-rl-hourly-remaining") {
-            if let Ok(val) = remaining.to_str().unwrap_or("").parse::<u32>() {
-                if val < 10 {
-                    warn!(remaining = val, "Nexus API hourly rate limit running low");
-                }
-            }
-        }
-
-        if resp.status() == 429 {
-            bail!("Nexus API rate limit exceeded. Please wait before retrying.");
-        }
-
-        let body = resp.error_for_status()?.json().await?;
-        Ok(body)
-    }
-
     async fn delete_req(&self, url: &str, form: &[(&str, &str)]) -> Result<()> {
         self.client
             .delete(url)
@@ -144,6 +157,176 @@ impl NexusApi {
     pub async fn get_mod(&self, game_domain: &str, mod_id: u64) -> Result<NexusMod> {
         let url = format!("{BASE_URL}/games/{game_domain}/mods/{mod_id}.json");
         self.get(&url).await
+    }
+
+    // ── GraphQL v2 browse helpers ─────────────────────────────
+
+    /// Fetch a trending or monthly-top browse feed via the v2 GraphQL
+    /// endpoint. Falls back to the REST `trending_mods` path when the
+    /// GraphQL response is malformed, so the UI still renders something
+    /// even if the v2 schema changes shape out from under us.
+    pub async fn browse_feed_gql(
+        &self,
+        game_domain: &str,
+        kind: super::graphql::ModFeedKind,
+    ) -> Result<Vec<super::graphql::GqlModTile>> {
+        match super::graphql::browse_feed(&self.client, &self.api_key, game_domain, kind).await {
+            Ok(tiles) => Ok(tiles),
+            Err(e) => {
+                warn!(error = %e, "GraphQL browse feed failed, falling back to REST");
+                let mods = self.trending_mods(game_domain).await?;
+                Ok(mods
+                    .into_iter()
+                    .map(|m| super::graphql::GqlModTile {
+                        mod_id: m.mod_id,
+                        name: m.name,
+                        summary: m.summary,
+                        version: Some(m.version),
+                        author: Some(m.author),
+                        picture_url: m.picture_url.clone(),
+                        thumbnail_url: m.picture_url,
+                        endorsements: Some(m.endorsement_count),
+                        downloads: None,
+                        uploaded_at: None,
+                        game_domain: m.domain_name,
+                    })
+                    .collect())
+            }
+        }
+    }
+
+    /// Full-text search via the v2 GraphQL endpoint, with a REST
+    /// fallback mirroring `browse_feed_gql`.
+    pub async fn search_mods_gql(
+        &self,
+        game_domain: &str,
+        term: &str,
+        page: u32,
+    ) -> Result<Vec<super::graphql::GqlModTile>> {
+        match super::graphql::search_mods(&self.client, &self.api_key, game_domain, term, page)
+            .await
+        {
+            Ok(tiles) => Ok(tiles),
+            Err(e) => {
+                warn!(error = %e, "GraphQL search failed, falling back to REST");
+                let results = self.search_mods(game_domain, term, page).await?;
+                Ok(results
+                    .results
+                    .into_iter()
+                    .map(|m| super::graphql::GqlModTile {
+                        mod_id: m.mod_id,
+                        name: m.name,
+                        summary: m.summary,
+                        version: Some(m.version),
+                        author: Some(m.author),
+                        picture_url: m.picture_url.clone(),
+                        thumbnail_url: m.picture_url,
+                        endorsements: Some(m.endorsement_count),
+                        downloads: None,
+                        uploaded_at: None,
+                        game_domain: m.domain_name,
+                    })
+                    .collect())
+            }
+        }
+    }
+
+    /// Collections browse / search via the v2 GraphQL endpoint. Falls
+    /// back to the REST `search_collections` path.
+    pub async fn collections_feed_gql(
+        &self,
+        game_domain: &str,
+        term: Option<&str>,
+    ) -> Result<Vec<super::graphql::GqlCollectionTile>> {
+        match super::graphql::collections_feed(&self.client, &self.api_key, game_domain, term)
+            .await
+        {
+            Ok(tiles) => Ok(tiles),
+            Err(e) => {
+                warn!(error = %e, "GraphQL collections feed failed, falling back to REST");
+                let results = self
+                    .search_collections(game_domain, term.unwrap_or(""))
+                    .await?;
+                Ok(results
+                    .into_iter()
+                    .map(|c| super::graphql::GqlCollectionTile {
+                        slug: c.slug,
+                        name: c.name,
+                        summary: c.summary,
+                        tile_image: c.image_url,
+                        game_domain: Some(c.game.domain_name),
+                        endorsements: Some(c.endorsements),
+                        downloads: None,
+                    })
+                    .collect())
+            }
+        }
+    }
+
+    /// Fetch raw bytes from a URL, reusing the client + apikey header.
+    ///
+    /// Used for downloading thumbnail / gallery images referenced by the v1 API.
+    /// The apikey header is harmless on image CDN URLs (ignored by the CDN),
+    /// but keeping it here means one code path with consistent auth.
+    pub async fn fetch_bytes(&self, url: &str) -> Result<Vec<u8>> {
+        let resp = self
+            .client
+            .get(url)
+            .header("apikey", &self.api_key)
+            .send()
+            .await?
+            .error_for_status()?;
+        Ok(resp.bytes().await?.to_vec())
+    }
+
+    /// Fetch the full image gallery for a mod via the unofficial v2 GraphQL
+    /// endpoint. Returns a list of image URLs (the main picture_url will
+    /// typically be the first entry, but this is not guaranteed — the caller
+    /// should merge with picture_url as a fallback).
+    ///
+    /// The GraphQL schema is undocumented and may change; on any error this
+    /// function returns an `Err` and the caller should fall back to the
+    /// single `picture_url` from the v1 `get_mod` response.
+    pub async fn get_mod_media(&self, game_domain: &str, mod_id: u64) -> Result<Vec<String>> {
+        let query = r#"query ModMedia($modId: Int!, $gameDomain: String!) {
+  mod(modId: $modId, gameDomain: $gameDomain) {
+    modImages { url }
+  }
+}"#;
+        let body = serde_json::json!({
+            "query": query,
+            "variables": {
+                "modId": mod_id,
+                "gameDomain": game_domain,
+            },
+        });
+
+        let resp = self
+            .client
+            .post("https://api.nexusmods.com/v2/graphql")
+            .header("apikey", &self.api_key)
+            .header("content-type", "application/json")
+            .json(&body)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let payload: serde_json::Value = resp.json().await?;
+        if let Some(errors) = payload.get("errors") {
+            bail!("Nexus GraphQL errors: {errors}");
+        }
+        let images = payload
+            .get("data")
+            .and_then(|d| d.get("mod"))
+            .and_then(|m| m.get("modImages"))
+            .and_then(|a| a.as_array())
+            .ok_or_else(|| anyhow::anyhow!("unexpected GraphQL response shape"))?;
+
+        let urls: Vec<String> = images
+            .iter()
+            .filter_map(|img| img.get("url").and_then(|u| u.as_str()).map(|s| s.to_string()))
+            .collect();
+        Ok(urls)
     }
 
     /// Get files for a mod.
@@ -227,17 +410,53 @@ impl NexusApi {
     }
 
     /// Endorse a mod on Nexus.
-    pub async fn endorse_mod(&self, game_domain: &str, mod_id: u64) -> Result<()> {
+    ///
+    /// The v1 endpoint requires a `Version` form parameter — passing the
+    /// installed mod version lets Nexus reject endorsements of obsolete
+    /// installs. Callers should pass the version string from the currently
+    /// loaded `NexusMod` response (not the local install, which may be
+    /// stale).
+    pub async fn endorse_mod(
+        &self,
+        game_domain: &str,
+        mod_id: u64,
+        version: &str,
+    ) -> Result<()> {
         let url = format!("{BASE_URL}/games/{game_domain}/mods/{mod_id}/endorse.json");
-        let _: serde_json::Value = self.post(&url).await?;
+        self.client
+            .post(&url)
+            .header("apikey", &self.api_key)
+            .form(&[("Version", version)])
+            .send()
+            .await?
+            .error_for_status()?;
         Ok(())
     }
 
     /// Abstain from endorsing (won't be asked again).
-    pub async fn abstain_mod(&self, game_domain: &str, mod_id: u64) -> Result<()> {
+    pub async fn abstain_mod(
+        &self,
+        game_domain: &str,
+        mod_id: u64,
+        version: &str,
+    ) -> Result<()> {
         let url = format!("{BASE_URL}/games/{game_domain}/mods/{mod_id}/abstain.json");
-        let _: serde_json::Value = self.post(&url).await?;
+        self.client
+            .post(&url)
+            .header("apikey", &self.api_key)
+            .form(&[("Version", version)])
+            .send()
+            .await?
+            .error_for_status()?;
         Ok(())
+    }
+
+    /// Fetch the full list of mods the current user is tracking, across all
+    /// games. The v1 endpoint is not filterable by domain, so callers that
+    /// only care about one mod should filter the returned list themselves.
+    pub async fn get_tracked_mods(&self) -> Result<Vec<NexusTrackedMod>> {
+        let url = format!("{BASE_URL}/user/tracked_mods.json");
+        self.get(&url).await
     }
 
     /// Track a mod (receive Nexus notifications).

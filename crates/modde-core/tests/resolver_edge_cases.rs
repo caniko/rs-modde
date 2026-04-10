@@ -22,6 +22,7 @@ fn make_profile(mods: Vec<(&str, bool)>, rules: smallvec::SmallVec<[LoadOrderRul
             .collect(),
         overrides: PathBuf::from("/tmp/overrides"),
         load_order_rules: rules,
+        load_order_lock: None,
     }
 }
 

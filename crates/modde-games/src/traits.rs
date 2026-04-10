@@ -184,6 +184,41 @@ pub trait GamePlugin: Send + Sync {
     fn plugins_txt_folder(&self) -> Option<&str> { None }
     fn nexus_game_domain(&self) -> Option<&str> { None }
 
+    /// Numeric Nexus game ID. Required by the GraphQL v2 API for
+    /// browse/search queries (which take `gameId: Int`, not a domain
+    /// string). Games that only speak REST can leave this `None`.
+    fn nexus_game_id_u32(&self) -> Option<u32> { None }
+
+    // ── Install-method detection (V8 installer pipeline) ────────
+
+    /// Claim an extracted archive as a game-specific install method.
+    ///
+    /// Runs **before** the generic probes (FOMOD, BAIN, DLL overlay) in
+    /// [`modde_core::installer::analyze`], so a game can authoritatively
+    /// identify layouts it knows about — e.g. Cyberpunk recognizing a
+    /// REDmod by `info.json` + `archives/` presence, or ENB for Bethesda.
+    ///
+    /// Return `None` to fall through to the generic probes.
+    fn analyze_mod_archive(
+        &self,
+        _extracted_dir: &Path,
+    ) -> Option<modde_core::installer::InstallMethod> {
+        None
+    }
+
+    /// Decide whether an extracted archive drops cleanly into the game's
+    /// mod dir without any staging (e.g. a Skyrim archive with a
+    /// top-level `Data/` directory, or a Cyberpunk archive with `r6/`).
+    ///
+    /// Called as the last fallback by
+    /// [`modde_core::installer::analyze`] — if this returns `true` the
+    /// plan becomes `InstallMethod::BareExtract`, otherwise the analyzer
+    /// falls through to [`InstallMethod::Unknown`] and the caller dumps
+    /// a dossier for the skill path.
+    fn recognizes_bare_layout(&self, _extracted_dir: &Path) -> bool {
+        false
+    }
+
     /// Classify a file extension into a content category.
     fn classify_extension(&self, ext: &str) -> ContentCategory {
         match ext {
@@ -375,6 +410,19 @@ pub struct DiscoveredMod {
 pub trait ModScanner: Send + Sync {
     fn scan_directories(&self) -> &[&str];
     fn scan_filesystem(&self, ctx: &ScanContext<'_>) -> anyhow::Result<Vec<DiscoveredMod>>;
+
+    /// Inverse of [`ModScanner::scan_filesystem`]'s mod_id scheme: given
+    /// a mod_id this scanner would produce, return the filesystem footprint
+    /// that mod owns (directory subtree or single file).
+    ///
+    /// Used by `modde_core::scanner::detect_stale_duplicates` to correlate
+    /// profile rows with a Wabbajack manifest's install directives. The
+    /// default impl returns `None`, which causes the dedup path to skip
+    /// the row. Game plugins that want their filesystem-scanner rows to
+    /// participate in dedup should override this.
+    fn mod_id_footprint(&self, _mod_id: &str) -> Option<modde_core::scanner::ModFootprint> {
+        None
+    }
 }
 
 pub fn walk_files_relative(base: &Path, dir: &Path) -> Vec<DiscoveredFile> {

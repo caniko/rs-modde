@@ -162,6 +162,7 @@ fn test_resolve_200_mods_linear_chain() {
         mods,
         overrides: PathBuf::from("/tmp/overrides"),
         load_order_rules: rules,
+        load_order_lock: None,
     };
 
     let result = resolve(&profile).unwrap();
@@ -197,6 +198,7 @@ fn test_resolve_500_mods_no_rules() {
         mods,
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     let result = resolve(&profile).unwrap();
@@ -233,6 +235,7 @@ fn test_resolve_diamond_dependency_50_wide() {
         mods,
         overrides: PathBuf::from("/tmp"),
         load_order_rules: rules,
+        load_order_lock: None,
     };
 
     let result = resolve(&profile).unwrap();
@@ -395,6 +398,7 @@ fn test_profile_manager_create_many_profiles() {
             mods: vec![simple_mod("base_mod", true)],
             overrides: PathBuf::from("/tmp/overrides"),
             load_order_rules: smallvec![],
+            load_order_lock: None,
         };
         mgr.create(&profile).unwrap();
     }
@@ -415,6 +419,7 @@ fn test_profile_manager_delete_then_recreate() {
         mods: vec![],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     mgr.create(&profile).unwrap();
@@ -434,6 +439,7 @@ fn test_profile_manager_delete_then_recreate() {
         mods: vec![simple_mod("new_mod", true)],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     mgr.create(&profile2).unwrap();
@@ -500,6 +506,7 @@ fn test_resolve_self_referencing_rule_ignored() {
             mod_id: ModId::from("mod_a"),
             after: ModId::from("mod_a"),
         }],
+        load_order_lock: None,
     };
 
     let result = resolve(&profile);
@@ -534,6 +541,7 @@ fn test_resolve_3_way_cycle() {
                 after: ModId::from("c"),
             },
         ],
+        load_order_lock: None,
     };
 
     let result = resolve(&profile);
@@ -566,6 +574,7 @@ fn test_resolve_mixed_enabled_disabled_with_rules() {
                 after: ModId::from("a"),
             },
         ],
+        load_order_lock: None,
     };
 
     let result = resolve(&profile).unwrap();
@@ -591,6 +600,7 @@ fn test_resolve_incompatible_one_disabled_is_ok() {
             mod_a: ModId::from("a"),
             mod_b: ModId::from("b"),
         }],
+        load_order_lock: None,
     };
 
     let result = resolve(&profile).unwrap();
@@ -612,6 +622,7 @@ fn test_resolve_all_disabled() {
         ],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     let result = resolve(&profile).unwrap();
@@ -650,6 +661,7 @@ fn test_profile_with_unicode_mod_names() {
         ],
         overrides: PathBuf::from("/tmp/overrides"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     pm.create(&profile).unwrap();
@@ -677,6 +689,7 @@ fn test_profile_with_fomod_config_roundtrip() {
         }],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     pm.create(&profile).unwrap();
@@ -708,6 +721,7 @@ fn test_profile_all_source_types_roundtrip() {
             mods: vec![],
             overrides: PathBuf::from("/tmp"),
             load_order_rules: smallvec![],
+            load_order_lock: None,
         };
 
         pm.create(&profile).unwrap();

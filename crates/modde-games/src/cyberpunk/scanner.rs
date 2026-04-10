@@ -35,6 +35,43 @@ impl ModScanner for CyberpunkScanner {
 
         Ok(mods)
     }
+
+    /// Inverse of the scheme used in the `scan_*_mods` helpers below.
+    /// Must stay in sync with them — if a new scan pass is added (or a
+    /// prefix changes), this function needs the matching branch.
+    ///
+    /// Directory footprints are lowercased and terminated with a
+    /// trailing `/`; file footprints are lowercased and match the on-disk
+    /// layout exactly. Both conventions match what
+    /// `modde_core::scanner::detect_stale_duplicates` expects.
+    fn mod_id_footprint(&self, mod_id: &str) -> Option<modde_core::scanner::ModFootprint> {
+        use modde_core::scanner::ModFootprint;
+        if let Some(name) = mod_id.strip_prefix("cet/") {
+            Some(ModFootprint::Directory(format!(
+                "bin/x64/plugins/cyber_engine_tweaks/mods/{}/",
+                name.to_lowercase()
+            )))
+        } else if let Some(name) = mod_id.strip_prefix("reds/") {
+            Some(ModFootprint::Directory(format!(
+                "r6/scripts/{}/",
+                name.to_lowercase()
+            )))
+        } else if let Some(name) = mod_id.strip_prefix("tweak/") {
+            Some(ModFootprint::Directory(format!(
+                "r6/tweaks/{}/",
+                name.to_lowercase()
+            )))
+        } else if let Some(name) = mod_id.strip_prefix("redmod/") {
+            Some(ModFootprint::Directory(format!("mods/{}/", name.to_lowercase())))
+        } else if let Some(stem) = mod_id.strip_prefix("archive/") {
+            Some(ModFootprint::File(format!(
+                "archive/pc/mod/{}.archive",
+                stem.to_lowercase()
+            )))
+        } else {
+            None
+        }
+    }
 }
 
 /// Cyber Engine Tweaks mods: each subdirectory of `.../cyber_engine_tweaks/mods/` is one mod.

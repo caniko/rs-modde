@@ -130,6 +130,70 @@ fn cli_profile_create_help() {
         .success();
 }
 
+// ── Load order lock subcommands (V7) ─────────────────────────────────
+//
+// These cover `modde profile lock`, `unlock`, and `lock-info`. They are
+// help-level smoke tests — enough to prove the subcommands are wired
+// into the clap tree and reject malformed invocations. The actual
+// mutation semantics are covered by unit tests in
+// `crates/modde-core/tests/load_order_lock_tests.rs`.
+
+#[test]
+fn cli_profile_lock_help() {
+    modde()
+        .args(["profile", "lock", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_profile_unlock_help() {
+    modde()
+        .args(["profile", "unlock", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_profile_lock_info_help() {
+    modde()
+        .args(["profile", "lock-info", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_profile_lock_requires_name() {
+    // `name` is a positional arg — missing it must be a parse error,
+    // not a silent no-op.
+    modde().args(["profile", "lock"]).assert().failure();
+}
+
+#[test]
+fn cli_profile_unlock_requires_name() {
+    modde().args(["profile", "unlock"]).assert().failure();
+}
+
+#[test]
+fn cli_profile_lock_info_requires_name() {
+    modde().args(["profile", "lock-info"]).assert().failure();
+}
+
+#[test]
+fn cli_profile_fork_help_mentions_unlock() {
+    // `--unlock` is the "fork to diverge" flag — make sure it's
+    // surfaced in help output so users can discover it.
+    let output = modde()
+        .args(["profile", "fork", "--help"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&output.get_output().stdout).into_owned();
+    assert!(
+        stdout.contains("--unlock"),
+        "`profile fork --help` must mention --unlock; got:\n{stdout}"
+    );
+}
+
 // ── error on missing required args ───────────────────────────────────
 
 #[test]

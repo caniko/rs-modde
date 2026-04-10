@@ -7,6 +7,7 @@ pub mod filter;
 pub mod fs;
 pub mod hash;
 pub mod instance;
+pub mod installer;
 pub mod manifest;
 pub mod paths;
 pub mod plugin;
@@ -27,6 +28,8 @@ pub use diagnostics::{
 pub use error::{CoreError, Result};
 pub use manifest::collection::CollectionManifest;
 pub use manifest::wabbajack::{DownloadDirective, InstallDirective, WabbajackManifest};
-pub use profile::{ActiveProfileInfo, ActivateResult, EnabledMod, Profile, ProfileSource};
+pub use profile::{
+    ActiveProfileInfo, ActivateResult, EnabledMod, LoadOrderLock, LockReason, Profile, ProfileSource,
+};
 pub use resolver::{ConflictMap, GameId, ModId, ResolvedLoadOrder};
 pub use save::{FingerprintCheck, SaveFingerprint, SaveSnapshot};
