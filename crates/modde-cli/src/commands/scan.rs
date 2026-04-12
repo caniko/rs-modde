@@ -299,6 +299,18 @@ pub fn handle(
                 "  Reordered {} mod(s) by manifest directive order ({} unmatched left in place).",
                 report.matched, report.unmatched,
             );
+
+            // Stash the source .wabbajack file in the content-addressed cache
+            // so `lock-info` can find it later. Log-and-continue on failure —
+            // the lock itself is already applied.
+            if let Some(ref manifest_path) = manifest {
+                if let Err(e) = modde_core::manifest::wabbajack::cache_wabbajack_file(
+                    manifest_path,
+                    &report.manifest_hash,
+                ) {
+                    tracing::warn!("failed to cache wabbajack source file: {e:#}");
+                }
+            }
         }
 
         pm.create_or_update(&profile)

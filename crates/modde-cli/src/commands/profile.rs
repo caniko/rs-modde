@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
+use smallvec::SmallVec;
 use tracing::info;
 
+use modde_core::error::CoreError;
 use modde_core::profile::{
     ActivateResult, LoadOrderLock, LockReason, Profile, ProfileManager, ProfileSource,
 };
@@ -8,6 +10,22 @@ use modde_core::save::SaveFingerprint;
 
 use crate::ProfileAction;
 use super::{compute_fingerprint, resolve_save_dir};
+
+/// Human-readable byte size (KB/MB/GB) for `lock-info` output.
+fn format_bytes(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+    if bytes >= GB {
+        format!("{:.1} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.1} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{bytes} B")
+    }
+}
 
 /// Render a `LockReason` as a short, human-readable phrase for CLI output.
 fn format_lock_reason(reason: &LockReason) -> String {
@@ -20,6 +38,27 @@ fn format_lock_reason(reason: &LockReason) -> String {
         LockReason::Manual { note: Some(n) } => format!("manual ({n})"),
         LockReason::Manual { note: None } => "manual".to_string(),
     }
+}
+
+/// Look up a mod in a profile by `mod_id` and return its index, or construct
+/// a typed [`CoreError::ModNotFound`] whose `candidates` field lists the
+/// first 5 mod ids in the profile as a hint.
+fn find_mod_or_bail(profile: &Profile, mod_id: &str) -> Result<usize> {
+    if let Some(idx) = profile.mods.iter().position(|m| m.mod_id == mod_id) {
+        return Ok(idx);
+    }
+    let candidates: SmallVec<[String; 5]> = profile
+        .mods
+        .iter()
+        .take(5)
+        .map(|m| m.mod_id.clone())
+        .collect();
+    Err(CoreError::ModNotFound {
+        profile: profile.name.clone(),
+        mod_id: mod_id.to_string(),
+        candidates,
+    }
+    .into())
 }
 
 pub fn handle(action: ProfileAction) -> Result<()> {
@@ -186,6 +225,24 @@ pub fn handle(action: ProfileAction) -> Result<()> {
                     println!("Profile '{name}' lock:");
                     println!("  Reason:    {}", format_lock_reason(&lock.reason));
                     println!("  Locked at: {}", lock.locked_at);
+                    // For Wabbajack locks, also show the cached source file
+                    // status so the user can re-verify / re-import from it.
+                    if let LockReason::Wabbajack { manifest_hash } = &lock.reason {
+                        let cache_path =
+                            modde_core::paths::wabbajack_cache_path(manifest_hash);
+                        match std::fs::metadata(&cache_path) {
+                            Ok(meta) => println!(
+                                "  Source:    {} ({})",
+                                cache_path.display(),
+                                format_bytes(meta.len())
+                            ),
+                            Err(_) => println!(
+                                "  Source:    {} (missing — re-run \
+                                 `modde scan --manifest <file> --import-to {name}`)",
+                                cache_path.display()
+                            ),
+                        }
+                    }
                 }
             }
             let pinned: Vec<&str> = profile
@@ -210,34 +267,33 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             game,
             note,
         } => {
+            // A per-mod pin is independent of the profile-level lock. If the
+            // profile is already Wabbajack-locked, lock-mod still succeeds —
+            // the pin takes effect after a later `unlock` or `fork --unlock`.
             let mut profile = pm.load(&name, game.as_deref())?;
-            if let Some(existing) = profile.load_order_lock.as_ref() {
+            let idx = find_mod_or_bail(&profile, &mod_id)?;
+            if let Some(existing) = profile.mods[idx].lock.as_ref() {
                 anyhow::bail!(
-                    "profile '{name}' is locked by {} — per-mod pins are redundant; unlock the profile first",
-                    format_lock_reason(&existing.reason)
+                    "mod '{mod_id}' is already pinned ({}) — unlock-mod first to re-pin",
+                    format_lock_reason(existing)
                 );
             }
-            let Some(m) = profile.mods.iter_mut().find(|m| m.mod_id == mod_id) else {
-                anyhow::bail!("mod '{mod_id}' is not in profile '{name}'");
-            };
-            m.lock = Some(LockReason::Manual { note: note.clone() });
+            profile.mods[idx].lock = Some(LockReason::Manual { note: note.clone() });
             pm.update(&profile)?;
             match note {
-                Some(n) => println!("Pinned mod '{mod_id}' in profile '{name}' (manual: {n})"),
-                None => println!("Pinned mod '{mod_id}' in profile '{name}' (manual)"),
+                Some(n) => println!("Pinned '{mod_id}' in profile '{name}' (manual: {n})"),
+                None => println!("Pinned '{mod_id}' in profile '{name}'"),
             }
         }
         ProfileAction::UnlockMod { name, mod_id, game } => {
             let mut profile = pm.load(&name, game.as_deref())?;
-            let Some(m) = profile.mods.iter_mut().find(|m| m.mod_id == mod_id) else {
-                anyhow::bail!("mod '{mod_id}' is not in profile '{name}'");
-            };
-            match m.lock.take() {
-                None => println!("Mod '{mod_id}' in profile '{name}' was not pinned."),
+            let idx = find_mod_or_bail(&profile, &mod_id)?;
+            match profile.mods[idx].lock.take() {
+                None => println!("'{mod_id}' was not pinned"),
                 Some(prior) => {
                     pm.update(&profile)?;
                     println!(
-                        "Unpinned mod '{mod_id}' in profile '{name}' (was {})",
+                        "Unpinned '{mod_id}' (was {})",
                         format_lock_reason(&prior)
                     );
                 }

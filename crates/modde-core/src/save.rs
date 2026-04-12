@@ -152,6 +152,14 @@ pub struct SaveSnapshot {
     pub file_count: usize,
     /// Mod fingerprint extracted from the commit, if present.
     pub fingerprint: Option<SaveFingerprint>,
+    /// Profile name extracted from the commit message.
+    pub profile_name: Option<String>,
+    /// Character/player name extracted from the save label.
+    pub character_name: Option<String>,
+    /// Save label (e.g. "Save 14").
+    pub save_label: Option<String>,
+    /// Save category (e.g. "manual", "auto", "quick").
+    pub category: Option<String>,
 }
 
 impl SaveSnapshot {
@@ -159,6 +167,81 @@ impl SaveSnapshot {
     /// instead of storing a redundant heap allocation.
     pub fn short_id(&self) -> &str {
         &self.id[..self.id.len().min(8)]
+    }
+
+    /// Human-readable title for display: character + save label, or first message line.
+    pub fn display_title(&self) -> String {
+        if let (Some(char_name), Some(label)) = (&self.character_name, &self.save_label) {
+            format!("{char_name} — {label}")
+        } else if let Some(char_name) = &self.character_name {
+            char_name.clone()
+        } else if let Some(label) = &self.save_label {
+            label.clone()
+        } else {
+            self.message.lines().next().unwrap_or("").trim().to_string()
+        }
+    }
+
+    /// Parse structured metadata from the commit message.
+    ///
+    /// Handles these formats produced by `describe_capture()`:
+    /// - `"capture: Lydia — Save 14 [manual]"`
+    /// - `"capture: 3 saves — Lydia (slots 1, 2); Orc Mage (slot 5)"`
+    /// - `"capture saves for profile 'Default'"`
+    /// - `"capture (FO76 cache — server saves not tracked): ..."`
+    fn parse_metadata_from_message(&mut self) {
+        let first_line = self.message.lines().next().unwrap_or("").trim();
+
+        // Extract profile name from "capture saves for profile 'Name'"
+        if let Some(rest) = first_line.strip_prefix("capture saves for profile '") {
+            if let Some(name) = rest.strip_suffix('\'') {
+                self.profile_name = Some(name.to_string());
+            }
+            return;
+        }
+
+        // Strip capture prefix: "capture: " or "capture (FO76 ...): "
+        let body = if let Some(rest) = first_line.strip_prefix("capture: ") {
+            rest
+        } else if first_line.starts_with("capture (") {
+            // "capture (FO76 cache — server saves not tracked): Lydia — Save 14 [manual]"
+            if let Some(idx) = first_line.find("): ") {
+                &first_line[idx + 3..]
+            } else {
+                return;
+            }
+        } else {
+            return;
+        };
+
+        // Extract category from trailing "[manual]", "[auto]", "[quick]", etc.
+        let (body, category) = if let Some(bracket_start) = body.rfind(" [") {
+            if body.ends_with(']') {
+                let cat = &body[bracket_start + 2..body.len() - 1];
+                self.category = Some(cat.to_string());
+                (&body[..bracket_start], Some(cat.to_string()))
+            } else {
+                (body, None)
+            }
+        } else {
+            (body, None)
+        };
+        let _ = category; // used above via self.category
+
+        // Extract character name and save label from "Lydia — Save 14"
+        if let Some((char_part, save_part)) = body.split_once(" — ") {
+            // Check if it's a multi-save summary like "3 saves — Lydia (slots 1, 2); ..."
+            if char_part.ends_with("saves") && char_part.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+                // Multi-save: use the whole body as the label
+                self.save_label = Some(first_line.to_string());
+            } else {
+                self.character_name = Some(char_part.to_string());
+                self.save_label = Some(save_part.to_string());
+            }
+        } else if body != "no new saves" {
+            // Single item without separator — use as label
+            self.save_label = Some(body.to_string());
+        }
     }
 
     /// Check whether this snapshot's fingerprint is compatible with the given fingerprint.
@@ -504,13 +587,19 @@ impl<'a> SaveManager<'a> {
 
             let fingerprint = SaveFingerprint::from_commit_message(&message);
 
-            snapshots.push(SaveSnapshot {
+            let mut snap = SaveSnapshot {
                 id: oid.to_string(),
                 message,
                 timestamp: secs,
                 file_count,
                 fingerprint,
-            });
+                profile_name: None,
+                character_name: None,
+                save_label: None,
+                category: None,
+            };
+            snap.parse_metadata_from_message();
+            snapshots.push(snap);
         }
 
         Ok(snapshots)
@@ -543,6 +632,10 @@ impl<'a> SaveManager<'a> {
                     timestamp: 0,
                     file_count: 0,
                     fingerprint: Some(fp),
+                    profile_name: None,
+                    character_name: None,
+                    save_label: None,
+                    category: None,
                 };
                 Ok(snapshot.check_compatibility(current_fingerprint))
             }
@@ -588,6 +681,18 @@ impl<'a> SaveManager<'a> {
 
         info!(game_id, profile = profile_name, commit = commit_id, count, "restored saves from snapshot");
         Ok(count)
+    }
+
+    /// List file paths in a specific snapshot's git tree.
+    pub fn snapshot_file_list(game_id: &str, commit_id: &str) -> Result<Vec<String>> {
+        let repo = Self::vault_repo(game_id)?;
+        let obj = repo.revparse_single(commit_id)
+            .map_err(|e| CoreError::SaveVaultError(format!("could not find commit '{commit_id}': {e}")))?;
+        let commit = obj.peel_to_commit()
+            .map_err(|e| CoreError::SaveVaultError(format!("not a commit: {e}")))?;
+        let tree = commit.tree()
+            .map_err(|e| CoreError::SaveVaultError(format!("commit tree: {e}")))?;
+        Ok(collect_tree_paths(&repo, &tree, ""))
     }
 
     // ── Adoption ─────────────────────────────────────────────────
@@ -673,6 +778,73 @@ fn sanitize_branch_name(name: &str) -> String {
         .collect()
 }
 
+// ── Timestamp formatting ────────────────────────────────────────
+
+/// Format a Unix timestamp as `"YYYY-MM-DD HH:MM:SS"` (UTC).
+///
+/// Uses a pure-arithmetic Euclidean civil-date algorithm — no chrono dependency.
+pub fn format_timestamp(secs: i64) -> String {
+    use std::fmt::Write;
+    let dt = time_to_parts(secs);
+    let mut s = String::new();
+    let _ = write!(s, "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+        dt.0, dt.1, dt.2, dt.3, dt.4, dt.5);
+    s
+}
+
+/// Format a Unix timestamp as a short date: `"Apr 12 14:30"`.
+pub fn format_timestamp_short(secs: i64) -> String {
+    let (y, m, d, hour, minute, _) = time_to_parts(secs);
+    let month = match m {
+        1 => "Jan", 2 => "Feb", 3 => "Mar", 4 => "Apr",
+        5 => "May", 6 => "Jun", 7 => "Jul", 8 => "Aug",
+        9 => "Sep", 10 => "Oct", 11 => "Nov", 12 => "Dec",
+        _ => "???",
+    };
+
+    // Include year if it differs from current year (approximate: 2026)
+    let current_year = {
+        let now_days = (std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() / 86400) as i32;
+        let z = now_days + 719468;
+        let era = if z >= 0 { z } else { z - 146096 } / 146097;
+        let doe = (z - era * 146097) as u32;
+        let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+        yoe as i32 + era * 400
+    };
+
+    if y != current_year {
+        format!("{month} {d} '{:02} {hour:02}:{minute:02}", y % 100)
+    } else {
+        format!("{month} {d} {hour:02}:{minute:02}")
+    }
+}
+
+/// Break a Unix timestamp into `(year, month, day, hour, minute, second)`.
+pub fn time_to_parts(secs: i64) -> (i32, u32, u32, u32, u32, u32) {
+    let days = (secs / 86400) as i32;
+    let time_of_day = (secs % 86400) as u32;
+    let hour = time_of_day / 3600;
+    let minute = (time_of_day % 3600) / 60;
+    let second = time_of_day % 60;
+
+    // Civil date from days since 1970-01-01 (Euclidean algorithm)
+    let z = days + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u32;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe as i32 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+
+    (y, m, d, hour, minute, second)
+}
+
 /// Recursively count blob entries in a git tree.
 fn count_tree_entries(repo: &Repository, tree: &git2::Tree) -> usize {
     let mut count = 0;
@@ -688,6 +860,29 @@ fn count_tree_entries(repo: &Repository, tree: &git2::Tree) -> usize {
         }
     }
     count
+}
+
+/// Recursively collect file paths in a git tree.
+fn collect_tree_paths(repo: &Repository, tree: &git2::Tree, prefix: &str) -> Vec<String> {
+    let mut paths = Vec::new();
+    for entry in tree.iter() {
+        let name = entry.name().unwrap_or("");
+        let full = if prefix.is_empty() {
+            name.to_string()
+        } else {
+            format!("{prefix}/{name}")
+        };
+        match entry.kind() {
+            Some(git2::ObjectType::Blob) => paths.push(full),
+            Some(git2::ObjectType::Tree) => {
+                if let Ok(subtree) = repo.find_tree(entry.id()) {
+                    paths.extend(collect_tree_paths(repo, &subtree, &full));
+                }
+            }
+            _ => {}
+        }
+    }
+    paths
 }
 
 /// Remove all entries inside a directory (but not the directory itself).

@@ -2,8 +2,7 @@
 //! result grid, and a minimal install-from-browse flow.
 //!
 //! The view is render-only; all state + task dispatch lives in
-//! [`crate::app::Modde`] (see `BrowseNexus*` messages). The detail modal
-//! for per-mod install is reused via [`crate::app::ModalState`].
+//! [`crate::app::Modde`] (see `BrowseNexus*` messages).
 
 use iced::widget::{button, column, container, row, scrollable, text, text_input};
 use iced::{Alignment, Element, Length};
@@ -69,10 +68,12 @@ impl Default for NexusBrowseState {
 
 /// Render the browse view. `game_domain` is the currently-loaded
 /// profile's Nexus domain (`None` → show an empty state and disable
-/// the install button).
+/// the install button). Taken by value so the inner buttons can
+/// clone it into their message payloads without tying the returned
+/// `Element`'s lifetime to a local borrow.
 pub fn view<'a>(
     state: &'a NexusBrowseState,
-    game_domain: Option<&'a str>,
+    game_domain: Option<String>,
 ) -> Element<'a, Message> {
     let title = text("Browse Nexus").size(20);
 
@@ -150,7 +151,7 @@ fn render_tab_bar(active: BrowseTab) -> Element<'static, Message> {
 
 fn mods_grid<'a>(
     mods: &'a [GqlModTile],
-    game_domain: Option<&'a str>,
+    game_domain: Option<String>,
 ) -> Element<'a, Message> {
     if mods.is_empty() {
         return container(text("No mods in this feed yet.").size(13))
@@ -159,12 +160,12 @@ fn mods_grid<'a>(
             .into();
     }
     let col = mods.iter().fold(column![].spacing(8), |col, tile| {
-        col.push(mod_card(tile, game_domain))
+        col.push(mod_card(tile, game_domain.clone()))
     });
     scrollable(col).height(Length::Fill).into()
 }
 
-fn mod_card<'a>(tile: &'a GqlModTile, game_domain: Option<&'a str>) -> Element<'a, Message> {
+fn mod_card<'a>(tile: &'a GqlModTile, game_domain: Option<String>) -> Element<'a, Message> {
     let header = row![
         text(&tile.name).size(16),
         iced::widget::space::horizontal(),
@@ -194,7 +195,7 @@ fn mod_card<'a>(tile: &'a GqlModTile, game_domain: Option<&'a str>) -> Element<'
     let install_btn: Element<Message> = match game_domain {
         Some(domain) => button(text("Install").size(13))
             .on_press(Message::BrowseInstallMod {
-                game_domain: domain.to_string(),
+                game_domain: domain,
                 mod_id: tile.mod_id,
             })
             .style(button::primary)
@@ -223,7 +224,7 @@ fn mod_card<'a>(tile: &'a GqlModTile, game_domain: Option<&'a str>) -> Element<'
 
 fn collections_grid<'a>(
     collections: &'a [GqlCollectionTile],
-    game_domain: Option<&'a str>,
+    game_domain: Option<String>,
 ) -> Element<'a, Message> {
     if collections.is_empty() {
         return container(text("No collections in this feed yet.").size(13))
@@ -232,14 +233,14 @@ fn collections_grid<'a>(
             .into();
     }
     let col = collections.iter().fold(column![].spacing(8), |col, tile| {
-        col.push(collection_card(tile, game_domain))
+        col.push(collection_card(tile, game_domain.clone()))
     });
     scrollable(col).height(Length::Fill).into()
 }
 
 fn collection_card<'a>(
     tile: &'a GqlCollectionTile,
-    _game_domain: Option<&'a str>,
+    _game_domain: Option<String>,
 ) -> Element<'a, Message> {
     let header = row![
         text(&tile.name).size(16),

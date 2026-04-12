@@ -62,6 +62,17 @@ pub fn save_vaults_dir() -> PathBuf {
     modde_data_dir().join("saves")
 }
 
+/// Content-addressed cache of `.wabbajack` manifest source files.
+/// See [`crate::manifest::wabbajack::cache_wabbajack_file`].
+pub fn wabbajack_cache_dir() -> PathBuf {
+    modde_data_dir().join("wabbajack_cache")
+}
+
+/// Path to a cached `.wabbajack` file keyed by its `manifest_hash`.
+pub fn wabbajack_cache_path(manifest_hash: &str) -> PathBuf {
+    wabbajack_cache_dir().join(format!("{manifest_hash}.wabbajack"))
+}
+
 /// Save vault (git repo) for a specific game: `<modde_data>/saves/<game_id>/`.
 pub fn save_vault_dir(game_id: &str) -> PathBuf {
     save_vaults_dir().join(game_id)

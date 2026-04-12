@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use modde_core::manifest::wabbajack::{
-    compute_manifest_hash, ArchiveEntry, ArchiveState, WabbajackManifest,
+    cache_wabbajack_file, compute_manifest_hash, ArchiveEntry, ArchiveState, WabbajackManifest,
 };
 use modde_core::profile::{
     EnabledMod, LoadOrderLock, LockReason, Profile, ProfileManager, ProfileSource,
@@ -1181,4 +1181,58 @@ fn detect_stale_duplicates_closure_gate_short_circuits_cp_prefixes() {
         ])
     );
     assert!(report.leaked.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// Wabbajack source-file cache (content-addressed)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn cache_wabbajack_file_copies_and_is_content_addressed() {
+    isolated_data_dir();
+
+    // Write a dummy "source" wabbajack file in a scratch tempdir.
+    let src_dir = tempfile::tempdir().unwrap();
+    let src = src_dir.path().join("modlist.wabbajack");
+    let payload = b"fake wabbajack payload bytes";
+    std::fs::write(&src, payload).unwrap();
+
+    let hash = "deadbeef00000001";
+    let dest = cache_wabbajack_file(&src, hash).expect("cache copy succeeds");
+
+    // Result matches the derived content-addressed path.
+    assert_eq!(dest, modde_core::paths::wabbajack_cache_path(hash));
+
+    // Destination exists and is byte-identical to the source.
+    let cached = std::fs::read(&dest).unwrap();
+    assert_eq!(cached, payload, "cached bytes must match source");
+}
+
+#[test]
+fn cache_wabbajack_file_is_idempotent() {
+    isolated_data_dir();
+
+    let src_dir = tempfile::tempdir().unwrap();
+    let first = src_dir.path().join("first.wabbajack");
+    let second = src_dir.path().join("second.wabbajack");
+    let first_bytes = b"first payload";
+    let second_bytes = b"second payload -- DIFFERENT content";
+    std::fs::write(&first, first_bytes).unwrap();
+    std::fs::write(&second, second_bytes).unwrap();
+
+    // Pick a hash distinct from any other test in this file to avoid
+    // cross-test interference (the cache dir is process-wide).
+    let hash = "deadbeef00000002";
+
+    let dest1 = cache_wabbajack_file(&first, hash).unwrap();
+    let dest2 = cache_wabbajack_file(&second, hash).unwrap();
+
+    // Same derived path, both calls.
+    assert_eq!(dest1, dest2);
+
+    // Idempotent skip: the second call does NOT overwrite with `second_bytes`.
+    // The hash is a stable content identifier — both install and scan can
+    // call this helper without coordination and we rely on first-writer-wins.
+    let cached = std::fs::read(&dest2).unwrap();
+    assert_eq!(cached, first_bytes, "second call must not overwrite first");
 }

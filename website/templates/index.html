@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} — {{ config.description }}{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>{{ page.title }}</h1>
+  <p class="tagline">{{ page.extra.tagline }}</p>
+  <p class="subtitle">{{ page.extra.subtitle }}</p>
+  <div class="hero-actions">
+    <a href="{{ config.base_url }}/docs/getting-started/installation/" class="btn btn-primary">Get started</a>
+    <a href="https://codeberg.org/caniko/rs-modde" class="btn btn-secondary">View source</a>
+  </div>
+</section>
+
+<section class="features">
+  <div class="features-grid">
+    {% for feature in page.extra.features %}
+    <div class="feature-card">
+      <h3>{{ feature.title }}</h3>
+      <p>{{ feature.description }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="quick-install">
+  <h2>Quick install</h2>
+  <pre><code>nix run codeberg:caniko/rs-modde</code></pre>
+</section>
+{% endblock %}

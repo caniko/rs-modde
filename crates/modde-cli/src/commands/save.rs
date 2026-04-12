@@ -315,52 +315,41 @@ pub async fn handle(action: SaveAction) -> Result<()> {
     Ok(())
 }
 
-/// Amend the last commit in a save vault with a custom message.
+/// Amend the last commit in a save vault with a custom message,
+/// preserving any `Mod-Fingerprint:` and `Save-Breaking-Mods:` trailers
+/// from the original commit.
 fn amend_last_commit(game_id: &str, message: &str) -> Result<()> {
     let repo = SaveManager::vault_repo(game_id)?;
     let head = repo.head()
         .and_then(|h| h.peel_to_commit())
         .context("no HEAD commit to amend")?;
+
+    // Preserve fingerprint trailers from the original message
+    let old_msg = head.message().unwrap_or("");
+    let trailers: Vec<&str> = old_msg
+        .lines()
+        .filter(|line| {
+            line.starts_with("Mod-Fingerprint: ") || line.starts_with("Save-Breaking-Mods: ")
+        })
+        .collect();
+
+    let final_message = if trailers.is_empty() {
+        message.to_string()
+    } else {
+        format!("{message}\n\n{}", trailers.join("\n"))
+    };
+
     head.amend(
         Some("HEAD"),
         None,  // keep author
         None,  // keep committer
         None,  // keep encoding
-        Some(message),
+        Some(&final_message),
         None,  // keep tree
     ).context("failed to amend commit")?;
     Ok(())
 }
 
 fn format_timestamp(secs: i64) -> String {
-    use std::fmt::Write;
-    // Simple UTC formatting without pulling in chrono
-    let dt = time_to_parts(secs);
-    let mut s = String::new();
-    let _ = write!(s, "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
-        dt.0, dt.1, dt.2, dt.3, dt.4, dt.5);
-    s
-}
-
-fn time_to_parts(secs: i64) -> (i32, u32, u32, u32, u32, u32) {
-    // Days since epoch
-    let days = (secs / 86400) as i32;
-    let time_of_day = (secs % 86400) as u32;
-    let hour = time_of_day / 3600;
-    let minute = (time_of_day % 3600) / 60;
-    let second = time_of_day % 60;
-
-    // Civil date from days since 1970-01-01 (Euclidean algorithm)
-    let z = days + 719468;
-    let era = if z >= 0 { z } else { z - 146096 } / 146097;
-    let doe = (z - era * 146097) as u32;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let y = yoe as i32 + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = if m <= 2 { y + 1 } else { y };
-
-    (y, m, d, hour, minute, second)
+    modde_core::save::format_timestamp(secs)
 }

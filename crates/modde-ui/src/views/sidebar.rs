@@ -3,6 +3,7 @@ use iced::{color, Element, Length};
 
 use crate::app::{Message, View};
 use crate::views::mod_details::ModDetailsState;
+use crate::views::save_details::SaveDetailsState;
 
 /// Render the navigation sidebar.
 pub fn view<'a>(
@@ -13,6 +14,7 @@ pub fn view<'a>(
     new_profile_name: &'a str,
     selected_game: &'a Option<String>,
     mod_details: Option<&'a ModDetailsState>,
+    save_details: Option<&'a SaveDetailsState>,
 ) -> Element<'a, Message> {
     let nav_button = |label: &'a str, target: View, current: &View| -> Element<'a, Message> {
         let is_active = std::mem::discriminant(&target) == std::mem::discriminant(current);
@@ -30,8 +32,8 @@ pub fn view<'a>(
 
     let nav = column![
         nav_button("Mod List", View::ModList, active_view),
-        nav_button("Load Order", View::LoadOrder, active_view),
         nav_button("Saves", View::Saves, active_view),
+        nav_button("Browse Nexus", View::BrowseNexus, active_view),
         nav_button("Collections", View::Collections, active_view),
         nav_button(
             "Wabbajack",
@@ -150,10 +152,13 @@ pub fn view<'a>(
         );
     }
 
-    // ── Mod detail panel (Nexus metadata for the currently selected mod) ──
+    // ── Detail panel (mod details or save details, mutually exclusive) ──
     if let Some(details) = mod_details {
         sections = sections.push(iced::widget::rule::horizontal(1));
         sections = sections.push(render_mod_details(details));
+    } else if let Some(details) = save_details {
+        sections = sections.push(iced::widget::rule::horizontal(1));
+        sections = sections.push(render_save_details(details));
     }
 
     iced::widget::row![
@@ -339,4 +344,121 @@ fn render_mod_details(state: &ModDetailsState) -> Element<'_, Message> {
     .spacing(4)
     .width(Length::Fill)
     .into()
+}
+
+/// Render the save detail panel appended to the bottom of the left sidebar.
+fn render_save_details(state: &SaveDetailsState) -> Element<'_, Message> {
+    use iced::widget::scrollable;
+    use modde_core::save::FingerprintCheck;
+
+    let mut col = column![].spacing(4).width(Length::Fill);
+
+    // Date
+    col = col.push(
+        text(state.formatted_date())
+            .size(12)
+            .color(color!(0xAAAAAA)),
+    );
+
+    // Title: character + save label
+    col = col.push(text(state.display_title()).size(13));
+
+    // Category badge
+    if let Some(ref cat) = state.category {
+        col = col.push(
+            text(format!("[{cat}]"))
+                .size(11)
+                .color(color!(0x888888)),
+        );
+    }
+
+    // Profile name
+    if let Some(ref name) = state.profile_name {
+        col = col.push(
+            text(format!("Profile: {name}"))
+                .size(11)
+                .color(color!(0xAAAAAA)),
+        );
+    }
+
+    // File count
+    col = col.push(
+        text(format!("{} file(s)", state.file_count))
+            .size(11),
+    );
+
+    // File list
+    match &state.file_paths {
+        Some(paths) if !paths.is_empty() => {
+            let file_list = paths.iter().fold(column![].spacing(1), |col, path| {
+                // Show only the filename for brevity in the narrow sidebar
+                let display = std::path::Path::new(path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(path);
+                col.push(text(display).size(10).color(color!(0x888888)))
+            });
+            col = col.push(
+                scrollable(file_list)
+                    .height(Length::Fixed(80.0)),
+            );
+        }
+        Some(_) => {} // empty list, skip
+        None => {
+            col = col.push(
+                text("Loading files...")
+                    .size(10)
+                    .color(color!(0x888888)),
+            );
+        }
+    }
+
+    // Fingerprint + compatibility
+    if let Some(ref fp) = state.fingerprint {
+        let fp_element: Element<Message> = match &state.compatibility {
+            Some(FingerprintCheck::Compatible) => {
+                text(format!("Mods: {} [compatible]", fp.short_hash()))
+                    .size(11)
+                    .color(color!(0x44AA44))
+                    .into()
+            }
+            Some(FingerprintCheck::Mismatch { removed, added }) => {
+                column![
+                    text(format!("Mods: {} [mismatch]", fp.short_hash()))
+                        .size(11)
+                        .color(color!(0xFF6644)),
+                    text(format!("-{} removed, +{} added", removed.len(), added.len()))
+                        .size(10)
+                        .color(color!(0xFF6644)),
+                ]
+                .spacing(1)
+                .into()
+            }
+            Some(FingerprintCheck::NoFingerprint) | None => {
+                text(format!("Mods: {}", fp.short_hash()))
+                    .size(11)
+                    .color(color!(0x888888))
+                    .into()
+            }
+        };
+        col = col.push(fp_element);
+    }
+
+    // Restore button
+    col = col.push(
+        button(text("Restore").size(12))
+            .on_press(Message::RestoreSaveSnapshot(state.commit_id.clone()))
+            .style(button::secondary)
+            .padding([4, 8])
+            .width(Length::Fill),
+    );
+
+    // Commit ID (subtle)
+    col = col.push(
+        text(&state.short_id)
+            .size(10)
+            .color(color!(0x666666)),
+    );
+
+    col.into()
 }

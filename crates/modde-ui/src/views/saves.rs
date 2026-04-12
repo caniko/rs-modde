@@ -1,4 +1,4 @@
-use iced::widget::{button, column, container, row, scrollable, text};
+use iced::widget::{button, column, container, mouse_area, row, scrollable, text};
 use iced::{color, Alignment, Element, Length};
 
 use modde_core::save::{SaveFingerprint, SaveSnapshot};
@@ -10,6 +10,7 @@ pub fn view<'a>(
     snapshots: &'a [SaveSnapshot],
     profile_name: Option<&'a str>,
     current_fingerprint: Option<&'a SaveFingerprint>,
+    selected_id: Option<&'a str>,
 ) -> Element<'a, Message> {
     let title_bar = row![
         text("Save Management").size(20),
@@ -43,11 +44,10 @@ pub fn view<'a>(
     }
 
     let header = row![
-        text("ID").size(12).width(Length::Fixed(80.0)),
-        text("Message").size(12).width(Length::Fill),
+        text("Date").size(12).width(Length::Fixed(110.0)),
+        text("Save").size(12).width(Length::Fill),
         text("Files").size(12).width(Length::Fixed(50.0)),
         text("Mods").size(12).width(Length::Fixed(60.0)),
-        text("").size(12).width(Length::Fixed(80.0)),
     ]
     .spacing(8)
     .padding([4, 0]);
@@ -63,9 +63,18 @@ pub fn view<'a>(
         .into()
     } else {
         let rows = snapshots.iter().fold(column![].spacing(2), |col, snap| {
-            let short_id = text(snap.short_id()).size(12).width(Length::Fixed(80.0));
-            let msg_line = snap.message.lines().next().unwrap_or("").trim();
-            let message = text(msg_line).size(13).width(Length::Fill);
+            let is_selected = selected_id == Some(snap.id.as_str());
+
+            // Date column
+            let date_text = text(modde_core::save::format_timestamp_short(snap.timestamp))
+                .size(12)
+                .width(Length::Fixed(110.0))
+                .color(color!(0xAAAAAA));
+
+            // Save label: character + save label, or fallback to message
+            let display = snap.display_title();
+            let save_text = text(display).size(13).width(Length::Fill);
+
             let file_count = text(format!("{}", snap.file_count)).size(12).width(Length::Fixed(50.0));
 
             // Fingerprint indicator
@@ -93,24 +102,34 @@ pub fn view<'a>(
                 }
             };
 
-            let commit_id = snap.id.clone();
-            let restore_btn = button(text("Restore").size(12))
-                .on_press(Message::RestoreSaveSnapshot(commit_id))
-                .style(button::secondary)
-                .padding([4, 8]);
-
             let snapshot_row = row![
-                short_id,
-                message,
+                date_text,
+                save_text,
                 file_count,
                 fp_indicator,
-                restore_btn,
             ]
             .spacing(8)
             .align_y(Alignment::Center)
             .padding([4, 8]);
 
-            col.push(snapshot_row)
+            // Wrap in a container with background highlight for selected row
+            let row_container: Element<Message> = if is_selected {
+                container(snapshot_row)
+                    .style(container::bordered_box)
+                    .width(Length::Fill)
+                    .into()
+            } else {
+                container(snapshot_row)
+                    .width(Length::Fill)
+                    .into()
+            };
+
+            // Make row clickable
+            let commit_id = snap.id.clone();
+            let clickable = mouse_area(row_container)
+                .on_press(Message::SelectSaveSnapshot(commit_id));
+
+            col.push(clickable)
         });
 
         scrollable(rows).height(Length::Fill).into()

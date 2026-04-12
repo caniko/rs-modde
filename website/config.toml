@@ -1,0 +1,17 @@
+# modde presentation website — Zola (custom templates)
+# Local dev: cd website && zola serve
+# Build: nix build .#website
+
+base_url = "https://caniko.codeberg.page/rs-modde"
+title = "modde"
+description = "NixOS-native game mod manager"
+default_language = "en"
+
+compile_sass = true
+build_search_index = false
+minify_html = false
+generate_feeds = false
+
+[markdown]
+[markdown.highlighting]
+theme = "nord"

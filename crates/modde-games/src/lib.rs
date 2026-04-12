@@ -1,3 +1,5 @@
+use smallvec::SmallVec;
+
 pub mod bethesda;
 pub mod cyberpunk;
 pub mod detection;
@@ -46,6 +48,14 @@ pub const SUPPORTED_GAME_IDS: &[&str] = &[
     "cyberpunk2077",
     "stellar-blade",
 ];
+
+/// (game_id, display_name) for every supported game, derived from the plugin registry.
+pub fn supported_games() -> SmallVec<[(&'static str, &'static str); 8]> {
+    SUPPORTED_GAME_IDS
+        .iter()
+        .filter_map(|&id| resolve_game_plugin(id).map(|p| (p.game_id(), p.display_name())))
+        .collect()
+}
 
 /// Map a Wabbajack manifest `game` field (e.g. `"Cyberpunk2077"`, `"SkyrimSpecialEdition"`)
 /// to the internal game_id (e.g. `"cyberpunk2077"`, `"skyrim-se"`).

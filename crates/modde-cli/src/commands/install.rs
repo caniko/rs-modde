@@ -505,11 +505,21 @@ async fn handle_wabbajack(
         overrides: ProfileManager::default_overrides(&profile_name),
         load_order_rules: smallvec::SmallVec::new(),
         load_order_lock: Some(LoadOrderLock::now(LockReason::Wabbajack {
-            manifest_hash,
+            manifest_hash: manifest_hash.clone(),
         })),
     };
 
     save_profile_and_settings(&pm, &profile, game_dir.as_deref())?;
+
+    // Self-contained re-verify: stash the .wabbajack source file in the
+    // content-addressed cache so a later `modde profile lock-info` can point
+    // at it even if the original source path moves. Log-and-continue — a
+    // cache miss shouldn't fail an otherwise successful install.
+    if let Err(e) =
+        modde_core::manifest::wabbajack::cache_wabbajack_file(&path, &manifest_hash)
+    {
+        warn!("failed to cache wabbajack source file: {e:#}");
+    }
 
     println!(
         "Wabbajack modlist '{}' installed to profile '{profile_name}' ({} mods)",

@@ -26,6 +26,10 @@ fn make_snapshot(fp: Option<SaveFingerprint>) -> SaveSnapshot {
         timestamp: 0,
         file_count: 1,
         fingerprint: fp,
+        profile_name: None,
+        character_name: None,
+        save_label: None,
+        category: None,
     }
 }
 

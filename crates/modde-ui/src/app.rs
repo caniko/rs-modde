@@ -7,7 +7,6 @@ use smallvec::SmallVec;
 
 use modde_core::manifest::collection::CollectionManifest;
 use modde_core::profile::ProfileManager;
-use modde_core::resolver::{ConflictMap, ModId};
 use modde_core::save::SaveSnapshot;
 use modde_core::settings::AppSettings;
 
@@ -58,15 +57,14 @@ pub struct Modde {
     pub active_downloads: Vec<crate::views::collections::CollectionDownload>,
     // ── New state fields ──
     pub loaded_profile: Option<modde_core::Profile>,
-    pub resolved_order: Vec<ModId>,
-    pub conflict_map: ConflictMap,
     pub save_snapshots: Vec<SaveSnapshot>,
     pub current_fingerprint: Option<modde_core::save::SaveFingerprint>,
+    pub selected_save_details: Option<crate::views::save_details::SaveDetailsState>,
     pub experiment_depth: usize,
     pub nexus_status: Option<NexusAuthStatus>,
     pub verify: VerifyState,
     pub new_profile_name: String,
-    pub available_games: SmallVec<[(String, String); 6]>,
+    pub available_games: SmallVec<[(String, String); 8]>,
     pub selected_game: Option<String>,
     pub stock_snapshot_exists: bool,
     pub window_id: window::Id,
@@ -77,29 +75,12 @@ pub struct Modde {
     pub mod_categories: Vec<(Option<i64>, String)>,
     pub data_tab_state: crate::views::data_tab::DataTabState,
     pub data_tab_conflicts: Vec<(String, Vec<String>)>,
+    /// State for the Browse Nexus view (Phase 6 of the installer pipeline).
+    pub browse_nexus: crate::views::browse_nexus::NexusBrowseState,
     pub diagnostics_state: crate::views::diagnostics::DiagnosticsState,
     pub tool_state: ToolState,
-    /// Currently-open modal overlay, if any. Rendered on top of the normal
-    /// view via `stack!` in [`Modde::view`]. Most of the time this is
-    /// `None` and the modal machinery contributes zero widgets to the
-    /// render tree.
-    pub modal: Option<ModalState>,
 }
 
-/// Open-modal state. Today this only carries the unlock-confirmation
-/// dialog, but the enum shape lets future destructive actions (delete
-/// profile, fork overwrite, etc.) reuse the same overlay machinery
-/// without another ad-hoc state field per dialog.
-#[derive(Debug, Clone)]
-pub enum ModalState {
-    /// Two-click guard for releasing a profile-level `LoadOrderLock`.
-    /// `lock_description` is the `format_lock_reason` output captured
-    /// at modal-open time so the dialog can show *why* the profile is
-    /// locked — even if the underlying profile changes between the
-    /// user clicking Unlock and confirming. The unlock handler
-    /// re-validates before actually mutating the DB.
-    ConfirmUnlockLoadOrder { lock_description: String },
-}
 
 #[derive(Debug, Clone)]
 pub struct VerifyResults {
@@ -180,19 +161,6 @@ impl Modde {
             if let Ok(pm) = ProfileManager::open() {
                 self.profiles = pm.list().unwrap_or_default();
                 if let Ok(profile) = pm.load(name, None) {
-                    match modde_core::resolver::resolve(&profile) {
-                        Ok(resolved) => {
-                            self.resolved_order = resolved.order;
-                        }
-                        Err(_) => {
-                            self.resolved_order = profile
-                                .mods
-                                .iter()
-                                .filter(|m| m.enabled)
-                                .map(|m| ModId::from(m.mod_id.clone()))
-                                .collect();
-                        }
-                    }
                     if let Ok(info) = pm.active(&profile.game_id) {
                         self.experiment_depth = info.map(|i| i.experiment_depth).unwrap_or(0);
                     }
@@ -218,6 +186,218 @@ impl Modde {
     fn save_settings(&self) {
         self.settings.save();
     }
+
+    // ── Browse Nexus helpers (Phase 6) ──────────────────────────
+
+    /// Return the currently-selected game's Nexus domain, if the game
+    /// plugin defines one. Used by the Browse Nexus view to issue
+    /// GraphQL queries scoped to the right game.
+    pub fn current_game_nexus_domain(&self) -> Option<String> {
+        let game_id = self
+            .loaded_profile
+            .as_ref()
+            .map(|p| p.game_id.to_string())
+            .or_else(|| self.selected_game.clone())?;
+        modde_games::resolve_game_plugin(&game_id)
+            .and_then(|p| p.nexus_game_domain())
+            .map(str::to_string)
+    }
+
+    /// Kick off an async feed load for the Browse Nexus view. Picks
+    /// the right GraphQL query based on the tab.
+    pub fn spawn_browse_load(
+        &mut self,
+        tab: crate::views::browse_nexus::BrowseTab,
+        game_domain: String,
+        search_query: String,
+    ) -> Task<Message> {
+        use crate::views::browse_nexus::BrowseTab;
+        self.browse_nexus.loading = true;
+        self.browse_nexus.error = None;
+        match tab {
+            BrowseTab::Top | BrowseTab::Month => {
+                let kind = match tab {
+                    BrowseTab::Top => modde_sources::nexus::graphql::ModFeedKind::Trending,
+                    _ => modde_sources::nexus::graphql::ModFeedKind::MonthlyTop,
+                };
+                Task::perform(
+                    async move {
+                        let api_key = modde_sources::nexus::auth::load_api_key()
+                            .map_err(|e| e.to_string())?;
+                        let client = reqwest::Client::new();
+                        let api =
+                            modde_sources::nexus::api::NexusApi::new(client, api_key);
+                        api.browse_feed_gql(&game_domain, kind)
+                            .await
+                            .map_err(|e| e.to_string())
+                    },
+                    Message::BrowseModsLoaded,
+                )
+            }
+            BrowseTab::Search => Task::perform(
+                async move {
+                    let api_key = modde_sources::nexus::auth::load_api_key()
+                        .map_err(|e| e.to_string())?;
+                    let client = reqwest::Client::new();
+                    let api = modde_sources::nexus::api::NexusApi::new(client, api_key);
+                    api.search_mods_gql(&game_domain, &search_query, 1)
+                        .await
+                        .map_err(|e| e.to_string())
+                },
+                Message::BrowseModsLoaded,
+            ),
+            BrowseTab::Collections => {
+                let term = if search_query.is_empty() {
+                    None
+                } else {
+                    Some(search_query)
+                };
+                Task::perform(
+                    async move {
+                        let api_key = modde_sources::nexus::auth::load_api_key()
+                            .map_err(|e| e.to_string())?;
+                        let client = reqwest::Client::new();
+                        let api =
+                            modde_sources::nexus::api::NexusApi::new(client, api_key);
+                        api.collections_feed_gql(&game_domain, term.as_deref())
+                            .await
+                            .map_err(|e| e.to_string())
+                    },
+                    Message::BrowseCollectionsLoaded,
+                )
+            }
+        }
+    }
+}
+
+/// Run the full install pipeline for a single Nexus mod, invoked from
+/// the Browse Nexus **Install** button. Owned as a free function so
+/// the `update()` arm can hand it to `Task::perform` without borrowing
+/// `self`.
+async fn run_browse_install(game_domain: String, mod_id: u64) -> Result<String, String> {
+    let api_key =
+        modde_sources::nexus::auth::load_api_key().map_err(|e| e.to_string())?;
+    let client = reqwest::Client::new();
+    let api = modde_sources::nexus::api::NexusApi::new(client.clone(), api_key.clone());
+
+    // Look up the latest MAIN file id.
+    let files = api
+        .get_mod_files(&game_domain, mod_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut candidates: Vec<_> = files
+        .files
+        .into_iter()
+        .filter(|f| f.category_name.as_deref() == Some("MAIN"))
+        .collect();
+    candidates.sort_by_key(|f| std::cmp::Reverse(f.uploaded_timestamp));
+    let file_id = candidates
+        .first()
+        .map(|f| f.file_id)
+        .ok_or_else(|| format!("no MAIN file found for mod {mod_id}"))?;
+
+    let mod_info = api
+        .get_mod(&game_domain, mod_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Build a probe from whichever game plugin is registered.
+    let probe = modde_games::resolve_game_plugin(&game_domain)
+        .map(modde_games::game_probe)
+        .unwrap_or_else(modde_core::installer::InstallProbe::noop);
+
+    let outcome = modde_sources::nexus::install::install_single_mod(
+        &client,
+        &api_key,
+        &game_domain,
+        mod_id,
+        file_id,
+        &mod_info,
+        &probe,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    use modde_core::installer::InstallStatus;
+    use modde_sources::nexus::install::InstallOutcome;
+
+    let mod_id_str = format!("{game_domain}_{mod_id}_{file_id}");
+    let pm = modde_core::profile::ProfileManager::open().map_err(|e| e.to_string())?;
+
+    // Prefer an existing profile for the game; fall back to creating a
+    // Manual profile named after the game domain if none exist.
+    let profile_name = pm
+        .list()
+        .ok()
+        .and_then(|profiles| {
+            profiles
+                .into_iter()
+                .find(|p| p.game_id.as_str() == game_domain)
+                .map(|p| p.name)
+        })
+        .unwrap_or_else(|| game_domain.clone());
+    let mut profile = match pm.load(&profile_name, None) {
+        Ok(p) => p,
+        Err(_) => modde_core::profile::Profile {
+            id: None,
+            name: profile_name.clone(),
+            game_id: modde_core::resolver::GameId::from(game_domain.clone()),
+            source: modde_core::profile::ProfileSource::Manual,
+            mods: Vec::new(),
+            overrides: modde_core::profile::ProfileManager::default_overrides(
+                &profile_name,
+            ),
+            load_order_rules: smallvec::SmallVec::new(),
+            load_order_lock: None,
+        },
+    };
+    let status = match &outcome {
+        InstallOutcome::Installed(_) | InstallOutcome::AlreadyStaged => {
+            InstallStatus::Installed
+        }
+        InstallOutcome::PendingUserInput { .. } => InstallStatus::PendingUserInput,
+        InstallOutcome::Unknown { .. } => InstallStatus::Unknown,
+    };
+    if !profile.mods.iter().any(|m| m.mod_id == mod_id_str) {
+        profile.mods.push(modde_core::profile::EnabledMod {
+            mod_id: mod_id_str.clone(),
+            display_name: Some(mod_info.name.clone()),
+            enabled: true,
+            version: Some(mod_info.version.clone()),
+            nexus_mod_id: Some(mod_id as i64),
+            nexus_file_id: Some(file_id as i64),
+            nexus_game_domain: Some(game_domain.clone()),
+            install_status: Some(status.as_str().to_string()),
+            ..Default::default()
+        });
+    }
+    pm.create_or_update(&profile).map_err(|e| e.to_string())?;
+
+    if let InstallOutcome::Installed(plan) = &outcome {
+        let mut db = modde_core::ModdeDb::open().map_err(|e| e.to_string())?;
+        let profile_id = pm
+            .load(&profile_name, None)
+            .map_err(|e| e.to_string())?
+            .id
+            .ok_or_else(|| "saved profile has no id".to_string())?;
+        db.record_install(profile_id, &mod_id_str, plan, InstallStatus::Installed)
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(match outcome {
+        InstallOutcome::Installed(_) | InstallOutcome::AlreadyStaged => {
+            format!("Installed '{}'", mod_info.name)
+        }
+        InstallOutcome::PendingUserInput { method } => {
+            format!("'{}' needs {method} wizard", mod_info.name)
+        }
+        InstallOutcome::Unknown { dossier_path, .. } => {
+            format!(
+                "Unknown install layout — dossier: {}",
+                dossier_path.display()
+            )
+        }
+    })
 }
 
 /// Direction for `Message::ReorderMod`. Re-export of the core type so
@@ -244,8 +424,9 @@ pub(crate) fn format_lock_reason(reason: &modde_core::LockReason) -> String {
 #[derive(Debug, Clone)]
 pub enum View {
     ModList,
-    LoadOrder,
     Collections,
+    /// Unified Nexus browse surface — Top / Month / Collections / Search.
+    BrowseNexus,
     WabbajackInstaller(WabbajackInstallerState),
     FOMODWizard(FOMODWizardState),
     Settings,
@@ -550,35 +731,39 @@ pub enum Message {
     /// and an index-based message was latently unsound. Also lets the
     /// handler consult the per-mod lock without an index round-trip.
     ReorderMod { mod_id: String, direction: ReorderDirection },
-    ApplyLoadOrder,
-
-    // Load order lock
-    /// Apply a manual profile-level load order lock. `note` is optional
-    /// free text (e.g. "freeze for release"). Refuses if the profile is
-    /// already locked — the user must unlock first to preserve audit
-    /// trail for Wabbajack / Collection / TomlImport locks.
-    LockLoadOrder { note: Option<String> },
-    /// Clear the profile-level load order lock.
-    UnlockLoadOrder,
     /// Pin an individual mod in place (per-mod lock).
     LockMod { mod_id: String },
     /// Release an individual mod's per-mod pin.
     UnlockMod { mod_id: String },
 
-    // Modal
-    /// User clicked the Unlock button — open the confirm dialog. The
-    /// handler snapshots the current lock reason into `ModalState` so
-    /// the dialog can describe *why* the profile is locked even if the
-    /// profile changes underneath. `Message::UnlockLoadOrder` is the
-    /// actual destructive action; the modal is a two-click guard.
-    ShowUnlockConfirm,
-    /// User clicked Cancel, clicked the backdrop, or otherwise dismissed
-    /// the modal without confirming. Closes the modal with no side effects.
-    DismissModal,
 
     // Collections
     SearchCollections(String),
     InstallCollection { slug: String, version: String },
+
+    // ── Browse Nexus (Phase 6) ───────────────────────────────
+    /// Switch the active browse tab. Fires a task to load the feed
+    /// for the new tab if its contents are empty.
+    BrowseTabSwitched(crate::views::browse_nexus::BrowseTab),
+    /// Live search box keystroke.
+    BrowseSearchChanged(String),
+    /// Submit the search (Enter pressed). Runs the appropriate query
+    /// depending on the active tab.
+    BrowseSearchSubmit,
+    /// Async result of a mods feed fetch.
+    BrowseModsLoaded(
+        Result<Vec<modde_sources::nexus::graphql::GqlModTile>, String>,
+    ),
+    /// Async result of a collections feed fetch.
+    BrowseCollectionsLoaded(
+        Result<Vec<modde_sources::nexus::graphql::GqlCollectionTile>, String>,
+    ),
+    /// User clicked "Install" on a mod tile. Runs the install
+    /// pipeline via `modde_sources::nexus::install::install_single_mod`.
+    BrowseInstallMod { game_domain: String, mod_id: u64 },
+    /// Async completion of a browse install. The `Ok` payload is a
+    /// short human-readable status message; `Err` is an error string.
+    BrowseInstallResult(Result<String, String>),
 
     // Wabbajack
     OpenWabbajackFile,
@@ -630,6 +815,7 @@ pub enum Message {
     // Saves
     LoadSaveHistory,
     RestoreSaveSnapshot(String),
+    SelectSaveSnapshot(String),
 
     // Verification
     RunVerify,
@@ -706,13 +892,10 @@ impl Modde {
             .and_then(|pm| pm.list())
             .unwrap_or_default();
 
-        let available_games: SmallVec<[(String, String); 6]> = smallvec::smallvec![
-            ("skyrim-se".to_string(), "Skyrim SE".to_string()),
-            ("skyrim-ae".to_string(), "Skyrim AE".to_string()),
-            ("fallout4".to_string(), "Fallout 4".to_string()),
-            ("fallout76".to_string(), "Fallout 76".to_string()),
-            ("cyberpunk2077".to_string(), "Cyberpunk 2077".to_string()),
-        ];
+        let available_games: SmallVec<[(String, String); 8]> = modde_games::supported_games()
+            .iter()
+            .map(|(id, name)| (id.to_string(), name.to_string()))
+            .collect();
 
         let mut app = Self {
             active_view: View::ModList,
@@ -737,10 +920,9 @@ impl Modde {
             wabbajack_manifest: None,
             active_downloads: Vec::new(),
             loaded_profile: None,
-            resolved_order: Vec::new(),
-            conflict_map: ConflictMap::default(),
             save_snapshots: Vec::new(),
             current_fingerprint: None,
+            selected_save_details: None,
             experiment_depth: 0,
             nexus_status: None,
             verify: VerifyState::Idle,
@@ -755,7 +937,7 @@ impl Modde {
             data_tab_conflicts: Vec::new(),
             diagnostics_state: Default::default(),
             tool_state: Default::default(),
-            modal: None,
+            browse_nexus: Default::default(),
         };
 
         // Auto-detect: if no game is selected but profiles exist, pick the first profile's game
@@ -798,19 +980,12 @@ impl Modde {
                 self.active_view = view;
             }
             Message::SwitchProfile(name) => {
-                // Any open modal (e.g. the unlock-confirm dialog) was
-                // describing the *old* profile's state. Close it so the
-                // user doesn't see a stale description that would act
-                // on a different profile if they clicked through.
-                self.modal = None;
                 self.active_profile = Some(name);
                 self.reload_profile();
+                self.selected_save_details = None;
                 self.status_message = "Profile switched".to_string();
             }
             Message::CreateProfile { name, game_id } => {
-                // Creating a new profile implicitly switches to it —
-                // any open modal was pre-switch and is now stale.
-                self.modal = None;
                 match ProfileManager::open() {
                     Ok(pm) => {
                         let profile = modde_core::Profile {
@@ -842,10 +1017,6 @@ impl Modde {
                 }
             }
             Message::DeleteProfile(name) => {
-                // If the deleted profile was the one the modal was
-                // describing, the dialog is now pointing at nothing.
-                // Close it unconditionally for simplicity.
-                self.modal = None;
                 match ProfileManager::open() {
                     Ok(pm) => match pm.delete(&name, None) {
                         Ok(()) => {
@@ -862,9 +1033,6 @@ impl Modde {
                 }
             }
             Message::ForkProfile { source, new_name } => {
-                // Fork auto-switches active_profile to the new fork —
-                // same staleness concern as SwitchProfile.
-                self.modal = None;
                 if let Some(ref profile) = self.loaded_profile {
                     let game_id = profile.game_id.clone();
                     match ProfileManager::open() {
@@ -1524,99 +1692,6 @@ impl Modde {
                 }
             }
 
-            // ── Load order lock ──────────────────────────────────
-            Message::LockLoadOrder { note } => {
-                let Some(ref profile_name) = self.active_profile else {
-                    return Task::none();
-                };
-                let Ok(pm) = ProfileManager::open() else {
-                    self.status_message = "Failed to open profile database".to_string();
-                    return Task::none();
-                };
-                let Ok(mut profile) = pm.load(profile_name, None) else {
-                    return Task::none();
-                };
-                if profile.load_order_lock.is_some() {
-                    self.status_message =
-                        "Profile is already locked — unlock first to re-lock.".to_string();
-                    return Task::none();
-                }
-                profile.load_order_lock = Some(modde_core::LoadOrderLock::now(
-                    modde_core::LockReason::Manual { note: note.clone() },
-                ));
-                if let Err(e) = pm.update(&profile) {
-                    self.status_message = format!("Failed to lock profile: {e}");
-                    return Task::none();
-                }
-                self.status_message = match note {
-                    Some(n) => format!("Load order locked ({n})"),
-                    None => "Load order locked".to_string(),
-                };
-                self.reload_profile();
-            }
-            Message::UnlockLoadOrder => {
-                let Some(ref profile_name) = self.active_profile else {
-                    return Task::none();
-                };
-                let Ok(pm) = ProfileManager::open() else {
-                    self.status_message = "Failed to open profile database".to_string();
-                    return Task::none();
-                };
-                let Ok(mut profile) = pm.load(profile_name, None) else {
-                    return Task::none();
-                };
-                let prior = profile.load_order_lock.take();
-                if let Err(e) = pm.update(&profile) {
-                    // Leave the modal open so the user can see what went
-                    // wrong and retry or cancel. Only a successful unlock
-                    // closes the dialog.
-                    self.status_message = format!("Failed to unlock profile: {e}");
-                    return Task::none();
-                }
-                self.status_message = match prior {
-                    Some(l) => format!("Load order unlocked (was {})", format_lock_reason(&l.reason)),
-                    None => "Profile was not locked".to_string(),
-                };
-                // Confirming the unlock also closes the modal that spawned
-                // the action. See `Message::ShowUnlockConfirm` for the open
-                // path.
-                self.modal = None;
-                self.reload_profile();
-            }
-            Message::ShowUnlockConfirm => {
-                // Two-click guard for the destructive `UnlockLoadOrder`
-                // action. We re-validate here (not just at the view layer)
-                // because keyboard shortcuts / scripted dispatch could
-                // bypass the button's disabled state.
-                let Some(ref profile_name) = self.active_profile else {
-                    self.status_message = "No active profile".to_string();
-                    return Task::none();
-                };
-                let Ok(pm) = ProfileManager::open() else {
-                    self.status_message = "Failed to open profile database".to_string();
-                    return Task::none();
-                };
-                let Ok(profile) = pm.load(profile_name, None) else {
-                    return Task::none();
-                };
-                let Some(lock) = profile.load_order_lock.as_ref() else {
-                    self.status_message = "Profile is not locked.".to_string();
-                    return Task::none();
-                };
-                // Snapshot the description at open time. The actual
-                // unlock handler re-loads the profile and mutates the
-                // DB, so any drift between open and confirm is still
-                // safe — worst case the user sees a stale reason in
-                // the dialog but the unlock itself is atomic.
-                self.modal = Some(ModalState::ConfirmUnlockLoadOrder {
-                    lock_description: format_lock_reason(&lock.reason),
-                });
-            }
-            Message::DismissModal => {
-                // Cheap dismissal — no DB touch, no status message
-                // change. Cancelling the dialog is free.
-                self.modal = None;
-            }
             Message::LockMod { mod_id } => {
                 let Some(ref profile_name) = self.active_profile else {
                     return Task::none();
@@ -1653,16 +1728,6 @@ impl Modde {
                     }
                 }
             }
-            Message::ApplyLoadOrder => {
-                if let Some(ref profile_name) = self.active_profile {
-                    if let Ok(pm) = ProfileManager::open() {
-                        if let Ok(profile) = pm.load(profile_name, None) {
-                            let _ = pm.create(&profile).or_else(|_| pm.update(&profile).map(|_| 0));
-                        }
-                    }
-                }
-                self.status_message = "Load order saved".to_string();
-            }
 
             // ── Collections ──────────────────────────────────────
             Message::SearchCollections(query) => {
@@ -1684,6 +1749,81 @@ impl Modde {
             }
             Message::InstallCollection { slug, version } => {
                 self.status_message = format!("Installing collection {slug} v{version}...");
+            }
+
+            // ── Browse Nexus (Phase 6) ───────────────────────────
+            Message::BrowseTabSwitched(tab) => {
+                self.browse_nexus.active_tab = tab;
+                self.browse_nexus.error = None;
+                let domain = match self.current_game_nexus_domain() {
+                    Some(d) => d,
+                    None => return Task::none(),
+                };
+                return self.spawn_browse_load(tab, domain, self.browse_nexus.search_query.clone());
+            }
+            Message::BrowseSearchChanged(query) => {
+                self.browse_nexus.search_query = query;
+            }
+            Message::BrowseSearchSubmit => {
+                self.browse_nexus.active_tab =
+                    crate::views::browse_nexus::BrowseTab::Search;
+                self.browse_nexus.error = None;
+                let domain = match self.current_game_nexus_domain() {
+                    Some(d) => d,
+                    None => return Task::none(),
+                };
+                let tab = self.browse_nexus.active_tab;
+                let query = self.browse_nexus.search_query.clone();
+                return self.spawn_browse_load(tab, domain, query);
+            }
+            Message::BrowseModsLoaded(result) => {
+                self.browse_nexus.loading = false;
+                match result {
+                    Ok(mods) => {
+                        self.browse_nexus.mods = mods;
+                        self.browse_nexus.error = None;
+                    }
+                    Err(e) => {
+                        self.browse_nexus.mods.clear();
+                        self.browse_nexus.error = Some(e);
+                    }
+                }
+            }
+            Message::BrowseCollectionsLoaded(result) => {
+                self.browse_nexus.loading = false;
+                match result {
+                    Ok(cols) => {
+                        self.browse_nexus.collections = cols;
+                        self.browse_nexus.error = None;
+                    }
+                    Err(e) => {
+                        self.browse_nexus.collections.clear();
+                        self.browse_nexus.error = Some(e);
+                    }
+                }
+            }
+            Message::BrowseInstallMod { game_domain, mod_id } => {
+                self.browse_nexus.install_status =
+                    Some(format!("Installing mod {mod_id}…"));
+                return Task::perform(
+                    async move {
+                        run_browse_install(game_domain, mod_id).await
+                    },
+                    Message::BrowseInstallResult,
+                );
+            }
+            Message::BrowseInstallResult(result) => {
+                match result {
+                    Ok(msg) => {
+                        self.browse_nexus.install_status = Some(msg.clone());
+                        self.status_message = msg;
+                        self.reload_profile();
+                    }
+                    Err(e) => {
+                        self.browse_nexus.install_status = Some(format!("Install failed: {e}"));
+                        self.status_message = format!("Install failed: {e}");
+                    }
+                }
             }
 
             // ── Wabbajack ────────────────────────────────────────
@@ -2052,6 +2192,7 @@ impl Modde {
 
             // ── Saves ────────────────────────────────────────────
             Message::LoadSaveHistory => {
+                self.selected_save_details = None;
                 if let Some(ref profile) = self.loaded_profile {
                     let game_id = profile.game_id.clone();
                     let profile_name = profile.name.clone();
@@ -2059,6 +2200,25 @@ impl Modde {
                         Ok(history) => self.save_snapshots = history,
                         Err(e) => { self.save_snapshots = Vec::new(); self.status_message = format!("Could not load save history: {e}"); }
                     }
+                }
+            }
+            Message::SelectSaveSnapshot(commit_id) => {
+                if let Some(snap) = self.save_snapshots.iter().find(|s| s.id == commit_id) {
+                    let compat = snap.fingerprint.as_ref()
+                        .zip(self.current_fingerprint.as_ref())
+                        .map(|(_, current)| snap.check_compatibility(current));
+
+                    let mut details = crate::views::save_details::SaveDetailsState::from_snapshot(snap, compat);
+
+                    // Load file list synchronously (fast git tree walk)
+                    if let Some(ref profile) = self.loaded_profile {
+                        match modde_core::save::SaveManager::snapshot_file_list(&profile.game_id, &commit_id) {
+                            Ok(files) => details.file_paths = Some(files),
+                            Err(_) => details.file_paths = Some(Vec::new()),
+                        }
+                    }
+
+                    self.selected_save_details = Some(details);
                 }
             }
             Message::RestoreSaveSnapshot(commit_id) => {
@@ -2191,6 +2351,14 @@ impl Modde {
     // ─── View ────────────────────────────────────────────────────
 
     fn view(&self) -> Element<'_, Message> {
+        // Show mod details in sidebar on all views except Saves;
+        // show save details only on Saves view.
+        let (mod_details_for_sidebar, save_details_for_sidebar) = if matches!(self.active_view, View::Saves) {
+            (None, self.selected_save_details.as_ref())
+        } else {
+            (self.selected_mod_details.as_ref(), None)
+        };
+
         let sidebar = crate::views::sidebar::view(
             &self.active_view,
             &self.profiles,
@@ -2198,7 +2366,8 @@ impl Modde {
             self.experiment_depth,
             &self.new_profile_name,
             &self.selected_game,
-            self.selected_mod_details.as_ref(),
+            mod_details_for_sidebar,
+            save_details_for_sidebar,
         );
 
         let mods = self.loaded_profile.as_ref().map(|p| p.mods.as_slice()).unwrap_or(&[]);
@@ -2213,8 +2382,15 @@ impl Modde {
                     .as_ref()
                     .is_some_and(|p| p.load_order_lock.is_some()),
             ),
-            View::LoadOrder => crate::views::load_order::view(&self.resolved_order, &self.conflict_map, self.loaded_profile.as_ref()),
             View::Collections => crate::views::collections::view(&self.collection_search, &self.collections, &self.active_downloads),
+            View::BrowseNexus => {
+                // Resolve the game domain here so the view can render
+                // an empty state when no profile/game is loaded yet.
+                // Pass by value so the Element's lifetime isn't tied
+                // to this local string.
+                let domain = self.current_game_nexus_domain();
+                crate::views::browse_nexus::view(&self.browse_nexus, domain)
+            }
             View::FOMODWizard(_) => crate::views::fomod_wizard::view(self),
             View::Settings => crate::views::settings::view(settings_state),
             View::WabbajackInstaller(state) => crate::views::wabbajack::view(state, &self.wabbajack_manifest),
@@ -2222,6 +2398,7 @@ impl Modde {
                 &self.save_snapshots,
                 self.loaded_profile.as_ref().map(|p| p.name.as_str()),
                 self.current_fingerprint.as_ref(),
+                self.selected_save_details.as_ref().map(|d| d.commit_id.as_str()),
             ),
             View::Verify => crate::views::verify::view(&self.verify),
             View::Downloads => container(text("Downloads view").size(14)).padding(20).width(Length::Fill).into(),
@@ -2304,13 +2481,7 @@ impl Modde {
             .height(Length::Fill)
             .into();
 
-        // Overlay any open modal on top of the normal UI. The `None`
-        // path is the hot path and contributes zero extra widgets to
-        // the render tree — see `crate::views::modal::overlay`.
-        match crate::views::modal::overlay(self.modal.as_ref()) {
-            None => base,
-            Some([backdrop, card]) => iced::widget::stack![base, backdrop, card].into(),
-        }
+        base
     }
 
     fn theme(&self) -> Theme {
@@ -2349,7 +2520,6 @@ impl Modde {
 fn shortcut_action_to_message(action: &str) -> Option<Message> {
     match action {
         "deploy" => Some(Message::Deploy),
-        "dismiss_modal" => Some(Message::DismissModal),
         _ => None,
     }
 }
@@ -2393,10 +2563,9 @@ mod tests {
             wabbajack_manifest: None,
             active_downloads: Vec::new(),
             loaded_profile: None,
-            resolved_order: Vec::new(),
-            conflict_map: ConflictMap::default(),
             save_snapshots: Vec::new(),
             current_fingerprint: None,
+            selected_save_details: None,
             experiment_depth: 0,
             nexus_status: None,
             verify: VerifyState::Idle,
@@ -2411,7 +2580,7 @@ mod tests {
             data_tab_conflicts: Vec::new(),
             diagnostics_state: Default::default(),
             tool_state: Default::default(),
-            modal: None,
+            browse_nexus: Default::default(),
         }
     }
 
@@ -2553,38 +2722,6 @@ mod tests {
         assert_eq!(app.status_message, old);
     }
 
-    // ── Modal (unlock confirmation) ────────────────────────────────
-    //
-    // These tests exercise the pure state transitions on `Modde.modal`.
-    // The `ShowUnlockConfirm` path that actually loads a profile from
-    // the DB isn't tested here because `test_app()` doesn't isolate the
-    // DB — covering that path requires the same `paths::set_data_dir`
-    // trick used in `load_order_lock_tests.rs`, which is overkill for
-    // this small feature. The handler code path is straightforward
-    // (load profile → read lock → format → set modal) and is exercised
-    // end-to-end by the UI smoke test in the plan file.
-
-    #[test]
-    fn test_dismiss_modal_clears_state() {
-        let mut app = test_app();
-        app.modal = Some(ModalState::ConfirmUnlockLoadOrder {
-            lock_description: "Wabbajack (hash deadbeef)".to_string(),
-        });
-        let _ = app.update(Message::DismissModal);
-        assert!(
-            app.modal.is_none(),
-            "DismissModal must clear the modal state"
-        );
-    }
-
-    #[test]
-    fn test_shortcut_action_to_message_maps_escape() {
-        assert!(matches!(
-            shortcut_action_to_message("dismiss_modal"),
-            Some(Message::DismissModal)
-        ));
-    }
-
     #[test]
     fn test_shortcut_action_to_message_maps_deploy() {
         assert!(matches!(
@@ -2595,100 +2732,10 @@ mod tests {
 
     #[test]
     fn test_shortcut_action_to_message_drops_unmapped() {
-        // Actions registered in all_shortcuts() but without a wired
-        // handler must return None, not panic or silently dispatch
-        // the wrong message.
         assert!(shortcut_action_to_message("refresh").is_none());
         assert!(shortcut_action_to_message("nonexistent").is_none());
     }
 
-    #[test]
-    fn test_dismiss_modal_is_idempotent() {
-        // Dismissing when nothing is open should be a silent no-op,
-        // not a panic or status-message clobber.
-        let mut app = test_app();
-        let old_status = app.status_message.clone();
-        assert!(app.modal.is_none());
-        let _ = app.update(Message::DismissModal);
-        assert!(app.modal.is_none());
-        assert_eq!(app.status_message, old_status);
-    }
-
-    #[test]
-    fn test_show_unlock_confirm_without_active_profile_is_noop() {
-        // No active profile → the handler returns early. Crucially, it
-        // must NOT open a modal (user would see an empty confirmation
-        // dialog with nothing to act on).
-        let mut app = test_app();
-        assert!(app.active_profile.is_none());
-        assert!(app.modal.is_none());
-        let _ = app.update(Message::ShowUnlockConfirm);
-        assert!(
-            app.modal.is_none(),
-            "ShowUnlockConfirm must not open a modal when no profile is active"
-        );
-    }
-
-    #[test]
-    fn test_switch_profile_clears_stale_modal() {
-        // Regression guard: the unlock modal captures a snapshot of
-        // the lock reason when it's opened. If the user switches
-        // profiles underneath, that snapshot is stale — close the
-        // modal so they don't see a description that would act on a
-        // different profile if they clicked through.
-        let mut app = test_app();
-        app.modal = Some(ModalState::ConfirmUnlockLoadOrder {
-            lock_description: "Wabbajack (hash stale)".to_string(),
-        });
-        let _ = app.update(Message::SwitchProfile("other".to_string()));
-        assert!(
-            app.modal.is_none(),
-            "SwitchProfile must close any open modal"
-        );
-    }
-
-    #[test]
-    fn test_delete_profile_clears_stale_modal() {
-        // Holds `DB_LOCK` because `Message::DeleteProfile` calls
-        // `ProfileManager::open()` which, once the refusal-test
-        // helpers have run, opens the shared isolated SQLite file.
-        // Without the guard this races the migration happening inside
-        // other refusal tests. See the `DB_LOCK` doc comment below.
-        let _guard = db_lock();
-        let mut app = test_app();
-        app.modal = Some(ModalState::ConfirmUnlockLoadOrder {
-            lock_description: "Wabbajack (hash stale)".to_string(),
-        });
-        // DeleteProfile calls ProfileManager::open() which hits the
-        // (isolated) DB and will fail on a missing profile — we only
-        // care that the modal is cleared *before* the DB call, so the
-        // early modal=None line runs regardless.
-        let _ = app.update(Message::DeleteProfile("nonexistent".to_string()));
-        assert!(
-            app.modal.is_none(),
-            "DeleteProfile must close any open modal"
-        );
-    }
-
-    #[test]
-    fn test_unlock_load_order_failure_leaves_modal_alone() {
-        // Contract from the plan: "failure paths don't clear the
-        // modal so the user sees what went wrong and can retry or
-        // cancel". The no-active-profile path in `UnlockLoadOrder`
-        // early-returns without touching `self.modal`. If a later
-        // refactor accidentally adds `self.modal = None` to the
-        // early-return branch, this test catches it.
-        let mut app = test_app();
-        assert!(app.active_profile.is_none());
-        app.modal = Some(ModalState::ConfirmUnlockLoadOrder {
-            lock_description: "sticky".to_string(),
-        });
-        let _ = app.update(Message::UnlockLoadOrder);
-        assert!(
-            app.modal.is_some(),
-            "failed unlock must leave the modal in place for retry/cancel"
-        );
-    }
 
     #[test]
     fn test_fomod_cancel() {
@@ -2724,8 +2771,7 @@ mod tests {
     // ── UI handler lock refusal tests (DB-isolated) ──────────────
     //
     // These exercise the DB-touching branches of `Message::ReorderMod`
-    // / `LockLoadOrder` / `UnlockLoadOrder` / `LockMod` / `UnlockMod`
-    // that the pure in-memory modal tests above explicitly skipped.
+    // / `LockMod` / `UnlockMod`.
     //
     // DB isolation is a process-wide `OnceLock<TempDir>` via
     // `modde_core::paths::set_data_dir` — the same pattern used by
@@ -2992,75 +3038,6 @@ mod tests {
         );
     }
 
-    // ─── LockLoadOrder / UnlockLoadOrder ─────────────────────────
-
-    #[test]
-    fn lock_load_order_sets_manual_lock() {
-        let _guard = db_lock();
-        seed_profile("lock_sets_manual", vec![seed_mod("a", None)], None);
-        let mut app = loaded_test_app("lock_sets_manual");
-        let _ = app.update(Message::LockLoadOrder {
-            note: Some("freeze".to_string()),
-        });
-        let persisted = reload_seeded("lock_sets_manual");
-        let lock = persisted
-            .load_order_lock
-            .as_ref()
-            .expect("lock should be set");
-        match &lock.reason {
-            LockReason::Manual { note: Some(n) } => assert_eq!(n, "freeze"),
-            other => panic!("expected Manual lock with note, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn lock_load_order_refused_when_already_locked() {
-        let _guard = db_lock();
-        seed_profile(
-            "lock_refuse_already",
-            vec![seed_mod("a", None)],
-            Some(LoadOrderLock::now(LockReason::Wabbajack {
-                manifest_hash: "abc".to_string(),
-            })),
-        );
-        let mut app = loaded_test_app("lock_refuse_already");
-        let _ = app.update(Message::LockLoadOrder { note: None });
-        let persisted = reload_seeded("lock_refuse_already");
-        // Lock reason must be unchanged — still Wabbajack.
-        match &persisted.load_order_lock.as_ref().unwrap().reason {
-            LockReason::Wabbajack { manifest_hash } => assert_eq!(manifest_hash, "abc"),
-            other => panic!("lock reason was overwritten: {other:?}"),
-        }
-        assert!(
-            app.status_message.contains("already locked"),
-            "status message should explain the refusal, got: {}",
-            app.status_message
-        );
-    }
-
-    #[test]
-    fn unlock_load_order_clears_lock() {
-        let _guard = db_lock();
-        seed_profile(
-            "unlock_clears",
-            vec![seed_mod("a", None)],
-            Some(LoadOrderLock::now(LockReason::Wabbajack {
-                manifest_hash: "xyz".to_string(),
-            })),
-        );
-        let mut app = loaded_test_app("unlock_clears");
-        let _ = app.update(Message::UnlockLoadOrder);
-        let persisted = reload_seeded("unlock_clears");
-        assert!(
-            persisted.load_order_lock.is_none(),
-            "lock must be cleared after UnlockLoadOrder"
-        );
-        assert!(
-            app.status_message.contains("Wabbajack"),
-            "status should mention the prior reason, got: {}",
-            app.status_message
-        );
-    }
 
     // ─── LockMod / UnlockMod (per-mod pins) ──────────────────────
 
