@@ -1,9 +1,16 @@
+pub mod browse_nexus;
 pub mod collections;
+pub mod data_tab;
+pub mod diagnostics;
+pub mod downloads;
 pub mod fomod_wizard;
-pub mod load_order;
+pub mod mod_details;
 pub mod mod_list;
+pub mod overwrite;
+pub mod save_details;
 pub mod saves;
 pub mod settings;
 pub mod sidebar;
+pub mod tools;
 pub mod verify;
 pub mod wabbajack;

@@ -206,7 +206,7 @@ async fn snapshot_recursive(src: &Path, dst: &Path) -> Result<()> {
         } else if file_type.is_file() {
             match tokio::fs::hard_link(&src_path, &dst_path).await {
                 Ok(()) => {}
-                Err(e) if e.raw_os_error() == Some(libc::EXDEV) => {
+                Err(e) if crate::fs::is_cross_device_error(&e) => {
                     warn!(
                         src = %src_path.display(),
                         "cross-device hardlink; falling back to copy"

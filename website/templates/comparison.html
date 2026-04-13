@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} — {{ config.description }}{% endblock %}
+
+{% block content %}
+<section class="comparison-hero">
+  <h1>{{ page.title }}</h1>
+  <p class="subtitle">{{ page.extra.subtitle }}</p>
+</section>
+
+<section class="comparison-content">
+  <div class="comparison-section">
+    <h2>modde-only features</h2>
+    <p class="section-subtitle">Features that exist in modde but have no MO2 equivalent.</p>
+    <div class="features-grid">
+      <div class="feature-card highlight">
+        <h3>Git-backed save vaults</h3>
+        <p>Full history, branching, and restore for game saves. Every snapshot is a git commit you can roll back to.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Save fingerprinting</h3>
+        <p>SHA-256 fingerprint of save-breaking mods. Warns you before loading a save that's incompatible with your current mod setup.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Experiment stack</h3>
+        <p>Try profile changes non-destructively. Stack experiments like git branches — rollback or commit when done.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Declarative FOMOD configs</h3>
+        <p>TOML/JSON/Nix configs for reproducible, non-interactive FOMOD installations. No more clicking through wizards.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Wabbajack installation</h3>
+        <p>Install complete Wabbajack modlists natively on Linux. MO2 is a target for Wabbajack, not an installer.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Nexus Collections</h3>
+        <p>Install curated Nexus Collections directly. MO2 doesn't support Collections.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>NixOS-native</h3>
+        <p>Declarative profiles in home-manager. sops-nix compatible API key management. No Wine needed for the manager.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Profile forking with saves</h3>
+        <p>Clone a profile including its entire save history. Fork locked Wabbajack profiles into freely editable copies.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Save auto-capture</h3>
+        <p>Automatically snapshot saves when the game exits or via continuous polling. Never lose progress.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Stock game verification</h3>
+        <p>Tree-hash your vanilla installation to detect unexpected modifications.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Multi-launcher detection</h3>
+        <p>Auto-detect games across Steam and Heroic (GOG, Epic, Sideload) in a single scan.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="comparison-section">
+    <h2>Feature coverage</h2>
+    <p class="section-subtitle">modde covers 63% of MO2's 143 tracked features, with strong coverage in profiles, saves, and deployment.</p>
+    <table class="coverage-table">
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Coverage</th>
+          <th>Done</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Save Management</td><td><span class="badge high">94%</span></td><td>7</td><td>8</td></tr>
+        <tr><td>Profile System</td><td><span class="badge high">88%</span></td><td>7</td><td>8</td></tr>
+        <tr><td>Diagnostics</td><td><span class="badge high">80%</span></td><td>4</td><td>5</td></tr>
+        <tr><td>Game Support</td><td><span class="badge mid">75%</span></td><td>6</td><td>8</td></tr>
+        <tr><td>Tool Integration</td><td><span class="badge mid">71%</span></td><td>5</td><td>7</td></tr>
+        <tr><td>Platform</td><td><span class="badge mid">71%</span></td><td>5</td><td>7</td></tr>
+        <tr><td>Core VFS & Deployment</td><td><span class="badge mid">67%</span></td><td>8</td><td>12</td></tr>
+        <tr><td>Mod Backup</td><td><span class="badge mid">67%</span></td><td>2</td><td>3</td></tr>
+        <tr><td>Conflict Resolution</td><td><span class="badge mid">63%</span></td><td>5</td><td>8</td></tr>
+        <tr><td>Installer Support</td><td><span class="badge mid">58%</span></td><td>4</td><td>6</td></tr>
+        <tr><td>Nexus Integration</td><td><span class="badge mid">55%</span></td><td>12</td><td>22</td></tr>
+        <tr><td>Mod Info Dialog</td><td><span class="badge mid">55%</span></td><td>6</td><td>11</td></tr>
+        <tr><td>Plugin Load Order</td><td><span class="badge low">54%</span></td><td>7</td><td>12</td></tr>
+        <tr><td>Organization & UI</td><td><span class="badge low">43%</span></td><td>9</td><td>21</td></tr>
+        <tr><td>Extensibility</td><td><span class="badge low">40%</span></td><td>2</td><td>5</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="comparison-section">
+    <h2>Where MO2 is ahead</h2>
+    <p class="section-subtitle">Areas where MO2's maturity shows. These are on the roadmap.</p>
+    <ul class="gap-list">
+      <li><strong>Mod Information Dialog</strong> — MO2's 9-tab double-click experience (filetree, conflicts, images, text editor) is the biggest UI gap</li>
+      <li><strong>Download queue</strong> — MO2 has pause/resume, speed tracking, and 10 download states</li>
+      <li><strong>BSA/BA2 archive conflicts</strong> — MO2 indexes files inside archives for conflict checking</li>
+      <li><strong>50+ games</strong> — MO2 supports many more titles via its plugin system</li>
+      <li><strong>Rich UI features</strong> — Collapsible separators, 12 status flag icons, content type detection, keyboard shortcuts</li>
+      <li><strong>Plugin system</strong> — MO2's Python plugin architecture enables community extensions</li>
+    </ul>
+  </div>
+</section>
+{% endblock %}

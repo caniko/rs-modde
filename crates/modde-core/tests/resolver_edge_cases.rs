@@ -17,11 +17,12 @@ fn make_profile(mods: Vec<(&str, bool)>, rules: smallvec::SmallVec<[LoadOrderRul
                 mod_id: id.to_string(),
                 enabled,
                 version: None,
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             })
             .collect(),
         overrides: PathBuf::from("/tmp/overrides"),
         load_order_rules: rules,
+        load_order_lock: None,
     }
 }
 

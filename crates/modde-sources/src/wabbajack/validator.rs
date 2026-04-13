@@ -83,12 +83,29 @@ pub async fn validate_install(
     })
 }
 
+/// Cheap pre-install check: returns `true` when every file the manifest
+/// expects already exists in the staging directory.  Only checks existence
+/// (no hashing), so it is fast enough to run unconditionally before the
+/// install pipeline.
+pub async fn preflight_staging(manifest: &WabbajackManifest, staging_dir: &Path) -> bool {
+    let expected = collect_expected_files(manifest);
+    if expected.is_empty() {
+        return false;
+    }
+    for (rel_path, _hash) in &expected {
+        if !staging_dir.join(rel_path).exists() {
+            return false;
+        }
+    }
+    true
+}
+
 /// Collect expected (relative_path, hash) pairs from the manifest.
 ///
 /// Uses archive entries as the source of truth for expected hashes. Install
 /// directives reference archives by hash, so we build a lookup from archive
 /// hash -> archive entry, then map install directive targets to expected hashes.
-fn collect_expected_files(manifest: &WabbajackManifest) -> Vec<(String, u64)> {
+pub(crate) fn collect_expected_files(manifest: &WabbajackManifest) -> Vec<(String, u64)> {
     use modde_core::manifest::wabbajack::RawDirective;
 
     let mut files = Vec::new();

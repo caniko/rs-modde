@@ -10,18 +10,33 @@ pub fn set_data_dir(path: PathBuf) {
         .expect("data directory already set");
 }
 
-/// XDG-compliant base data directory (`$XDG_DATA_HOME` or `~/.local/share`).
+/// Platform-aware base data directory.
+///
+/// - Linux: `$XDG_DATA_HOME` or `~/.local/share`
+/// - macOS: `~/Library/Application Support`
+/// - Windows: `%APPDATA%` (e.g. `C:\Users\X\AppData\Roaming`)
 pub fn data_dir() -> PathBuf {
-    std::env::var("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| home_dir().join(".local/share"))
+    // Honor XDG override on Linux/BSD
+    #[cfg(target_os = "linux")]
+    if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
+        return PathBuf::from(xdg);
+    }
+
+    dirs::data_dir().unwrap_or_else(|| home_dir().join(".local/share"))
 }
 
-/// XDG-compliant config directory (`$XDG_CONFIG_HOME` or `~/.config`).
+/// Platform-aware config directory.
+///
+/// - Linux: `$XDG_CONFIG_HOME` or `~/.config`
+/// - macOS: `~/Library/Application Support`
+/// - Windows: `%APPDATA%`
 pub fn config_dir() -> PathBuf {
-    std::env::var("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| home_dir().join(".config"))
+    #[cfg(target_os = "linux")]
+    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
+        return PathBuf::from(xdg);
+    }
+
+    dirs::config_dir().unwrap_or_else(|| home_dir().join(".config"))
 }
 
 /// Root of all modde data: `<data_dir>/modde/` or the overridden path.
@@ -47,6 +62,11 @@ pub fn profiles_dir() -> PathBuf {
     modde_data_dir().join("profiles")
 }
 
+/// Downloads directory: `<modde_data>/downloads/`.
+pub fn downloads_dir() -> PathBuf {
+    modde_data_dir().join("downloads")
+}
+
 /// Stock game snapshots: `<modde_data>/stock/`.
 pub fn stock_dir() -> PathBuf {
     modde_data_dir().join("stock")
@@ -57,14 +77,56 @@ pub fn save_vaults_dir() -> PathBuf {
     modde_data_dir().join("saves")
 }
 
+/// Content-addressed cache of `.wabbajack` manifest source files.
+/// See [`crate::manifest::wabbajack::cache_wabbajack_file`].
+pub fn wabbajack_cache_dir() -> PathBuf {
+    modde_data_dir().join("wabbajack_cache")
+}
+
+/// Path to a cached `.wabbajack` file keyed by its `manifest_hash`.
+pub fn wabbajack_cache_path(manifest_hash: &str) -> PathBuf {
+    wabbajack_cache_dir().join(format!("{manifest_hash}.wabbajack"))
+}
+
 /// Save vault (git repo) for a specific game: `<modde_data>/saves/<game_id>/`.
 pub fn save_vault_dir(game_id: &str) -> PathBuf {
     save_vaults_dir().join(game_id)
 }
 
+/// Default Steam install directory (platform-aware).
+fn steam_install_dir() -> PathBuf {
+    #[cfg(target_os = "linux")]
+    {
+        home_dir().join(".local/share/Steam")
+    }
+    #[cfg(target_os = "macos")]
+    {
+        home_dir().join("Library/Application Support/Steam")
+    }
+    #[cfg(target_os = "windows")]
+    {
+        steam_install_dir_windows()
+    }
+}
+
+/// Read Steam install path from Windows registry, with fallback.
+#[cfg(target_os = "windows")]
+fn steam_install_dir_windows() -> PathBuf {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok(key) = hkcu.open_subkey(r"Software\Valve\Steam") {
+        if let Ok(path) = key.get_value::<String, _>("SteamPath") {
+            return PathBuf::from(path);
+        }
+    }
+    PathBuf::from(r"C:\Program Files (x86)\Steam")
+}
+
 /// Default Steam common library path.
 pub fn steam_common() -> PathBuf {
-    home_dir().join(".local/share/Steam/steamapps/common")
+    steam_install_dir().join("steamapps/common")
 }
 
 /// Parse Steam's `libraryfolders.vdf` and return all library paths.
@@ -73,7 +135,7 @@ pub fn steam_common() -> PathBuf {
 /// Each entry has a `"path"` key pointing to the Steam library root;
 /// game installs live under `<path>/steamapps/common/<game>/`.
 pub fn steam_library_folders() -> Vec<PathBuf> {
-    let vdf_path = home_dir().join(".local/share/Steam/steamapps/libraryfolders.vdf");
+    let vdf_path = steam_install_dir().join("steamapps/libraryfolders.vdf");
     parse_library_folders_vdf(&vdf_path)
 }
 
@@ -104,7 +166,7 @@ fn parse_library_folders_vdf(path: &Path) -> Vec<PathBuf> {
     }
 
     // Ensure the default library is always included
-    let default_lib = home_dir().join(".local/share/Steam");
+    let default_lib = steam_install_dir();
     if !paths.iter().any(|p| p == &default_lib) && default_lib.exists() {
         paths.insert(0, default_lib);
     }
@@ -120,10 +182,22 @@ fn extract_vdf_string(s: &str) -> Option<&str> {
     Some(&s[..end])
 }
 
-/// Heroic Games Launcher config directory (`~/.config/heroic`).
+/// Heroic Games Launcher config directory (platform-aware).
+///
+/// - Linux: `~/.config/heroic`
+/// - macOS: `~/Library/Application Support/heroic`
+/// - Windows: `%APPDATA%\heroic`
 pub fn heroic_config_dir() -> Option<PathBuf> {
     let dir = config_dir().join("heroic");
     dir.is_dir().then_some(dir)
+}
+
+/// Heroic Games Launcher binary location (Windows only).
+#[cfg(target_os = "windows")]
+pub fn heroic_exe_path() -> Option<PathBuf> {
+    let local_app = dirs::data_local_dir()?;
+    let exe = local_app.join(r"Programs\heroic\Heroic.exe");
+    exe.exists().then_some(exe)
 }
 
 /// SQLite database path: `<modde_data>/modde.db`.
@@ -137,7 +211,18 @@ pub fn modde_config_dir() -> PathBuf {
 }
 
 pub fn home_dir() -> PathBuf {
-    PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string()))
+    dirs::home_dir().unwrap_or_else(|| {
+        #[cfg(unix)]
+        {
+            PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string()))
+        }
+        #[cfg(windows)]
+        {
+            PathBuf::from(
+                std::env::var("USERPROFILE").unwrap_or_else(|_| r"C:\Temp".to_string()),
+            )
+        }
+    })
 }
 
 #[cfg(test)]

@@ -26,7 +26,7 @@ fn simple_mod(id: &str, enabled: bool) -> EnabledMod {
         mod_id: id.to_string(),
         enabled,
         version: Some("1.0".to_string()),
-        fomod_config: None,
+        fomod_config: None, ..Default::default()
     }
 }
 
@@ -42,6 +42,7 @@ fn make_profile(name: &str, mods: Vec<&str>, rules: smallvec::SmallVec<[LoadOrde
             .collect(),
         overrides: PathBuf::from("/tmp/overrides"),
         load_order_rules: rules,
+        load_order_lock: None,
     }
 }
 
@@ -67,6 +68,7 @@ fn smoke_profile_roundtrip() {
             mod_id: ModId::from("mod_b"),
             after: ModId::from("mod_a"),
         }],
+        load_order_lock: None,
     };
 
     pm.create(&profile).unwrap();
@@ -96,6 +98,7 @@ fn smoke_profile_nexus_collection_source_roundtrip() {
         mods: vec![],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     pm.create(&profile).unwrap();
@@ -228,7 +231,7 @@ fn smoke_symlink_farm_build() {
         vec![("textures/sky.dds".into(), PathBuf::from("/store/mod_b/sky.dds"))],
     );
 
-    let farm = SymlinkFarm::build("smoke_profile", &resolved, &mod_files, None).unwrap();
+    let farm = SymlinkFarm::build("smoke_profile", &resolved, &mod_files, None, None).unwrap();
     // mod_b wins because it's later in the order
     assert_eq!(farm.links.len(), 1);
     assert_eq!(

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
@@ -40,11 +40,13 @@ impl SymlinkFarm<Built> {
     ///
     /// `mod_files` maps each mod ID to its list of `(relative_path, store_entry_path)` pairs.
     /// `overrides` (if provided) are layered on top — override files win over all mods.
+    /// `hidden` is a set of `(mod_id, rel_path)` pairs to exclude from the farm.
     pub fn build(
         profile_name: &str,
         resolved: &ResolvedLoadOrder,
         mod_files: &HashMap<ModId, Vec<(String, PathBuf)>>,
         overrides: Option<&[(String, PathBuf)]>,
+        hidden: Option<&HashSet<(String, String)>>,
     ) -> Result<Self> {
         let staging_dir = paths::profiles_dir().join(profile_name).join("staging");
 
@@ -54,6 +56,12 @@ impl SymlinkFarm<Built> {
         for mod_id in &resolved.order {
             if let Some(files) = mod_files.get(mod_id) {
                 for (rel_path, source) in files {
+                    // Skip hidden files
+                    if let Some(hidden) = hidden {
+                        if hidden.contains(&(mod_id.0.clone(), rel_path.clone())) {
+                            continue;
+                        }
+                    }
                     links.insert(rel_path.clone(), source.clone());
                 }
             }
@@ -182,7 +190,7 @@ mod tests {
         let resolved = make_resolved(vec![]);
         let mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
 
-        let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None).unwrap();
+        let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None, None).unwrap();
         assert!(farm.links.is_empty());
     }
 
@@ -196,7 +204,7 @@ mod tests {
             vec![("textures/sky.dds".into(), source.clone())],
         );
 
-        let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None).unwrap();
+        let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None, None).unwrap();
         assert_eq!(farm.links.len(), 1);
         assert_eq!(farm.links.get("textures/sky.dds").unwrap(), &source);
     }
@@ -218,7 +226,7 @@ mod tests {
             vec![("meshes/body.nif".into(), source_b.clone())],
         );
 
-        let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None).unwrap();
+        let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None, None).unwrap();
         assert_eq!(farm.links.len(), 1);
         // mod_b is later, so it wins
         assert_eq!(farm.links.get("meshes/body.nif").unwrap(), &source_b);
@@ -240,7 +248,7 @@ mod tests {
             vec![("meshes/tree.nif".into(), source_b.clone())],
         );
 
-        let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None).unwrap();
+        let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None, None).unwrap();
         assert_eq!(farm.links.len(), 2);
         assert_eq!(farm.links.get("textures/sky.dds").unwrap(), &source_a);
         assert_eq!(farm.links.get("meshes/tree.nif").unwrap(), &source_b);
@@ -257,7 +265,7 @@ mod tests {
         mod_files.insert("mod_a".into(), vec![("file_a.txt".into(), source_a.clone())]);
         mod_files.insert("mod_b".into(), vec![("file_b.txt".into(), source_b.clone())]);
 
-        let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None).unwrap();
+        let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None, None).unwrap();
         assert_eq!(farm.links.len(), 2);
         assert_eq!(farm.links.get("file_a.txt").unwrap(), &source_a);
         assert_eq!(farm.links.get("file_b.txt").unwrap(), &source_b);
@@ -274,12 +282,43 @@ mod tests {
             vec![("a/b/c/d/e/deep_file.esp".into(), source.clone())],
         );
 
-        let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None).unwrap();
+        let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None, None).unwrap();
         assert_eq!(farm.links.len(), 1);
         assert_eq!(
             farm.links.get("a/b/c/d/e/deep_file.esp").unwrap(),
             &source
         );
+    }
+
+    #[test]
+    fn test_build_hidden_files() {
+        let resolved = make_resolved(vec!["mod_a", "mod_b"]);
+        let source_a1 = PathBuf::from("/store/mod_a/textures/sky.dds");
+        let source_a2 = PathBuf::from("/store/mod_a/meshes/tree.nif");
+        let source_b = PathBuf::from("/store/mod_b/textures/sky.dds");
+
+        let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
+        mod_files.insert(
+            "mod_a".into(),
+            vec![
+                ("textures/sky.dds".into(), source_a1.clone()),
+                ("meshes/tree.nif".into(), source_a2.clone()),
+            ],
+        );
+        mod_files.insert(
+            "mod_b".into(),
+            vec![("textures/sky.dds".into(), source_b.clone())],
+        );
+
+        // Hide mod_b's sky.dds — mod_a's version should win
+        let mut hidden = HashSet::new();
+        hidden.insert(("mod_b".to_string(), "textures/sky.dds".to_string()));
+
+        let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None, Some(&hidden)).unwrap();
+        assert_eq!(farm.links.len(), 2);
+        // mod_a's sky.dds should win since mod_b's is hidden
+        assert_eq!(farm.links.get("textures/sky.dds").unwrap(), &source_a1);
+        assert_eq!(farm.links.get("meshes/tree.nif").unwrap(), &source_a2);
     }
 
     // ========================================================================

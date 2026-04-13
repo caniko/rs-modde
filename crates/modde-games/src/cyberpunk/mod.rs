@@ -1,6 +1,8 @@
+pub mod collision;
 pub mod manifest;
 pub mod redmod;
 pub mod saves;
+pub mod scanner;
 
 use std::path::{Path, PathBuf};
 
@@ -158,6 +160,58 @@ impl GamePlugin for Cyberpunk2077 {
 
     fn executable_dir(&self, install: &Path) -> PathBuf {
         install.join("bin").join("x64")
+    }
+
+    fn archive_extensions(&self) -> &[&str] {
+        &["archive"]
+    }
+
+    fn steam_app_id_u32(&self) -> Option<u32> {
+        Some(1091500)
+    }
+
+    fn nexus_game_domain(&self) -> Option<&str> {
+        Some("cyberpunk2077")
+    }
+
+    fn nexus_game_id_u32(&self) -> Option<u32> {
+        // Nexus Mods v2 GraphQL game ID for Cyberpunk 2077.
+        // Source: https://api.nexusmods.com/v1/games.json
+        Some(3333)
+    }
+
+    fn analyze_mod_archive(
+        &self,
+        extracted_dir: &Path,
+    ) -> Option<modde_core::installer::InstallMethod> {
+        // REDmod signature: top-level `info.json` + `archives/` subdir.
+        // The `archives/` dir may also be spelled `archive/` on some
+        // mods; check both.
+        let info_json = extracted_dir.join("info.json");
+        if !info_json.is_file() {
+            return None;
+        }
+        let archives = extracted_dir.join("archives");
+        let archive = extracted_dir.join("archive");
+        if archives.is_dir() || archive.is_dir() {
+            return Some(modde_core::installer::InstallMethod::REDmod {
+                manifest: PathBuf::from("info.json"),
+            });
+        }
+        None
+    }
+
+    fn recognizes_bare_layout(&self, extracted_dir: &Path) -> bool {
+        // Cyberpunk mods drop loose into one of these top-level dirs.
+        // If any of them exist at the extraction root, treat the archive
+        // as a bare extract — the deploy step will symlink into
+        // `<install>/mods/<name>/` via the REDmod loader.
+        for name in ["r6", "archive", "archives", "bin", "engine", "mods", "red4ext"] {
+            if extracted_dir.join(name).is_dir() {
+                return true;
+            }
+        }
+        false
     }
 }
 

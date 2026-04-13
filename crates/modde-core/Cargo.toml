@@ -24,7 +24,14 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 rusqlite = { workspace = true }
 git2 = { workspace = true }
+dirs = { workspace = true }
+zip = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+winreg = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

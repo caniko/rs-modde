@@ -26,7 +26,7 @@ fn simple_mod(id: &str, enabled: bool) -> EnabledMod {
         mod_id: id.to_string(),
         enabled,
         version: Some("1.0".to_string()),
-        fomod_config: None,
+        fomod_config: None, ..Default::default()
     }
 }
 
@@ -92,6 +92,7 @@ async fn e2e_full_pipeline_20_mods_complex_order() {
         mods,
         overrides: PathBuf::from("/tmp"),
         load_order_rules: rules,
+        load_order_lock: None,
     };
 
     // Resolve
@@ -216,6 +217,7 @@ async fn e2e_wabbajack_source_resolve_deploy_verify() {
                 after: ModId::from("unofficial_patch"),
             },
         ],
+        load_order_lock: None,
     };
 
     // Save and reload via DB
@@ -312,6 +314,7 @@ async fn e2e_nexus_collection_source_resolve_deploy_verify() {
             mod_id: ModId::from("f4se"),
             before: ModId::from("body_mod"),
         }],
+        load_order_lock: None,
     };
 
     let resolved = resolve(&profile).unwrap();
@@ -441,6 +444,7 @@ fn e2e_multiple_profiles_same_game() {
         ],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     let p2 = Profile {
@@ -457,6 +461,7 @@ fn e2e_multiple_profiles_same_game() {
         ],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     let p3 = Profile {
@@ -467,6 +472,7 @@ fn e2e_multiple_profiles_same_game() {
         mods: vec![simple_mod("skyui", true)],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     mgr.create(&p1).unwrap();
@@ -501,25 +507,26 @@ fn e2e_disabled_mods_excluded_from_resolution() {
                 mod_id: "disabled_1".to_string(),
                 enabled: false,
                 version: Some("1.0".to_string()),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             simple_mod("also_on", true),
             EnabledMod {
                 mod_id: "disabled_2".to_string(),
                 enabled: false,
                 version: Some("2.0".to_string()),
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             EnabledMod {
                 mod_id: "disabled_3".to_string(),
                 enabled: false,
                 version: None,
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
             simple_mod("last_enabled", true),
         ],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     let resolved = resolve(&profile).unwrap();
@@ -589,6 +596,7 @@ fn e2e_circular_dependency_detected() {
                 after: ModId::from("mod_b"),
             },
         ],
+        load_order_lock: None,
     };
 
     let result = resolve(&profile);
@@ -633,6 +641,7 @@ fn e2e_circular_dependency_three_way() {
                 after: ModId::from("mod_c"),
             },
         ],
+        load_order_lock: None,
     };
 
     let result = resolve(&profile);
@@ -658,6 +667,7 @@ fn e2e_profile_save_modify_save_load() {
         mods: vec![simple_mod("mod_a", true), simple_mod("mod_b", true)],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
     let id = pm.create(&profile).unwrap();
     profile.id = Some(id);
@@ -885,6 +895,7 @@ fn e2e_incompatible_mods_both_enabled() {
             mod_a: ModId::from("enb"),
             mod_b: ModId::from("reshade"),
         }],
+        load_order_lock: None,
     };
 
     let result = resolve(&profile);
@@ -904,7 +915,7 @@ fn e2e_incompatible_mods_one_disabled_is_ok() {
                 mod_id: "reshade".to_string(),
                 enabled: false,
                 version: None,
-                fomod_config: None,
+                fomod_config: None, ..Default::default()
             },
         ],
         overrides: PathBuf::from("/tmp"),
@@ -912,6 +923,7 @@ fn e2e_incompatible_mods_one_disabled_is_ok() {
             mod_a: ModId::from("enb"),
             mod_b: ModId::from("reshade"),
         }],
+        load_order_lock: None,
     };
 
     let resolved = resolve(&profile).unwrap();

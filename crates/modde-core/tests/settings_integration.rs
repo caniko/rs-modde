@@ -24,6 +24,7 @@ fn make_profile(name: &str, game_id: &str) -> Profile {
         mods: Vec::new(),
         overrides: PathBuf::from("/tmp/overrides"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     }
 }
 

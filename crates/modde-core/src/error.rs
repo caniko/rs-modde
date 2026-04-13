@@ -44,6 +44,13 @@ pub enum CoreError {
     #[error("ambiguous profile name '{name}': found in games {games:?}. Use --game to disambiguate.")]
     AmbiguousProfile { name: String, games: SmallVec<[GameId; 4]> },
 
+    #[error("mod '{mod_id}' not found in profile '{profile}'. Available: {candidates:?}")]
+    ModNotFound {
+        profile: String,
+        mod_id: String,
+        candidates: SmallVec<[String; 5]>,
+    },
+
     #[error("game '{0}' not detected")]
     GameNotDetected(String),
 

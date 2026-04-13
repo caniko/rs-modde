@@ -1,9 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use tracing::{info, warn};
 
+use modde_core::collision;
 use modde_core::fs::walk_files_relative;
 use modde_core::paths;
 use modde_core::profile::{ProfileManager, ProfileSource};
@@ -52,7 +53,7 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
         let staging = paths::staging_dir().join(&profile.name);
         info!(staging = %staging.display(), "Wabbajack profile: deploying from staging");
 
-        deploy_mo2_to_game(&staging, &install_dir)
+        deploy_mo2_to_game(&staging, &install_dir, false)
             .await
             .context("Wabbajack deploy from staging failed")?;
 
@@ -77,29 +78,53 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     println!("Load order: {} enabled mods", resolved.order.len());
 
     let store = paths::store_dir();
-    let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
-    let mut conflict_map = ConflictMap::default();
-    let mut conflict_count: usize = 0;
 
+    // Build archive-aware conflict map using the collision system.
+    let classifier = modde_games::resolve_collision_classifier(&profile.game_id);
+
+    let (conflict_map, _origins) = if let Some(ref cls) = classifier {
+        collision::build_full_conflict_map(
+            &store,
+            &resolved.order,
+            cls.as_ref(),
+        )
+        .context("failed to build conflict map")?
+    } else {
+        // Fallback: build a loose-files-only conflict map (no classifier available).
+        let mut cm = ConflictMap::default();
+        let origins = collision::OriginMap::new();
+        for mod_id in &resolved.order {
+            let mod_dir = store.join(mod_id.as_str());
+            if !mod_dir.exists() {
+                continue;
+            }
+            if let Ok(files) = walk_files_relative(&mod_dir) {
+                for (rel_path, _) in &files {
+                    cm.register(rel_path.clone(), mod_id.clone());
+                }
+            }
+        }
+        (cm, origins)
+    };
+
+    // Walk store files for the symlink farm (still needs absolute paths).
+    let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
+    let mut conflict_count: usize = 0;
     for mod_id in &resolved.order {
         let mod_dir_path = store.join(mod_id.as_str());
-
         if !mod_dir_path.exists() {
             warn!(%mod_id, "mod directory not found in store, skipping");
             continue;
         }
-
         let files = walk_files_relative(&mod_dir_path)
             .with_context(|| format!("failed to walk files for mod {mod_id}"))?;
-
         for (rel_path, _) in &files {
-            if conflict_map.files.contains_key(rel_path) {
-                conflict_count += 1;
-                info!(file = %rel_path, mod_id = %mod_id, "file override: later mod wins");
+            if let Some(providers) = conflict_map.files.get(rel_path) {
+                if providers.len() > 1 {
+                    conflict_count += 1;
+                }
             }
-            conflict_map.register(rel_path.clone(), mod_id.clone());
         }
-
         mod_files.insert(mod_id.clone(), files);
     }
 
@@ -124,7 +149,22 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
         None
     };
 
-    let farm = SymlinkFarm::build(name, &resolved, &mod_files, overrides.as_deref())
+    // Load hidden files for this profile
+    let hidden_set: Option<HashSet<(String, String)>> = profile.id.and_then(|pid| {
+        let hidden = pm.db().list_hidden_files(pid).ok()?;
+        if hidden.is_empty() {
+            None
+        } else {
+            let set: HashSet<(String, String)> = hidden
+                .into_iter()
+                .map(|h| (h.mod_id, h.rel_path))
+                .collect();
+            info!(count = set.len(), "applying hidden file exclusions");
+            Some(set)
+        }
+    });
+
+    let farm = SymlinkFarm::build(name, &resolved, &mod_files, overrides.as_deref(), hidden_set.as_ref())
         .context("failed to build symlink farm")?;
 
     let total_files = farm.links.len();
@@ -150,6 +190,28 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
         &profile.game_id, &install_dir, &staging_dir,
     )
     .context("Wine DLL override configuration failed")?;
+
+    // Generate per-game tool configs and apply tool environment to launcher
+    if let Ok(db) = modde_core::db::ModdeDb::open() {
+        // Generate config files (MangoHud.conf, vkBasalt.conf, etc.)
+        if let Err(e) = modde_games::launcher::generate_tool_configs(&profile.game_id, &db) {
+            warn!(error = %e, "failed to generate tool configs");
+        }
+
+        // Apply tool env vars + wrappers to Heroic launcher config
+        let launcher = modde_games::launcher::detect_launcher(&install_dir);
+        if let modde_games::launcher::Launcher::Heroic { ref config_path, ref game_id } = launcher {
+            let env_vars = modde_games::launcher::collect_tool_env_vars(&profile.game_id, &db)
+                .unwrap_or_default();
+            let wrappers = modde_games::launcher::collect_tool_wrappers(&profile.game_id, &db)
+                .unwrap_or_default();
+            if let Err(e) = modde_games::launcher::apply_tool_environment_heroic(
+                config_path, game_id, &env_vars, &wrappers,
+            ) {
+                warn!(error = %e, "failed to apply tool environment to Heroic");
+            }
+        }
+    }
 
     println!("Deployed profile: {name}");
     println!("  Game: {} ({})", game_plugin.display_name(), profile.game_id);

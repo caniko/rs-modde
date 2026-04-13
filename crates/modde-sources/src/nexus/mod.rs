@@ -1,6 +1,10 @@
 pub mod api;
 pub mod auth;
 pub mod cdn;
+pub mod graphql;
+pub mod install;
+pub mod oauth;
+pub mod updates;
 
 pub use api::NexusApi;
 

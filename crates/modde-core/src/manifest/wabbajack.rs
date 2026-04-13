@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -77,6 +78,44 @@ pub struct WabbajackManifest {
     pub archives: Vec<ArchiveEntry>,
     #[serde(default)]
     pub directives: Vec<RawDirective>,
+}
+
+/// Compute a stable identifier for a Wabbajack manifest, derived from its
+/// `name` + `version`. Used as the `manifest_hash` field on
+/// [`crate::profile::LockReason::Wabbajack`] so install and retroactive-scan
+/// flows produce identical IDs for the same modlist.
+///
+/// The hashing scheme is `DefaultHasher::hash(name) + hash(version)` rendered
+/// in lowercase hex — matching the scheme previously inlined at
+/// `crates/modde-cli/src/commands/install.rs:361-367`. Extracted here so
+/// `scan --manifest` can produce bit-identical hashes during retroactive
+/// lock assignment.
+pub fn compute_manifest_hash(manifest: &WabbajackManifest) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    manifest.name.hash(&mut hasher);
+    manifest.version.hash(&mut hasher);
+    format!("{:x}", hasher.finish())
+}
+
+/// Copy a `.wabbajack` source file into the content-addressed cache so a
+/// [`crate::profile::LockReason::Wabbajack`] record can be self-verifying even
+/// if the original source moves or is deleted.
+///
+/// Idempotent: if the destination already exists, returns its path without
+/// re-copying — `manifest_hash` is a stable content identifier, so two
+/// different source files that share a hash are treated as equivalent.
+/// Creates the cache directory on demand.
+pub fn cache_wabbajack_file(source: &Path, manifest_hash: &str) -> crate::error::Result<PathBuf> {
+    let dest = crate::paths::wabbajack_cache_path(manifest_hash);
+    if dest.exists() {
+        return Ok(dest);
+    }
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::copy(source, &dest)?;
+    Ok(dest)
 }
 
 /// An archive entry referenced by hash in download/install directives.

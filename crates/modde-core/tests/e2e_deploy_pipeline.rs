@@ -20,7 +20,7 @@ fn simple_mod(id: &str, enabled: bool) -> EnabledMod {
         mod_id: id.to_string(),
         enabled,
         version: Some("1.0".to_string()),
-        fomod_config: None,
+        fomod_config: None, ..Default::default()
     }
 }
 
@@ -53,6 +53,7 @@ async fn test_full_deploy_pipeline() {
                 after: ModId::from("texture_overhaul"),
             },
         ],
+        load_order_lock: None,
     };
 
     // Step 2: Save and reload the profile via DB
@@ -168,6 +169,7 @@ async fn test_profile_roundtrip_all_sources() {
             mods: vec![simple_mod("mod_a", true)],
             overrides: PathBuf::from("/tmp"),
             load_order_rules: smallvec![],
+            load_order_lock: None,
         },
         Profile {
             id: None,
@@ -185,6 +187,7 @@ async fn test_profile_roundtrip_all_sources() {
                     mod_b: ModId::from("conflicting_mod"),
                 },
             ],
+            load_order_lock: None,
         },
         Profile {
             id: None,
@@ -196,6 +199,7 @@ async fn test_profile_roundtrip_all_sources() {
             mods: vec![],
             overrides: PathBuf::from("/tmp"),
             load_order_rules: smallvec![],
+            load_order_lock: None,
         },
     ];
 
@@ -227,6 +231,7 @@ async fn test_resolve_and_detect_incompatible() {
                 mod_b: ModId::from("reshade"),
             },
         ],
+        load_order_lock: None,
     };
 
     let result = resolve(&profile);
@@ -284,6 +289,7 @@ fn test_profile_manager_full_lifecycle() {
         mods: vec![simple_mod("mod_a", true)],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
     let p2 = Profile {
         id: None,
@@ -293,6 +299,7 @@ fn test_profile_manager_full_lifecycle() {
         mods: vec![],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
+        load_order_lock: None,
     };
 
     mgr.create(&p1).unwrap();

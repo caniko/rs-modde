@@ -650,16 +650,45 @@ fn try_extract(cmd: &str, args: &[&std::ffi::OsStr]) -> Result<bool> {
     }
 }
 
+/// Collect 7-Zip binary candidates for the current platform.
+fn platform_7z_candidates() -> Vec<String> {
+    #[allow(unused_mut)]
+    let mut candidates = vec!["7zz".into(), "7z".into()];
+
+    #[cfg(target_os = "windows")]
+    for path in [
+        r"C:\Program Files\7-Zip\7z.exe",
+        r"C:\Program Files (x86)\7-Zip\7z.exe",
+    ] {
+        if std::path::Path::new(path).exists() {
+            candidates.push(path.into());
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    for path in ["/opt/homebrew/bin/7z", "/usr/local/bin/7z"] {
+        if std::path::Path::new(path).exists() {
+            candidates.push(path.into());
+        }
+    }
+
+    candidates
+}
+
 /// Extract an entire archive to `dest_dir`, trying multiple tools.
 ///
 /// Returns `true` if extraction succeeded with any tool.
-/// Tries: 7zz → 7z → unrar (for RAR archives with proprietary compression).
+/// Tries well-known archive tools in order: 7zz → 7z → unrar.
+/// On Windows, also checks standard 7-Zip install paths.
+/// On macOS, also checks Homebrew paths.
 fn extract_full_archive(archive_path: &Path, dest_dir: &Path) -> Result<bool> {
     let out_flag = format!("-o{}", dest_dir.display());
     let archive = archive_path.as_os_str();
 
-    // 7zz / 7z share identical arguments
-    for cmd in ["7zz", "7z"] {
+    // Build a list of 7z candidates: PATH first, then platform-specific locations
+    let sevenz_candidates = platform_7z_candidates();
+
+    for cmd in &sevenz_candidates {
         if try_extract(cmd, &[
             "x".as_ref(), out_flag.as_ref(), "-y".as_ref(), archive,
         ])? {

@@ -1,9 +1,89 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use anyhow::Result;
 use smallvec::SmallVec;
+
+/// Content types a game can have.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ContentCategory {
+    Plugin,    // .esp, .esm, .esl
+    Texture,   // .dds, .png, .tga
+    Mesh,      // .nif
+    Sound,     // .wav, .xwm, .fuz
+    Script,    // .pex, .psc, .reds, .lua
+    Interface, // .swf
+    Archive,   // .bsa, .ba2, .archive
+    Config,    // .ini, .json, .yaml, .xml
+    Binary,    // .dll
+    Other,
+}
+
+impl ContentCategory {
+    /// Human-readable label for display.
+    pub fn label(self) -> &'static str {
+        match self {
+            ContentCategory::Plugin => "plugins",
+            ContentCategory::Texture => "textures",
+            ContentCategory::Mesh => "meshes",
+            ContentCategory::Sound => "sounds",
+            ContentCategory::Script => "scripts",
+            ContentCategory::Interface => "interfaces",
+            ContentCategory::Archive => "archives",
+            ContentCategory::Config => "configs",
+            ContentCategory::Binary => "binaries",
+            ContentCategory::Other => "other",
+        }
+    }
+
+    /// Display order (lower = shown first).
+    pub fn order(self) -> u8 {
+        match self {
+            ContentCategory::Plugin => 0,
+            ContentCategory::Script => 1,
+            ContentCategory::Binary => 2,
+            ContentCategory::Texture => 3,
+            ContentCategory::Mesh => 4,
+            ContentCategory::Sound => 5,
+            ContentCategory::Interface => 6,
+            ContentCategory::Archive => 7,
+            ContentCategory::Config => 8,
+            ContentCategory::Other => 9,
+        }
+    }
+}
+
+/// Summary of content types found in a mod.
+#[derive(Debug, Clone, Default)]
+pub struct ContentSummary {
+    pub counts: HashMap<ContentCategory, usize>,
+}
+
+impl ContentSummary {
+    /// Return counts sorted by display order, excluding zero counts.
+    pub fn sorted_counts(&self) -> Vec<(ContentCategory, usize)> {
+        let mut entries: Vec<_> = self.counts.iter()
+            .filter(|(_, count)| **count > 0)
+            .map(|(cat, count)| (*cat, *count))
+            .collect();
+        entries.sort_by_key(|(cat, _)| cat.order());
+        entries
+    }
+
+    /// Format as a human-readable string like "5 textures, 2 meshes, 1 plugin".
+    pub fn display_string(&self) -> String {
+        let parts: Vec<String> = self.sorted_counts().iter()
+            .map(|(cat, count)| format!("{} {}", count, cat.label()))
+            .collect();
+        if parts.is_empty() {
+            "No files".to_string()
+        } else {
+            parts.join(", ")
+        }
+    }
+}
 
 /// Whether a mod is safe to add/remove without breaking existing saves.
 ///
@@ -94,6 +174,89 @@ pub trait GamePlugin: Send + Sync {
     /// Used to locate proxy DLLs that need Wine overrides.
     fn executable_dir(&self, install: &Path) -> PathBuf {
         install.to_path_buf()
+    }
+
+    // ── DRY trait methods ─────────────────────────────────────────
+    fn ini_file_names(&self) -> &[&str] { &[] }
+    fn archive_extensions(&self) -> &[&str] { &[] }
+    fn has_plugin_system(&self) -> bool { false }
+    fn steam_app_id_u32(&self) -> Option<u32> { None }
+    fn plugins_txt_folder(&self) -> Option<&str> { None }
+    fn nexus_game_domain(&self) -> Option<&str> { None }
+
+    /// Numeric Nexus game ID. Required by the GraphQL v2 API for
+    /// browse/search queries (which take `gameId: Int`, not a domain
+    /// string). Games that only speak REST can leave this `None`.
+    fn nexus_game_id_u32(&self) -> Option<u32> { None }
+
+    // ── Install-method detection (V8 installer pipeline) ────────
+
+    /// Claim an extracted archive as a game-specific install method.
+    ///
+    /// Runs **before** the generic probes (FOMOD, BAIN, DLL overlay) in
+    /// [`modde_core::installer::analyze`], so a game can authoritatively
+    /// identify layouts it knows about — e.g. Cyberpunk recognizing a
+    /// REDmod by `info.json` + `archives/` presence, or ENB for Bethesda.
+    ///
+    /// Return `None` to fall through to the generic probes.
+    fn analyze_mod_archive(
+        &self,
+        _extracted_dir: &Path,
+    ) -> Option<modde_core::installer::InstallMethod> {
+        None
+    }
+
+    /// Decide whether an extracted archive drops cleanly into the game's
+    /// mod dir without any staging (e.g. a Skyrim archive with a
+    /// top-level `Data/` directory, or a Cyberpunk archive with `r6/`).
+    ///
+    /// Called as the last fallback by
+    /// [`modde_core::installer::analyze`] — if this returns `true` the
+    /// plan becomes `InstallMethod::BareExtract`, otherwise the analyzer
+    /// falls through to [`InstallMethod::Unknown`] and the caller dumps
+    /// a dossier for the skill path.
+    fn recognizes_bare_layout(&self, _extracted_dir: &Path) -> bool {
+        false
+    }
+
+    /// Classify a file extension into a content category.
+    fn classify_extension(&self, ext: &str) -> ContentCategory {
+        match ext {
+            "esp" | "esm" | "esl" => ContentCategory::Plugin,
+            "dds" | "png" | "tga" | "jpg" => ContentCategory::Texture,
+            "nif" => ContentCategory::Mesh,
+            "wav" | "xwm" | "fuz" | "mp3" | "ogg" => ContentCategory::Sound,
+            "pex" | "psc" | "reds" | "lua" => ContentCategory::Script,
+            "swf" => ContentCategory::Interface,
+            "bsa" | "ba2" | "archive" => ContentCategory::Archive,
+            "ini" | "json" | "yaml" | "xml" | "toml" => ContentCategory::Config,
+            "dll" | "so" => ContentCategory::Binary,
+            _ => ContentCategory::Other,
+        }
+    }
+
+    /// Scan a mod directory and return a content summary.
+    fn summarize_content(&self, mod_dir: &Path) -> ContentSummary {
+        let mut summary = ContentSummary::default();
+        let mut stack = vec![mod_dir.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            let entries = match std::fs::read_dir(&dir) {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    let cat = self.classify_extension(&ext.to_lowercase());
+                    *summary.counts.entry(cat).or_insert(0) += 1;
+                }
+            }
+        }
+        summary
     }
 }
 
@@ -214,4 +377,79 @@ pub trait SaveTracker: Send + Sync {
             n => format!("capture: {} saves", n),
         }
     }
+}
+
+// ── Mod Scanner ─────────────────────────────────────────────────
+
+pub struct ScanContext<'a> {
+    pub install_dir: &'a Path,
+}
+
+#[derive(Debug, Clone)]
+pub struct DiscoveredFile {
+    pub rel_path: String,
+    pub size: u64,
+}
+
+#[derive(Debug, Clone)]
+pub enum ModSource {
+    Filesystem { location: String },
+    Archive { archive_name: String },
+}
+
+#[derive(Debug, Clone)]
+pub struct DiscoveredMod {
+    pub mod_id: String,
+    pub display_name: String,
+    pub version: Option<String>,
+    pub files: Vec<DiscoveredFile>,
+    pub source: ModSource,
+    pub confidence: f64,
+}
+
+pub trait ModScanner: Send + Sync {
+    fn scan_directories(&self) -> &[&str];
+    fn scan_filesystem(&self, ctx: &ScanContext<'_>) -> anyhow::Result<Vec<DiscoveredMod>>;
+
+    /// Inverse of [`ModScanner::scan_filesystem`]'s mod_id scheme: given
+    /// a mod_id this scanner would produce, return the filesystem footprint
+    /// that mod owns (directory subtree or single file).
+    ///
+    /// Used by `modde_core::scanner::detect_stale_duplicates` to correlate
+    /// profile rows with a Wabbajack manifest's install directives. The
+    /// default impl returns `None`, which causes the dedup path to skip
+    /// the row. Game plugins that want their filesystem-scanner rows to
+    /// participate in dedup should override this.
+    fn mod_id_footprint(&self, _mod_id: &str) -> Option<modde_core::scanner::ModFootprint> {
+        None
+    }
+}
+
+pub fn walk_files_relative(base: &Path, dir: &Path) -> Vec<DiscoveredFile> {
+    let mut result = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                result.extend(walk_files_relative(base, &path));
+            } else if let Ok(meta) = path.metadata() {
+                if let Ok(rel) = path.strip_prefix(base) {
+                    result.push(DiscoveredFile {
+                        rel_path: rel.to_string_lossy().to_string(),
+                        size: meta.len(),
+                    });
+                }
+            }
+        }
+    }
+    result
+}
+
+pub fn slug(s: &str) -> String {
+    s.to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string()
 }

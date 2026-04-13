@@ -66,6 +66,15 @@ fn load_from_keyring() -> Option<String> {
 /// 2. System keyring (secret-service D-Bus)
 /// 3. `NEXUS_API_KEY_FILE` file path (sops-nix compatible)
 pub fn load_api_key() -> Result<String> {
+    // 0. Try OAuth token first
+    if let Some(token) = super::oauth::load_token() {
+        if !token.is_expired() {
+            debug!("using OAuth token for Nexus authentication");
+            return Ok(token.access_token);
+        }
+        debug!("OAuth token expired, falling back to API key");
+    }
+
     // 1. Try environment variable first
     if let Ok(key) = std::env::var("NEXUS_API_KEY") {
         if !key.is_empty() {

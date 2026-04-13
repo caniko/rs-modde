@@ -2,6 +2,20 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
+/// Check if an I/O error is a cross-device link error (EXDEV on Unix,
+/// `ERROR_NOT_SAME_DEVICE` on Windows). Used to fall back from `rename`
+/// to copy+delete when source and destination are on different filesystems.
+pub fn is_cross_device_error(e: &std::io::Error) -> bool {
+    #[cfg(unix)]
+    {
+        e.raw_os_error() == Some(libc::EXDEV)
+    }
+    #[cfg(windows)]
+    {
+        e.raw_os_error() == Some(17) // ERROR_NOT_SAME_DEVICE
+    }
+}
+
 /// Create a symlink at `link` pointing to `original`, using the correct
 /// platform API.  On Windows the call inspects `original` to decide between
 /// `symlink_file` and `symlink_dir`.

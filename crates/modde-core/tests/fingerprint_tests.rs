@@ -10,7 +10,7 @@ fn mod_entry(id: &str, enabled: bool) -> EnabledMod {
         mod_id: id.to_string(),
         enabled,
         version: Some("1.0".to_string()),
-        fomod_config: None,
+        fomod_config: None, ..Default::default()
     }
 }
 
@@ -26,6 +26,10 @@ fn make_snapshot(fp: Option<SaveFingerprint>) -> SaveSnapshot {
         timestamp: 0,
         file_count: 1,
         fingerprint: fp,
+        profile_name: None,
+        character_name: None,
+        save_label: None,
+        category: None,
     }
 }
 
