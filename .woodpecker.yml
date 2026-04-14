@@ -1,5 +1,16 @@
 steps:
-  - name: build
+  - name: check
+    image: nixos/nix:latest
+    commands:
+      - echo 'experimental-features = flakes nix-command' >> /etc/nix/nix.conf
+      - nix develop --command cargo fmt --all -- --check
+      - nix develop --command cargo clippy --workspace -- -D warnings
+      - nix develop --command cargo test --workspace
+      - nix develop --command cargo build --workspace --release
+    when:
+      - event: [push, pull_request]
+
+  - name: build-site
     image: nixos/nix:latest
     commands:
       - echo 'experimental-features = flakes nix-command' >> /etc/nix/nix.conf

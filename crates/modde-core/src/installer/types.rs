@@ -201,6 +201,9 @@ pub enum InstallerError {
 
     #[error("plan references a file that is not present in the staging dir: {0}")]
     MissingFile(String),
+
+    #[error("FOMOD installer error: {0}")]
+    FomodError(String),
 }
 
 pub type InstallerResult<T> = std::result::Result<T, InstallerError>;

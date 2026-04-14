@@ -5,3 +5,6 @@
 *.wabbajack
 .direnv/
 result
+docs/site/themes/
+docs/site/public/
+website/public/

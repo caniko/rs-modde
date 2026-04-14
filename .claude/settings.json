@@ -49,14 +49,18 @@
       "Bash(./target/debug/modde profile:*)",
       "Bash(./target/debug/modde scan:*)",
       "Bash(modde\" | head -20)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(nix-prefetch-git --url https://codeberg.org/caniko/rs-modde --rev v0.1.0 --fetch-submodules)",
+      "Bash(nix-build -A modde)"
     ],
     "additionalDirectories": [
       "/home/can/.local/share/modde/tmp",
       "/home/can/.local/share/modde",
       "/tmp/nix-shell.*",
       "/home/can/.config/heroic/GamesConfig",
-      "/tmp"
+      "/tmp",
+      "/data/nvme0/can/Projects/rs-modde/target/debug/deps",
+      "/data/nvme0/can/Projects/nix/nixpkgs/pkgs/by-name/mo/modde"
     ]
   }
 }

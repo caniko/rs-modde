@@ -154,12 +154,21 @@
               just
               _7zz
               unrar
+              zola
             ]
             ++ linuxBuildInputs;
 
           extraEnv = lib.optionalAttrs pkgs.stdenv.isLinux {
             LD_LIBRARY_PATH = linuxLdPath;
           };
+
+          extraShellHook = ''
+            # Set up adidoks theme symlink for local docs development
+            if [ -d docs/site ]; then
+              mkdir -p docs/site/themes
+              ln -sfn "${adidoks}" "docs/site/themes/${themeName}"
+            fi
+          '';
         };
 
       apps.deploy-pages = {

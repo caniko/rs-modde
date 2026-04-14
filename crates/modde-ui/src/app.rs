@@ -5,6 +5,7 @@ use iced::widget::{button, column, container, mouse_area, pick_list, row, text};
 use iced::{keyboard, window, Element, Length, Subscription, Task, Theme};
 use smallvec::SmallVec;
 
+use modde_core::filter::{FilterCriterion, FilterKind, FilterMode};
 use modde_core::manifest::collection::CollectionManifest;
 use modde_core::profile::ProfileManager;
 use modde_core::save::SaveSnapshot;
@@ -79,6 +80,12 @@ pub struct Modde {
     pub browse_nexus: crate::views::browse_nexus::NexusBrowseState,
     pub diagnostics_state: crate::views::diagnostics::DiagnosticsState,
     pub tool_state: ToolState,
+    /// Filter mode (AND/OR) for the mod list filter toolbar.
+    pub filter_mode: FilterMode,
+    /// Active tri-state filter criteria for the mod list.
+    pub filter_criteria: Vec<FilterCriterion>,
+    /// Whether the mod list uses compact row rendering.
+    pub compact_mod_list: bool,
 }
 
 
@@ -872,6 +879,12 @@ pub enum Message {
     ClearOverwrite,
     MoveOverwriteToMod(String),
 
+    // Mod list filter toolbar
+    ToggleFilterMode,
+    CycleFilter(FilterKind),
+    ClearFilters,
+    ToggleCompactModList,
+
     // Misc
     Noop,
 }
@@ -938,6 +951,13 @@ impl Modde {
             diagnostics_state: Default::default(),
             tool_state: Default::default(),
             browse_nexus: Default::default(),
+            filter_mode: FilterMode::default(),
+            filter_criteria: vec![
+                FilterCriterion::new(FilterKind::Enabled),
+                FilterCriterion::new(FilterKind::HasNotes),
+                FilterCriterion::new(FilterKind::HasNexusId),
+            ],
+            compact_mod_list: false,
         };
 
         // Auto-detect: if no game is selected but profiles exist, pick the first profile's game
@@ -1097,6 +1117,22 @@ impl Modde {
                 }
             }
             Message::FilterChanged(filter) => self.mod_filter = filter,
+            Message::ToggleFilterMode => {
+                self.filter_mode = self.filter_mode.toggle();
+            }
+            Message::CycleFilter(kind) => {
+                if let Some(c) = self.filter_criteria.iter_mut().find(|c| c.kind == kind) {
+                    c.state = c.state.cycle();
+                }
+            }
+            Message::ClearFilters => {
+                for c in &mut self.filter_criteria {
+                    c.state = modde_core::filter::TriState::Ignore;
+                }
+            }
+            Message::ToggleCompactModList => {
+                self.compact_mod_list = !self.compact_mod_list;
+            }
             Message::ToggleSeparator(cat_id) => {
                 if !self.collapsed_categories.remove(&cat_id) {
                     self.collapsed_categories.insert(cat_id);
@@ -2374,10 +2410,15 @@ impl Modde {
         let settings_state = self.settings_state();
 
         let content: Element<Message> = match &self.active_view {
-            View::ModList => crate::views::mod_list::view(
+            View::ModList => crate::views::mod_list::view_filtered(
                 mods,
                 &self.mod_filter,
                 self.selected_mod_index,
+                self.filter_mode,
+                &self.filter_criteria,
+                &self.collapsed_categories,
+                &self.mod_categories,
+                self.compact_mod_list,
                 self.loaded_profile
                     .as_ref()
                     .is_some_and(|p| p.load_order_lock.is_some()),
@@ -2600,6 +2641,13 @@ mod tests {
             diagnostics_state: Default::default(),
             tool_state: Default::default(),
             browse_nexus: Default::default(),
+            filter_mode: FilterMode::default(),
+            filter_criteria: vec![
+                FilterCriterion::new(FilterKind::Enabled),
+                FilterCriterion::new(FilterKind::HasNotes),
+                FilterCriterion::new(FilterKind::HasNexusId),
+            ],
+            compact_mod_list: false,
         }
     }
 

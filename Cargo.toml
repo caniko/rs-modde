@@ -12,6 +12,9 @@ members = [
 edition = "2024"
 license = "GPL-3.0-only"
 repository = "https://codeberg.org/caniko/rs-modde"
+authors = ["Can H. Tartanoglu"]
+keywords = ["modding", "mod-manager", "nexus-mods", "wabbajack", "game-mods"]
+categories = ["command-line-utilities", "game-development"]
 
 [workspace.dependencies]
 # Serialization
@@ -104,13 +107,13 @@ open = "5"
 clap = { version = "4", features = ["derive", "env"] }
 
 # FOMOD
-fomod-oxide = { path = "../rs-fomod-oxide", features = ["json"] }
+fomod-oxide = { version = "0.1", features = ["json"] }
 
 # Workspace crates
-modde-core = { path = "crates/modde-core" }
-modde-sources = { path = "crates/modde-sources" }
-modde-games = { path = "crates/modde-games" }
-modde-ui = { path = "crates/modde-ui" }
+modde-core = { version = "0.1", path = "crates/modde-core" }
+modde-sources = { version = "0.1", path = "crates/modde-sources" }
+modde-games = { version = "0.1", path = "crates/modde-games" }
+modde-ui = { version = "0.1", path = "crates/modde-ui" }
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

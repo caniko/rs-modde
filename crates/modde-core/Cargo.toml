@@ -5,6 +5,9 @@ description = "Core types and logic for the modde mod manager"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [lints]
 workspace = true
@@ -26,6 +29,7 @@ rusqlite = { workspace = true }
 git2 = { workspace = true }
 dirs = { workspace = true }
 zip = { workspace = true }
+fomod-oxide = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

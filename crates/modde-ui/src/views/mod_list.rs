@@ -8,64 +8,11 @@ use modde_core::profile::EnabledMod;
 
 use crate::app::Message;
 
-// ─── Filter UI state ──────────────────────────────────────────────
-// These messages will be wired into the main Message enum by Unit 4A.
-// For now we define them here and map to Message::Noop where needed.
-
-/// Filter toolbar state that lives in the parent (Modde struct in app.rs).
-/// Unit 4A should add these fields to `Modde`:
-///
-/// ```rust,ignore
-/// pub filter_mode: FilterMode,
-/// pub filter_criteria: Vec<FilterCriterion>,
-/// pub collapsed_categories: HashSet<i64>,
-/// pub compact_mod_list: bool,
-/// ```
-///
-/// And these messages to `Message`:
-///
-/// ```rust,ignore
-/// ToggleFilterMode,
-/// CycleFilter(FilterKind),
-/// ClearFilters,
-/// ToggleCategoryCollapse(i64),
-/// ToggleCompactModList,
-/// ```
-
 // ─── Constants ────────────────────────────────────────────────────
 
-/// Category ID used for uncategorized mods.
-const UNCATEGORIZED_ID: i64 = 0;
 const UNCATEGORIZED_LABEL: &str = "Uncategorized";
 
 // ─── View function ────────────────────────────────────────────────
-
-/// Empty set used as default when no collapsed categories are tracked.
-static EMPTY_COLLAPSED: std::sync::LazyLock<HashSet<i64>> =
-    std::sync::LazyLock::new(HashSet::new);
-
-/// Backward-compatible entry point matching the current app.rs call site.
-///
-/// Once Unit 4A adds filter state fields to `Modde` and new `Message` variants,
-/// switch the call site to `view_filtered()` instead.
-pub fn view<'a>(
-    mods: &'a [EnabledMod],
-    filter_text: &'a str,
-    selected_index: Option<usize>,
-    profile_locked: bool,
-) -> Element<'a, Message> {
-    view_filtered(
-        mods,
-        filter_text,
-        selected_index,
-        FilterMode::default(),
-        &[],
-        &EMPTY_COLLAPSED,
-        &[],
-        false,
-        profile_locked,
-    )
-}
 
 /// Render the mod list view with filter toolbar and collapsible category separators.
 ///
@@ -80,8 +27,8 @@ pub fn view_filtered<'a>(
     selected_index: Option<usize>,
     filter_mode: FilterMode,
     active_filters: &'a [FilterCriterion],
-    collapsed_categories: &'a HashSet<i64>,
-    categories: &'a [(i64, String)],
+    collapsed_categories: &'a HashSet<Option<i64>>,
+    categories: &'a [(Option<i64>, String)],
     compact: bool,
     profile_locked: bool,
 ) -> Element<'a, Message> {
@@ -112,7 +59,7 @@ pub fn view_filtered<'a>(
 
     let mode_label = filter_mode.label();
     let mode_btn = button(text(mode_label).size(11))
-        .on_press(Message::Noop) // TODO: wire to ToggleFilterMode
+        .on_press(Message::ToggleFilterMode)
         .style(if filter_mode == FilterMode::And {
             button::primary
         } else {
@@ -122,16 +69,16 @@ pub fn view_filtered<'a>(
 
     let filter_buttons = row![
         mode_btn,
-        tri_state_button("Enabled", find_filter_state(active_filters, FilterKind::Enabled)),
-        tri_state_button("Notes", find_filter_state(active_filters, FilterKind::HasNotes)),
-        tri_state_button("Nexus", find_filter_state(active_filters, FilterKind::HasNexusId)),
+        tri_state_button("Enabled", FilterKind::Enabled, find_filter_state(active_filters, FilterKind::Enabled)),
+        tri_state_button("Notes", FilterKind::HasNotes, find_filter_state(active_filters, FilterKind::HasNotes)),
+        tri_state_button("Nexus", FilterKind::HasNexusId, find_filter_state(active_filters, FilterKind::HasNexusId)),
         button(text("Clear").size(11))
-            .on_press(Message::Noop) // TODO: wire to ClearFilters
+            .on_press(Message::ClearFilters)
             .style(button::secondary)
             .padding([3, 8]),
         iced::widget::space::horizontal(),
         button(text(if compact { "Normal" } else { "Compact" }).size(11))
-            .on_press(Message::Noop) // TODO: wire to ToggleCompactModList
+            .on_press(Message::ToggleCompactModList)
             .style(button::text)
             .padding([3, 8]),
     ]
@@ -157,22 +104,22 @@ pub fn view_filtered<'a>(
     let total_shown = filtered_indices.len();
 
     // ── Group by category ──
-    let category_map: HashMap<i64, &str> = categories
+    let category_map: HashMap<Option<i64>, &str> = categories
         .iter()
         .map(|(id, name)| (*id, name.as_str()))
         .collect();
 
-    let mut grouped: Vec<(i64, &str, Vec<usize>)> = build_category_groups(
+    let mut grouped: Vec<(Option<i64>, &str, Vec<usize>)> = build_category_groups(
         &filtered_indices,
         mods,
         &category_map,
     );
 
-    // Sort: uncategorized first, then by category name
+    // Sort: uncategorized (None) first, then by category name
     grouped.sort_by(|a, b| {
-        if a.0 == UNCATEGORIZED_ID {
+        if a.0.is_none() {
             std::cmp::Ordering::Less
-        } else if b.0 == UNCATEGORIZED_ID {
+        } else if b.0.is_none() {
             std::cmp::Ordering::Greater
         } else {
             a.1.cmp(b.1)
@@ -234,7 +181,7 @@ fn find_filter_state(criteria: &[FilterCriterion], kind: FilterKind) -> TriState
 }
 
 /// Build a tri-state toggle button.
-fn tri_state_button(label: &str, state: TriState) -> Element<'_, Message> {
+fn tri_state_button(label: &str, kind: FilterKind, state: TriState) -> Element<'_, Message> {
     let prefix = state.label();
     let display = format!("{prefix} {label}");
     let style = match state {
@@ -243,7 +190,7 @@ fn tri_state_button(label: &str, state: TriState) -> Element<'_, Message> {
         TriState::Exclude => button::danger,
     };
     button(text(display).size(11))
-        .on_press(Message::Noop) // TODO: wire to CycleFilter(kind)
+        .on_press(Message::CycleFilter(kind))
         .style(style)
         .padding([3, 8])
         .into()
@@ -253,22 +200,21 @@ fn tri_state_button(label: &str, state: TriState) -> Element<'_, Message> {
 fn build_category_groups<'a>(
     filtered_indices: &[usize],
     mods: &'a [EnabledMod],
-    category_map: &HashMap<i64, &'a str>,
-) -> Vec<(i64, &'a str, Vec<usize>)> {
-    let mut groups: HashMap<i64, Vec<usize>> = HashMap::new();
+    category_map: &HashMap<Option<i64>, &'a str>,
+) -> Vec<(Option<i64>, &'a str, Vec<usize>)> {
+    let mut groups: HashMap<Option<i64>, Vec<usize>> = HashMap::new();
     for &idx in filtered_indices {
-        let cat_id = mods[idx].category_id.unwrap_or(UNCATEGORIZED_ID);
+        let cat_id = mods[idx].category_id;
         groups.entry(cat_id).or_default().push(idx);
     }
 
     groups
         .into_iter()
         .map(|(cat_id, indices)| {
-            let name = if cat_id == UNCATEGORIZED_ID {
-                UNCATEGORIZED_LABEL
-            } else {
-                category_map.get(&cat_id).copied().unwrap_or("Unknown")
-            };
+            let name = category_map
+                .get(&cat_id)
+                .copied()
+                .unwrap_or(if cat_id.is_none() { UNCATEGORIZED_LABEL } else { "Unknown" });
             (cat_id, name, indices)
         })
         .collect()
@@ -289,10 +235,10 @@ fn build_flat_mod_rows<'a>(
 
 /// Build categorized rows with collapsible separators.
 fn build_categorized_rows<'a>(
-    groups: &[(i64, &str, Vec<usize>)],
+    groups: &[(Option<i64>, &str, Vec<usize>)],
     mods: &'a [EnabledMod],
     selected_index: Option<usize>,
-    collapsed: &HashSet<i64>,
+    collapsed: &HashSet<Option<i64>>,
     compact: bool,
     profile_locked: bool,
 ) -> iced::widget::Column<'a, Message> {
@@ -311,7 +257,7 @@ fn build_categorized_rows<'a>(
             .spacing(6)
             .align_y(Alignment::Center),
         )
-        .on_press(Message::Noop) // TODO: wire to ToggleCategoryCollapse(*cat_id)
+        .on_press(Message::ToggleSeparator(*cat_id))
         .style(button::text)
         .padding([4, 8])
         .width(Length::Fill);

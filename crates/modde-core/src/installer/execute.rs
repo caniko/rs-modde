@@ -64,17 +64,67 @@ pub fn execute(
             )?
         }
 
-        InstallMethod::Fomod { config_toml, .. } => {
-            if config_toml.is_none() {
-                return Err(InstallerError::RequiresUserInput { method: "fomod" });
+        InstallMethod::Fomod { module_config, config_toml } => {
+            let config_str = match config_toml {
+                Some(s) => s,
+                None => return Err(InstallerError::RequiresUserInput { method: "fomod" }),
+            };
+
+            // Parse the declarative config (TOML-serialized).
+            let decl: fomod_oxide::DeclarativeConfig = toml::from_str(config_str)
+                .map_err(|e| InstallerError::FomodError(format!("invalid config TOML: {e}")))?;
+
+            // Read and parse the ModuleConfig.xml.
+            let xml_path = source_root.join(module_config);
+            let xml = fs::read_to_string(&xml_path)
+                .map_err(|e| InstallerError::FomodError(format!(
+                    "cannot read {}: {e}", xml_path.display()
+                )))?;
+            let module_cfg = fomod_oxide::ModuleConfig::parse(&xml)
+                .map_err(|e| InstallerError::FomodError(format!("FOMOD parse error: {e}")))?;
+
+            // Create installer, apply selections, resolve file operations.
+            let mut installer = fomod_oxide::Installer::new(module_cfg);
+            decl.apply(&xml, &mut installer)
+                .map_err(|e| InstallerError::FomodError(format!("FOMOD apply error: {e}")))?;
+            let fomod_plan = installer.resolve();
+
+            // Execute the FOMOD plan: copy selected files into the store.
+            let mut out = Vec::new();
+            for op in &fomod_plan.operations {
+                let src_path = source_root.join(&op.source);
+                if op.is_folder {
+                    if src_path.is_dir() {
+                        let dest_base = if op.destination.is_empty() {
+                            store_mod_dir.join(&op.source)
+                        } else {
+                            store_mod_dir.join(&op.destination)
+                        };
+                        out.extend(stage_tree(&src_path, &dest_base, None)?);
+                    }
+                } else if src_path.is_file() {
+                    let dest = if op.destination.is_empty() {
+                        store_mod_dir.join(&op.source)
+                    } else {
+                        store_mod_dir.join(&op.destination)
+                    };
+                    if let Some(parent) = dest.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+                    if fs::rename(&src_path, &dest).is_err() {
+                        fs::copy(&src_path, &dest)?;
+                        let _ = fs::remove_file(&src_path);
+                    }
+                    let size = fs::metadata(&dest).map(|m| m.len()).unwrap_or(0);
+                    out.push(StagedFile {
+                        rel_path: dest_rel(store_mod_dir, &dest),
+                        origin_rel_path: op.source.clone(),
+                        size,
+                        merge_group: None,
+                    });
+                }
             }
-            // TODO(installer): apply the declarative config by consulting
-            // `fomod_oxide` from the CLI/UI edge. For now, stage the raw
-            // archive so the deploy step can re-run the FOMOD applier
-            // against the stored `config_toml`. This preserves today's
-            // Wabbajack-collection behavior while the richer applier
-            // lands in a follow-up.
-            stage_tree(&source_root, store_mod_dir, None)?
+            out
         }
 
         InstallMethod::Bain { selected_subdirs } => {
