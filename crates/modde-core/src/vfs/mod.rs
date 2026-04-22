@@ -349,7 +349,7 @@ mod tests {
         links.insert("data/source.txt".to_string(), source_file.clone());
 
         let farm = test_farm(staging_dir.clone(), links);
-        let farm = farm.materialize().await.unwrap();
+        let _farm = farm.materialize().await.unwrap();
 
         let link_path = staging_dir.join("data/source.txt");
         assert!(

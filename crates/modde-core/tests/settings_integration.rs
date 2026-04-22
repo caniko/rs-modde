@@ -11,7 +11,7 @@ use std::path::PathBuf;
 
 use modde_core::GameId;
 use modde_core::db::ModdeDb;
-use modde_core::profile::{EnabledMod, Profile, ProfileManager, ProfileSource};
+use modde_core::profile::{Profile, ProfileManager, ProfileSource};
 use modde_core::settings::AppSettings;
 use smallvec::smallvec;
 
