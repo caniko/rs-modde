@@ -248,7 +248,6 @@ fn read_f32_le(r: &mut impl Read) -> io::Result<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
 
     /// Build a minimal TES4 record in memory for testing.
     fn build_test_plugin(version: f32, masters: &[&str], record_flags: u32) -> Vec<u8> {
