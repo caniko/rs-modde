@@ -21,7 +21,10 @@ fn wabbajack_download_directives() {
     let downloads = manifest.download_directives();
     assert_eq!(downloads.len(), 3);
 
-    assert!(matches!(&downloads[0], DownloadDirective::Nexus { mod_id: 42, .. }));
+    assert!(matches!(
+        &downloads[0],
+        DownloadDirective::Nexus { mod_id: 42, .. }
+    ));
     assert!(matches!(&downloads[1], DownloadDirective::GitHub { repo, .. } if repo == "test-repo"));
     assert!(matches!(&downloads[2], DownloadDirective::DirectURL { .. }));
 }

@@ -11,7 +11,9 @@ async fn test_create_bsa_deeply_nested_path() {
     // Create deeply nested directory structure
     let deep_path = staging.path().join("textures/landscape/snow/detail");
     tokio::fs::create_dir_all(&deep_path).await.unwrap();
-    tokio::fs::write(deep_path.join("snow01.dds"), b"snow texture data").await.unwrap();
+    tokio::fs::write(deep_path.join("snow01.dds"), b"snow texture data")
+        .await
+        .unwrap();
 
     let states = vec![BSAFileState {
         path: "textures\\landscape\\snow\\detail\\snow01.dds".to_string(),
@@ -33,7 +35,9 @@ async fn test_create_bsa_root_level_file() {
     let output = staging.path().join("test.bsa");
 
     // File at root level (no subdirectory)
-    tokio::fs::write(staging.path().join("plugin.esp"), b"plugin data").await.unwrap();
+    tokio::fs::write(staging.path().join("plugin.esp"), b"plugin data")
+        .await
+        .unwrap();
 
     let states = vec![BSAFileState {
         path: "plugin.esp".to_string(),
@@ -52,7 +56,9 @@ async fn test_create_ba2_deeply_nested_path() {
 
     let deep_path = staging.path().join("meshes/architecture/whiterun");
     tokio::fs::create_dir_all(&deep_path).await.unwrap();
-    tokio::fs::write(deep_path.join("wall.nif"), b"mesh data").await.unwrap();
+    tokio::fs::write(deep_path.join("wall.nif"), b"mesh data")
+        .await
+        .unwrap();
 
     let states = vec![BSAFileState {
         path: "meshes\\architecture\\whiterun\\wall.nif".to_string(),
@@ -78,7 +84,9 @@ async fn test_create_bsa_many_files_same_folder() {
     let mut states = Vec::new();
     for i in 0..20 {
         let filename = format!("model_{i}.nif");
-        tokio::fs::write(mesh_dir.join(&filename), format!("data_{i}")).await.unwrap();
+        tokio::fs::write(mesh_dir.join(&filename), format!("data_{i}"))
+            .await
+            .unwrap();
         states.push(BSAFileState {
             path: format!("meshes\\{filename}"),
             hash: 0,
@@ -102,7 +110,9 @@ async fn test_create_bsa_many_folders() {
         let dir = staging.path().join(folder);
         tokio::fs::create_dir_all(&dir).await.unwrap();
         let filename = format!("{folder}_data.dat");
-        tokio::fs::write(dir.join(&filename), format!("{folder} content")).await.unwrap();
+        tokio::fs::write(dir.join(&filename), format!("{folder} content"))
+            .await
+            .unwrap();
         states.push(BSAFileState {
             path: format!("{folder}\\{filename}"),
             hash: 0,
@@ -127,7 +137,9 @@ async fn test_create_bsa_creates_parent_dirs() {
     let staging = tempfile::tempdir().unwrap();
     let output = staging.path().join("deeply/nested/output/test.bsa");
 
-    tokio::fs::write(staging.path().join("file.txt"), b"data").await.unwrap();
+    tokio::fs::write(staging.path().join("file.txt"), b"data")
+        .await
+        .unwrap();
 
     let states = vec![BSAFileState {
         path: "file.txt".to_string(),
@@ -146,8 +158,12 @@ async fn test_create_bsa_large_file_compresses() {
 
     // Create a large compressible file (repeated pattern)
     let data = "A".repeat(100_000);
-    tokio::fs::create_dir_all(staging.path().join("data")).await.unwrap();
-    tokio::fs::write(staging.path().join("data/large.txt"), data.as_bytes()).await.unwrap();
+    tokio::fs::create_dir_all(staging.path().join("data"))
+        .await
+        .unwrap();
+    tokio::fs::write(staging.path().join("data/large.txt"), data.as_bytes())
+        .await
+        .unwrap();
 
     let states = vec![BSAFileState {
         path: "data\\large.txt".to_string(),
@@ -170,11 +186,19 @@ async fn test_create_bsa_large_file_compresses() {
 #[tokio::test]
 async fn test_extension_detection_bsa() {
     let staging = tempfile::tempdir().unwrap();
-    tokio::fs::write(staging.path().join("file.dat"), b"test").await.unwrap();
-    let states = vec![BSAFileState { path: "file.dat".to_string(), hash: 0, size: 4 }];
+    tokio::fs::write(staging.path().join("file.dat"), b"test")
+        .await
+        .unwrap();
+    let states = vec![BSAFileState {
+        path: "file.dat".to_string(),
+        hash: 0,
+        size: 4,
+    }];
 
     let bsa_output = staging.path().join("test.bsa");
-    create_bsa(&states, staging.path(), &bsa_output).await.unwrap();
+    create_bsa(&states, staging.path(), &bsa_output)
+        .await
+        .unwrap();
     let bsa_data = std::fs::read(&bsa_output).unwrap();
     assert_eq!(&bsa_data[..4], b"BSA\0", "should be BSA format");
 }
@@ -182,11 +206,19 @@ async fn test_extension_detection_bsa() {
 #[tokio::test]
 async fn test_extension_detection_ba2() {
     let staging = tempfile::tempdir().unwrap();
-    tokio::fs::write(staging.path().join("file.dat"), b"test").await.unwrap();
-    let states = vec![BSAFileState { path: "file.dat".to_string(), hash: 0, size: 4 }];
+    tokio::fs::write(staging.path().join("file.dat"), b"test")
+        .await
+        .unwrap();
+    let states = vec![BSAFileState {
+        path: "file.dat".to_string(),
+        hash: 0,
+        size: 4,
+    }];
 
     let ba2_output = staging.path().join("test.ba2");
-    create_bsa(&states, staging.path(), &ba2_output).await.unwrap();
+    create_bsa(&states, staging.path(), &ba2_output)
+        .await
+        .unwrap();
     let ba2_data = std::fs::read(&ba2_output).unwrap();
     assert_eq!(&ba2_data[..4], b"BTDX", "should be BA2 format");
 }
@@ -194,11 +226,23 @@ async fn test_extension_detection_ba2() {
 #[tokio::test]
 async fn test_unknown_extension_defaults_to_bsa() {
     let staging = tempfile::tempdir().unwrap();
-    tokio::fs::write(staging.path().join("file.dat"), b"test").await.unwrap();
-    let states = vec![BSAFileState { path: "file.dat".to_string(), hash: 0, size: 4 }];
+    tokio::fs::write(staging.path().join("file.dat"), b"test")
+        .await
+        .unwrap();
+    let states = vec![BSAFileState {
+        path: "file.dat".to_string(),
+        hash: 0,
+        size: 4,
+    }];
 
     let unknown_output = staging.path().join("test.archive");
-    create_bsa(&states, staging.path(), &unknown_output).await.unwrap();
+    create_bsa(&states, staging.path(), &unknown_output)
+        .await
+        .unwrap();
     let data = std::fs::read(&unknown_output).unwrap();
-    assert_eq!(&data[..4], b"BSA\0", "unknown extension should default to BSA");
+    assert_eq!(
+        &data[..4],
+        b"BSA\0",
+        "unknown extension should default to BSA"
+    );
 }

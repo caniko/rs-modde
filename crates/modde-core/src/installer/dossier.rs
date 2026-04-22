@@ -51,22 +51,33 @@ pub struct DossierContext {
 }
 
 /// A slug identifying the dossier dir. Stable across retries.
+#[must_use]
 pub fn dossier_slug(ctx: &DossierContext) -> String {
-    match (ctx.game_domain.as_deref(), ctx.nexus_mod_id, ctx.nexus_file_id) {
+    match (
+        ctx.game_domain.as_deref(),
+        ctx.nexus_mod_id,
+        ctx.nexus_file_id,
+    ) {
         (Some(domain), Some(mod_id), Some(file_id)) => {
             format!("{domain}_{mod_id}_{file_id}")
         }
         (Some(domain), Some(mod_id), None) => format!("{domain}_{mod_id}"),
-        _ => format!("{}_{}", ctx.game_id, &ctx.source_archive_hash[..8.min(ctx.source_archive_hash.len())]),
+        _ => format!(
+            "{}_{}",
+            ctx.game_id,
+            &ctx.source_archive_hash[..8.min(ctx.source_archive_hash.len())]
+        ),
     }
 }
 
 /// Root directory holding all unknown-installer dossiers.
+#[must_use]
 pub fn dossiers_dir() -> PathBuf {
     modde_data_dir().join("unknown-installers")
 }
 
 /// Path to the dossier for a specific unknown mod.
+#[must_use]
 pub fn dossier_path(ctx: &DossierContext) -> PathBuf {
     dossiers_dir().join(dossier_slug(ctx))
 }
@@ -125,7 +136,11 @@ fn write_archive_tree(extracted_dir: &Path, out: &Path) -> InstallerResult<()> {
     let mut count = 0;
     for (_, rel) in &files {
         if count >= MAX_ENTRIES {
-            writeln!(file, "... ({} more entries omitted)", files.len() - MAX_ENTRIES)?;
+            writeln!(
+                file,
+                "... ({} more entries omitted)",
+                files.len() - MAX_ENTRIES
+            )?;
             break;
         }
         writeln!(file, "{}", rel.display())?;
@@ -138,8 +153,14 @@ fn copy_text_samples(extracted_dir: &Path, out: &Path) -> InstallerResult<()> {
     const MAX_SAMPLES: usize = 5;
     const MAX_BYTES: u64 = 16 * 1024;
     const INTERESTING: &[&str] = &[
-        "readme", "info.json", "moduleconfig.xml", "meta.ini", "manifest.json",
-        "install.xml", "fomod.xml", "modinfo.xml",
+        "readme",
+        "info.json",
+        "moduleconfig.xml",
+        "meta.ini",
+        "manifest.json",
+        "install.xml",
+        "fomod.xml",
+        "modinfo.xml",
     ];
 
     fs::create_dir_all(out)?;
@@ -158,7 +179,9 @@ fn copy_text_samples(extracted_dir: &Path, out: &Path) -> InstallerResult<()> {
         if !matches {
             continue;
         }
-        let Ok(meta) = fs::metadata(&abs) else { continue };
+        let Ok(meta) = fs::metadata(&abs) else {
+            continue;
+        };
         if meta.len() > MAX_BYTES {
             continue;
         }
@@ -168,7 +191,7 @@ fn copy_text_samples(extracted_dir: &Path, out: &Path) -> InstallerResult<()> {
         };
         // Flatten the rel path into a single filename so the samples
         // directory stays shallow.
-        let flat = rel.to_string_lossy().replace('/', "__").replace('\\', "__");
+        let flat = rel.to_string_lossy().replace(['/', '\\'], "__");
         let sample_path = out.join(flat);
         fs::write(&sample_path, body)?;
         written += 1;
@@ -176,23 +199,19 @@ fn copy_text_samples(extracted_dir: &Path, out: &Path) -> InstallerResult<()> {
     Ok(())
 }
 
-fn write_prompt(
-    dir: &Path,
-    ctx: &DossierContext,
-    method: &InstallMethod,
-) -> InstallerResult<()> {
+fn write_prompt(dir: &Path, ctx: &DossierContext, method: &InstallMethod) -> InstallerResult<()> {
     let mut prompt = String::new();
     prompt.push_str("# modde unknown installer dossier\n\n");
     prompt.push_str(&format!("Mod: **{}**\n", ctx.mod_name));
     if let Some(author) = &ctx.mod_author {
-        prompt.push_str(&format!("Author: {}\n", author));
+        prompt.push_str(&format!("Author: {author}\n"));
     }
     if let Some(version) = &ctx.mod_version {
-        prompt.push_str(&format!("Version: {}\n", version));
+        prompt.push_str(&format!("Version: {version}\n"));
     }
     prompt.push_str(&format!("Game: {}\n", ctx.game_id));
     if let Some(url) = &ctx.nexus_url {
-        prompt.push_str(&format!("Nexus URL: {}\n", url));
+        prompt.push_str(&format!("Nexus URL: {url}\n"));
     }
     prompt.push_str(&format!(
         "Detection verdict: `{}` (reason: {})\n\n",
@@ -225,12 +244,8 @@ fn write_prompt(
         "3. Also extend `execute.rs` if the new variant needs custom \
          staging logic.\n",
     );
-    prompt.push_str(
-        "4. Write a unit test using the file samples in this dossier.\n",
-    );
-    prompt.push_str(
-        "5. Run `cargo test -p modde-core installer::`.\n",
-    );
+    prompt.push_str("4. Write a unit test using the file samples in this dossier.\n");
+    prompt.push_str("5. Run `cargo test -p modde-core installer::`.\n");
     prompt.push_str(
         "6. Rename this dossier directory by appending `.resolved` so the \
          UI surfaces a **Retry Install** button.\n\n",
@@ -239,7 +254,9 @@ fn write_prompt(
     prompt.push_str("## Files in this dossier\n\n");
     prompt.push_str("- `metadata.json` — mod + context info\n");
     prompt.push_str("- `archive_tree.txt` — recursive listing of the extracted archive\n");
-    prompt.push_str("- `file_samples/` — verbatim copies of small text files (READMEs, configs, manifests)\n");
+    prompt.push_str(
+        "- `file_samples/` — verbatim copies of small text files (READMEs, configs, manifests)\n",
+    );
     prompt.push_str("- `analyzer_trace.json` — which generic probes ran and how they voted\n");
     prompt.push_str("- `PROMPT.md` — this file\n\n");
 
@@ -254,5 +271,5 @@ fn write_prompt(
 }
 
 fn io_err(e: serde_json::Error) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
+    std::io::Error::other(e.to_string())
 }

@@ -1,4 +1,4 @@
-//! Integration tests for GoogleDriveSource.
+//! Integration tests for `GoogleDriveSource`.
 //!
 //! The `extract_confirm_token` function is private and is thoroughly tested
 //! via inline `#[cfg(test)] mod tests` in `src/gdrive/mod.rs`.
@@ -6,8 +6,8 @@
 
 use modde_core::GameId;
 use modde_core::manifest::wabbajack::DownloadDirective;
-use modde_sources::gdrive::GoogleDriveSource;
 use modde_sources::DownloadSource;
+use modde_sources::gdrive::GoogleDriveSource;
 use reqwest::Client;
 use std::collections::HashMap;
 

@@ -16,7 +16,7 @@ use modde_core::paths;
 /// A game installation detected by scanning launcher libraries.
 #[derive(Debug, Clone)]
 pub struct DetectedGame {
-    /// The modde game_id (e.g. "skyrim-se", "cyberpunk2077").
+    /// The modde `game_id` (e.g. "skyrim-se", "cyberpunk2077").
     pub game_id: &'static str,
     /// Human-readable display name.
     pub display_name: &'static str,
@@ -80,7 +80,9 @@ impl LauncherSource {
                 let status = cmd
                     .args(["--no-gui", "--launch", app_id])
                     .status()
-                    .with_context(|| format!("failed to launch Heroic ({bin} --no-gui --launch {app_id})"))?;
+                    .with_context(|| {
+                        format!("failed to launch Heroic ({bin} --no-gui --launch {app_id})")
+                    })?;
                 Ok(Some(status))
             }
         }
@@ -184,8 +186,7 @@ fn heroic_command() -> Option<(String, Vec<String>)> {
             .stderr(Stdio::null())
             .status()
             .ok()
-            .map(|s| s.success())
-            .unwrap_or(false)
+            .is_some_and(|s| s.success())
         {
             return Some((
                 "flatpak".to_string(),
@@ -225,10 +226,11 @@ fn heroic_command() -> Option<(String, Vec<String>)> {
     }
 }
 
-/// Find a detected game by its modde game_id.
+/// Find a detected game by its modde `game_id`.
 ///
 /// Convenience wrapper around [`scan_installed_games`] that returns the first
 /// match. Used by both CLI and UI to resolve the launcher for a game.
+#[must_use]
 pub fn find_detected_game(game_id: &str) -> Option<DetectedGame> {
     scan_installed_games()
         .into_iter()
@@ -239,6 +241,7 @@ pub fn find_detected_game(game_id: &str) -> Option<DetectedGame> {
 ///
 /// Returns every detected game with its install path and launcher source.
 /// A game may appear multiple times if installed via different launchers.
+#[must_use]
 pub fn scan_installed_games() -> Vec<DetectedGame> {
     let mut detected = Vec::new();
 
@@ -389,7 +392,7 @@ fn scan_heroic_store_file(
     }
 }
 
-/// Scan Heroic sideloaded apps — match by directory name against known steam_dir names.
+/// Scan Heroic sideloaded apps — match by directory name against known `steam_dir` names.
 fn scan_heroic_sideload(path: &Path, detected: &mut Vec<DetectedGame>) {
     let data = match std::fs::read_to_string(path) {
         Ok(d) => d,
@@ -434,8 +437,7 @@ fn scan_heroic_sideload(path: &Path, detected: &mut Vec<DetectedGame>) {
         for game in KNOWN_GAMES {
             let matches = game
                 .steam_dir
-                .map(|sd| sd.eq_ignore_ascii_case(dir_name))
-                .unwrap_or(false);
+                .is_some_and(|sd| sd.eq_ignore_ascii_case(dir_name));
 
             if matches {
                 debug!(
@@ -462,13 +464,14 @@ fn scan_heroic_sideload(path: &Path, detected: &mut Vec<DetectedGame>) {
 ///
 /// This is used by `GamePlugin::detect_install()` implementations to check
 /// all available sources instead of just hardcoded paths.
+#[must_use]
 pub fn find_game_install(game_id: &str) -> Option<PathBuf> {
     // Check settings override first
     let settings = modde_core::settings::AppSettings::load();
-    if let Some(path) = settings.game_path(game_id) {
-        if path.is_dir() {
-            return Some(path.clone());
-        }
+    if let Some(path) = settings.game_path(game_id)
+        && path.is_dir()
+    {
+        return Some(path.clone());
     }
 
     // Scan all launchers
@@ -504,7 +507,10 @@ mod tests {
         std::fs::create_dir_all(&install_dir).unwrap();
 
         let store_file = tmp.path().join("installed.json");
-        write_heroic_installed(&store_file, &[("1423049311", &install_dir.to_string_lossy())]);
+        write_heroic_installed(
+            &store_file,
+            &[("1423049311", &install_dir.to_string_lossy())],
+        );
 
         let mut detected = Vec::new();
         scan_heroic_store_file(
@@ -521,7 +527,10 @@ mod tests {
         assert_eq!(detected.len(), 1);
         assert_eq!(detected[0].game_id, "cyberpunk2077");
         assert_eq!(detected[0].install_path, install_dir);
-        assert!(matches!(detected[0].source, LauncherSource::HeroicGog { .. }));
+        assert!(matches!(
+            detected[0].source,
+            LauncherSource::HeroicGog { .. }
+        ));
     }
 
     #[test]
@@ -531,7 +540,10 @@ mod tests {
         std::fs::create_dir_all(&install_dir).unwrap();
 
         let store_file = tmp.path().join("installed.json");
-        write_heroic_installed(&store_file, &[("9999999999", &install_dir.to_string_lossy())]);
+        write_heroic_installed(
+            &store_file,
+            &[("9999999999", &install_dir.to_string_lossy())],
+        );
 
         let mut detected = Vec::new();
         scan_heroic_store_file(
@@ -567,7 +579,11 @@ mod tests {
             &mut detected,
         );
 
-        assert_eq!(detected.len(), 0, "nonexistent install path should be skipped");
+        assert_eq!(
+            detected.len(),
+            0,
+            "nonexistent install path should be skipped"
+        );
     }
 
     #[test]
@@ -589,11 +605,7 @@ mod tests {
         std::fs::write(&store_file, "this is not json").unwrap();
 
         let mut detected = Vec::new();
-        scan_heroic_store_file(
-            &store_file,
-            |_| None,
-            &mut detected,
-        );
+        scan_heroic_store_file(&store_file, |_| None, &mut detected);
         assert_eq!(detected.len(), 0);
     }
 
@@ -604,11 +616,7 @@ mod tests {
         std::fs::write(&store_file, r#"{"installed":[]}"#).unwrap();
 
         let mut detected = Vec::new();
-        scan_heroic_store_file(
-            &store_file,
-            |_| None,
-            &mut detected,
-        );
+        scan_heroic_store_file(&store_file, |_| None, &mut detected);
         assert_eq!(detected.len(), 0);
     }
 
@@ -620,14 +628,20 @@ mod tests {
         std::fs::create_dir_all(&install_dir).unwrap();
 
         let store_file = tmp.path().join("installed.json");
-        write_heroic_installed(&store_file, &[("some_sideload_id", &install_dir.to_string_lossy())]);
+        write_heroic_installed(
+            &store_file,
+            &[("some_sideload_id", &install_dir.to_string_lossy())],
+        );
 
         let mut detected = Vec::new();
         scan_heroic_sideload(&store_file, &mut detected);
 
         assert_eq!(detected.len(), 1);
         assert_eq!(detected[0].game_id, "cyberpunk2077");
-        assert!(matches!(detected[0].source, LauncherSource::HeroicSideload { .. }));
+        assert!(matches!(
+            detected[0].source,
+            LauncherSource::HeroicSideload { .. }
+        ));
     }
 
     #[test]
@@ -658,7 +672,10 @@ mod tests {
         // Instead, we directly test scan_steam_libraries by injecting a mock path.
         // We can do this by patching the paths module — but since we can't do that easily,
         // we test via the internal helper by constructing the detection directly.
-        let detected_game = KNOWN_GAMES.iter().find(|g| g.game_id == "cyberpunk2077").unwrap();
+        let detected_game = KNOWN_GAMES
+            .iter()
+            .find(|g| g.game_id == "cyberpunk2077")
+            .unwrap();
         let install_path = common.clone();
         assert_eq!(install_path.file_name().unwrap(), "Cyberpunk 2077");
         assert!(install_path.is_dir());
@@ -680,19 +697,25 @@ mod tests {
 
     #[test]
     fn launcher_source_display_heroic_gog() {
-        let src = LauncherSource::HeroicGog { app_id: "1423049311".to_string() };
+        let src = LauncherSource::HeroicGog {
+            app_id: "1423049311".to_string(),
+        };
         assert_eq!(src.to_string(), "Heroic/GOG (1423049311)");
     }
 
     #[test]
     fn launcher_source_display_heroic_epic() {
-        let src = LauncherSource::HeroicEpic { app_id: "Ginger".to_string() };
+        let src = LauncherSource::HeroicEpic {
+            app_id: "Ginger".to_string(),
+        };
         assert_eq!(src.to_string(), "Heroic/Epic (Ginger)");
     }
 
     #[test]
     fn launcher_source_display_sideload() {
-        let src = LauncherSource::HeroicSideload { app_id: "custom_app".to_string() };
+        let src = LauncherSource::HeroicSideload {
+            app_id: "custom_app".to_string(),
+        };
         assert_eq!(src.to_string(), "Heroic/Sideload (custom_app)");
     }
 
@@ -702,14 +725,18 @@ mod tests {
     fn known_games_ids_are_unique() {
         let ids: Vec<_> = KNOWN_GAMES.iter().map(|g| g.game_id).collect();
         let deduped: std::collections::HashSet<_> = ids.iter().collect();
-        assert_eq!(ids.len(), deduped.len(), "KNOWN_GAMES has duplicate game_ids");
+        assert_eq!(
+            ids.len(),
+            deduped.len(),
+            "KNOWN_GAMES has duplicate game_ids"
+        );
     }
 
     #[test]
     fn known_games_includes_supported_games() {
         use crate::SUPPORTED_GAME_IDS;
-        for &game_id in SUPPORTED_GAME_IDS.iter()
-            .filter(|g| **g != "skyrim-ae")  // AE intentionally shares SE's steam dir
+        for &game_id in SUPPORTED_GAME_IDS.iter().filter(|g| **g != "skyrim-ae")
+        // AE intentionally shares SE's steam dir
         {
             if ["skyrim-se", "fallout4", "cyberpunk2077"].contains(&game_id) {
                 assert!(

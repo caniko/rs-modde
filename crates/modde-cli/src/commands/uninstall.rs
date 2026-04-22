@@ -9,10 +9,10 @@
 use anyhow::{Context, Result, bail};
 use tracing::{info, warn};
 
-use modde_core::installer::dossiers_dir;
-use modde_core::profile::ProfileManager;
 use modde_core::ModdeDb;
+use modde_core::installer::dossiers_dir;
 use modde_core::paths;
+use modde_core::profile::ProfileManager;
 
 /// Remove `mod_id` from `profile_name`. If `profile_name` is `None`,
 /// the unambiguous default profile is used.
@@ -47,14 +47,14 @@ pub async fn handle(mod_id: String, profile_name: Option<String>) -> Result<()> 
     // We stored each file under `store/<mod_id>/<rel_path>`, so the
     // top-level store dir is `store/<mod_id>`.
     let store_mod_dir = paths::store_dir().join(&mod_id);
-    if store_mod_dir.exists() {
-        if let Err(e) = std::fs::remove_dir_all(&store_mod_dir) {
-            warn!(
-                path = %store_mod_dir.display(),
-                error = %e,
-                "failed to delete store dir; leaving orphaned files behind"
-            );
-        }
+    if store_mod_dir.exists()
+        && let Err(e) = std::fs::remove_dir_all(&store_mod_dir)
+    {
+        warn!(
+            path = %store_mod_dir.display(),
+            error = %e,
+            "failed to delete store dir; leaving orphaned files behind"
+        );
     }
 
     // Finally, strip the mod row from the in-memory profile and persist
@@ -63,7 +63,8 @@ pub async fn handle(mod_id: String, profile_name: Option<String>) -> Result<()> 
     // `pm.update()` below rewrites the mods table from the in-memory
     // list so we need to drop it there too.
     profile.mods.retain(|m| m.mod_id != mod_id);
-    pm.update(&profile).context("failed to persist profile after remove")?;
+    pm.update(&profile)
+        .context("failed to persist profile after remove")?;
 
     info!(%mod_id, files = staged_files.len(), "mod removed");
     println!(

@@ -21,19 +21,20 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     let name = &profile.name;
     info!(profile = %name, game = %profile.game_id, "deploying profile");
 
-    let game_plugin = modde_games::resolve_game_plugin(&profile.game_id)
-        .ok_or_else(|| anyhow::anyhow!(
+    let game_plugin = modde_games::resolve_game_plugin(&profile.game_id).ok_or_else(|| {
+        anyhow::anyhow!(
             "unsupported game: '{}'\nSupported games: {}",
             profile.game_id,
             modde_games::SUPPORTED_GAME_IDS.join(", ")
-        ))?;
+        )
+    })?;
 
-    let install_dir = game_plugin
-        .detect_install()
-        .ok_or_else(|| anyhow::anyhow!(
+    let install_dir = game_plugin.detect_install().ok_or_else(|| {
+        anyhow::anyhow!(
             "could not detect install directory for {}",
             game_plugin.display_name()
-        ))?;
+        )
+    })?;
 
     let game_mod_dir = game_plugin.mod_directory(&install_dir);
     info!(
@@ -61,19 +62,20 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
             .post_deploy(&install_dir)
             .context("post-deploy hook failed")?;
 
-        super::install::configure_wine_overrides(
-            &profile.game_id, &install_dir, &staging,
-        )
-        .context("Wine DLL override configuration failed")?;
+        super::install::configure_wine_overrides(&profile.game_id, &install_dir, &staging)
+            .context("Wine DLL override configuration failed")?;
 
         println!("Deployed Wabbajack profile: {name}");
-        println!("  Game: {} ({})", game_plugin.display_name(), profile.game_id);
+        println!(
+            "  Game: {} ({})",
+            game_plugin.display_name(),
+            profile.game_id
+        );
         println!("  Install dir: {}", install_dir.display());
         return Ok(());
     }
 
-    let resolved = resolver::resolve(&profile)
-        .context("failed to resolve load order")?;
+    let resolved = resolver::resolve(&profile).context("failed to resolve load order")?;
 
     println!("Load order: {} enabled mods", resolved.order.len());
 
@@ -83,12 +85,8 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     let classifier = modde_games::resolve_collision_classifier(&profile.game_id);
 
     let (conflict_map, _origins) = if let Some(ref cls) = classifier {
-        collision::build_full_conflict_map(
-            &store,
-            &resolved.order,
-            cls.as_ref(),
-        )
-        .context("failed to build conflict map")?
+        collision::build_full_conflict_map(&store, &resolved.order, cls.as_ref())
+            .context("failed to build conflict map")?
     } else {
         // Fallback: build a loose-files-only conflict map (no classifier available).
         let mut cm = ConflictMap::default();
@@ -119,10 +117,10 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
         let files = walk_files_relative(&mod_dir_path)
             .with_context(|| format!("failed to walk files for mod {mod_id}"))?;
         for (rel_path, _) in &files {
-            if let Some(providers) = conflict_map.files.get(rel_path) {
-                if providers.len() > 1 {
-                    conflict_count += 1;
-                }
+            if let Some(providers) = conflict_map.files.get(rel_path)
+                && providers.len() > 1
+            {
+                conflict_count += 1;
             }
         }
         mod_files.insert(mod_id.clone(), files);
@@ -139,8 +137,8 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
 
     // Collect profile-level overrides
     let overrides = if profile.overrides.exists() {
-        let files = walk_files_relative(&profile.overrides)
-            .context("failed to walk override files")?;
+        let files =
+            walk_files_relative(&profile.overrides).context("failed to walk override files")?;
         for (rel_path, _) in &files {
             info!(file = %rel_path, "override wins over mod file");
         }
@@ -155,21 +153,26 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
         if hidden.is_empty() {
             None
         } else {
-            let set: HashSet<(String, String)> = hidden
-                .into_iter()
-                .map(|h| (h.mod_id, h.rel_path))
-                .collect();
+            let set: HashSet<(String, String)> =
+                hidden.into_iter().map(|h| (h.mod_id, h.rel_path)).collect();
             info!(count = set.len(), "applying hidden file exclusions");
             Some(set)
         }
     });
 
-    let farm = SymlinkFarm::build(name, &resolved, &mod_files, overrides.as_deref(), hidden_set.as_ref())
-        .context("failed to build symlink farm")?;
+    let farm = SymlinkFarm::build(
+        name,
+        &resolved,
+        &mod_files,
+        overrides.as_deref(),
+        hidden_set.as_ref(),
+    )
+    .context("failed to build symlink farm")?;
 
     let total_files = farm.links.len();
 
-    let farm = farm.materialize()
+    let farm = farm
+        .materialize()
         .await
         .context("failed to materialize symlink farm")?;
 
@@ -186,10 +189,8 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     // This ensures Nexus/Manual profiles also get WINEDLLOVERRIDES set when mods
     // deploy proxy DLLs (e.g. version.dll for CET, winmm.dll for ASI loaders).
     let staging_dir = paths::staging_dir().join(name);
-    super::install::configure_wine_overrides(
-        &profile.game_id, &install_dir, &staging_dir,
-    )
-    .context("Wine DLL override configuration failed")?;
+    super::install::configure_wine_overrides(&profile.game_id, &install_dir, &staging_dir)
+        .context("Wine DLL override configuration failed")?;
 
     // Generate per-game tool configs and apply tool environment to launcher
     if let Ok(db) = modde_core::db::ModdeDb::open() {
@@ -200,13 +201,20 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
 
         // Apply tool env vars + wrappers to Heroic launcher config
         let launcher = modde_games::launcher::detect_launcher(&install_dir);
-        if let modde_games::launcher::Launcher::Heroic { ref config_path, ref game_id } = launcher {
+        if let modde_games::launcher::Launcher::Heroic {
+            ref config_path,
+            ref game_id,
+        } = launcher
+        {
             let env_vars = modde_games::launcher::collect_tool_env_vars(&profile.game_id, &db)
                 .unwrap_or_default();
             let wrappers = modde_games::launcher::collect_tool_wrappers(&profile.game_id, &db)
                 .unwrap_or_default();
             if let Err(e) = modde_games::launcher::apply_tool_environment_heroic(
-                config_path, game_id, &env_vars, &wrappers,
+                config_path,
+                game_id,
+                &env_vars,
+                &wrappers,
             ) {
                 warn!(error = %e, "failed to apply tool environment to Heroic");
             }
@@ -214,7 +222,11 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     }
 
     println!("Deployed profile: {name}");
-    println!("  Game: {} ({})", game_plugin.display_name(), profile.game_id);
+    println!(
+        "  Game: {} ({})",
+        game_plugin.display_name(),
+        profile.game_id
+    );
     println!("  Install dir: {}", install_dir.display());
     println!("  Mod dir: {}", game_mod_dir.display());
     println!("  Total files: {total_files}");

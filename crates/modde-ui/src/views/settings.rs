@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use iced::widget::{button, column, pick_list, row, scrollable, text, text_input};
-use iced::{color, Alignment, Element, Length};
+use iced::{Alignment, Element, Length, color};
 
 use crate::app::{Message, NexusAuthStatus, SettingsState};
 
@@ -11,25 +11,36 @@ pub fn view(state: SettingsState) -> Element<'static, Message> {
 
     // Nexus API key with validation status
     let nexus_status_widget: Element<'static, Message> = match &state.nexus_status {
-        Some(NexusAuthStatus::Checking) => text("Checking...").size(12).color(color!(0xAAAA44)).into(),
-        Some(NexusAuthStatus::Valid { username, is_premium }) => {
+        Some(NexusAuthStatus::Checking) => {
+            text("Checking...").size(12).color(color!(0xAAAA44)).into()
+        }
+        Some(NexusAuthStatus::Valid {
+            username,
+            is_premium,
+        }) => {
             let tier = if *is_premium { "Premium" } else { "Standard" };
             text(format!("Logged in as {username} ({tier})"))
                 .size(12)
                 .color(color!(0x88CC88))
                 .into()
         }
-        Some(NexusAuthStatus::Invalid(err)) => {
-            text(format!("Invalid: {err}"))
-                .size(12)
-                .color(color!(0xFF4444))
-                .into()
-        }
+        Some(NexusAuthStatus::Invalid(err)) => text(format!("Invalid: {err}"))
+            .size(12)
+            .color(color!(0xFF4444))
+            .into(),
         None => text("Not validated").size(12).into(),
     };
 
-    let game_path_str = state.game_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
-    let download_dir_str = state.download_dir.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
+    let game_path_str = state
+        .game_path
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    let download_dir_str = state
+        .download_dir
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
 
     let api_key_section = column![
         text("Nexus Mods API Key").size(14),
@@ -55,16 +66,13 @@ pub fn view(state: SettingsState) -> Element<'static, Message> {
         text("Game Install Path").size(14),
         text("Root directory of the game installation.").size(11),
         row![
-            text_input(
-                "/path/to/game",
-                &game_path_str,
-            )
-            .on_input(|s| Message::SetGamePath {
-                game_id: "default".to_string(),
-                path: PathBuf::from(s),
-            })
-            .padding(8)
-            .width(Length::Fill),
+            text_input("/path/to/game", &game_path_str,)
+                .on_input(|s| Message::SetGamePath {
+                    game_id: "default".to_string(),
+                    path: PathBuf::from(s),
+                })
+                .padding(8)
+                .width(Length::Fill),
             button(text("Browse").size(13))
                 .on_press(Message::BrowseGamePath)
                 .style(button::secondary)
@@ -80,13 +88,10 @@ pub fn view(state: SettingsState) -> Element<'static, Message> {
         text("Download Directory").size(14),
         text("Where downloaded mod archives are stored.").size(11),
         row![
-            text_input(
-                "/path/to/downloads",
-                &download_dir_str,
-            )
-            .on_input(|s| Message::SetDownloadDir(PathBuf::from(s)))
-            .padding(8)
-            .width(Length::Fill),
+            text_input("/path/to/downloads", &download_dir_str,)
+                .on_input(|s| Message::SetDownloadDir(PathBuf::from(s)))
+                .padding(8)
+                .width(Length::Fill),
             button(text("Browse").size(13))
                 .on_press(Message::BrowseDownloadDir)
                 .style(button::secondary)

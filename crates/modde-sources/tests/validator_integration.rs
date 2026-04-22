@@ -25,7 +25,9 @@ async fn test_validate_from_archive_with_matching_hash() {
     let file_hash = xxh3_64(content);
 
     // Create the file in staging
-    tokio::fs::write(staging.path().join("output.esp"), content).await.unwrap();
+    tokio::fs::write(staging.path().join("output.esp"), content)
+        .await
+        .unwrap();
 
     // The archive hash happens to equal the file hash for this test
     let manifest = WabbajackManifest {
@@ -80,11 +82,15 @@ async fn test_validate_mixed_from_archive_and_patched() {
     // Create files
     let correct_content = b"correct archive output";
     let correct_hash = xxh3_64(correct_content);
-    tokio::fs::write(staging.path().join("from_archive.esp"), correct_content).await.unwrap();
+    tokio::fs::write(staging.path().join("from_archive.esp"), correct_content)
+        .await
+        .unwrap();
 
     let patched_content = b"patched output data";
     let patched_hash = xxh3_64(patched_content);
-    tokio::fs::write(staging.path().join("patched.esp"), patched_content).await.unwrap();
+    tokio::fs::write(staging.path().join("patched.esp"), patched_content)
+        .await
+        .unwrap();
 
     let manifest = WabbajackManifest {
         archives: vec![ArchiveEntry {
@@ -168,7 +174,9 @@ async fn test_validate_deeply_nested_file() {
 
     let content = b"deep texture data";
     let hash = xxh3_64(content);
-    tokio::fs::write(deep.join("peak.dds"), content).await.unwrap();
+    tokio::fs::write(deep.join("peak.dds"), content)
+        .await
+        .unwrap();
 
     let manifest = WabbajackManifest {
         directives: vec![RawDirective::PatchedFromArchive {
@@ -193,8 +201,12 @@ async fn test_validate_report_counts_are_consistent() {
     // 3 files: 1 correct, 1 wrong hash, 1 missing
     let correct_content = b"correct";
     let correct_hash = xxh3_64(correct_content);
-    tokio::fs::write(staging.path().join("correct.txt"), correct_content).await.unwrap();
-    tokio::fs::write(staging.path().join("wrong.txt"), b"wrong data").await.unwrap();
+    tokio::fs::write(staging.path().join("correct.txt"), correct_content)
+        .await
+        .unwrap();
+    tokio::fs::write(staging.path().join("wrong.txt"), b"wrong data")
+        .await
+        .unwrap();
     // missing.txt not created
 
     let manifest = WabbajackManifest {
@@ -227,7 +239,10 @@ async fn test_validate_report_counts_are_consistent() {
     assert_eq!(report.missing.len(), 1);
     assert_eq!(report.mismatches.len(), 1);
     // total_files == verified + missing + mismatches
-    assert_eq!(report.total_files, report.verified + report.missing.len() + report.mismatches.len());
+    assert_eq!(
+        report.total_files,
+        report.verified + report.missing.len() + report.mismatches.len()
+    );
 }
 
 #[tokio::test]
@@ -235,7 +250,9 @@ async fn test_validate_mismatch_contains_both_hashes() {
     let staging = tempfile::tempdir().unwrap();
     let content = b"actual content";
     let actual_hash = xxh3_64(content);
-    tokio::fs::write(staging.path().join("file.txt"), content).await.unwrap();
+    tokio::fs::write(staging.path().join("file.txt"), content)
+        .await
+        .unwrap();
 
     let manifest = WabbajackManifest {
         directives: vec![RawDirective::PatchedFromArchive {
@@ -265,7 +282,9 @@ async fn test_validate_many_files() {
         let content = format!("content_{i}");
         let hash = xxh3_64(content.as_bytes());
         let filename = format!("file_{i}.txt");
-        tokio::fs::write(staging.path().join(&filename), content.as_bytes()).await.unwrap();
+        tokio::fs::write(staging.path().join(&filename), content.as_bytes())
+            .await
+            .unwrap();
 
         directives.push(RawDirective::PatchedFromArchive {
             archive_hash_path: vec![serde_json::Value::Number(0.into())],

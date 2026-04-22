@@ -1,5 +1,5 @@
-use modde_core::manifest::wabbajack::*;
 use modde_core::manifest::collection::*;
+use modde_core::manifest::wabbajack::*;
 
 // ── WabbajackManifest tests ──────────────────────────────────────────
 
@@ -89,11 +89,19 @@ fn test_download_directives_all_types() {
     assert_eq!(directives.len(), 5);
 
     // Verify each type via pattern matching
-    assert!(matches!(&directives[0], DownloadDirective::Nexus { mod_id: 42, .. }));
+    assert!(matches!(
+        &directives[0],
+        DownloadDirective::Nexus { mod_id: 42, .. }
+    ));
     assert!(matches!(&directives[1], DownloadDirective::GitHub { user, .. } if user == "user"));
     assert!(matches!(&directives[2], DownloadDirective::GoogleDrive { id, .. } if id == "abc123"));
-    assert!(matches!(&directives[3], DownloadDirective::Mega { url, .. } if url.contains("mega.nz")));
-    assert!(matches!(&directives[4], DownloadDirective::DirectURL { .. }));
+    assert!(
+        matches!(&directives[3], DownloadDirective::Mega { url, .. } if url.contains("mega.nz"))
+    );
+    assert!(matches!(
+        &directives[4],
+        DownloadDirective::DirectURL { .. }
+    ));
 }
 
 #[test]
@@ -109,7 +117,13 @@ fn test_install_directives_unknown_filtered() {
 
     let install = manifest.install_directives();
     assert_eq!(install.len(), 1);
-    assert!(matches!(&install[0], InstallDirective::FromArchive { archive_hash: 42, .. }));
+    assert!(matches!(
+        &install[0],
+        InstallDirective::FromArchive {
+            archive_hash: 42,
+            ..
+        }
+    ));
 }
 
 #[test]
@@ -123,7 +137,9 @@ fn test_install_directives_from_archive_empty_hash_path() {
     let install = manifest.install_directives();
     assert_eq!(install.len(), 1);
     match &install[0] {
-        InstallDirective::FromArchive { archive_hash, from, .. } => {
+        InstallDirective::FromArchive {
+            archive_hash, from, ..
+        } => {
             assert_eq!(*archive_hash, 0);
             assert_eq!(from, "");
         }
@@ -150,7 +166,11 @@ fn test_install_directives_create_bsa() {
     let install = manifest.install_directives();
     assert_eq!(install.len(), 1);
     match &install[0] {
-        InstallDirective::CreateBSA { temp_id, to, file_states } => {
+        InstallDirective::CreateBSA {
+            temp_id,
+            to,
+            file_states,
+        } => {
             assert_eq!(temp_id, "tmp_001");
             assert_eq!(to, "output/test.bsa");
             assert_eq!(file_states.len(), 2);
@@ -224,7 +244,10 @@ fn test_collection_optional_fields() {
     let collection: CollectionManifest = serde_json::from_str(json).unwrap();
     assert_eq!(collection.summary.as_deref(), Some("A summary"));
     assert_eq!(collection.description.as_deref(), Some("A description"));
-    assert_eq!(collection.image_url.as_deref(), Some("https://example.com/img.jpg"));
+    assert_eq!(
+        collection.image_url.as_deref(),
+        Some("https://example.com/img.jpg")
+    );
 }
 
 #[test]

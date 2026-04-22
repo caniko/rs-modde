@@ -16,7 +16,9 @@ async fn test_snapshot_nonexistent_source_returns_game_not_detected() {
     let store = TempDir::new().unwrap();
     let mgr = StockGameManager::new(store.path().to_path_buf());
 
-    let result = mgr.snapshot("fake-game", &PathBuf::from("/nonexistent/path/to/game")).await;
+    let result = mgr
+        .snapshot("fake-game", &PathBuf::from("/nonexistent/path/to/game"))
+        .await;
     assert!(result.is_err());
     let err = format!("{}", result.unwrap_err());
     assert!(err.contains("not detected"), "unexpected error: {err}");

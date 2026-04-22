@@ -6,8 +6,8 @@ use modde_sources::wabbajack::manifest::parse_wabbajack_file;
 fn write_zip(path: &std::path::Path, entries: &[(&str, &[u8])]) {
     let file = std::fs::File::create(path).unwrap();
     let mut writer = zip::ZipWriter::new(file);
-    let options = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Stored);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     for (name, data) in entries {
         writer.start_file(*name, options).unwrap();
         writer.write_all(data).unwrap();

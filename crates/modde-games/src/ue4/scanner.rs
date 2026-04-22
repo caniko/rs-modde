@@ -4,7 +4,7 @@ use std::path::Path;
 use anyhow::Result;
 
 use crate::traits::{
-    walk_files_relative, DiscoveredFile, DiscoveredMod, ModScanner, ModSource, ScanContext,
+    DiscoveredFile, DiscoveredMod, ModScanner, ModSource, ScanContext, walk_files_relative,
 };
 
 /// Data-driven scanner for UE4 pak-based mods.
@@ -34,7 +34,7 @@ fn stem_for(rel: &str) -> Option<String> {
     let path = std::path::Path::new(rel);
     path.file_stem()
         .and_then(|s| s.to_str())
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
 }
 
 impl Ue4Scanner {

@@ -3,7 +3,7 @@
 //! Shortcuts are defined as static mappings. The app's subscription
 //! system calls `handle_key_event()` to convert key events into Messages.
 
-use iced::keyboard::{key::Named, Key, Modifiers};
+use iced::keyboard::{Key, Modifiers, key::Named};
 
 /// A keyboard shortcut definition.
 #[derive(Debug, Clone)]
@@ -15,6 +15,7 @@ pub struct Shortcut {
 }
 
 /// All registered shortcuts.
+#[must_use]
 pub fn all_shortcuts() -> Vec<Shortcut> {
     vec![
         Shortcut {
@@ -76,6 +77,7 @@ pub fn all_shortcuts() -> Vec<Shortcut> {
 
 /// Match a key event against registered shortcuts.
 /// Returns the action name if a shortcut matches, None otherwise.
+#[must_use]
 pub fn match_shortcut(key: &Key, modifiers: Modifiers) -> Option<&'static str> {
     for shortcut in all_shortcuts() {
         if keys_match(key, &shortcut.key) && modifiers == shortcut.modifiers {
@@ -94,6 +96,7 @@ fn keys_match(a: &Key, b: &Key) -> bool {
 }
 
 /// Format all shortcuts as a human-readable help string.
+#[must_use]
 pub fn help_text() -> String {
     let mut lines = vec!["Keyboard Shortcuts:".to_string(), String::new()];
     for s in all_shortcuts() {

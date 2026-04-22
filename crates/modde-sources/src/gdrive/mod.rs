@@ -18,6 +18,7 @@ pub struct GoogleDriveSource {
 }
 
 impl GoogleDriveSource {
+    #[must_use]
     pub fn new(client: Client) -> Self {
         Self { client }
     }
@@ -77,11 +78,16 @@ async fn do_download(
     if content_type.contains("text/html") {
         debug!("got virus scan warning page, extracting confirm token");
         let body = resp.text().await?;
-        let confirm_token = extract_confirm_token(&body)
-            .ok_or_else(|| anyhow::anyhow!("failed to extract confirm token from virus scan page"))?;
+        let confirm_token = extract_confirm_token(&body).ok_or_else(|| {
+            anyhow::anyhow!("failed to extract confirm token from virus scan page")
+        })?;
 
         let confirmed_url = format!("{}&confirm={confirm_token}", handle.url);
-        let resp = client.get(&confirmed_url).send().await?.error_for_status()?;
+        let resp = client
+            .get(&confirmed_url)
+            .send()
+            .await?
+            .error_for_status()?;
         stream_to_file(resp, dest, handle.size_hint.unwrap_or(0), progress).await?;
     } else {
         stream_to_file(resp, dest, handle.size_hint.unwrap_or(0), progress).await?;
@@ -118,7 +124,7 @@ fn extract_confirm_token(html: &str) -> Option<String> {
         let rest = &html[pos..];
         if let Some(href_pos) = rest.find("confirm=") {
             let val_rest = &rest[href_pos + 8..];
-            let end = val_rest.find(|c: char| c == '&' || c == '"' || c == '\'')?;
+            let end = val_rest.find(['&', '"', '\''])?;
             let token = &val_rest[..end];
             if !token.is_empty() {
                 return Some(token.to_string());
@@ -137,13 +143,14 @@ mod tests {
 
     #[test]
     fn confirm_token_pattern1_ampersand_delimited() {
-        let html = r#"<a href="https://drive.google.com/uc?id=ID&confirm=t&export=download">Download</a>"#;
+        let html =
+            r#"<a href="https://drive.google.com/uc?id=ID&confirm=t&export=download">Download</a>"#;
         assert_eq!(extract_confirm_token(html), Some("t".to_string()));
     }
 
     #[test]
     fn confirm_token_pattern1_long_token() {
-        let html = r#"something confirm=AbCdEfGh1234&rest"#;
+        let html = r"something confirm=AbCdEfGh1234&rest";
         assert_eq!(
             extract_confirm_token(html),
             Some("AbCdEfGh1234".to_string())
@@ -158,7 +165,7 @@ mod tests {
 
     #[test]
     fn confirm_token_pattern1_single_quote_delimited() {
-        let html = r#"href='https://example.com?confirm=tok123'"#;
+        let html = r"href='https://example.com?confirm=tok123'";
         assert_eq!(extract_confirm_token(html), Some("tok123".to_string()));
     }
 
@@ -172,18 +179,13 @@ mod tests {
 
     #[test]
     fn confirm_token_pattern2_input_field() {
-        let html =
-            r#"<input type="hidden" name="confirm" value="SecretVal"><input type="submit">"#;
-        assert_eq!(
-            extract_confirm_token(html),
-            Some("SecretVal".to_string())
-        );
+        let html = r#"<input type="hidden" name="confirm" value="SecretVal"><input type="submit">"#;
+        assert_eq!(extract_confirm_token(html), Some("SecretVal".to_string()));
     }
 
     #[test]
     fn confirm_token_pattern2_with_extra_attrs() {
-        let html =
-            r#"<input class="foo" name="confirm" id="bar" value="TOKEN42">"#;
+        let html = r#"<input class="foo" name="confirm" id="bar" value="TOKEN42">"#;
         assert_eq!(extract_confirm_token(html), Some("TOKEN42".to_string()));
     }
 
@@ -197,8 +199,7 @@ mod tests {
 
     #[test]
     fn confirm_token_pattern3_uc_download_link_quote_end() {
-        let html =
-            r#"<a id="uc-download-link" href="/uc?export=download&confirm=TOK">"#;
+        let html = r#"<a id="uc-download-link" href="/uc?export=download&confirm=TOK">"#;
         assert_eq!(extract_confirm_token(html), Some("TOK".to_string()));
     }
 

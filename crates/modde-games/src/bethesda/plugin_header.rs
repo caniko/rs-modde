@@ -49,20 +49,21 @@ pub struct PluginHeader {
 
 impl PluginHeader {
     /// Whether this plugin uses the outdated Form 43 format (Skyrim LE).
+    #[must_use]
     pub fn is_form_43(&self) -> bool {
         self.version < FORM_44_VERSION - 0.01
     }
 
     /// Whether this plugin is flagged as a master (ESM).
+    #[must_use]
     pub fn is_esm(&self) -> bool {
-        self.record_flags & flags::ESM != 0
-            || self.filename.to_lowercase().ends_with(".esm")
+        self.record_flags & flags::ESM != 0 || self.filename.to_lowercase().ends_with(".esm")
     }
 
     /// Whether this plugin is flagged as a light plugin (ESL).
+    #[must_use]
     pub fn is_esl(&self) -> bool {
-        self.record_flags & flags::ESL != 0
-            || self.filename.to_lowercase().ends_with(".esl")
+        self.record_flags & flags::ESL != 0 || self.filename.to_lowercase().ends_with(".esl")
     }
 }
 
@@ -70,15 +71,9 @@ impl PluginHeader {
 #[derive(Debug, Clone)]
 pub enum PluginWarning {
     /// Plugin uses Form 43 format (Skyrim LE) in a Form 44 game (SSE).
-    Form43 {
-        plugin: String,
-        version: f32,
-    },
+    Form43 { plugin: String, version: f32 },
     /// Plugin depends on a master that is not in the active load order.
-    MissingMaster {
-        plugin: String,
-        master: String,
-    },
+    MissingMaster { plugin: String, master: String },
 }
 
 impl std::fmt::Display for PluginWarning {
@@ -117,7 +112,7 @@ pub fn parse_plugin_header(path: &Path) -> Result<PluginHeader> {
     let mut sig = [0u8; 4];
     file.read_exact(&mut sig)?;
     if &sig != TES4_SIGNATURE {
-        bail!("not a valid Bethesda plugin: expected TES4, got {:?}", sig);
+        bail!("not a valid Bethesda plugin: expected TES4, got {sig:?}");
     }
 
     let data_size = read_u32_le(&mut file)?;
@@ -134,14 +129,14 @@ pub fn parse_plugin_header(path: &Path) -> Result<PluginHeader> {
 
     // Read TES4 sub-records up to data_size bytes
     let data_start = file.stream_position()?;
-    let data_end = data_start + data_size as u64;
+    let data_end = data_start + u64::from(data_size);
 
     while file.stream_position()? < data_end {
         let mut sub_sig = [0u8; 4];
         if file.read_exact(&mut sub_sig).is_err() {
             break;
         }
-        let sub_size = read_u16_le(&mut file)? as u64;
+        let sub_size = u64::from(read_u16_le(&mut file)?);
         let sub_start = file.stream_position()?;
 
         match &sub_sig {
@@ -173,8 +168,12 @@ pub fn parse_plugin_header(path: &Path) -> Result<PluginHeader> {
 
     Ok(PluginHeader {
         filename,
-        record_flags: record_flags,
-        version: if version >= 1 { plugin_version } else { plugin_version },
+        record_flags,
+        version: if version >= 1 {
+            plugin_version
+        } else {
+            plugin_version
+        },
         num_records,
         masters,
     })
@@ -190,10 +189,8 @@ pub fn validate_plugins(
     active_plugins: &[&str],
     check_form_43: bool,
 ) -> Vec<PluginWarning> {
-    let active_lower: std::collections::HashSet<String> = active_plugins
-        .iter()
-        .map(|p| p.to_lowercase())
-        .collect();
+    let active_lower: std::collections::HashSet<String> =
+        active_plugins.iter().map(|p| p.to_lowercase()).collect();
 
     let mut warnings = Vec::new();
 
@@ -254,7 +251,6 @@ fn read_f32_le(r: &mut impl Read) -> io::Result<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
 
     /// Build a minimal TES4 record in memory for testing.
     fn build_test_plugin(version: f32, masters: &[&str], record_flags: u32) -> Vec<u8> {
@@ -354,7 +350,9 @@ mod tests {
         let warnings = validate_plugins(tmp.path(), &active, true);
 
         assert_eq!(warnings.len(), 1);
-        assert!(matches!(&warnings[0], PluginWarning::MissingMaster { master, .. } if master == "MissingMod.esp"));
+        assert!(
+            matches!(&warnings[0], PluginWarning::MissingMaster { master, .. } if master == "MissingMod.esp")
+        );
     }
 
     #[test]
@@ -370,7 +368,11 @@ mod tests {
         let active = vec!["Skyrim.esm", "OldMod.esp"];
         let warnings = validate_plugins(tmp.path(), &active, true);
 
-        assert!(warnings.iter().any(|w| matches!(w, PluginWarning::Form43 { plugin, .. } if plugin == "OldMod.esp")));
+        assert!(
+            warnings.iter().any(
+                |w| matches!(w, PluginWarning::Form43 { plugin, .. } if plugin == "OldMod.esp")
+            )
+        );
     }
 
     #[test]

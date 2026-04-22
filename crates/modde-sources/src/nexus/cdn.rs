@@ -31,9 +31,8 @@ pub async fn generate_download_link(
         );
     }
 
-    let url = format!(
-        "{BASE_URL}/games/{game_domain}/mods/{mod_id}/files/{file_id}/download_link.json"
-    );
+    let url =
+        format!("{BASE_URL}/games/{game_domain}/mods/{mod_id}/files/{file_id}/download_link.json");
 
     let links: Vec<DownloadLink> = client
         .get(&url)

@@ -90,7 +90,7 @@ pub struct ShadowedMod {
 pub struct CollisionReport {
     /// Collision details grouped by (loser, winner) mod pair.
     pub pairs: Vec<ModPairCollision>,
-    /// Files that are provided by a mod but always overridden (mod_id, file_path).
+    /// Files that are provided by a mod but always overridden (`mod_id`, `file_path`).
     pub redundant_files: Vec<(ModId, String)>,
     /// Mods whose files are all overridden.
     pub shadowed_mods: Vec<ShadowedMod>,
@@ -175,19 +175,13 @@ pub fn build_full_conflict_map(
                 };
 
                 for (archive_file_path, _size) in archive_files {
-                    conflict_map.register(
-                        archive_file_path.clone(),
+                    conflict_map.register(archive_file_path.clone(), mod_id.clone());
+                    origins.entry(archive_file_path).or_default().insert(
                         mod_id.clone(),
+                        FileOrigin::Archive {
+                            archive_rel: rel_path.clone(),
+                        },
                     );
-                    origins
-                        .entry(archive_file_path)
-                        .or_default()
-                        .insert(
-                            mod_id.clone(),
-                            FileOrigin::Archive {
-                                archive_rel: rel_path.clone(),
-                            },
-                        );
                 }
             }
         }
@@ -227,7 +221,7 @@ pub fn analyze_collisions(
     let mut mod_overridden_by: HashMap<ModId, HashSet<ModId>> = HashMap::new();
 
     // Count total files per mod (including non-conflicting).
-    for (_, providers) in &conflict_map.files {
+    for providers in conflict_map.files.values() {
         for mod_id in providers {
             *mod_file_count.entry(mod_id.clone()).or_default() += 1;
         }
@@ -371,12 +365,8 @@ pub fn analyze_collisions(
     }
 }
 
-/// Order a (mod_a, mod_b) pair so the lower-priority mod is first.
-fn order_pair(
-    a: &ModId,
-    b: &ModId,
-    priority_rank: &HashMap<&ModId, usize>,
-) -> (ModId, ModId) {
+/// Order a (`mod_a`, `mod_b`) pair so the lower-priority mod is first.
+fn order_pair(a: &ModId, b: &ModId, priority_rank: &HashMap<&ModId, usize>) -> (ModId, ModId) {
     let rank_a = priority_rank.get(a).copied().unwrap_or(0);
     let rank_b = priority_rank.get(b).copied().unwrap_or(0);
     if rank_a <= rank_b {
@@ -510,12 +500,15 @@ mod tests {
         let hidden = HashSet::new();
 
         let mut origins: OriginMap = HashMap::new();
-        origins.entry("textures/sky.dds".into()).or_default().insert(
-            mod_id("mod_a"),
-            FileOrigin::Archive {
-                archive_rel: "mod_a.bsa".into(),
-            },
-        );
+        origins
+            .entry("textures/sky.dds".into())
+            .or_default()
+            .insert(
+                mod_id("mod_a"),
+                FileOrigin::Archive {
+                    archive_rel: "mod_a.bsa".into(),
+                },
+            );
         origins
             .entry("textures/sky.dds".into())
             .or_default()

@@ -7,12 +7,11 @@ use smallvec::smallvec;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-
 use modde_core::GameId;
-use modde_core::profile::{EnabledMod, Profile, ProfileManager, ProfileSource};
-use modde_core::resolver::{resolve, ConflictMap, LoadOrderRule, ModId};
-use modde_core::vfs::SymlinkFarm;
 use modde_core::ModdeDb;
+use modde_core::profile::{EnabledMod, Profile, ProfileManager, ProfileSource};
+use modde_core::resolver::{ConflictMap, LoadOrderRule, ModId, resolve};
+use modde_core::vfs::SymlinkFarm;
 use tempfile::TempDir;
 
 fn simple_mod(id: &str, enabled: bool) -> EnabledMod {
@@ -20,7 +19,8 @@ fn simple_mod(id: &str, enabled: bool) -> EnabledMod {
         mod_id: id.to_string(),
         enabled,
         version: Some("1.0".to_string()),
-        fomod_config: None, ..Default::default()
+        fomod_config: None,
+        ..Default::default()
     }
 }
 
@@ -70,11 +70,29 @@ async fn test_full_deploy_pipeline() {
     assert!(!resolved.order.contains(&ModId::from("disabled_mod")));
 
     // Verify ordering constraints
-    let pos_base = resolved.order.iter().position(|m| m == "base_textures").unwrap();
-    let pos_overhaul = resolved.order.iter().position(|m| m == "texture_overhaul").unwrap();
-    let pos_patch = resolved.order.iter().position(|m| m == "patch_mod").unwrap();
-    assert!(pos_base < pos_overhaul, "base_textures must come before texture_overhaul");
-    assert!(pos_overhaul < pos_patch, "texture_overhaul must come before patch_mod");
+    let pos_base = resolved
+        .order
+        .iter()
+        .position(|m| m == "base_textures")
+        .unwrap();
+    let pos_overhaul = resolved
+        .order
+        .iter()
+        .position(|m| m == "texture_overhaul")
+        .unwrap();
+    let pos_patch = resolved
+        .order
+        .iter()
+        .position(|m| m == "patch_mod")
+        .unwrap();
+    assert!(
+        pos_base < pos_overhaul,
+        "base_textures must come before texture_overhaul"
+    );
+    assert!(
+        pos_overhaul < pos_patch,
+        "texture_overhaul must come before patch_mod"
+    );
 
     // Step 4: Create mod files in a mock store
     let store = tmp.path().join("store");
@@ -98,17 +116,24 @@ async fn test_full_deploy_pipeline() {
 
     // Build mod_files map
     let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
-    mod_files.insert(ModId::from("base_textures"), vec![
-        ("textures/sky.dds".into(), base_dir.join("sky.dds")),
-        ("textures/ground.dds".into(), base_dir.join("ground.dds")),
-    ]);
-    mod_files.insert(ModId::from("texture_overhaul"), vec![
-        ("textures/sky.dds".into(), overhaul_dir.join("sky.dds")),
-    ]);
-    mod_files.insert(ModId::from("patch_mod"), vec![
-        ("patch.esp".into(), patch_dir.join("patch.esp")),
-        ("textures/ground.dds".into(), patch_dir.join("ground.dds")),
-    ]);
+    mod_files.insert(
+        ModId::from("base_textures"),
+        vec![
+            ("textures/sky.dds".into(), base_dir.join("sky.dds")),
+            ("textures/ground.dds".into(), base_dir.join("ground.dds")),
+        ],
+    );
+    mod_files.insert(
+        ModId::from("texture_overhaul"),
+        vec![("textures/sky.dds".into(), overhaul_dir.join("sky.dds"))],
+    );
+    mod_files.insert(
+        ModId::from("patch_mod"),
+        vec![
+            ("patch.esp".into(), patch_dir.join("patch.esp")),
+            ("textures/ground.dds".into(), patch_dir.join("ground.dds")),
+        ],
+    );
 
     // Step 5: Build the symlink farm
     // Use a custom staging dir within our temp
@@ -127,35 +152,93 @@ async fn test_full_deploy_pipeline() {
     // Verify override resolution: 3 unique files
     assert_eq!(farm.links.len(), 3);
     // sky.dds should come from texture_overhaul (loaded after base_textures)
-    assert!(farm.links["textures/sky.dds"].to_string_lossy().contains("texture_overhaul"));
+    assert!(
+        farm.links["textures/sky.dds"]
+            .to_string_lossy()
+            .contains("texture_overhaul")
+    );
     // ground.dds should come from patch_mod (loaded last)
-    assert!(farm.links["textures/ground.dds"].to_string_lossy().contains("patch_mod"));
+    assert!(
+        farm.links["textures/ground.dds"]
+            .to_string_lossy()
+            .contains("patch_mod")
+    );
     // patch.esp only from patch_mod
-    assert!(farm.links["patch.esp"].to_string_lossy().contains("patch_mod"));
+    assert!(
+        farm.links["patch.esp"]
+            .to_string_lossy()
+            .contains("patch_mod")
+    );
 
     // Step 6: Materialize the symlink farm
     let farm = farm.materialize().await.unwrap();
 
     // Verify staging directory structure
-    assert!(tmp.path().join("staging/textures/sky.dds").symlink_metadata().unwrap().file_type().is_symlink());
-    assert!(tmp.path().join("staging/textures/ground.dds").symlink_metadata().unwrap().file_type().is_symlink());
-    assert!(tmp.path().join("staging/patch.esp").symlink_metadata().unwrap().file_type().is_symlink());
+    assert!(
+        tmp.path()
+            .join("staging/textures/sky.dds")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert!(
+        tmp.path()
+            .join("staging/textures/ground.dds")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert!(
+        tmp.path()
+            .join("staging/patch.esp")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
 
     // Verify content through symlinks
-    assert_eq!(std::fs::read_to_string(tmp.path().join("staging/textures/sky.dds")).unwrap(), "overhaul_sky");
-    assert_eq!(std::fs::read_to_string(tmp.path().join("staging/textures/ground.dds")).unwrap(), "patch_ground");
-    assert_eq!(std::fs::read_to_string(tmp.path().join("staging/patch.esp")).unwrap(), "patch_plugin");
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("staging/textures/sky.dds")).unwrap(),
+        "overhaul_sky"
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("staging/textures/ground.dds")).unwrap(),
+        "patch_ground"
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("staging/patch.esp")).unwrap(),
+        "patch_plugin"
+    );
 
     // Step 7: Deploy to a game directory
     let game_dir = tmp.path().join("game/Data");
     farm.deploy_to(&game_dir).await.unwrap();
 
     // Verify deployment - symlinks in game dir point to staging
-    assert!(game_dir.join("textures/sky.dds").symlink_metadata().unwrap().file_type().is_symlink());
+    assert!(
+        game_dir
+            .join("textures/sky.dds")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
     // Content accessible through the double-symlink chain
-    assert_eq!(std::fs::read_to_string(game_dir.join("textures/sky.dds")).unwrap(), "overhaul_sky");
-    assert_eq!(std::fs::read_to_string(game_dir.join("textures/ground.dds")).unwrap(), "patch_ground");
-    assert_eq!(std::fs::read_to_string(game_dir.join("patch.esp")).unwrap(), "patch_plugin");
+    assert_eq!(
+        std::fs::read_to_string(game_dir.join("textures/sky.dds")).unwrap(),
+        "overhaul_sky"
+    );
+    assert_eq!(
+        std::fs::read_to_string(game_dir.join("textures/ground.dds")).unwrap(),
+        "patch_ground"
+    );
+    assert_eq!(
+        std::fs::read_to_string(game_dir.join("patch.esp")).unwrap(),
+        "patch_plugin"
+    );
 }
 
 #[tokio::test]
@@ -179,14 +262,15 @@ async fn test_profile_roundtrip_all_sources() {
                 slug: "cool-collection".to_string(),
                 version: "2.1".to_string(),
             },
-            mods: vec![simple_mod("nexus_mod", true), simple_mod("optional_mod", false)],
-            overrides: PathBuf::from("/tmp"),
-            load_order_rules: smallvec![
-                LoadOrderRule::Incompatible {
-                    mod_a: ModId::from("nexus_mod"),
-                    mod_b: ModId::from("conflicting_mod"),
-                },
+            mods: vec![
+                simple_mod("nexus_mod", true),
+                simple_mod("optional_mod", false),
             ],
+            overrides: PathBuf::from("/tmp"),
+            load_order_rules: smallvec![LoadOrderRule::Incompatible {
+                mod_a: ModId::from("nexus_mod"),
+                mod_b: ModId::from("conflicting_mod"),
+            },],
             load_order_lock: None,
         },
         Profile {
@@ -220,17 +304,12 @@ async fn test_resolve_and_detect_incompatible() {
         name: "conflict".to_string(),
         game_id: GameId::from("skyrim-se"),
         source: ProfileSource::Manual,
-        mods: vec![
-            simple_mod("enbseries", true),
-            simple_mod("reshade", true),
-        ],
+        mods: vec![simple_mod("enbseries", true), simple_mod("reshade", true)],
         overrides: PathBuf::from("/tmp"),
-        load_order_rules: smallvec![
-            LoadOrderRule::Incompatible {
-                mod_a: ModId::from("enbseries"),
-                mod_b: ModId::from("reshade"),
-            },
-        ],
+        load_order_rules: smallvec![LoadOrderRule::Incompatible {
+            mod_a: ModId::from("enbseries"),
+            mod_b: ModId::from("reshade"),
+        },],
         load_order_lock: None,
     };
 
@@ -253,8 +332,14 @@ async fn test_conflict_map_populated_during_build() {
     std::fs::write(mod_b_dir.join("shared.esp"), "mod_b_version").unwrap();
 
     let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
-    mod_files.insert(ModId::from("mod_a"), vec![("shared.esp".into(), mod_a_dir.join("shared.esp"))]);
-    mod_files.insert(ModId::from("mod_b"), vec![("shared.esp".into(), mod_b_dir.join("shared.esp"))]);
+    mod_files.insert(
+        ModId::from("mod_a"),
+        vec![("shared.esp".into(), mod_a_dir.join("shared.esp"))],
+    );
+    mod_files.insert(
+        ModId::from("mod_b"),
+        vec![("shared.esp".into(), mod_b_dir.join("shared.esp"))],
+    );
 
     // Build conflict map manually (as the resolver would)
     let mut conflict_map = ConflictMap::default();

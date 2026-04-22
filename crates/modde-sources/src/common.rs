@@ -38,7 +38,10 @@ pub async fn verify_and_wrap(dest: &Path, expected_hash: u64) -> Result<Verified
     modde_core::hash::verify_xxhash_compat(dest, expected_hash)
         .await
         .context("hash verification failed (tried xxh64 and xxh3)")?;
-    Ok(VerifiedFile { path: dest.to_path_buf(), hash: expected_hash })
+    Ok(VerifiedFile {
+        path: dest.to_path_buf(),
+        hash: expected_hash,
+    })
 }
 
 /// Ensure parent directory exists.
@@ -62,7 +65,9 @@ where
                 if attempt + 1 < MAX_RETRIES {
                     let base_delay = BACKOFF_BASE_MS * (1 << attempt);
                     // Add deterministic jitter: up to 50% of base delay, derived from attempt index
-                    let jitter = base_delay / 4 + (base_delay / 2).wrapping_mul(attempt as u64 + 1) % (base_delay / 2 + 1);
+                    let jitter = base_delay / 4
+                        + (base_delay / 2).wrapping_mul(u64::from(attempt) + 1)
+                            % (base_delay / 2 + 1);
                     let delay = base_delay + jitter;
                     warn!(attempt = attempt + 1, delay_ms = delay, error = %e, "{label} failed, retrying");
                     tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
@@ -86,11 +91,7 @@ pub async fn simple_download(
 ) -> Result<VerifiedFile> {
     ensure_parent(dest).await?;
 
-    let resp = client
-        .get(&handle.url)
-        .send()
-        .await?
-        .error_for_status()?;
+    let resp = client.get(&handle.url).send().await?.error_for_status()?;
 
     let downloaded = stream_to_file(resp, dest, handle.size_hint.unwrap_or(0), progress).await?;
     debug!(bytes = downloaded, "download complete");

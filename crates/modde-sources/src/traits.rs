@@ -6,7 +6,7 @@ use anyhow::Result;
 
 use modde_core::manifest::wabbajack::DownloadDirective;
 
-/// Progress callback: (bytes_downloaded, total_bytes).
+/// Progress callback: (`bytes_downloaded`, `total_bytes`).
 /// `total_bytes` may be 0 if unknown.
 pub type ProgressCallback = Arc<dyn Fn(u64, u64) + Send + Sync>;
 

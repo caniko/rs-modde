@@ -1,13 +1,11 @@
-//! GameMode — Feral Interactive's performance optimization daemon.
+//! `GameMode` — Feral Interactive's performance optimization daemon.
 //!
 //! Uses `gamemoderun` as a wrapper command before the game executable.
 //! No config files or env vars needed.
 
 use smallvec::SmallVec;
 
-use super::{
-    GameTool, ToolAvailability, ToolCategory, ToolConfig, WrapperEntry, which,
-};
+use super::{GameTool, ToolAvailability, ToolCategory, ToolConfig, WrapperEntry, which};
 
 pub static GAMEMODE: GameMode = GameMode;
 

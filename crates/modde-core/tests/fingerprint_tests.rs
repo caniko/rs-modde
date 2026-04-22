@@ -1,4 +1,4 @@
-//! Tests for SaveFingerprint, FingerprintCheck, and SaveSnapshot compatibility.
+//! Tests for `SaveFingerprint`, `FingerprintCheck`, and `SaveSnapshot` compatibility.
 
 use modde_core::profile::EnabledMod;
 use modde_core::save::{FingerprintCheck, SaveFingerprint, SaveSnapshot};
@@ -10,7 +10,8 @@ fn mod_entry(id: &str, enabled: bool) -> EnabledMod {
         mod_id: id.to_string(),
         enabled,
         version: Some("1.0".to_string()),
-        fomod_config: None, ..Default::default()
+        fomod_config: None,
+        ..Default::default()
     }
 }
 
@@ -193,7 +194,7 @@ fn fingerprint_check_mismatch_mod_removed() {
             assert!(removed.contains(&"script_heavy_quest".to_string()));
             assert!(added.is_empty());
         }
-        other => panic!("expected Mismatch, got {:?}", other),
+        other => panic!("expected Mismatch, got {other:?}"),
     }
 }
 
@@ -216,7 +217,7 @@ fn fingerprint_check_mismatch_mod_added() {
             assert!(removed.is_empty());
             assert!(added.contains(&"script_new_quest".to_string()));
         }
-        other => panic!("expected Mismatch, got {:?}", other),
+        other => panic!("expected Mismatch, got {other:?}"),
     }
 }
 
@@ -242,7 +243,7 @@ fn fingerprint_check_mismatch_both_removed_and_added() {
             assert!(removed.contains(&"script_old_quest".to_string()));
             assert!(added.contains(&"script_new_quest".to_string()));
         }
-        other => panic!("expected Mismatch, got {:?}", other),
+        other => panic!("expected Mismatch, got {other:?}"),
     }
 }
 

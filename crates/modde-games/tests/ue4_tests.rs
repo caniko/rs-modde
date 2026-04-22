@@ -1,9 +1,9 @@
 use std::path::Path;
 
 use modde_games::traits::ContentCategory;
-use modde_games::ue4::scanner::{Ue4Scanner, STELLAR_BLADE_SCANNER};
 use modde_games::ue4::STELLAR_BLADE;
-use modde_games::{GamePlugin, ModScanner, ModSource, ScanContext, SUPPORTED_GAME_IDS};
+use modde_games::ue4::scanner::{STELLAR_BLADE_SCANNER, Ue4Scanner};
+use modde_games::{GamePlugin, ModScanner, ModSource, SUPPORTED_GAME_IDS, ScanContext};
 use tempfile::TempDir;
 
 // ── GamePlugin: identity ────────────────────────────────────────────
@@ -34,7 +34,14 @@ fn test_stellar_blade_nexus_domain_none() {
 fn test_stellar_blade_mod_directory() {
     let install = Path::new("/fake/game/Stellar Blade");
     let mod_dir = STELLAR_BLADE.mod_directory(install);
-    assert_eq!(mod_dir, install.join("SB").join("Content").join("Paks").join("~mods"));
+    assert_eq!(
+        mod_dir,
+        install
+            .join("SB")
+            .join("Content")
+            .join("Paks")
+            .join("~mods")
+    );
 }
 
 #[test]
@@ -57,19 +64,34 @@ fn test_stellar_blade_paks_root() {
 
 #[test]
 fn test_stellar_blade_classify_extension_pak() {
-    assert_eq!(STELLAR_BLADE.classify_extension("pak"), ContentCategory::Archive);
-    assert_eq!(STELLAR_BLADE.classify_extension("ucas"), ContentCategory::Archive);
-    assert_eq!(STELLAR_BLADE.classify_extension("utoc"), ContentCategory::Archive);
+    assert_eq!(
+        STELLAR_BLADE.classify_extension("pak"),
+        ContentCategory::Archive
+    );
+    assert_eq!(
+        STELLAR_BLADE.classify_extension("ucas"),
+        ContentCategory::Archive
+    );
+    assert_eq!(
+        STELLAR_BLADE.classify_extension("utoc"),
+        ContentCategory::Archive
+    );
 }
 
 #[test]
 fn test_stellar_blade_classify_extension_dll_binary() {
-    assert_eq!(STELLAR_BLADE.classify_extension("dll"), ContentCategory::Binary);
+    assert_eq!(
+        STELLAR_BLADE.classify_extension("dll"),
+        ContentCategory::Binary
+    );
 }
 
 #[test]
 fn test_stellar_blade_classify_extension_lua_script() {
-    assert_eq!(STELLAR_BLADE.classify_extension("lua"), ContentCategory::Script);
+    assert_eq!(
+        STELLAR_BLADE.classify_extension("lua"),
+        ContentCategory::Script
+    );
 }
 
 #[test]
@@ -144,7 +166,9 @@ fn test_scanner_groups_pak_triple_by_stem() {
     write_empty(&mods_dir.join("MyMod_P.ucas"));
     write_empty(&mods_dir.join("MyMod_P.utoc"));
 
-    let ctx = ScanContext { install_dir: td.path() };
+    let ctx = ScanContext {
+        install_dir: td.path(),
+    };
     let mods = STELLAR_BLADE_SCANNER.scan_filesystem(&ctx).unwrap();
 
     assert_eq!(mods.len(), 1, "expected single mod from pak triple");
@@ -167,7 +191,9 @@ fn test_scanner_separates_distinct_stems() {
     write_empty(&mods_dir.join("Beta_P.pak"));
     write_empty(&mods_dir.join("Beta_P.ucas"));
 
-    let ctx = ScanContext { install_dir: td.path() };
+    let ctx = ScanContext {
+        install_dir: td.path(),
+    };
     let mods = STELLAR_BLADE_SCANNER.scan_filesystem(&ctx).unwrap();
 
     assert_eq!(mods.len(), 2);
@@ -183,7 +209,9 @@ fn test_scanner_logic_mods_location() {
     std::fs::create_dir_all(&logic).unwrap();
     write_empty(&logic.join("Blueprint_P.pak"));
 
-    let ctx = ScanContext { install_dir: td.path() };
+    let ctx = ScanContext {
+        install_dir: td.path(),
+    };
     let mods = STELLAR_BLADE_SCANNER.scan_filesystem(&ctx).unwrap();
 
     assert_eq!(mods.len(), 1);
@@ -202,7 +230,9 @@ fn test_scanner_walks_mod_subdirs() {
     write_empty(&nested.join("Nested_P.pak"));
     write_empty(&nested.join("Nested_P.ucas"));
 
-    let ctx = ScanContext { install_dir: td.path() };
+    let ctx = ScanContext {
+        install_dir: td.path(),
+    };
     let mods = STELLAR_BLADE_SCANNER.scan_filesystem(&ctx).unwrap();
 
     assert_eq!(mods.len(), 1);
@@ -218,7 +248,9 @@ fn test_scanner_ignores_non_pak_files() {
     write_empty(&mods_dir.join("readme.txt"));
     write_empty(&mods_dir.join("Mod_P.pak"));
 
-    let ctx = ScanContext { install_dir: td.path() };
+    let ctx = ScanContext {
+        install_dir: td.path(),
+    };
     let mods = STELLAR_BLADE_SCANNER.scan_filesystem(&ctx).unwrap();
 
     assert_eq!(mods.len(), 1);
@@ -228,7 +260,9 @@ fn test_scanner_ignores_non_pak_files() {
 #[test]
 fn test_scanner_empty_when_no_install() {
     let td = TempDir::new().unwrap();
-    let ctx = ScanContext { install_dir: td.path() };
+    let ctx = ScanContext {
+        install_dir: td.path(),
+    };
     let mods = STELLAR_BLADE_SCANNER.scan_filesystem(&ctx).unwrap();
     assert!(mods.is_empty());
 }
@@ -245,7 +279,9 @@ fn test_scanner_scan_directories() {
 #[test]
 fn test_scanner_footprint_round_trip() {
     use modde_core::scanner::ModFootprint;
-    let fp = STELLAR_BLADE_SCANNER.mod_id_footprint("pak/MyMod_P").unwrap();
+    let fp = STELLAR_BLADE_SCANNER
+        .mod_id_footprint("pak/MyMod_P")
+        .unwrap();
     assert_eq!(
         fp,
         ModFootprint::File("sb/content/paks/~mods/mymod_p.pak".to_string())
@@ -267,8 +303,8 @@ fn test_stellar_blade_in_supported_ids() {
 
 #[test]
 fn test_resolve_game_plugin_stellar_blade() {
-    let plugin = modde_games::resolve_game_plugin("stellar-blade")
-        .expect("stellar-blade should resolve");
+    let plugin =
+        modde_games::resolve_game_plugin("stellar-blade").expect("stellar-blade should resolve");
     assert_eq!(plugin.game_id(), "stellar-blade");
 }
 
@@ -292,7 +328,9 @@ fn test_ue4_scanner_is_data_driven() {
     std::fs::create_dir_all(&mods_dir).unwrap();
     write_empty(&mods_dir.join("Creature_P.pak"));
 
-    let ctx = ScanContext { install_dir: td.path() };
+    let ctx = ScanContext {
+        install_dir: td.path(),
+    };
     let mods = FAKE_PALWORLD_SCANNER.scan_filesystem(&ctx).unwrap();
     assert_eq!(mods.len(), 1);
     assert_eq!(mods[0].mod_id, "pak/Creature_P");

@@ -55,7 +55,10 @@ async fn test_xxhash_verify_wrong_hash_error_message() {
     let result = verify_xxhash(f.path(), 12345).await;
     assert!(result.is_err());
     let err = format!("{}", result.unwrap_err());
-    assert!(err.contains("hash mismatch"), "expected hash mismatch error, got: {err}");
+    assert!(
+        err.contains("hash mismatch"),
+        "expected hash mismatch error, got: {err}"
+    );
 }
 
 // ── SHA-256 edge cases ──────────────────────────────────────────────
@@ -90,10 +93,17 @@ async fn test_sha256_verify_immediately_after_hash() {
 #[tokio::test]
 async fn test_sha256_verify_wrong_hash_error_message() {
     let f = create_temp_file(b"test");
-    let result = verify_sha256(f.path(), "0000000000000000000000000000000000000000000000000000000000000000").await;
+    let result = verify_sha256(
+        f.path(),
+        "0000000000000000000000000000000000000000000000000000000000000000",
+    )
+    .await;
     assert!(result.is_err());
     let err = format!("{}", result.unwrap_err());
-    assert!(err.contains("hash mismatch"), "expected hash mismatch, got: {err}");
+    assert!(
+        err.contains("hash mismatch"),
+        "expected hash mismatch, got: {err}"
+    );
 }
 
 #[tokio::test]
@@ -140,7 +150,10 @@ async fn test_xxhash_mismatch_includes_path() {
     let result = verify_xxhash(f.path(), 0).await;
     let err = format!("{}", result.unwrap_err());
     // Error should mention the file path
-    assert!(err.contains(f.path().to_str().unwrap()), "error should contain path: {err}");
+    assert!(
+        err.contains(f.path().to_str().unwrap()),
+        "error should contain path: {err}"
+    );
 }
 
 #[tokio::test]
@@ -148,5 +161,8 @@ async fn test_sha256_mismatch_includes_path() {
     let f = create_temp_file(b"mismatch sha256");
     let result = verify_sha256(f.path(), "bad_hash").await;
     let err = format!("{}", result.unwrap_err());
-    assert!(err.contains(f.path().to_str().unwrap()), "error should contain path: {err}");
+    assert!(
+        err.contains(f.path().to_str().unwrap()),
+        "error should contain path: {err}"
+    );
 }

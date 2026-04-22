@@ -2,9 +2,7 @@
 
 use std::path::PathBuf;
 
-use modde_core::manifest::wabbajack::{
-    ArchiveEntry, RawDirective, WabbajackManifest,
-};
+use modde_core::manifest::wabbajack::{ArchiveEntry, RawDirective, WabbajackManifest};
 use modde_sources::wabbajack::patcher::apply_patch;
 use modde_sources::wabbajack::validator::validate_install;
 use xxhash_rust::xxh3::xxh3_64;
@@ -60,8 +58,8 @@ fn data_op(data: &[u8]) -> Vec<u8> {
 #[test]
 fn test_patch_reconstruct_from_non_contiguous_fragments() {
     let source = b"ABCDEFGHIJKLMNOP";
-    let c1 = copy_op(4, 6);   // offset 4, length 6 = "EFGHIJ"
-    let c2 = copy_op(12, 4);  // offset 12, length 4 = "MNOP"
+    let c1 = copy_op(4, 6); // offset 4, length 6 = "EFGHIJ"
+    let c2 = copy_op(12, 4); // offset 12, length 4 = "MNOP"
     let patch = build_patch(&[(OP_COPY, &c1), (OP_COPY, &c2)]);
     let result = apply_patch(source, &patch).unwrap();
     assert_eq!(&result, b"EFGHIJMNOP");
@@ -145,7 +143,12 @@ fn test_patch_empty_source_empty_output() {
 fn test_patch_error_invalid_magic() {
     let result = apply_patch(b"source", b"BAADMAGIC\x01\x04SHA1");
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("invalid patch magic"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid patch magic")
+    );
 }
 
 #[test]

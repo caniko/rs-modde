@@ -3,8 +3,8 @@
 
 use std::path::PathBuf;
 
+use modde_games::bethesda::plugins_txt::{PluginEntry, format_plugins_txt, parse_plugins_txt};
 use modde_games::bethesda::{FALLOUT4, FALLOUT76, SKYRIM_AE, SKYRIM_SE};
-use modde_games::bethesda::plugins_txt::{format_plugins_txt, parse_plugins_txt, PluginEntry};
 use modde_games::traits::GamePlugin;
 use tempfile::TempDir;
 
@@ -57,8 +57,22 @@ fn test_deploy_creates_symlinks_for_flat_structure() {
 
     SKYRIM_SE.deploy(&staging, &target).unwrap();
 
-    assert!(target.join("plugin.esp").symlink_metadata().unwrap().file_type().is_symlink());
-    assert!(target.join("textures.bsa").symlink_metadata().unwrap().file_type().is_symlink());
+    assert!(
+        target
+            .join("plugin.esp")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert!(
+        target
+            .join("textures.bsa")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
 }
 
 #[test]
@@ -111,7 +125,10 @@ fn test_deploy_overwrites_existing_symlinks() {
     // Second deploy should overwrite
     SKYRIM_SE.deploy(&staging, &target).unwrap();
 
-    assert_eq!(std::fs::read_to_string(target.join("mod.esp")).unwrap(), "v2");
+    assert_eq!(
+        std::fs::read_to_string(target.join("mod.esp")).unwrap(),
+        "v2"
+    );
 }
 
 #[test]
@@ -229,10 +246,22 @@ fn test_format_disabled_plugins() {
 #[test]
 fn test_format_parse_roundtrip() {
     let entries = vec![
-        PluginEntry { name: "Skyrim.esm".to_string(), enabled: true },
-        PluginEntry { name: "Update.esm".to_string(), enabled: true },
-        PluginEntry { name: "Optional.esp".to_string(), enabled: false },
-        PluginEntry { name: "Dawnguard.esm".to_string(), enabled: true },
+        PluginEntry {
+            name: "Skyrim.esm".to_string(),
+            enabled: true,
+        },
+        PluginEntry {
+            name: "Update.esm".to_string(),
+            enabled: true,
+        },
+        PluginEntry {
+            name: "Optional.esp".to_string(),
+            enabled: false,
+        },
+        PluginEntry {
+            name: "Dawnguard.esm".to_string(),
+            enabled: true,
+        },
     ];
 
     let formatted = format_plugins_txt(&entries);
@@ -258,7 +287,11 @@ fn test_format_parse_roundtrip_large() {
     assert_eq!(parsed.len(), 300);
     for (orig, parsed) in entries.iter().zip(parsed.iter()) {
         assert_eq!(orig.name, parsed.name, "name mismatch at some index");
-        assert_eq!(orig.enabled, parsed.enabled, "enabled mismatch for {}", orig.name);
+        assert_eq!(
+            orig.enabled, parsed.enabled,
+            "enabled mismatch for {}",
+            orig.name
+        );
     }
 }
 
@@ -272,8 +305,14 @@ fn test_write_and_read_plugins_txt_file() {
     let path = tmp.path().join("plugins.txt");
 
     let entries = vec![
-        PluginEntry { name: "Skyrim.esm".to_string(), enabled: true },
-        PluginEntry { name: "DisabledMod.esp".to_string(), enabled: false },
+        PluginEntry {
+            name: "Skyrim.esm".to_string(),
+            enabled: true,
+        },
+        PluginEntry {
+            name: "DisabledMod.esp".to_string(),
+            enabled: false,
+        },
     ];
 
     write_plugins_txt_to(&path, &entries).unwrap();
@@ -293,13 +332,19 @@ fn test_write_overwrites_existing() {
 
     write_plugins_txt_to(
         &path,
-        &[PluginEntry { name: "Old.esp".to_string(), enabled: true }],
+        &[PluginEntry {
+            name: "Old.esp".to_string(),
+            enabled: true,
+        }],
     )
     .unwrap();
 
     write_plugins_txt_to(
         &path,
-        &[PluginEntry { name: "New.esp".to_string(), enabled: true }],
+        &[PluginEntry {
+            name: "New.esp".to_string(),
+            enabled: true,
+        }],
     )
     .unwrap();
 

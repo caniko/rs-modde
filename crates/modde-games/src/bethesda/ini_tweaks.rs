@@ -42,16 +42,15 @@ pub fn scan_mod_ini_tweaks(mod_id: &str, mod_dir: &Path) -> Result<Vec<IniTweak>
             } else if !trimmed.is_empty()
                 && !trimmed.starts_with(';')
                 && !trimmed.starts_with('#')
+                && let Some((key, value)) = trimmed.split_once('=')
             {
-                if let Some((key, value)) = trimmed.split_once('=') {
-                    tweaks.push(IniTweak {
-                        mod_id: mod_id.to_string(),
-                        ini_file: ini_file.clone(),
-                        section: current_section.clone(),
-                        key: key.trim().to_string(),
-                        value: value.trim().to_string(),
-                    });
-                }
+                tweaks.push(IniTweak {
+                    mod_id: mod_id.to_string(),
+                    ini_file: ini_file.clone(),
+                    section: current_section.clone(),
+                    key: key.trim().to_string(),
+                    value: value.trim().to_string(),
+                });
             }
         }
     }

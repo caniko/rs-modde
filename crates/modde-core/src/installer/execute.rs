@@ -49,7 +49,11 @@ pub fn execute(
                 .unwrap_or("redmod");
             let nested = store_mod_dir.join("mods").join(mod_name);
             fs::create_dir_all(&nested)?;
-            stage_tree(&source_root, &nested, Some(PathBuf::from("mods").join(mod_name)))?
+            stage_tree(
+                &source_root,
+                &nested,
+                Some(PathBuf::from("mods").join(mod_name)),
+            )?
         }
 
         InstallMethod::DllOverlay { .. } => {
@@ -64,7 +68,10 @@ pub fn execute(
             )?
         }
 
-        InstallMethod::Fomod { module_config, config_toml } => {
+        InstallMethod::Fomod {
+            module_config,
+            config_toml,
+        } => {
             let config_str = match config_toml {
                 Some(s) => s,
                 None => return Err(InstallerError::RequiresUserInput { method: "fomod" }),
@@ -76,10 +83,9 @@ pub fn execute(
 
             // Read and parse the ModuleConfig.xml.
             let xml_path = source_root.join(module_config);
-            let xml = fs::read_to_string(&xml_path)
-                .map_err(|e| InstallerError::FomodError(format!(
-                    "cannot read {}: {e}", xml_path.display()
-                )))?;
+            let xml = fs::read_to_string(&xml_path).map_err(|e| {
+                InstallerError::FomodError(format!("cannot read {}: {e}", xml_path.display()))
+            })?;
             let module_cfg = fomod_oxide::ModuleConfig::parse(&xml)
                 .map_err(|e| InstallerError::FomodError(format!("FOMOD parse error: {e}")))?;
 
@@ -115,7 +121,7 @@ pub fn execute(
                         fs::copy(&src_path, &dest)?;
                         let _ = fs::remove_file(&src_path);
                     }
-                    let size = fs::metadata(&dest).map(|m| m.len()).unwrap_or(0);
+                    let size = fs::metadata(&dest).map_or(0, |m| m.len());
                     out.push(StagedFile {
                         rel_path: dest_rel(store_mod_dir, &dest),
                         origin_rel_path: op.source.clone(),
@@ -193,7 +199,7 @@ fn stage_tree(
             fs::copy(&abs, &dest_path)?;
             let _ = fs::remove_file(&abs);
         }
-        let size = fs::metadata(&dest_path).map(|m| m.len()).unwrap_or(0);
+        let size = fs::metadata(&dest_path).map_or(0, |m| m.len());
         let origin_rel_path = match &origin_prefix {
             Some(p) => p.join(&rel).to_string_lossy().to_string(),
             None => rel.to_string_lossy().to_string(),
@@ -209,10 +215,10 @@ fn stage_tree(
 }
 
 fn dest_rel(dest_root: &Path, dest_path: &Path) -> String {
-    dest_path
-        .strip_prefix(dest_root)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| dest_path.to_string_lossy().to_string())
+    dest_path.strip_prefix(dest_root).map_or_else(
+        |_| dest_path.to_string_lossy().to_string(),
+        |p| p.to_string_lossy().to_string(),
+    )
 }
 
 #[cfg(test)]

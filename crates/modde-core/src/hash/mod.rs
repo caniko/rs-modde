@@ -5,8 +5,8 @@ use tokio::io::AsyncReadExt;
 use xxhash_rust::xxh3::xxh3_64;
 use xxhash_rust::xxh64::xxh64;
 
-use crate::error::Result;
 use crate::CoreError;
+use crate::error::Result;
 
 const BUF_SIZE: usize = 64 * 1024;
 

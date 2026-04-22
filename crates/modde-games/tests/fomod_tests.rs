@@ -28,11 +28,7 @@ fn parse_module_config() {
     assert_eq!(steps.steps[1].name, "Optional Patches");
 
     // First step has one group with SelectExactlyOne
-    let groups = &steps.steps[0]
-        .optional_file_groups
-        .as_ref()
-        .unwrap()
-        .groups;
+    let groups = &steps.steps[0].optional_file_groups.as_ref().unwrap().groups;
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0].group_type, GroupType::SelectExactlyOne);
     assert_eq!(groups[0].plugins.plugins.len(), 2);
@@ -44,11 +40,7 @@ fn installer_default_selections() {
     let config = ModuleConfig::parse(xml).unwrap();
 
     let steps = config.install_steps.as_ref().unwrap();
-    let group = &steps.steps[0]
-        .optional_file_groups
-        .as_ref()
-        .unwrap()
-        .groups[0];
+    let group = &steps.steps[0].optional_file_groups.as_ref().unwrap().groups[0];
 
     let defaults = Installer::default_selections(group);
     // High Resolution is Recommended, should be default
@@ -83,7 +75,11 @@ fn installer_resolve_with_required_files() {
     // Should have required files even with no selections
     assert!(plan.operations.len() >= 2);
 
-    let sources: Vec<&str> = plan.operations.iter().map(|op| op.source.as_str()).collect();
+    let sources: Vec<&str> = plan
+        .operations
+        .iter()
+        .map(|op| op.source.as_str())
+        .collect();
     assert!(sources.contains(&"readme.txt"));
     assert!(sources.contains(&"core_files"));
 }
@@ -108,7 +104,11 @@ fn installer_resolve_full_flow() {
     assert_eq!(visible.len(), 2);
 
     let plan = installer.resolve();
-    let sources: Vec<&str> = plan.operations.iter().map(|op| op.source.as_str()).collect();
+    let sources: Vec<&str> = plan
+        .operations
+        .iter()
+        .map(|op| op.source.as_str())
+        .collect();
 
     // Should include required files
     assert!(sources.contains(&"readme.txt"));
@@ -133,7 +133,11 @@ fn installer_resolve_standard_textures() {
     );
 
     let plan = installer.resolve();
-    let sources: Vec<&str> = plan.operations.iter().map(|op| op.source.as_str()).collect();
+    let sources: Vec<&str> = plan
+        .operations
+        .iter()
+        .map(|op| op.source.as_str())
+        .collect();
 
     assert!(sources.contains(&"textures/standard"));
     // Should NOT include high LOD file

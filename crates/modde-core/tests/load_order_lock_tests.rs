@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use modde_core::manifest::wabbajack::{
-    cache_wabbajack_file, compute_manifest_hash, ArchiveEntry, ArchiveState, WabbajackManifest,
+    ArchiveEntry, ArchiveState, WabbajackManifest, cache_wabbajack_file, compute_manifest_hash,
 };
 use modde_core::profile::{
     EnabledMod, LoadOrderLock, LockReason, Profile, ProfileManager, ProfileSource,
@@ -57,7 +57,7 @@ fn isolated_data_dir() {
 // Fixtures
 // ---------------------------------------------------------------------------
 
-/// Parse the existing wabbajack_manifest.json fixture. It contains:
+/// Parse the existing `wabbajack_manifest.json` fixture. It contains:
 /// - One Nexus archive (hash `12345678901234`) referenced by two directives
 ///   (`FromArchive` and `PatchedFromArchive`) — so directive-order dedup is
 ///   exercised naturally.
@@ -186,7 +186,9 @@ fn db_roundtrip_preserves_profile_level_lock() {
     }));
 
     pm.create(&profile).expect("create profile");
-    let loaded = pm.load("wj-locked", Some("skyrim-se")).expect("load profile");
+    let loaded = pm
+        .load("wj-locked", Some("skyrim-se"))
+        .expect("load profile");
 
     assert_eq!(profile.load_order_lock, loaded.load_order_lock);
 }
@@ -484,9 +486,7 @@ fn toml_import_preserves_existing_wabbajack_lock() {
         Some(LockReason::Wabbajack { manifest_hash }) => {
             assert_eq!(manifest_hash, "original-wj-hash");
         }
-        other => panic!(
-            "TOML import must preserve existing Wabbajack lock, got {other:?}"
-        ),
+        other => panic!("TOML import must preserve existing Wabbajack lock, got {other:?}"),
     }
 }
 
@@ -588,7 +588,11 @@ fn manifest_directive_order_dedupes_multiple_references() {
     let manifest = sample_manifest();
     let order = manifest_directive_order(&manifest);
 
-    assert_eq!(order.len(), 1, "expected single dedup'd mod_id, got {order:?}");
+    assert_eq!(
+        order.len(),
+        1,
+        "expected single dedup'd mod_id, got {order:?}"
+    );
     assert_eq!(order[0], "nexus_skyrimspecialedition_42_100");
 }
 
@@ -752,7 +756,10 @@ fn apply_wabbajack_lock_is_idempotent() {
 
     let ids1: Vec<&str> = p1.mods.iter().map(|m| m.mod_id.as_str()).collect();
     let ids2: Vec<&str> = p2.mods.iter().map(|m| m.mod_id.as_str()).collect();
-    assert_eq!(ids1, ids2, "mod order should be stable under re-application");
+    assert_eq!(
+        ids1, ids2,
+        "mod order should be stable under re-application"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -763,7 +770,7 @@ fn apply_wabbajack_lock_is_idempotent() {
 // checks, called by the UI message handler and (eventually) the CLI.
 // These tests pin down every refusal path plus the successful swap.
 
-use modde_core::profile::{try_reorder, ReorderDirection, ReorderError};
+use modde_core::profile::{ReorderDirection, ReorderError, try_reorder};
 
 fn three_mod_profile() -> Profile {
     make_profile(
@@ -802,7 +809,9 @@ fn try_reorder_refuses_when_profile_locked() {
 
     let err = try_reorder(&mut profile, "b", ReorderDirection::Up).unwrap_err();
     match err {
-        ReorderError::ProfileLocked { reason: LockReason::Wabbajack { manifest_hash } } => {
+        ReorderError::ProfileLocked {
+            reason: LockReason::Wabbajack { manifest_hash },
+        } => {
             assert_eq!(manifest_hash, "test");
         }
         other => panic!("expected ProfileLocked(Wabbajack), got {other:?}"),
@@ -822,7 +831,10 @@ fn try_reorder_refuses_when_target_mod_pinned() {
 
     let err = try_reorder(&mut profile, "b", ReorderDirection::Down).unwrap_err();
     match err {
-        ReorderError::ModPinned { mod_id, reason: LockReason::Manual { .. } } => {
+        ReorderError::ModPinned {
+            mod_id,
+            reason: LockReason::Manual { .. },
+        } => {
             assert_eq!(mod_id, "b");
         }
         other => panic!("expected ModPinned(Manual), got {other:?}"),
@@ -909,7 +921,7 @@ fn try_reorder_refuses_even_when_only_per_mod_lock_set_with_profile_lock() {
 //   - Data/meshes/test.nif
 // i.e. covered dirs include `data/textures/`, `data/meshes/`, `data/`.
 
-use modde_core::scanner::{detect_stale_duplicates, DuplicateReport, ModFootprint};
+use modde_core::scanner::{DuplicateReport, ModFootprint, detect_stale_duplicates};
 
 /// Helper: Cyberpunk-style prefix → footprint mapping. Mirrors
 /// `modde_games::cyberpunk::scanner::mod_id_footprint` but kept inline
@@ -920,13 +932,10 @@ fn cp_footprint(mod_id: &str) -> Option<ModFootprint> {
             "bin/x64/plugins/cyber_engine_tweaks/mods/{}/",
             name.to_lowercase()
         )))
-    } else if let Some(stem) = mod_id.strip_prefix("archive/") {
-        Some(ModFootprint::File(format!(
-            "archive/pc/mod/{}.archive",
-            stem.to_lowercase()
-        )))
     } else {
-        None
+        mod_id.strip_prefix("archive/").map(|stem| {
+            ModFootprint::File(format!("archive/pc/mod/{}.archive", stem.to_lowercase()))
+        })
     }
 }
 
@@ -936,11 +945,14 @@ fn cp_footprint(mod_id: &str) -> Option<ModFootprint> {
 /// paths without bringing in a CP2077 manifest.
 fn skyrim_test_footprint(mod_id: &str) -> Option<ModFootprint> {
     if let Some(rest) = mod_id.strip_prefix("dir/") {
-        Some(ModFootprint::Directory(format!("data/{}/", rest.to_lowercase())))
-    } else if let Some(rest) = mod_id.strip_prefix("file/") {
-        Some(ModFootprint::File(rest.to_lowercase()))
+        Some(ModFootprint::Directory(format!(
+            "data/{}/",
+            rest.to_lowercase()
+        )))
     } else {
-        None
+        mod_id
+            .strip_prefix("file/")
+            .map(|rest| ModFootprint::File(rest.to_lowercase()))
     }
 }
 
@@ -973,8 +985,8 @@ fn detect_stale_duplicates_preserves_genuine_additions() {
         "mixed",
         "skyrim-se",
         vec![
-            mod_entry("dir/textures"),       // leaked (covered)
-            mod_entry("dir/notinmanifest"),  // genuine (not covered)
+            mod_entry("dir/textures"),      // leaked (covered)
+            mod_entry("dir/notinmanifest"), // genuine (not covered)
         ],
     );
 
@@ -994,7 +1006,7 @@ fn detect_stale_duplicates_handles_file_footprints() {
         "skyrim-se",
         vec![
             mod_entry("file/data/textures/test.dds"), // exact match → leaked
-            mod_entry("file/data/other.dds"),          // not in manifest → genuine
+            mod_entry("file/data/other.dds"),         // not in manifest → genuine
         ],
     );
 
@@ -1135,8 +1147,8 @@ fn detect_stale_duplicates_strips_mo2_prefix_from_directive_paths() {
         "3077-like",
         "cyberpunk2077",
         vec![
-            mod_entry("cet/ImmersiveHealing"),  // should be LEAKED
-            mod_entry("cet/MyOwnCETMod"),       // should be GENUINE
+            mod_entry("cet/ImmersiveHealing"), // should be LEAKED
+            mod_entry("cet/MyOwnCETMod"),      // should be GENUINE
         ],
     );
 

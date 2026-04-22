@@ -2,23 +2,23 @@ use std::io::{Cursor, Read};
 
 use anyhow::{Context, Result, bail};
 
-/// Magic bytes identifying an OctoDiff binary delta patch.
+/// Magic bytes identifying an `OctoDiff` binary delta patch.
 const OCTODELTA_MAGIC: &[u8; 9] = b"OCTODELTA";
 
 /// Maximum allowed output size for a patch operation (4 GiB).
-/// Prevents malformed patches from causing unbounded memory allocation (DoS).
+/// Prevents malformed patches from causing unbounded memory allocation (`DoS`).
 const MAX_PATCH_OUTPUT: usize = 4 * 1024 * 1024 * 1024;
 
-/// OctoDiff operation types.
+/// `OctoDiff` operation types.
 const OP_COPY: u8 = 0x60;
 const OP_DATA: u8 = 0x80;
 
-/// Apply an OctoDiff binary delta patch to a source (basis) file, producing the target file.
+/// Apply an `OctoDiff` binary delta patch to a source (basis) file, producing the target file.
 ///
-/// OctoDiff delta format:
+/// `OctoDiff` delta format:
 /// - 9 bytes magic: `OCTODELTA`
 /// - 1 byte version: `0x01`
-/// - Hash metadata: type_len(1) + name(type_len bytes) + hash_len(u32 LE) + hash(hash_len bytes)
+/// - Hash metadata: `type_len(1)` + `name(type_len` bytes) + `hash_len(u32` LE) + `hash(hash_len` bytes)
 /// - 3 bytes separator: `>>>`
 /// - Repeated operations until end of data:
 ///   - `0x60` copy: offset(u64 LE) + length(u64 LE) — copy from basis file
@@ -32,11 +32,7 @@ pub fn apply_patch(source: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
         .read_exact(&mut magic)
         .context("failed to read patch magic")?;
     if &magic != OCTODELTA_MAGIC {
-        bail!(
-            "invalid patch magic: expected {:?}, got {:?}",
-            OCTODELTA_MAGIC,
-            magic
-        );
+        bail!("invalid patch magic: expected {OCTODELTA_MAGIC:?}, got {magic:?}");
     }
 
     // Read version
@@ -58,9 +54,11 @@ pub fn apply_patch(source: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
 
     // Read separator ">>>"
     let mut sep = [0u8; 3];
-    cursor.read_exact(&mut sep).context("failed to read separator")?;
+    cursor
+        .read_exact(&mut sep)
+        .context("failed to read separator")?;
     if &sep != b">>>" {
-        bail!("expected '>>>' separator, got {:?}", sep);
+        bail!("expected '>>>' separator, got {sep:?}");
     }
 
     // Process delta operations
@@ -76,10 +74,10 @@ pub fn apply_patch(source: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
 
         match op_buf[0] {
             OP_COPY => {
-                let offset = read_u64_le(&mut cursor)
-                    .context("failed to read copy offset")? as usize;
-                let length = read_u64_le(&mut cursor)
-                    .context("failed to read copy length")? as usize;
+                let offset =
+                    read_u64_le(&mut cursor).context("failed to read copy offset")? as usize;
+                let length =
+                    read_u64_le(&mut cursor).context("failed to read copy length")? as usize;
 
                 if offset + length > source.len() {
                     bail!(
@@ -88,21 +86,15 @@ pub fn apply_patch(source: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
                     );
                 }
                 if output.len().saturating_add(length) > MAX_PATCH_OUTPUT {
-                    bail!(
-                        "patch output exceeds maximum size of {} bytes",
-                        MAX_PATCH_OUTPUT
-                    );
+                    bail!("patch output exceeds maximum size of {MAX_PATCH_OUTPUT} bytes");
                 }
                 output.extend_from_slice(&source[offset..offset + length]);
             }
             OP_DATA => {
-                let length = read_u64_le(&mut cursor)
-                    .context("failed to read data length")? as usize;
+                let length =
+                    read_u64_le(&mut cursor).context("failed to read data length")? as usize;
                 if output.len().saturating_add(length) > MAX_PATCH_OUTPUT {
-                    bail!(
-                        "patch output exceeds maximum size of {} bytes",
-                        MAX_PATCH_OUTPUT
-                    );
+                    bail!("patch output exceeds maximum size of {MAX_PATCH_OUTPUT} bytes");
                 }
                 let mut data = vec![0u8; length];
                 cursor
@@ -137,7 +129,7 @@ fn read_u32_le<R: Read>(reader: &mut R) -> Result<u32> {
 mod tests {
     use super::*;
 
-    /// Build a minimal OctoDiff patch.
+    /// Build a minimal `OctoDiff` patch.
     fn build_octodiff_patch(ops: &[(u8, &[u8])]) -> Vec<u8> {
         let mut patch = Vec::new();
         patch.extend_from_slice(OCTODELTA_MAGIC);

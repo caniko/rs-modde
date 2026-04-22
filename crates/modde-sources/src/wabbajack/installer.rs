@@ -7,9 +7,7 @@ use futures::stream::{self, StreamExt};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
-use modde_core::manifest::wabbajack::{
-    DownloadDirective, InstallDirective, WabbajackManifest,
-};
+use modde_core::manifest::wabbajack::{DownloadDirective, InstallDirective, WabbajackManifest};
 
 use crate::traits::{AnySource, DownloadHandle, DownloadSource};
 
@@ -22,22 +20,43 @@ const DEFAULT_CONCURRENCY: usize = 4;
 /// Progress update sent during installation.
 #[derive(Debug, Clone)]
 pub enum InstallProgress {
-    Starting { total_downloads: usize },
-    Downloading { name: String, bytes: u64, total: u64 },
-    DownloadComplete { name: String },
-    Verifying { name: String },
-    Applying { directive_index: usize, total: usize },
-    Patching { name: String },
-    CreatingBSA { name: String },
-    InlineFile { name: String },
+    Starting {
+        total_downloads: usize,
+    },
+    Downloading {
+        name: String,
+        bytes: u64,
+        total: u64,
+    },
+    DownloadComplete {
+        name: String,
+    },
+    Verifying {
+        name: String,
+    },
+    Applying {
+        directive_index: usize,
+        total: usize,
+    },
+    Patching {
+        name: String,
+    },
+    CreatingBSA {
+        name: String,
+    },
+    InlineFile {
+        name: String,
+    },
     Complete,
-    Failed { error: String },
+    Failed {
+        error: String,
+    },
 }
 
 /// Orchestrate a full Wabbajack install pipeline.
 pub struct WabbajackInstaller {
     manifest: WabbajackManifest,
-    /// Path to the `.wabbajack` zip file (needed for InlineFile and PatchedFromArchive data).
+    /// Path to the `.wabbajack` zip file (needed for `InlineFile` and `PatchedFromArchive` data).
     wabbajack_path: PathBuf,
     store_dir: PathBuf,
     staging_dir: PathBuf,
@@ -48,6 +67,7 @@ pub struct WabbajackInstaller {
 }
 
 impl WabbajackInstaller {
+    #[must_use]
     pub fn new(
         manifest: WabbajackManifest,
         wabbajack_path: PathBuf,
@@ -78,10 +98,7 @@ impl WabbajackInstaller {
     }
 
     /// Run the full install pipeline, sending progress updates via channel.
-    pub async fn install(
-        &self,
-        progress_tx: mpsc::UnboundedSender<InstallProgress>,
-    ) -> Result<()> {
+    pub async fn install(&self, progress_tx: mpsc::UnboundedSender<InstallProgress>) -> Result<()> {
         let downloads = self.manifest.download_directives();
         let installs = self.manifest.install_directives();
 
@@ -115,14 +132,9 @@ impl WabbajackInstaller {
                 } => {
                     self.apply_from_archive(*archive_hash, from, to).await?;
                 }
-                InstallDirective::InlineFile {
-                    source_data_id,
-                    to,
-                } => {
+                InstallDirective::InlineFile { source_data_id, to } => {
                     progress_tx
-                        .send(InstallProgress::InlineFile {
-                            name: to.clone(),
-                        })
+                        .send(InstallProgress::InlineFile { name: to.clone() })
                         .ok();
                     self.apply_inline_file(source_data_id, to).await?;
                 }
@@ -133,9 +145,7 @@ impl WabbajackInstaller {
                     patch_id,
                 } => {
                     progress_tx
-                        .send(InstallProgress::Patching {
-                            name: to.clone(),
-                        })
+                        .send(InstallProgress::Patching { name: to.clone() })
                         .ok();
                     self.apply_patched_from_archive(*archive_hash, from, to, patch_id)
                         .await?;
@@ -146,9 +156,7 @@ impl WabbajackInstaller {
                     file_states,
                 } => {
                     progress_tx
-                        .send(InstallProgress::CreatingBSA {
-                            name: to.clone(),
-                        })
+                        .send(InstallProgress::CreatingBSA { name: to.clone() })
                         .ok();
                     self.apply_create_bsa(temp_id, to, file_states).await?;
                 }
@@ -243,7 +251,7 @@ impl WabbajackInstaller {
         // Collect any errors
         let errors: Vec<_> = results
             .into_iter()
-            .filter_map(|r| r.err())
+            .filter_map(std::result::Result::err)
             .collect();
 
         if !errors.is_empty() {
@@ -289,12 +297,7 @@ impl WabbajackInstaller {
     }
 
     /// Extract a file from a downloaded archive and place it in the staging directory.
-    async fn apply_from_archive(
-        &self,
-        archive_hash: u64,
-        from: &str,
-        to: &str,
-    ) -> Result<()> {
+    async fn apply_from_archive(&self, archive_hash: u64, from: &str, to: &str) -> Result<()> {
         // Validate paths against traversal attacks
         validate_archive_entry(from)?;
         validate_archive_entry(to)?;
@@ -310,10 +313,7 @@ impl WabbajackInstaller {
         let data = extract_from_archive_cached(&archive_path, from, &self.extract_cache)
             .await
             .with_context(|| {
-                format!(
-                    "failed to extract '{}' from archive {:016x}",
-                    from, archive_hash
-                )
+                format!("failed to extract '{from}' from archive {archive_hash:016x}")
             })?;
 
         tokio::fs::write(&output_path, &data).await?;
@@ -323,11 +323,7 @@ impl WabbajackInstaller {
     }
 
     /// Extract inline file data from the `.wabbajack` zip and write to staging.
-    async fn apply_inline_file(
-        &self,
-        source_data_id: &str,
-        to: &str,
-    ) -> Result<()> {
+    async fn apply_inline_file(&self, source_data_id: &str, to: &str) -> Result<()> {
         let wj_path = self.wabbajack_path.clone();
         let sid = source_data_id.to_string();
         let output_path = self.staging_dir.join(normalize_path(to));
@@ -343,8 +339,9 @@ impl WabbajackInstaller {
             let file = std::fs::File::open(&wj_path)
                 .with_context(|| format!("failed to open wabbajack file: {}", wj_path.display()))?;
             let mut archive = zip::ZipArchive::new(file)?;
-            let mut entry = archive.by_name(&sid)
-                .with_context(|| format!("inline data entry '{}' not found in wabbajack zip", sid))?;
+            let mut entry = archive
+                .by_name(&sid)
+                .with_context(|| format!("inline data entry '{sid}' not found in wabbajack zip"))?;
             validate_zip_entry(&entry)?;
             let mut data = Vec::with_capacity(entry.size() as usize);
             std::io::Read::read_to_end(&mut entry, &mut data)?;
@@ -377,10 +374,7 @@ impl WabbajackInstaller {
         let source_data = extract_from_archive_cached(&src_archive_path, from, &self.extract_cache)
             .await
             .with_context(|| {
-                format!(
-                    "failed to extract '{}' from archive {:016x} for patching",
-                    from, archive_hash
-                )
+                format!("failed to extract '{from}' from archive {archive_hash:016x} for patching")
             })?;
 
         // Validate the output path against traversal attacks
@@ -392,8 +386,9 @@ impl WabbajackInstaller {
         let patch_data = tokio::task::spawn_blocking(move || {
             let file = std::fs::File::open(&wj_path)?;
             let mut archive = zip::ZipArchive::new(file)?;
-            let mut entry = archive.by_name(&pid)
-                .with_context(|| format!("patch data '{}' not found in wabbajack zip", pid))?;
+            let mut entry = archive
+                .by_name(&pid)
+                .with_context(|| format!("patch data '{pid}' not found in wabbajack zip"))?;
             validate_zip_entry(&entry)?;
             let mut data = Vec::with_capacity(entry.size() as usize);
             std::io::Read::read_to_end(&mut entry, &mut data)?;
@@ -444,13 +439,13 @@ fn validate_archive_entry(name: &str) -> Result<()> {
     // Reject entries with ".." path components (path traversal / zip-slip)
     for component in normalized.split('/') {
         if component == ".." {
-            bail!("archive entry contains path traversal: {}", name);
+            bail!("archive entry contains path traversal: {name}");
         }
     }
 
     // Reject absolute paths
     if normalized.starts_with('/') {
-        bail!("archive entry contains absolute path: {}", name);
+        bail!("archive entry contains absolute path: {name}");
     }
 
     Ok(())
@@ -463,7 +458,7 @@ fn validate_zip_entry<R: std::io::Read + ?Sized>(entry: &zip::read::ZipFile<'_, 
 
     // Reject symlink entries from zip archives
     if entry.is_symlink() {
-        bail!("archive entry is a symlink (rejected for security): {}", name);
+        bail!("archive entry is a symlink (rejected for security): {name}");
     }
 
     Ok(())
@@ -543,23 +538,19 @@ async fn extract_from_archive_cached(
         if file_path.exists() {
             // Reject symlinks extracted by external tools (7z, unrar)
             if file_path.symlink_metadata()?.file_type().is_symlink() {
-                anyhow::bail!(
-                    "extracted file is a symlink (rejected for security): {}",
-                    inner_path
-                );
+                anyhow::bail!("extracted file is a symlink (rejected for security): {inner_path}");
             }
             return Ok(std::fs::read(&file_path)?);
         }
 
         // Try case-insensitive search
-        find_file_case_insensitive(&cache_dir, &normalized)
-            .with_context(|| {
-                format!(
-                    "file '{}' not found in cached extraction of {}",
-                    inner_path,
-                    archive_path.display()
-                )
-            })
+        find_file_case_insensitive(&cache_dir, &normalized).with_context(|| {
+            format!(
+                "file '{}' not found in cached extraction of {}",
+                inner_path,
+                archive_path.display()
+            )
+        })
     })
     .await?
 }
@@ -583,10 +574,7 @@ fn find_file_case_insensitive(base: &Path, relative_path: &str) -> Result<Vec<u8
                 current = entry.path();
                 // Reject symlinks in intermediate path components
                 if current.symlink_metadata()?.file_type().is_symlink() {
-                    anyhow::bail!(
-                        "path component is a symlink (rejected for security): {}",
-                        part
-                    );
+                    anyhow::bail!("path component is a symlink (rejected for security): {part}");
                 }
                 found = true;
                 break;
@@ -594,16 +582,17 @@ fn find_file_case_insensitive(base: &Path, relative_path: &str) -> Result<Vec<u8
         }
 
         if !found {
-            anyhow::bail!("path component '{}' not found in {}", part, current.display());
+            anyhow::bail!(
+                "path component '{}' not found in {}",
+                part,
+                current.display()
+            );
         }
     }
 
     // Final resolved file must not be a symlink either
     if current.symlink_metadata()?.file_type().is_symlink() {
-        anyhow::bail!(
-            "resolved file is a symlink (rejected for security): {}",
-            relative_path
-        );
+        anyhow::bail!("resolved file is a symlink (rejected for security): {relative_path}");
     }
 
     Ok(std::fs::read(&current)?)
@@ -617,14 +606,13 @@ fn extract_from_zip(archive_path: &Path, inner_path: &str) -> Result<Vec<u8>> {
     let mut archive = zip::ZipArchive::new(file)
         .with_context(|| format!("failed to read zip archive: {}", archive_path.display()))?;
 
-    let entry_name = find_entry_in_archive(&archive, inner_path)
-        .with_context(|| {
-            format!(
-                "file '{}' not found in archive {}",
-                inner_path,
-                archive_path.display()
-            )
-        })?;
+    let entry_name = find_entry_in_archive(&archive, inner_path).with_context(|| {
+        format!(
+            "file '{}' not found in archive {}",
+            inner_path,
+            archive_path.display()
+        )
+    })?;
 
     let mut entry = archive.by_name(&entry_name)?;
     validate_zip_entry(&entry)?;
@@ -633,8 +621,6 @@ fn extract_from_zip(archive_path: &Path, inner_path: &str) -> Result<Vec<u8>> {
 
     Ok(data)
 }
-
-
 
 /// Try to run a command, returning `true` if it exits successfully.
 fn try_extract(cmd: &str, args: &[&std::ffi::OsStr]) -> Result<bool> {
@@ -689,18 +675,20 @@ fn extract_full_archive(archive_path: &Path, dest_dir: &Path) -> Result<bool> {
     let sevenz_candidates = platform_7z_candidates();
 
     for cmd in &sevenz_candidates {
-        if try_extract(cmd, &[
-            "x".as_ref(), out_flag.as_ref(), "-y".as_ref(), archive,
-        ])? {
+        if try_extract(
+            cmd,
+            &["x".as_ref(), out_flag.as_ref(), "-y".as_ref(), archive],
+        )? {
             return Ok(true);
         }
     }
 
     // unrar has a different argument layout
     let unrar_dest = format!("{}/", dest_dir.display());
-    if try_extract("unrar", &[
-        "x".as_ref(), "-o+".as_ref(), archive, unrar_dest.as_ref(),
-    ])? {
+    if try_extract(
+        "unrar",
+        &["x".as_ref(), "-o+".as_ref(), archive, unrar_dest.as_ref()],
+    )? {
         return Ok(true);
     }
 
@@ -708,10 +696,7 @@ fn extract_full_archive(archive_path: &Path, dest_dir: &Path) -> Result<bool> {
 }
 
 /// Find a file entry in a zip archive, trying multiple path formats.
-fn find_entry_in_archive(
-    archive: &zip::ZipArchive<std::fs::File>,
-    path: &str,
-) -> Result<String> {
+fn find_entry_in_archive(archive: &zip::ZipArchive<std::fs::File>, path: &str) -> Result<String> {
     // Normalize separators for comparison
     let normalized = path.replace('\\', "/");
     let backslash = path.replace('/', "\\");
@@ -753,7 +738,7 @@ mod tests {
         writer.finish().unwrap();
     }
 
-    /// Helper: open a zip for find_entry_in_archive tests.
+    /// Helper: open a zip for `find_entry_in_archive` tests.
     fn open_zip(path: &std::path::Path) -> zip::ZipArchive<std::fs::File> {
         let file = std::fs::File::open(path).unwrap();
         zip::ZipArchive::new(file).unwrap()
@@ -1056,10 +1041,7 @@ mod tests {
         let result = extract_from_zip(&zip_path, "does_not_exist.txt");
         assert!(result.is_err());
         let err_msg = format!("{:#}", result.unwrap_err());
-        assert!(
-            err_msg.contains("not found"),
-            "unexpected error: {err_msg}"
-        );
+        assert!(err_msg.contains("not found"), "unexpected error: {err_msg}");
     }
 
     // -----------------------------------------------------------------------

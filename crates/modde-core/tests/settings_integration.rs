@@ -1,17 +1,17 @@
-//! Integration tests for AppSettings + ProfileManager interaction.
+//! Integration tests for `AppSettings` + `ProfileManager` interaction.
 //!
 //! These mirror the exact initialization flow used by the UI's `Modde::new()`:
 //! 1. Load settings from disk
 //! 2. List profiles from the database
-//! 3. Auto-detect selected_game from profile if unset
-//! 4. Auto-detect game_path if missing
+//! 3. Auto-detect `selected_game` from profile if unset
+//! 4. Auto-detect `game_path` if missing
 //! 5. Persist settings
 
 use std::path::PathBuf;
 
 use modde_core::GameId;
 use modde_core::db::ModdeDb;
-use modde_core::profile::{EnabledMod, Profile, ProfileManager, ProfileSource};
+use modde_core::profile::{Profile, ProfileManager, ProfileSource};
 use modde_core::settings::AppSettings;
 use smallvec::smallvec;
 
@@ -52,8 +52,14 @@ fn settings_round_trip_preserves_all_fields() {
     assert_eq!(loaded.selected_game.as_deref(), Some("cyberpunk2077"));
     assert_eq!(loaded.theme, "Nord");
     assert_eq!(loaded.download_dir, Some(PathBuf::from("/dl")));
-    assert_eq!(loaded.game_path("cyberpunk2077"), Some(&PathBuf::from("/games/cp2077")));
-    assert_eq!(loaded.game_path("skyrim-se"), Some(&PathBuf::from("/games/skyrim")));
+    assert_eq!(
+        loaded.game_path("cyberpunk2077"),
+        Some(&PathBuf::from("/games/cp2077"))
+    );
+    assert_eq!(
+        loaded.game_path("skyrim-se"),
+        Some(&PathBuf::from("/games/skyrim"))
+    );
     assert!(loaded.game_path("fallout4").is_none());
 }
 
@@ -104,7 +110,11 @@ fn set_game_path_updates_existing() {
     let mut s = AppSettings::default();
     s.set_game_path("cyberpunk2077", PathBuf::from("/old"));
     s.set_game_path("cyberpunk2077", PathBuf::from("/new"));
-    assert_eq!(s.game_paths.len(), 1, "should update in-place, not add duplicate");
+    assert_eq!(
+        s.game_paths.len(),
+        1,
+        "should update in-place, not add duplicate"
+    );
     assert_eq!(s.game_path("cyberpunk2077"), Some(&PathBuf::from("/new")));
 }
 
@@ -115,14 +125,17 @@ fn set_game_path_independent_games() {
     s.set_game_path("cyberpunk2077", PathBuf::from("/cp2077"));
     assert_eq!(s.game_paths.len(), 2);
     assert_eq!(s.game_path("skyrim-se"), Some(&PathBuf::from("/skyrim")));
-    assert_eq!(s.game_path("cyberpunk2077"), Some(&PathBuf::from("/cp2077")));
+    assert_eq!(
+        s.game_path("cyberpunk2077"),
+        Some(&PathBuf::from("/cp2077"))
+    );
 }
 
 // ---------------------------------------------------------------------------
 // UI init flow: profile listing -> auto-detect game
 // ---------------------------------------------------------------------------
 
-/// Simulates the exact logic in Modde::new() for selecting a game from profiles.
+/// Simulates the exact logic in `Modde::new()` for selecting a game from profiles.
 fn simulate_ui_init(
     pm: &ProfileManager,
     settings: &mut AppSettings,
@@ -131,11 +144,11 @@ fn simulate_ui_init(
     let mut selected_game = settings.selected_game.clone();
 
     // Auto-detect: if no game selected but profiles exist, pick first profile's game
-    if selected_game.is_none() {
-        if let Some(first) = profiles.first() {
-            selected_game = Some(first.game_id.to_string());
-            settings.selected_game = Some(first.game_id.to_string());
-        }
+    if selected_game.is_none()
+        && let Some(first) = profiles.first()
+    {
+        selected_game = Some(first.game_id.to_string());
+        settings.selected_game = Some(first.game_id.to_string());
     }
 
     (profiles, selected_game)

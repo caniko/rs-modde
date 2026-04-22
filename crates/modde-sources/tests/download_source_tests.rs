@@ -1,6 +1,6 @@
 //! Unit tests for download source implementations.
 //!
-//! Tests can_handle() dispatch, resolve() output, and DownloadHandle construction
+//! Tests `can_handle()` dispatch, `resolve()` output, and `DownloadHandle` construction
 //! without requiring network access.
 
 use modde_core::GameId;
@@ -331,7 +331,9 @@ fn test_exactly_one_source_handles_each_directive_type() {
     let sources: Vec<AnySource> = vec![
         AnySource::Direct(modde_sources::direct::DirectSource::new(client.clone())),
         AnySource::GitHub(modde_sources::github::GitHubSource::new(client.clone())),
-        AnySource::GoogleDrive(modde_sources::gdrive::GoogleDriveSource::new(client.clone())),
+        AnySource::GoogleDrive(modde_sources::gdrive::GoogleDriveSource::new(
+            client.clone(),
+        )),
         AnySource::Mega(modde_sources::mega::MegaSource::new(client.clone())),
     ];
 
@@ -363,8 +365,7 @@ fn test_exactly_one_source_handles_each_directive_type() {
         assert_eq!(
             handlers.len(),
             1,
-            "exactly one source should handle {:?}",
-            directive
+            "exactly one source should handle {directive:?}"
         );
     }
 }
@@ -376,7 +377,9 @@ fn test_no_source_handles_nexus_without_nexus_source() {
     let sources: Vec<AnySource> = vec![
         AnySource::Direct(modde_sources::direct::DirectSource::new(client.clone())),
         AnySource::GitHub(modde_sources::github::GitHubSource::new(client.clone())),
-        AnySource::GoogleDrive(modde_sources::gdrive::GoogleDriveSource::new(client.clone())),
+        AnySource::GoogleDrive(modde_sources::gdrive::GoogleDriveSource::new(
+            client.clone(),
+        )),
         AnySource::Mega(modde_sources::mega::MegaSource::new(client.clone())),
     ];
 

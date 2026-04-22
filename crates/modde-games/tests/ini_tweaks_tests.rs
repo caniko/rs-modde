@@ -1,6 +1,6 @@
 use std::fs;
 
-use modde_games::bethesda::ini_tweaks::{apply_ini_tweaks, scan_mod_ini_tweaks, IniTweak};
+use modde_games::bethesda::ini_tweaks::{IniTweak, apply_ini_tweaks, scan_mod_ini_tweaks};
 use tempfile::TempDir;
 
 #[test]
@@ -50,7 +50,11 @@ iSize H=1080
 
     let display: Vec<_> = tweaks.iter().filter(|t| t.section == "Display").collect();
     assert_eq!(display.len(), 2);
-    assert!(display.iter().any(|t| t.key == "iSize W" && t.value == "1920"));
+    assert!(
+        display
+            .iter()
+            .any(|t| t.key == "iSize W" && t.value == "1920")
+    );
 }
 
 #[test]
@@ -77,8 +81,8 @@ fn test_apply_tweaks() {
 
 #[test]
 fn test_scan_nonexistent_dir() {
-    let tweaks = scan_mod_ini_tweaks("ghost", std::path::Path::new("/tmp/does_not_exist_xyz"))
-        .unwrap();
+    let tweaks =
+        scan_mod_ini_tweaks("ghost", std::path::Path::new("/tmp/does_not_exist_xyz")).unwrap();
     assert!(tweaks.is_empty());
 }
 

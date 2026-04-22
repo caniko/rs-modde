@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail};
 use reqwest::Client;
 use serde::Deserialize;
-use tracing::{info, debug, warn};
+use tracing::{debug, info, warn};
 
 const VALIDATE_URL: &str = "https://api.nexusmods.com/v1/users/validate.json";
 const KEYRING_SERVICE: &str = "modde";
@@ -76,10 +76,10 @@ pub fn load_api_key() -> Result<String> {
     }
 
     // 1. Try environment variable first
-    if let Ok(key) = std::env::var("NEXUS_API_KEY") {
-        if !key.is_empty() {
-            return Ok(key);
-        }
+    if let Ok(key) = std::env::var("NEXUS_API_KEY")
+        && !key.is_empty()
+    {
+        return Ok(key);
     }
 
     // 2. Try system keyring

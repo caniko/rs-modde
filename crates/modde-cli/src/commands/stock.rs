@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
 use tracing::info;
 
+use modde_core::ModdeDb;
 use modde_core::fs::count_files;
 use modde_core::stock::StockGameManager;
-use modde_core::ModdeDb;
 
 use crate::StockAction;
 use modde_games::resolve_game_plugin;
@@ -17,15 +17,14 @@ pub async fn handle(action: StockAction) -> Result<()> {
             info!(%game_id, "creating stock snapshot");
 
             // Detect game install using GamePlugin
-            let game = resolve_game_plugin(&game_id)
-                .context("unsupported game")?;
-            let install_path = game
-                .detect_install()
-                .ok_or_else(|| anyhow::anyhow!(
+            let game = resolve_game_plugin(&game_id).context("unsupported game")?;
+            let install_path = game.detect_install().ok_or_else(|| {
+                anyhow::anyhow!(
                     "could not detect install path for game '{}' ({})",
                     game_id,
                     game.display_name()
-                ))?;
+                )
+            })?;
 
             info!(
                 game = game.display_name(),

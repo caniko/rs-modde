@@ -9,7 +9,7 @@ use super::api::NexusApi;
 /// Information about a mod that has an available update on Nexus.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModUpdate {
-    /// The mod_id string used in the profile (local identifier).
+    /// The `mod_id` string used in the profile (local identifier).
     pub mod_id: String,
     /// Nexus mod ID.
     pub nexus_mod_id: u64,
@@ -49,19 +49,24 @@ pub async fn check_updates(
     // Group tracked mods by game domain
     let mut by_domain: HashMap<&str, Vec<&TrackedMod>> = HashMap::new();
     for t in tracked {
-        by_domain.entry(t.nexus_game_domain.as_str()).or_default().push(t);
+        by_domain
+            .entry(t.nexus_game_domain.as_str())
+            .or_default()
+            .push(t);
     }
 
     let mut updates = Vec::new();
 
     for (domain, domain_mods) in &by_domain {
-        debug!(domain, mod_count = domain_mods.len(), "checking updates for domain");
+        debug!(
+            domain,
+            mod_count = domain_mods.len(),
+            "checking updates for domain"
+        );
 
         // Build a lookup: nexus_mod_id -> TrackedMod
-        let lookup: HashMap<u64, &&TrackedMod> = domain_mods
-            .iter()
-            .map(|m| (m.nexus_mod_id, m))
-            .collect();
+        let lookup: HashMap<u64, &&TrackedMod> =
+            domain_mods.iter().map(|m| (m.nexus_mod_id, m)).collect();
 
         // One API call per domain
         let updated = api.updated_mods(domain, period).await?;
@@ -125,7 +130,10 @@ mod tests {
 
         let mut by_domain: HashMap<&str, Vec<&TrackedMod>> = HashMap::new();
         for t in &tracked {
-            by_domain.entry(t.nexus_game_domain.as_str()).or_default().push(t);
+            by_domain
+                .entry(t.nexus_game_domain.as_str())
+                .or_default()
+                .push(t);
         }
 
         assert_eq!(by_domain.len(), 2);

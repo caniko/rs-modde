@@ -10,10 +10,7 @@ fn build_test_bsa(folders: &[(&str, &[(&str, u32)])]) -> Vec<u8> {
     let folder_count = folders.len() as u32;
     let file_count: u32 = folders.iter().map(|(_, files)| files.len() as u32).sum();
 
-    let total_folder_name_len: u32 = folders
-        .iter()
-        .map(|(name, _)| name.len() as u32 + 2)
-        .sum();
+    let total_folder_name_len: u32 = folders.iter().map(|(name, _)| name.len() as u32 + 2).sum();
 
     let _total_file_name_len: u32 = folders
         .iter()
@@ -76,7 +73,7 @@ fn build_test_ba2(files: &[(&str, u32)]) -> Vec<u8> {
     buf.extend_from_slice(&file_count.to_le_bytes());
 
     let header_size: u64 = 24;
-    let records_size: u64 = file_count as u64 * 36;
+    let records_size: u64 = u64::from(file_count) * 36;
     let name_table_offset = header_size + records_size;
     buf.extend_from_slice(&name_table_offset.to_le_bytes());
 

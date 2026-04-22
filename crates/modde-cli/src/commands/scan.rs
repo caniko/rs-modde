@@ -3,12 +3,12 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
+use modde_core::GameId;
 use modde_core::manifest::wabbajack::WabbajackManifest;
 use modde_core::profile::{EnabledMod, Profile, ProfileManager, ProfileSource};
 use modde_core::scanner::{
     apply_wabbajack_lock, manifest_match_to_enabled, match_wabbajack_manifest,
 };
-use modde_core::GameId;
 use modde_games::ScanContext;
 
 pub fn handle(
@@ -27,8 +27,12 @@ pub fn handle(
         anyhow::bail!("--prune-duplicates requires --import-to");
     }
     // Resolve game plugin and scanner.
-    let game_plugin = modde_games::resolve_game_plugin(&game)
-        .ok_or_else(|| anyhow::anyhow!("unsupported game '{game}'. Supported: {}", modde_games::SUPPORTED_GAME_IDS.join(", ")))?;
+    let game_plugin = modde_games::resolve_game_plugin(&game).ok_or_else(|| {
+        anyhow::anyhow!(
+            "unsupported game '{game}'. Supported: {}",
+            modde_games::SUPPORTED_GAME_IDS.join(", ")
+        )
+    })?;
 
     let scanner = modde_games::resolve_mod_scanner(&game)
         .ok_or_else(|| anyhow::anyhow!("no mod scanner available for game '{game}'"))?;
@@ -39,12 +43,16 @@ pub fn handle(
             anyhow::ensure!(d.is_dir(), "game directory does not exist: {}", d.display());
             d
         }
-        None => game_plugin
-            .detect_install()
-            .ok_or_else(|| anyhow::anyhow!("could not auto-detect install for '{game}'. Use --game-dir"))?,
+        None => game_plugin.detect_install().ok_or_else(|| {
+            anyhow::anyhow!("could not auto-detect install for '{game}'. Use --game-dir")
+        })?,
     };
 
-    println!("Scanning: {} at {}", game_plugin.display_name(), install_dir.display());
+    println!(
+        "Scanning: {} at {}",
+        game_plugin.display_name(),
+        install_dir.display()
+    );
     println!("Scan directories: {:?}", scanner.scan_directories());
 
     // Build case-insensitive file index of the entire game directory.
@@ -66,7 +74,9 @@ pub fn handle(
 
     if let Some(manifest_path) = &manifest {
         let wj_manifest = modde_sources::wabbajack::manifest::parse_wabbajack_file(manifest_path)
-            .with_context(|| format!("failed to parse manifest: {}", manifest_path.display()))?;
+            .with_context(|| {
+            format!("failed to parse manifest: {}", manifest_path.display())
+        })?;
 
         println!(
             "\nManifest: {} by {} ({} archives, {} directives)",
@@ -86,8 +96,8 @@ pub fn handle(
         );
 
         if !matches.is_empty() {
-            println!("\n  {:>5}  {:>6}  {}", "Files", "Conf%", "Mod Name");
-            println!("  {:>5}  {:>6}  {}", "-----", "-----", "--------");
+            println!("\n  {:>5}  {:>6}  Mod Name", "Files", "Conf%");
+            println!("  {:>5}  {:>6}  --------", "-----", "-----");
             for m in &matches {
                 println!(
                     "  {:>3}/{:<3} {:>5.0}%  {}",
@@ -117,8 +127,11 @@ pub fn handle(
     println!("\nFilesystem scan: {} mods discovered", fs_mods.len());
 
     if !fs_mods.is_empty() {
-        println!("\n  {:>5}  {:>6}  {:12}  {}", "Files", "Conf%", "Location", "Name");
-        println!("  {:>5}  {:>6}  {:12}  {}", "-----", "-----", "--------", "----");
+        println!(
+            "\n  {:>5}  {:>6}  {:12}  Name",
+            "Files", "Conf%", "Location"
+        );
+        println!("  {:>5}  {:>6}  {:12}  ----", "-----", "-----", "--------");
         for m in &fs_mods {
             let location = match &m.source {
                 modde_games::ModSource::Filesystem { location } => location.as_str(),
@@ -183,9 +196,9 @@ pub fn handle(
                 manifest_covered_dirs.contains(&root)
             } else {
                 !m.files.is_empty()
-                    && m.files.iter().all(|f| {
-                        manifest_covered_files.contains(&f.rel_path.to_lowercase())
-                    })
+                    && m.files
+                        .iter()
+                        .all(|f| manifest_covered_files.contains(&f.rel_path.to_lowercase()))
             };
             if covered {
                 fs_skipped += 1;
@@ -213,20 +226,19 @@ pub fn handle(
         let pm = ProfileManager::open().context("failed to open profile database")?;
 
         // Load existing profile or create a new one.
-        let mut profile = match pm.load(profile_name, Some(&game)) {
-            Ok(p) => p,
-            Err(_) => {
-                println!("Creating new profile '{profile_name}' for game '{game}'");
-                Profile {
-                    id: None,
-                    name: profile_name.clone(),
-                    game_id: GameId::from(game.clone()),
-                    source: ProfileSource::Manual,
-                    mods: Vec::new(),
-                    overrides: ProfileManager::default_overrides(profile_name),
-                    load_order_rules: smallvec::SmallVec::new(),
-                    load_order_lock: None,
-                }
+        let mut profile = if let Ok(p) = pm.load(profile_name, Some(&game)) {
+            p
+        } else {
+            println!("Creating new profile '{profile_name}' for game '{game}'");
+            Profile {
+                id: None,
+                name: profile_name.clone(),
+                game_id: GameId::from(game.clone()),
+                source: ProfileSource::Manual,
+                mods: Vec::new(),
+                overrides: ProfileManager::default_overrides(profile_name),
+                load_order_rules: smallvec::SmallVec::new(),
+                load_order_lock: None,
             }
         };
 
@@ -243,26 +255,30 @@ pub fn handle(
                 // validated at entry; unreachable
                 unreachable!("prune_duplicates without manifest should have bailed earlier");
             };
-            let report = modde_core::scanner::detect_stale_duplicates(
-                &profile,
-                wj_manifest,
-                |mod_id| scanner.mod_id_footprint(mod_id),
-            );
-            if !report.leaked.is_empty() {
-                let leaked_set: HashSet<&str> =
-                    report.leaked.iter().map(|s| s.as_str()).collect();
+            let report =
+                modde_core::scanner::detect_stale_duplicates(&profile, wj_manifest, |mod_id| {
+                    scanner.mod_id_footprint(mod_id)
+                });
+            if report.leaked.is_empty() {
+                println!(
+                    "\nNo leaked duplicates found in '{profile_name}' \
+                     ({} genuine fs-scanner additions untouched)",
+                    report.genuine.len()
+                );
+            } else {
+                let leaked_set: HashSet<&str> = report
+                    .leaked
+                    .iter()
+                    .map(std::string::String::as_str)
+                    .collect();
                 let before = profile.mods.len();
-                profile.mods.retain(|m| !leaked_set.contains(m.mod_id.as_str()));
+                profile
+                    .mods
+                    .retain(|m| !leaked_set.contains(m.mod_id.as_str()));
                 let removed = before - profile.mods.len();
                 println!(
                     "\nPruned {removed} leaked duplicate(s) from '{profile_name}' \
                      (kept {} genuine addition(s))",
-                    report.genuine.len()
-                );
-            } else {
-                println!(
-                    "\nNo leaked duplicates found in '{profile_name}' \
-                     ({} genuine fs-scanner additions untouched)",
                     report.genuine.len()
                 );
             }
@@ -271,8 +287,7 @@ pub fn handle(
         // Merge: add any mods from `all_mods` that the profile doesn't
         // already track. Existing entries keep their per-mod state (notes,
         // category, per-mod lock, etc.) — we only bring in new mod_ids.
-        let existing_ids: HashSet<String> =
-            profile.mods.iter().map(|m| m.mod_id.clone()).collect();
+        let existing_ids: HashSet<String> = profile.mods.iter().map(|m| m.mod_id.clone()).collect();
         let new_mods: Vec<EnabledMod> = all_mods
             .into_iter()
             .filter(|m| !existing_ids.contains(&m.mod_id))
@@ -293,7 +308,11 @@ pub fn handle(
             println!(
                 "\nApplied Wabbajack load order lock to '{profile_name}' (manifest_hash={}){}",
                 report.manifest_hash,
-                if report.replaced_existing_lock { " — overwrote existing lock" } else { "" }
+                if report.replaced_existing_lock {
+                    " — overwrote existing lock"
+                } else {
+                    ""
+                }
             );
             println!(
                 "  Reordered {} mod(s) by manifest directive order ({} unmatched left in place).",
@@ -303,13 +322,13 @@ pub fn handle(
             // Stash the source .wabbajack file in the content-addressed cache
             // so `lock-info` can find it later. Log-and-continue on failure —
             // the lock itself is already applied.
-            if let Some(ref manifest_path) = manifest {
-                if let Err(e) = modde_core::manifest::wabbajack::cache_wabbajack_file(
+            if let Some(ref manifest_path) = manifest
+                && let Err(e) = modde_core::manifest::wabbajack::cache_wabbajack_file(
                     manifest_path,
                     &report.manifest_hash,
-                ) {
-                    tracing::warn!("failed to cache wabbajack source file: {e:#}");
-                }
+                )
+            {
+                tracing::warn!("failed to cache wabbajack source file: {e:#}");
             }
         }
 
@@ -317,8 +336,7 @@ pub fn handle(
             .context("failed to save profile")?;
 
         println!(
-            "\nImported {} new mods into profile '{profile_name}' (had {} tracked before)",
-            added, prior,
+            "\nImported {added} new mods into profile '{profile_name}' (had {prior} tracked before)",
         );
     } else if !dry_run {
         println!("\nUse --import-to <profile> to save discovered mods to a profile.");
@@ -350,7 +368,7 @@ fn dir_prefixes(path: &str) -> Vec<String> {
 /// The returned path is lowercased, uses forward slashes, and ends with a
 /// trailing `/` so it can be compared against `dir_prefixes` output.
 ///
-/// For a directory-based mod (CET, REDscript, REDmod, ...) with files
+/// For a directory-based mod (CET, `REDscript`, `REDmod`, ...) with files
 /// like `bin/x64/plugins/cyber_engine_tweaks/mods/ImmersiveHealing/init.lua`
 /// and `.../ImmersiveHealing/settings.json`, this returns
 /// `"bin/x64/plugins/cyber_engine_tweaks/mods/immersivehealing/"` — the
@@ -393,11 +411,9 @@ fn build_file_index(root: &std::path::Path) -> HashSet<String> {
             let path = entry.path();
             if path.is_dir() {
                 stack.push(path);
-            } else {
-                if let Ok(rel) = path.strip_prefix(root) {
-                    let normalized = rel.to_string_lossy().replace('\\', "/").to_lowercase();
-                    files.insert(normalized);
-                }
+            } else if let Ok(rel) = path.strip_prefix(root) {
+                let normalized = rel.to_string_lossy().replace('\\', "/").to_lowercase();
+                files.insert(normalized);
             }
         }
     }

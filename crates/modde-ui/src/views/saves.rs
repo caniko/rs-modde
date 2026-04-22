@@ -1,5 +1,5 @@
 use iced::widget::{button, column, container, mouse_area, row, scrollable, text};
-use iced::{color, Alignment, Element, Length};
+use iced::{Alignment, Element, Length, color};
 
 use modde_core::save::{SaveFingerprint, SaveSnapshot};
 
@@ -29,18 +29,18 @@ pub fn view<'a>(
     });
 
     // Show current fingerprint
-    if let Some(fp) = current_fingerprint {
-        if !fp.is_empty() {
-            profile_info = profile_info.push(
-                text(format!(
-                    "Save-breaking mods: {} [{}]",
-                    fp.mod_ids.len(),
-                    fp.short_hash()
-                ))
-                .size(12)
-                .color(color!(0x888888)),
-            );
-        }
+    if let Some(fp) = current_fingerprint
+        && !fp.is_empty()
+    {
+        profile_info = profile_info.push(
+            text(format!(
+                "Save-breaking mods: {} [{}]",
+                fp.mod_ids.len(),
+                fp.short_hash()
+            ))
+            .size(12)
+            .color(color!(0x888888)),
+        );
     }
 
     let header = row![
@@ -75,42 +75,54 @@ pub fn view<'a>(
             let display = snap.display_title();
             let save_text = text(display).size(13).width(Length::Fill);
 
-            let file_count = text(format!("{}", snap.file_count)).size(12).width(Length::Fixed(50.0));
+            let file_count = text(format!("{}", snap.file_count))
+                .size(12)
+                .width(Length::Fixed(50.0));
 
             // Fingerprint indicator
             let fp_indicator: Element<Message> = match &snap.fingerprint {
                 Some(fp) if current_fingerprint.is_some() => {
                     let check = snap.check_compatibility(current_fingerprint.unwrap());
                     match check {
-                        modde_core::save::FingerprintCheck::Compatible => {
-                            text(fp.short_hash()).size(11).color(color!(0x44AA44)).width(Length::Fixed(60.0)).into()
-                        }
-                        modde_core::save::FingerprintCheck::Mismatch { ref removed, ref added } => {
+                        modde_core::save::FingerprintCheck::Compatible => text(fp.short_hash())
+                            .size(11)
+                            .color(color!(0x44AA44))
+                            .width(Length::Fixed(60.0))
+                            .into(),
+                        modde_core::save::FingerprintCheck::Mismatch {
+                            ref removed,
+                            ref added,
+                        } => {
                             let delta = format!("-{}/+{}", removed.len(), added.len());
-                            text(delta).size(11).color(color!(0xFF6644)).width(Length::Fixed(60.0)).into()
+                            text(delta)
+                                .size(11)
+                                .color(color!(0xFF6644))
+                                .width(Length::Fixed(60.0))
+                                .into()
                         }
-                        modde_core::save::FingerprintCheck::NoFingerprint => {
-                            text("—").size(11).color(color!(0x666666)).width(Length::Fixed(60.0)).into()
-                        }
+                        modde_core::save::FingerprintCheck::NoFingerprint => text("—")
+                            .size(11)
+                            .color(color!(0x666666))
+                            .width(Length::Fixed(60.0))
+                            .into(),
                     }
                 }
-                Some(fp) => {
-                    text(fp.short_hash()).size(11).color(color!(0x888888)).width(Length::Fixed(60.0)).into()
-                }
-                None => {
-                    text("—").size(11).color(color!(0x666666)).width(Length::Fixed(60.0)).into()
-                }
+                Some(fp) => text(fp.short_hash())
+                    .size(11)
+                    .color(color!(0x888888))
+                    .width(Length::Fixed(60.0))
+                    .into(),
+                None => text("—")
+                    .size(11)
+                    .color(color!(0x666666))
+                    .width(Length::Fixed(60.0))
+                    .into(),
             };
 
-            let snapshot_row = row![
-                date_text,
-                save_text,
-                file_count,
-                fp_indicator,
-            ]
-            .spacing(8)
-            .align_y(Alignment::Center)
-            .padding([4, 8]);
+            let snapshot_row = row![date_text, save_text, file_count, fp_indicator,]
+                .spacing(8)
+                .align_y(Alignment::Center)
+                .padding([4, 8]);
 
             // Wrap in a container with background highlight for selected row
             let row_container: Element<Message> = if is_selected {
@@ -119,15 +131,13 @@ pub fn view<'a>(
                     .width(Length::Fill)
                     .into()
             } else {
-                container(snapshot_row)
-                    .width(Length::Fill)
-                    .into()
+                container(snapshot_row).width(Length::Fill).into()
             };
 
             // Make row clickable
             let commit_id = snap.id.clone();
-            let clickable = mouse_area(row_container)
-                .on_press(Message::SelectSaveSnapshot(commit_id));
+            let clickable =
+                mouse_area(row_container).on_press(Message::SelectSaveSnapshot(commit_id));
 
             col.push(clickable)
         });

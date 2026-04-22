@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use smallvec::SmallVec;
 
 use crate::traits::{
-    classify_mod_by_content, ContentCategory, GamePlugin, ModClassifyConfig, ModSafety,
+    ContentCategory, GamePlugin, ModClassifyConfig, ModSafety, classify_mod_by_content,
 };
 
 /// Data-driven UE4 game plugin.
@@ -30,6 +30,7 @@ pub struct Ue4Game {
 }
 
 impl Ue4Game {
+    #[must_use]
     pub const fn new(
         game_id: &'static str,
         display_name: &'static str,
@@ -47,13 +48,12 @@ impl Ue4Game {
     }
 
     /// `<install>/<ProjectName>/Content/Paks`
+    #[must_use]
     pub fn paks_root(&self, install: &Path) -> PathBuf {
-        install
-            .join(self.project_name)
-            .join("Content")
-            .join("Paks")
+        install.join(self.project_name).join("Content").join("Paks")
     }
 
+    #[must_use]
     pub fn project_name(&self) -> &'static str {
         self.project_name
     }
@@ -136,7 +136,7 @@ impl GamePlugin for Ue4Game {
             return out;
         };
         for entry in entries.flatten() {
-            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            if !entry.file_type().is_ok_and(|t| t.is_dir()) {
                 continue;
             }
             let Ok(inner) = std::fs::read_dir(entry.path()) else {
@@ -144,10 +144,11 @@ impl GamePlugin for Ue4Game {
             };
             for f in inner.flatten() {
                 let name = f.file_name().to_string_lossy().to_lowercase();
-                if let Some(stem) = name.strip_suffix(".dll") {
-                    if UE4_PROXY_DLLS.contains(&stem) && !out.iter().any(|x| x == stem) {
-                        out.push(stem.to_string());
-                    }
+                if let Some(stem) = name.strip_suffix(".dll")
+                    && UE4_PROXY_DLLS.contains(&stem)
+                    && !out.iter().any(|x| x == stem)
+                {
+                    out.push(stem.to_string());
                 }
             }
         }

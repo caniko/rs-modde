@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use modde_core::GameId;
 use modde_core::profile::{EnabledMod, Profile, ProfileSource};
-use modde_core::resolver::{resolve, ConflictMap, LoadOrderRule, ModId};
+use modde_core::resolver::{ConflictMap, LoadOrderRule, ModId, resolve};
 
 fn make_profile(mods: Vec<(&str, bool)>, rules: smallvec::SmallVec<[LoadOrderRule; 4]>) -> Profile {
     Profile {
@@ -17,7 +17,8 @@ fn make_profile(mods: Vec<(&str, bool)>, rules: smallvec::SmallVec<[LoadOrderRul
                 mod_id: id.to_string(),
                 enabled,
                 version: None,
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             })
             .collect(),
         overrides: PathBuf::from("/tmp/overrides"),
@@ -197,10 +198,7 @@ fn test_resolve_many_mods_no_rules() {
     // All mods should appear
     for i in 0..100 {
         let name = ModId::from(format!("mod_{i}").as_str());
-        assert!(
-            result.order.contains(&name),
-            "mod_{i} not found in order"
-        );
+        assert!(result.order.contains(&name), "mod_{i} not found in order");
     }
 }
 
@@ -216,7 +214,10 @@ fn test_conflict_map_no_conflicts() {
 fn test_conflict_map_many_providers() {
     let mut cm = ConflictMap::default();
     for i in 0..5 {
-        cm.register("shared_file.dds".to_string(), ModId::from(format!("mod_{i}").as_str()));
+        cm.register(
+            "shared_file.dds".to_string(),
+            ModId::from(format!("mod_{i}").as_str()),
+        );
     }
     let conflicts = cm.conflicts();
     assert_eq!(conflicts.len(), 1);

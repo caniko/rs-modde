@@ -17,6 +17,7 @@ pub struct DirectSource {
 }
 
 impl DirectSource {
+    #[must_use]
     pub fn new(client: Client) -> Self {
         Self { client }
     }
@@ -68,7 +69,7 @@ async fn download_with_resume(
     dest: &Path,
     progress: &ProgressCallback,
 ) -> Result<()> {
-    let existing_len = tokio::fs::metadata(dest).await.map(|m| m.len()).unwrap_or(0);
+    let existing_len = tokio::fs::metadata(dest).await.map_or(0, |m| m.len());
 
     let mut req = client.get(&handle.url);
     for (k, v) in &handle.headers {
@@ -93,7 +94,10 @@ async fn download_with_resume(
         (file, existing_len)
     } else {
         if existing_len > 0 {
-            debug!("server returned {}, restarting download from scratch", status);
+            debug!(
+                "server returned {}, restarting download from scratch",
+                status
+            );
         }
         let file = tokio::fs::File::create(dest).await?;
         (file, 0u64)

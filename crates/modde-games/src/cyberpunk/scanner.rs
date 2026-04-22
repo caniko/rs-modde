@@ -2,8 +2,10 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::traits::{DiscoveredFile, DiscoveredMod, ModScanner, ModSource, ScanContext, walk_files_relative};
 use super::manifest::RedModManifest;
+use crate::traits::{
+    DiscoveredFile, DiscoveredMod, ModScanner, ModSource, ScanContext, walk_files_relative,
+};
 
 pub struct CyberpunkScanner;
 
@@ -62,14 +64,14 @@ impl ModScanner for CyberpunkScanner {
                 name.to_lowercase()
             )))
         } else if let Some(name) = mod_id.strip_prefix("redmod/") {
-            Some(ModFootprint::Directory(format!("mods/{}/", name.to_lowercase())))
-        } else if let Some(stem) = mod_id.strip_prefix("archive/") {
-            Some(ModFootprint::File(format!(
-                "archive/pc/mod/{}.archive",
-                stem.to_lowercase()
+            Some(ModFootprint::Directory(format!(
+                "mods/{}/",
+                name.to_lowercase()
             )))
         } else {
-            None
+            mod_id.strip_prefix("archive/").map(|stem| {
+                ModFootprint::File(format!("archive/pc/mod/{}.archive", stem.to_lowercase()))
+            })
         }
     }
 }
@@ -107,7 +109,7 @@ fn scan_cet_mods(install: &Path, out: &mut Vec<DiscoveredMod>) -> Result<()> {
     Ok(())
 }
 
-/// REDscript mods: each subdirectory of `r6/scripts/` is one mod.
+/// `REDscript` mods: each subdirectory of `r6/scripts/` is one mod.
 fn scan_redscript_mods(install: &Path, out: &mut Vec<DiscoveredMod>) -> Result<()> {
     let scripts_dir = install.join("r6/scripts");
     if !scripts_dir.is_dir() {
@@ -139,7 +141,7 @@ fn scan_redscript_mods(install: &Path, out: &mut Vec<DiscoveredMod>) -> Result<(
     Ok(())
 }
 
-/// TweakXL mods: each subdirectory of `r6/tweaks/` is one mod.
+/// `TweakXL` mods: each subdirectory of `r6/tweaks/` is one mod.
 fn scan_tweakxl_mods(install: &Path, out: &mut Vec<DiscoveredMod>) -> Result<()> {
     let tweaks_dir = install.join("r6/tweaks");
     if !tweaks_dir.is_dir() {
@@ -188,7 +190,7 @@ fn scan_archive_mods(install: &Path, out: &mut Vec<DiscoveredMod>) -> Result<()>
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("unknown");
-        let size = path.metadata().map(|m| m.len()).unwrap_or(0);
+        let size = path.metadata().map_or(0, |m| m.len());
         let rel = path
             .strip_prefix(install)
             .unwrap_or(&path)
@@ -199,7 +201,10 @@ fn scan_archive_mods(install: &Path, out: &mut Vec<DiscoveredMod>) -> Result<()>
             mod_id: format!("archive/{stem}"),
             display_name: stem.to_string(),
             version: None,
-            files: vec![DiscoveredFile { rel_path: rel, size }],
+            files: vec![DiscoveredFile {
+                rel_path: rel,
+                size,
+            }],
             source: ModSource::Filesystem {
                 location: "archive/pc/mod".into(),
             },
@@ -209,7 +214,7 @@ fn scan_archive_mods(install: &Path, out: &mut Vec<DiscoveredMod>) -> Result<()>
     Ok(())
 }
 
-/// REDmod mods: each subdirectory of `mods/` is one mod (parse `info.json`).
+/// `REDmod` mods: each subdirectory of `mods/` is one mod (parse `info.json`).
 fn scan_redmod_mods(install: &Path, out: &mut Vec<DiscoveredMod>) -> Result<()> {
     let mods_dir = install.join("mods");
     if !mods_dir.is_dir() {
@@ -225,7 +230,10 @@ fn scan_redmod_mods(install: &Path, out: &mut Vec<DiscoveredMod>) -> Result<()> 
         let info_json = entry.path().join("info.json");
 
         let (name, version) = if info_json.exists() {
-            match std::fs::read_to_string(&info_json).ok().and_then(|s| RedModManifest::parse(&s).ok()) {
+            match std::fs::read_to_string(&info_json)
+                .ok()
+                .and_then(|s| RedModManifest::parse(&s).ok())
+            {
                 Some(manifest) => (manifest.name, manifest.version),
                 None => (dir_name.clone(), None),
             }

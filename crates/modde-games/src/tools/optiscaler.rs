@@ -1,6 +1,6 @@
-//! OptiScaler — DLSS/FSR/XeSS upscaling and frame generation replacement.
+//! `OptiScaler` — DLSS/FSR/XeSS upscaling and frame generation replacement.
 //!
-//! OptiScaler hooks into a game via proxy DLLs (typically `dxgi.dll` or
+//! `OptiScaler` hooks into a game via proxy DLLs (typically `dxgi.dll` or
 //! `winmm.dll`). Some games need additional DLLs like `nvngx.dll`.
 //!
 //! This implementation also subsumes the old fgmod DLL restoration logic:
@@ -13,16 +13,14 @@ use anyhow::{Context, Result};
 use smallvec::{SmallVec, smallvec};
 use tracing::info;
 
-use super::{
-    AppliedFiles, GameTool, ToolAvailability, ToolCategory, ToolConfig,
-};
+use super::{AppliedFiles, GameTool, ToolAvailability, ToolCategory, ToolConfig};
 
 pub static OPTISCALER: OptiScaler = OptiScaler;
 
 pub struct OptiScaler;
 
 /// DLLs that fgmod deletes at launch time. If any of these are deployed by
-/// mods or by OptiScaler itself, the launch wrapper must restore them.
+/// mods or by `OptiScaler` itself, the launch wrapper must restore them.
 pub const FGMOD_DELETED_DLLS: &[&str] = &[
     "dxgi.dll",
     "winmm.dll",
@@ -96,9 +94,7 @@ impl GameTool for OptiScaler {
                 let fgmod = dirs::home_dir()?.join(".local/share/goverlay/fgmod");
                 fgmod.is_dir().then_some(fgmod)
             })
-            .context(
-                "optiscaler: 'source_dir' setting is required, or install fgmod/goverlay",
-            )?;
+            .context("optiscaler: 'source_dir' setting is required, or install fgmod/goverlay")?;
 
         let dll_name = config.get_str("dll_name").unwrap_or("dxgi.dll");
         let exe_subdir = config.get_str("exe_subdir").unwrap_or("");
@@ -164,10 +160,8 @@ impl GameTool for OptiScaler {
 ///
 /// Scans the staging mods directory for DLLs that fgmod will delete at launch,
 /// and returns `(source, destination)` pairs for the wrapper to restore them.
-pub fn fgmod_restore_commands(
-    game_dir: &Path,
-    staging_dir: &Path,
-) -> Vec<(String, String)> {
+#[must_use]
+pub fn fgmod_restore_commands(game_dir: &Path, staging_dir: &Path) -> Vec<(String, String)> {
     let exe_dir = game_dir.join("bin/x64");
     let mut restore = Vec::new();
 
@@ -177,7 +171,7 @@ pub fn fgmod_restore_commands(
     }
 
     for entry in std::fs::read_dir(&mods_dir).into_iter().flatten().flatten() {
-        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+        if !entry.file_type().is_ok_and(|t| t.is_dir()) {
             continue;
         }
 

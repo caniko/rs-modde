@@ -29,9 +29,9 @@ use crate::traits::{DetectedSave, SaveTracker};
 
 // ── Magic constants ───────────────────────────────────────────────────────────
 
-const MAGIC_SKYRIM_SE: &[u8] = b"TESV_SAVEGAME";   // 13 bytes
-const MAGIC_FALLOUT4:  &[u8] = b"FO4_SAVEGAME";    // 12 bytes
-const MAGIC_FALLOUT76: &[u8] = b"FO76_SAVEGAME";   // 13 bytes
+const MAGIC_SKYRIM_SE: &[u8] = b"TESV_SAVEGAME"; // 13 bytes
+const MAGIC_FALLOUT4: &[u8] = b"FO4_SAVEGAME"; // 12 bytes
+const MAGIC_FALLOUT76: &[u8] = b"FO76_SAVEGAME"; // 13 bytes
 
 // ── Public singletons ─────────────────────────────────────────────────────────
 
@@ -95,37 +95,33 @@ impl SaveTracker for BethesdaSaveTracker {
                 .unwrap_or(SystemTime::UNIX_EPOCH);
 
             // Parse header to extract save number and character name
-            let header = match read_save_header(&path, self.magic) {
-                Ok(h) => h,
-                Err(_) => {
-                    // Unreadable or wrong-game save — include without metadata
-                    let rel = path
-                        .file_name()
-                        .map(std::path::PathBuf::from)
-                        .unwrap_or_else(|| path.clone());
-                    saves.push(DetectedSave {
-                        rel_path: rel,
-                        category: classify_slot_name(
-                            path.file_stem().and_then(|s| s.to_str()).unwrap_or(""),
-                        ),
-                        label: None,
-                        modified,
-                    });
-                    continue;
-                }
+            let header = if let Ok(h) = read_save_header(&path, self.magic) {
+                h
+            } else {
+                // Unreadable or wrong-game save — include without metadata
+                let rel = path
+                    .file_name()
+                    .map_or_else(|| path.clone(), std::path::PathBuf::from);
+                saves.push(DetectedSave {
+                    rel_path: rel,
+                    category: classify_slot_name(
+                        path.file_stem().and_then(|s| s.to_str()).unwrap_or(""),
+                    ),
+                    label: None,
+                    modified,
+                });
+                continue;
             };
 
             let label = Some(format!(
                 "{} — Save {}",
                 header.player_name, header.save_number
             ));
-            let category = classify_slot_name(
-                path.file_stem().and_then(|s| s.to_str()).unwrap_or(""),
-            );
+            let category =
+                classify_slot_name(path.file_stem().and_then(|s| s.to_str()).unwrap_or(""));
             let rel = path
                 .file_name()
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| path.clone());
+                .map_or_else(|| path.clone(), std::path::PathBuf::from);
 
             saves.push(DetectedSave {
                 rel_path: rel,
@@ -174,7 +170,10 @@ impl SaveTracker for BethesdaSaveTracker {
                         } else {
                             let mut sorted = slots.clone();
                             sorted.sort_unstable();
-                            let slot_list: Vec<_> = sorted.iter().map(|n| n.to_string()).collect();
+                            let slot_list: Vec<_> = sorted
+                                .iter()
+                                .map(std::string::ToString::to_string)
+                                .collect();
                             format!("{name} (slots {})", slot_list.join(", "))
                         }
                     })
@@ -228,7 +227,10 @@ fn read_save_header(path: &Path, expected_magic: &[u8]) -> anyhow::Result<SaveHe
     file.read_exact(&mut name_buf)?;
     let player_name = String::from_utf8_lossy(&name_buf).into_owned();
 
-    Ok(SaveHeader { save_number, player_name })
+    Ok(SaveHeader {
+        save_number,
+        player_name,
+    })
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -286,7 +288,10 @@ mod tests {
 
     #[test]
     fn classify_manual_save() {
-        assert_eq!(classify_slot_name("Save1_DEADBEEF_Lydia_WhiterunWorld"), "manual");
+        assert_eq!(
+            classify_slot_name("Save1_DEADBEEF_Lydia_WhiterunWorld"),
+            "manual"
+        );
         assert_eq!(classify_slot_name("Save42"), "manual");
     }
 
@@ -318,12 +323,12 @@ mod tests {
     /// Build a minimal .ess file in memory.
     fn make_ess(magic: &[u8], save_number: u32, player_name: &str) -> Vec<u8> {
         let mut buf = Vec::new();
-        buf.extend_from_slice(magic);                          // magic
-        buf.extend_from_slice(&0u32.to_le_bytes());            // headerSize (ignored)
-        buf.extend_from_slice(&save_number.to_le_bytes());     // saveNumber
+        buf.extend_from_slice(magic); // magic
+        buf.extend_from_slice(&0u32.to_le_bytes()); // headerSize (ignored)
+        buf.extend_from_slice(&save_number.to_le_bytes()); // saveNumber
         let name_bytes = player_name.as_bytes();
         buf.extend_from_slice(&(name_bytes.len() as u16).to_le_bytes()); // nameLength
-        buf.extend_from_slice(name_bytes);                     // playerName
+        buf.extend_from_slice(name_bytes); // playerName
         buf
     }
 
@@ -403,15 +408,24 @@ mod tests {
 
         let saves = SKYRIM_SAVE_TRACKER.detect_saves(tmp.path()).unwrap();
         assert_eq!(saves.len(), 1);
-        assert!(saves[0].label.as_deref().unwrap_or("").contains("Dragonborn"));
+        assert!(
+            saves[0]
+                .label
+                .as_deref()
+                .unwrap_or("")
+                .contains("Dragonborn")
+        );
     }
 
     #[test]
     fn detect_saves_skips_bak_files() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("Save1.bak"), b"ignored").unwrap();
-        std::fs::write(tmp.path().join("Save1.ess"),
-            make_ess(MAGIC_SKYRIM_SE, 1, "Hero")).unwrap();
+        std::fs::write(
+            tmp.path().join("Save1.ess"),
+            make_ess(MAGIC_SKYRIM_SE, 1, "Hero"),
+        )
+        .unwrap();
 
         let saves = SKYRIM_SAVE_TRACKER.detect_saves(tmp.path()).unwrap();
         // .bak must be skipped; only .ess counts
@@ -426,8 +440,15 @@ mod tests {
         std::fs::write(&ess, make_ess(MAGIC_FALLOUT4, 5, "Sole")).unwrap();
 
         let saves = SKYRIM_SAVE_TRACKER.detect_saves(tmp.path()).unwrap();
-        assert_eq!(saves.len(), 1, "file should be captured even if magic mismatches");
-        assert!(saves[0].label.is_none(), "label should be None when header fails");
+        assert_eq!(
+            saves.len(),
+            1,
+            "file should be captured even if magic mismatches"
+        );
+        assert!(
+            saves[0].label.is_none(),
+            "label should be None when header fails"
+        );
     }
 
     #[test]

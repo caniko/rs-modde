@@ -52,13 +52,14 @@ pub fn patch_ini_content(content: &str, section: &str, key: &str, value: &str) -
             if !trimmed.is_empty() {
                 last_content_line = Some(i);
             }
-            if !trimmed.is_empty() && !trimmed.starts_with(';') && !trimmed.starts_with('#') {
-                if let Some((k, _)) = trimmed.split_once('=') {
-                    if k.trim() == key.trim() {
-                        *line = format!("{key}={value}");
-                        key_found = true;
-                    }
-                }
+            if !trimmed.is_empty()
+                && !trimmed.starts_with(';')
+                && !trimmed.starts_with('#')
+                && let Some((k, _)) = trimmed.split_once('=')
+                && k.trim() == key.trim()
+            {
+                *line = format!("{key}={value}");
+                key_found = true;
             }
         }
     }

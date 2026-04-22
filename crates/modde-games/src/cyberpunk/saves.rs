@@ -37,11 +37,15 @@ impl SaveTracker for CyberpunkSaveTracker {
             let name_str = name.to_string_lossy();
 
             // Only track save directories/files matching known prefixes
-            let Some((_, category)) = SAVE_PREFIXES.iter().find(|(prefix, _)| name_str.starts_with(prefix)) else {
+            let Some((_, category)) = SAVE_PREFIXES
+                .iter()
+                .find(|(prefix, _)| name_str.starts_with(prefix))
+            else {
                 continue;
             };
 
-            let modified = entry.metadata()
+            let modified = entry
+                .metadata()
                 .and_then(|m| m.modified())
                 .unwrap_or(SystemTime::UNIX_EPOCH);
 
@@ -69,7 +73,9 @@ impl SaveTracker for CyberpunkSaveTracker {
             0 => "capture: no new saves".into(),
             1 => {
                 let s = &saves[0];
-                let name = s.label.as_deref()
+                let name = s
+                    .label
+                    .as_deref()
                     .unwrap_or_else(|| s.rel_path.to_str().unwrap_or("unknown"));
                 format!("capture: {} [{}]", name, s.category)
             }
@@ -79,7 +85,8 @@ impl SaveTracker for CyberpunkSaveTracker {
                 for s in saves {
                     *cats.entry(&*s.category).or_insert(0u32) += 1;
                 }
-                let summary: Vec<String> = cats.into_iter()
+                let summary: Vec<String> = cats
+                    .into_iter()
                     .map(|(cat, count)| format!("{count} {cat}"))
                     .collect();
                 format!("capture: {} saves ({})", n, summary.join(", "))
@@ -90,21 +97,21 @@ impl SaveTracker for CyberpunkSaveTracker {
 
 /// Try to extract a human-readable label from save metadata.
 ///
-/// Cyberpunk saves with NamedSaves may have a metadata.9.json containing
+/// Cyberpunk saves with `NamedSaves` may have a metadata.9.json containing
 /// a custom name. Falls back to the directory name.
 fn extract_label(save_path: &Path, dir_name: &str) -> Option<String> {
     // Try NamedSaves metadata (metadata.9.json)
     let meta_path = save_path.join("metadata.9.json");
-    if meta_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&meta_path) {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(name) = json.get("customName").or_else(|| json.get("name")).and_then(|v| v.as_str()) {
-                    if !name.is_empty() {
-                        return Some(name.to_string());
-                    }
-                }
-            }
-        }
+    if meta_path.exists()
+        && let Ok(content) = std::fs::read_to_string(&meta_path)
+        && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+        && let Some(name) = json
+            .get("customName")
+            .or_else(|| json.get("name"))
+            .and_then(|v| v.as_str())
+        && !name.is_empty()
+    {
+        return Some(name.to_string());
     }
 
     // Fall back to directory name (strip prefix and numeric suffix for readability)

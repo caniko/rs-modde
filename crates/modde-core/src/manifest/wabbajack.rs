@@ -24,7 +24,9 @@ fn deserialize_b64_hash<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u6
         serde_json::Value::Number(n) => n
             .as_u64()
             .ok_or_else(|| serde::de::Error::custom("hash number not a valid u64")),
-        _ => Err(serde::de::Error::custom("expected string or number for hash")),
+        _ => Err(serde::de::Error::custom(
+            "expected string or number for hash",
+        )),
     }
 }
 
@@ -45,7 +47,9 @@ fn deserialize_headers<'de, D: Deserializer<'de>>(
         }
         serde_json::Value::Array(_) => Ok(HashMap::new()),
         serde_json::Value::Null => Ok(HashMap::new()),
-        _ => Err(serde::de::Error::custom("expected object or array for Headers")),
+        _ => Err(serde::de::Error::custom(
+            "expected object or array for Headers",
+        )),
     }
 }
 
@@ -56,6 +60,7 @@ fn serialize_b64_hash<S: Serializer>(val: &u64, serializer: S) -> Result<S::Ok, 
 }
 
 /// Parse a base64 hash string into u64 (for use outside serde).
+#[must_use]
 pub fn parse_b64_hash(s: &str) -> Option<u64> {
     let bytes = BASE64.decode(s).ok()?;
     if bytes.len() != 8 {
@@ -90,6 +95,7 @@ pub struct WabbajackManifest {
 /// `crates/modde-cli/src/commands/install.rs:361-367`. Extracted here so
 /// `scan --manifest` can produce bit-identical hashes during retroactive
 /// lock assignment.
+#[must_use]
 pub fn compute_manifest_hash(manifest: &WabbajackManifest) -> String {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -171,11 +177,7 @@ pub enum ArchiveState {
     HttpDownloader {
         #[serde(rename = "Url")]
         url: String,
-        #[serde(
-            default,
-            rename = "Headers",
-            deserialize_with = "deserialize_headers"
-        )]
+        #[serde(default, rename = "Headers", deserialize_with = "deserialize_headers")]
         headers: HashMap<String, String>,
     },
 }
@@ -267,6 +269,7 @@ pub enum DownloadDirective {
 
 impl DownloadDirective {
     /// Extract the expected hash from any directive variant.
+    #[must_use]
     pub fn hash(&self) -> u64 {
         match self {
             Self::Nexus { hash, .. }
@@ -282,17 +285,14 @@ impl DownloadDirective {
     /// Returns `Cow::Borrowed` for variants where the label can be
     /// computed without allocation (currently none, but future-proofed),
     /// and `Cow::Owned` when formatting is required.
+    #[must_use]
     pub fn display_name(&self) -> Cow<'_, str> {
         match self {
             Self::Nexus { mod_id, .. } => format!("nexus:{mod_id}").into(),
             Self::GitHub { repo, .. } => format!("github:{repo}").into(),
             Self::GoogleDrive { id, .. } => format!("gdrive:{id}").into(),
-            Self::Mega { url, .. } => {
-                format!("mega:{}", &url[..url.len().min(30)]).into()
-            }
-            Self::DirectURL { url, .. } => {
-                format!("http:{}", &url[..url.len().min(30)]).into()
-            }
+            Self::Mega { url, .. } => format!("mega:{}", &url[..url.len().min(30)]).into(),
+            Self::DirectURL { url, .. } => format!("http:{}", &url[..url.len().min(30)]).into(),
         }
     }
 }
@@ -336,18 +336,15 @@ pub struct BSAFileState {
     pub size: u64,
 }
 
-/// Parse a hash from a serde_json::Value — tries base64 string first, then numeric.
+/// Parse a hash from a `serde_json::Value` — tries base64 string first, then numeric.
 fn parse_hash_value(val: Option<&serde_json::Value>) -> u64 {
-    val.and_then(|v| {
-        v.as_str()
-            .and_then(parse_b64_hash)
-            .or_else(|| v.as_u64())
-    })
-    .unwrap_or(0)
+    val.and_then(|v| v.as_str().and_then(parse_b64_hash).or_else(|| v.as_u64()))
+        .unwrap_or(0)
 }
 
 impl WabbajackManifest {
     /// Extract typed download directives from archive entries.
+    #[must_use]
     pub fn download_directives(&self) -> Vec<DownloadDirective> {
         self.archives
             .iter()
@@ -395,6 +392,7 @@ impl WabbajackManifest {
     }
 
     /// Extract typed install directives from raw directives.
+    #[must_use]
     pub fn install_directives(&self) -> Vec<InstallDirective> {
         self.directives
             .iter()
@@ -416,9 +414,7 @@ impl WabbajackManifest {
                     })
                 }
                 RawDirective::InlineFile {
-                    source_data_id,
-                    to,
-                    ..
+                    source_data_id, to, ..
                 } => Some(InstallDirective::InlineFile {
                     source_data_id: source_data_id.clone(),
                     to: to.clone(),

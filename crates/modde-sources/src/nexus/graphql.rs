@@ -21,8 +21,8 @@
 
 use anyhow::{Context, Result, bail};
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 const GRAPHQL_URL: &str = "https://api.nexusmods.com/v2/graphql";
@@ -64,17 +64,17 @@ pub async fn post<T: DeserializeOwned>(
         .await
         .context("failed to decode GraphQL response")?;
 
-    if let Some(errors) = envelope.get("errors") {
-        if !errors.is_null() {
-            bail!("Nexus GraphQL errors: {errors}");
-        }
+    if let Some(errors) = envelope.get("errors")
+        && !errors.is_null()
+    {
+        bail!("Nexus GraphQL errors: {errors}");
     }
     let data = envelope
         .get("data")
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("GraphQL response missing `data` field"))?;
-    let decoded: T = serde_json::from_value(data)
-        .context("failed to decode GraphQL `data` payload")?;
+    let decoded: T =
+        serde_json::from_value(data).context("failed to decode GraphQL `data` payload")?;
     Ok(decoded)
 }
 
@@ -121,7 +121,7 @@ pub enum ModFeedKind {
     MonthlyTop,
 }
 
-const TRENDING_QUERY: &str = r#"
+const TRENDING_QUERY: &str = r"
 query TrendingMods($gameDomain: String!) {
   mods(
     filter: { gameDomain: { value: $gameDomain, op: EQUALS } }
@@ -143,9 +143,9 @@ query TrendingMods($gameDomain: String!) {
     }
   }
 }
-"#;
+";
 
-const SEARCH_QUERY: &str = r#"
+const SEARCH_QUERY: &str = r"
 query SearchMods($gameDomain: String!, $term: String!, $page: Int!) {
   mods(
     filter: {
@@ -170,7 +170,7 @@ query SearchMods($gameDomain: String!, $term: String!, $page: Int!) {
     }
   }
 }
-"#;
+";
 
 /// Fetch a trending / monthly-top browse feed. The `kind` drives which
 /// server-side sort is used.
@@ -212,7 +212,7 @@ pub async fn search_mods(
     let vars = serde_json::json!({
         "gameDomain": game_domain,
         "term": term,
-        "page": page as i64,
+        "page": i64::from(page),
     });
     let data: serde_json::Value = post(client, api_key, SEARCH_QUERY, vars).await?;
     decode_mod_list(&data)
@@ -235,7 +235,7 @@ fn decode_mod_list(data: &Value) -> Result<Vec<GqlModTile>> {
             let mut tile: GqlModTile = serde_json::from_value(raw.clone()).unwrap_or(GqlModTile {
                 mod_id: raw
                     .get("modId")
-                    .and_then(|v| v.as_u64())
+                    .and_then(serde_json::Value::as_u64)
                     .unwrap_or_default(),
                 name: raw
                     .get("name")
@@ -283,7 +283,7 @@ pub struct GqlCollectionTile {
     pub downloads: Option<u64>,
 }
 
-const COLLECTIONS_QUERY: &str = r#"
+const COLLECTIONS_QUERY: &str = r"
 query CollectionsFeed($gameDomain: String!, $term: String) {
   collections(
     filter: {
@@ -304,7 +304,7 @@ query CollectionsFeed($gameDomain: String!, $term: String) {
     }
   }
 }
-"#;
+";
 
 /// Fetch the collections browse/search feed. `term` is `None` for the
 /// default "top collections" listing and `Some(q)` for a user search.

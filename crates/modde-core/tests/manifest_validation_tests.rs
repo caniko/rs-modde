@@ -1,6 +1,6 @@
 //! Manifest validation and parsing edge case tests.
 //!
-//! Tests WabbajackManifest and CollectionManifest serialization,
+//! Tests `WabbajackManifest` and `CollectionManifest` serialization,
 //! directive extraction, and edge cases in JSON parsing.
 
 use std::collections::HashMap;
@@ -76,7 +76,10 @@ fn test_download_directives_all_types() {
                 size: 5000,
                 state: Some(ArchiveState::HttpDownloader {
                     url: "https://example.com/mod.zip".to_string(),
-                    headers: HashMap::from([("Authorization".to_string(), "Bearer xyz".to_string())]),
+                    headers: HashMap::from([(
+                        "Authorization".to_string(),
+                        "Bearer xyz".to_string(),
+                    )]),
                 }),
             },
         ],

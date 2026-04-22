@@ -48,16 +48,15 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
     let mut header = column![].spacing(5);
 
     // Module header image
-    if let Some(img_path) = installer.module_image_path() {
-        if let Some(ref source_dir) = app.fomod_source_dir {
-            if let Some(resolved) = installer.resolve_image(source_dir, img_path) {
-                header = header.push(
-                    image(image::Handle::from_path(resolved))
-                        .width(Length::Fill)
-                        .height(Length::Fixed(120.0)),
-                );
-            }
-        }
+    if let Some(img_path) = installer.module_image_path()
+        && let Some(ref source_dir) = app.fomod_source_dir
+        && let Some(resolved) = installer.resolve_image(source_dir, img_path)
+    {
+        header = header.push(
+            image(image::Handle::from_path(resolved))
+                .width(Length::Fill)
+                .height(Length::Fixed(120.0)),
+        );
     }
 
     header = header.push(text(module_name).size(24));
@@ -118,11 +117,8 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
                 GroupType::SelectAny => "Select any",
             };
 
-            let mut group_col = column![
-                text(&group.name).size(16),
-                text(group_type_label).size(12),
-            ]
-            .spacing(5);
+            let mut group_col =
+                column![text(&group.name).size(16), text(group_type_label).size(12),].spacing(5);
 
             let current_sel = app
                 .fomod_selections
@@ -158,17 +154,14 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
 
                 let plugin_widget: Element<'_, Message> = if is_radio {
                     let chosen: Option<usize> = current_sel.first().copied();
-                    radio(
-                        &label,
-                        plugin_idx,
-                        chosen,
-                        move |picked| Message::FOMODChoice {
+                    radio(&label, plugin_idx, chosen, move |picked| {
+                        Message::FOMODChoice {
                             step: step_idx,
                             group: group_idx,
                             option: picked,
                             selected: true,
-                        },
-                    )
+                        }
+                    })
                     .into()
                 } else if group.group_type == GroupType::SelectAll {
                     checkbox(true).label(label.clone()).into()
@@ -191,25 +184,22 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
 
                 // Plugin image
                 if let Some(img_path) = installer.plugin_image_path(step_idx, group_idx, plugin_idx)
+                    && let Some(ref source_dir) = app.fomod_source_dir
+                    && let Some(resolved) = installer.resolve_image(source_dir, img_path)
+                    && is_selected
                 {
-                    if let Some(ref source_dir) = app.fomod_source_dir {
-                        if let Some(resolved) = installer.resolve_image(source_dir, img_path) {
-                            if is_selected {
-                                option_col = option_col.push(
-                                    image(image::Handle::from_path(resolved))
-                                        .width(Length::Fixed(200.0))
-                                        .height(Length::Fixed(120.0)),
-                                );
-                            }
-                        }
-                    }
+                    option_col = option_col.push(
+                        image(image::Handle::from_path(resolved))
+                            .width(Length::Fixed(200.0))
+                            .height(Length::Fixed(120.0)),
+                    );
                 }
 
                 // Description
-                if let Some(ref desc) = plugin.description {
-                    if !desc.is_empty() {
-                        option_col = option_col.push(text(desc).size(11));
-                    }
+                if let Some(ref desc) = plugin.description
+                    && !desc.is_empty()
+                {
+                    option_col = option_col.push(text(desc).size(11));
                 }
 
                 // File preview count for selected plugins
@@ -227,11 +217,7 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
                 group_col = group_col.push(option_col);
             }
 
-            groups_col = groups_col.push(
-                container(group_col)
-                    .padding(10)
-                    .width(Length::Fill),
-            );
+            groups_col = groups_col.push(container(group_col).padding(10).width(Length::Fill));
         }
     }
 
@@ -251,24 +237,15 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
     // ── Navigation buttons ──
     let mut nav = row![].spacing(10);
 
-    nav = nav.push(
-        button(text("Cancel"))
-            .on_press(Message::FOMODCancel),
-    );
+    nav = nav.push(button(text("Cancel")).on_press(Message::FOMODCancel));
 
     // Undo button
     if app.fomod_can_undo {
-        nav = nav.push(
-            button(text("Undo"))
-                .on_press(Message::FOMODUndo),
-        );
+        nav = nav.push(button(text("Undo")).on_press(Message::FOMODUndo));
     }
 
     if app.fomod_wizard_pos > 0 {
-        nav = nav.push(
-            button(text("Back"))
-                .on_press(Message::FOMODBack),
-        );
+        nav = nav.push(button(text("Back")).on_press(Message::FOMODBack));
     }
 
     let is_last = app.fomod_is_last_step();
@@ -283,14 +260,10 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
     };
     nav = nav.push(next_btn);
 
-    let content = column![
-        header,
-        scrollable(groups_col).height(Length::Fill),
-        nav,
-    ]
-    .spacing(15)
-    .width(Length::Fill)
-    .height(Length::Fill);
+    let content = column![header, scrollable(groups_col).height(Length::Fill), nav,]
+        .spacing(15)
+        .width(Length::Fill)
+        .height(Length::Fill);
 
     container(content)
         .width(Length::Fill)

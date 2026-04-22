@@ -2,10 +2,10 @@ use smallvec::smallvec;
 use std::path::PathBuf;
 
 use modde_core::GameId;
+use modde_core::ModdeDb;
 use modde_core::error::CoreError;
 use modde_core::profile::{EnabledMod, Profile, ProfileManager, ProfileSource};
 use modde_core::resolver::{LoadOrderRule, ModId};
-use modde_core::ModdeDb;
 use pretty_assertions::assert_eq;
 
 // ---------------------------------------------------------------------------
@@ -30,12 +30,13 @@ fn simple_mod(id: &str, enabled: bool) -> EnabledMod {
         mod_id: id.to_string(),
         enabled,
         version: None,
-        fomod_config: None, ..Default::default()
+        fomod_config: None,
+        ..Default::default()
     }
 }
 
 /// Assert two profiles have identical content by comparing every field.
-/// The types intentionally do not derive PartialEq, so we compare field-by-field
+/// The types intentionally do not derive `PartialEq`, so we compare field-by-field
 /// via their TOML serialization which is deterministic.
 fn assert_profiles_eq(a: &Profile, b: &Profile) {
     let a_toml = toml::to_string_pretty(a).expect("serialize a");
@@ -218,7 +219,8 @@ fn test_profile_with_many_mods() {
             } else {
                 None
             },
-            fomod_config: None, ..Default::default()
+            fomod_config: None,
+            ..Default::default()
         })
         .collect();
 
@@ -243,13 +245,15 @@ fn test_profile_mod_with_version() {
                 mod_id: "skse".to_string(),
                 enabled: true,
                 version: Some("2.2.6".to_string()),
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
             EnabledMod {
                 mod_id: "ussep".to_string(),
                 enabled: true,
                 version: None,
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
         ],
     );

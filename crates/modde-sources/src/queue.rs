@@ -46,6 +46,7 @@ pub struct DownloadQueue {
 
 impl DownloadQueue {
     /// Create a new queue with the given concurrency limit.
+    #[must_use]
     pub fn new(max_concurrent: usize) -> Self {
         Self {
             tasks: Vec::new(),
@@ -77,26 +78,25 @@ impl DownloadQueue {
 
     /// Pause an active download. No-op if the task is not `Active`.
     pub fn pause(&mut self, id: usize) {
-        if let Some(task) = self.tasks.iter_mut().find(|t| t.id == id) {
-            if let DownloadState::Active {
+        if let Some(task) = self.tasks.iter_mut().find(|t| t.id == id)
+            && let DownloadState::Active {
                 bytes_downloaded,
                 total_bytes,
             } = task.state
-            {
-                task.state = DownloadState::Paused {
-                    bytes_downloaded,
-                    total_bytes,
-                };
-            }
+        {
+            task.state = DownloadState::Paused {
+                bytes_downloaded,
+                total_bytes,
+            };
         }
     }
 
     /// Resume a paused download by moving it back to `Queued`.
     pub fn resume(&mut self, id: usize) {
-        if let Some(task) = self.tasks.iter_mut().find(|t| t.id == id) {
-            if matches!(task.state, DownloadState::Paused { .. }) {
-                task.state = DownloadState::Queued;
-            }
+        if let Some(task) = self.tasks.iter_mut().find(|t| t.id == id)
+            && matches!(task.state, DownloadState::Paused { .. })
+        {
+            task.state = DownloadState::Queued;
         }
     }
 
@@ -106,6 +106,7 @@ impl DownloadQueue {
     }
 
     /// Number of currently active downloads.
+    #[must_use]
     pub fn active_count(&self) -> usize {
         self.tasks
             .iter()
@@ -114,6 +115,7 @@ impl DownloadQueue {
     }
 
     /// All tasks in the `Queued` state, ready to be started.
+    #[must_use]
     pub fn pending(&self) -> Vec<&DownloadTask> {
         self.tasks
             .iter()
@@ -144,6 +146,7 @@ impl DownloadQueue {
     }
 
     /// Look up a task by ID.
+    #[must_use]
     pub fn get(&self, id: usize) -> Option<&DownloadTask> {
         self.tasks.iter().find(|t| t.id == id)
     }
@@ -154,16 +157,19 @@ impl DownloadQueue {
     }
 
     /// View all tracked tasks in insertion order.
+    #[must_use]
     pub fn all(&self) -> &[DownloadTask] {
         &self.tasks
     }
 
     /// Total number of tasks in the queue (all states).
+    #[must_use]
     pub fn len(&self) -> usize {
         self.tasks.len()
     }
 
     /// Whether the queue is empty.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.tasks.is_empty()
     }

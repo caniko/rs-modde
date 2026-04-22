@@ -1,6 +1,4 @@
-use iced::widget::{
-    button, column, container, progress_bar, row, scrollable, text, text_input,
-};
+use iced::widget::{button, column, container, progress_bar, row, scrollable, text, text_input};
 use iced::{Alignment, Element, Length};
 
 use modde_core::manifest::collection::CollectionManifest;
@@ -16,6 +14,7 @@ pub struct CollectionDownload {
 }
 
 impl CollectionDownload {
+    #[must_use]
     pub fn progress_fraction(&self) -> f32 {
         if self.bytes_total == 0 {
             0.0
@@ -56,9 +55,7 @@ pub fn view<'a>(
         let cards = collections
             .iter()
             .fold(column![].spacing(8), |col, collection| {
-                let download_state = active_downloads
-                    .iter()
-                    .find(|d| d.slug == collection.slug);
+                let download_state = active_downloads.iter().find(|d| d.slug == collection.slug);
 
                 let card = collection_card(collection, download_state);
                 col.push(card)
@@ -67,12 +64,17 @@ pub fn view<'a>(
         scrollable(cards).height(Length::Fill).into()
     };
 
-    column![title_bar, search_bar, iced::widget::rule::horizontal(1), content,]
-        .spacing(8)
-        .padding(16)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+    column![
+        title_bar,
+        search_bar,
+        iced::widget::rule::horizontal(1),
+        content,
+    ]
+    .spacing(8)
+    .padding(16)
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into()
 }
 
 fn collection_card<'a>(

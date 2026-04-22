@@ -18,6 +18,7 @@ pub enum TriState {
 
 impl TriState {
     /// Cycle through the tri-state: Ignore -> Include -> Exclude -> Ignore.
+    #[must_use]
     pub fn cycle(self) -> Self {
         match self {
             Self::Ignore => Self::Include,
@@ -27,11 +28,13 @@ impl TriState {
     }
 
     /// Whether this tri-state is active (not Ignore).
+    #[must_use]
     pub fn is_active(self) -> bool {
         self != Self::Ignore
     }
 
     /// Display label for the current state.
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::Ignore => " ",
@@ -51,6 +54,7 @@ pub enum FilterKind {
 
 impl FilterKind {
     /// Human-readable label.
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::Enabled => "Enabled",
@@ -60,6 +64,7 @@ impl FilterKind {
     }
 
     /// Test whether a mod matches this criterion (positive sense).
+    #[must_use]
     pub fn matches(self, m: &EnabledMod) -> bool {
         match self {
             Self::Enabled => m.enabled,
@@ -77,6 +82,7 @@ pub struct FilterCriterion {
 }
 
 impl FilterCriterion {
+    #[must_use]
     pub fn new(kind: FilterKind) -> Self {
         Self {
             kind,
@@ -86,6 +92,7 @@ impl FilterCriterion {
 
     /// Whether this criterion passes for a given mod.
     /// Returns `None` if Ignore (i.e. this criterion doesn't participate).
+    #[must_use]
     pub fn evaluate(&self, m: &EnabledMod) -> Option<bool> {
         match self.state {
             TriState::Ignore => None,
@@ -106,6 +113,7 @@ pub enum FilterMode {
 }
 
 impl FilterMode {
+    #[must_use]
     pub fn toggle(self) -> Self {
         match self {
             Self::And => Self::Or,
@@ -113,6 +121,7 @@ impl FilterMode {
         }
     }
 
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::And => "AND",
@@ -125,6 +134,7 @@ impl FilterMode {
 ///
 /// `text_filter` is a case-insensitive substring match on `mod_id`.
 /// `criteria` are the tri-state filters combined according to `mode`.
+#[must_use]
 pub fn apply_filters(
     mods: &[EnabledMod],
     text_filter: &str,
@@ -177,6 +187,7 @@ pub enum CsvColumn {
 }
 
 impl CsvColumn {
+    #[must_use]
     pub fn header(self) -> &'static str {
         match self {
             Self::ModId => "mod_id",
@@ -189,6 +200,7 @@ impl CsvColumn {
         }
     }
 
+    #[must_use]
     pub fn value(self, m: &EnabledMod) -> String {
         match self {
             Self::ModId => m.mod_id.clone(),
@@ -201,8 +213,17 @@ impl CsvColumn {
         }
     }
 
+    #[must_use]
     pub fn all() -> &'static [CsvColumn] {
-        &[Self::ModId, Self::Enabled, Self::Version, Self::Category, Self::Notes, Self::Tags, Self::NexusModId]
+        &[
+            Self::ModId,
+            Self::Enabled,
+            Self::Version,
+            Self::Category,
+            Self::Notes,
+            Self::Tags,
+            Self::NexusModId,
+        ]
     }
 }
 
@@ -216,14 +237,17 @@ pub fn export_csv<W: std::io::Write>(
     writeln!(writer, "{}", headers.join(","))?;
 
     for m in mods {
-        let values: Vec<String> = columns.iter().map(|c| {
-            let v = c.value(m);
-            if v.contains(',') || v.contains('"') || v.contains('\n') {
-                format!("\"{}\"", v.replace('"', "\"\""))
-            } else {
-                v
-            }
-        }).collect();
+        let values: Vec<String> = columns
+            .iter()
+            .map(|c| {
+                let v = c.value(m);
+                if v.contains(',') || v.contains('"') || v.contains('\n') {
+                    format!("\"{}\"", v.replace('"', "\"\""))
+                } else {
+                    v
+                }
+            })
+            .collect();
         writeln!(writer, "{}", values.join(","))?;
     }
     Ok(())
@@ -257,7 +281,11 @@ mod tests {
 
     #[test]
     fn enabled_include() {
-        let mods = vec![test_mod("A", true), test_mod("B", false), test_mod("C", true)];
+        let mods = vec![
+            test_mod("A", true),
+            test_mod("B", false),
+            test_mod("C", true),
+        ];
         let criteria = vec![FilterCriterion {
             kind: FilterKind::Enabled,
             state: TriState::Include,
@@ -291,8 +319,14 @@ mod tests {
         m.notes = Some("hello".to_string());
         let mods = vec![m, test_mod("B", false), test_mod("C", true)];
         let criteria = vec![
-            FilterCriterion { kind: FilterKind::HasNotes, state: TriState::Include },
-            FilterCriterion { kind: FilterKind::Enabled, state: TriState::Exclude },
+            FilterCriterion {
+                kind: FilterKind::HasNotes,
+                state: TriState::Include,
+            },
+            FilterCriterion {
+                kind: FilterKind::Enabled,
+                state: TriState::Exclude,
+            },
         ];
         // OR: has notes OR is not enabled
         let result = apply_filters(&mods, "", &criteria, FilterMode::Or);

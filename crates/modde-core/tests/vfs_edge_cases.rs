@@ -18,13 +18,20 @@ type ModFiles = HashMap<ModId, Vec<(String, PathBuf)>>;
 #[test]
 fn test_build_many_mods_many_files() {
     let resolved = make_resolved(
-        (0..50).map(|i| Box::leak(format!("mod_{i}").into_boxed_str()) as &str).collect(),
+        (0..50)
+            .map(|i| Box::leak(format!("mod_{i}").into_boxed_str()) as &str)
+            .collect(),
     );
     let mut mod_files: ModFiles = HashMap::new();
     for i in 0..50 {
         let mod_id = format!("mod_{i}");
         let files: Vec<(String, PathBuf)> = (0..10)
-            .map(|j| (format!("textures/file_{j}.dds"), PathBuf::from(format!("/store/{mod_id}/file_{j}.dds"))))
+            .map(|j| {
+                (
+                    format!("textures/file_{j}.dds"),
+                    PathBuf::from(format!("/store/{mod_id}/file_{j}.dds")),
+                )
+            })
             .collect();
         mod_files.insert(ModId::from(mod_id.as_str()), files);
     }
@@ -33,7 +40,7 @@ fn test_build_many_mods_many_files() {
     // Last mod wins for each file path, so 10 unique files
     assert_eq!(farm.links.len(), 10);
     // All links should point to mod_49 (last in order)
-    for (_, source) in &farm.links {
+    for source in farm.links.values() {
         assert!(source.to_string_lossy().contains("mod_49"));
     }
 }
@@ -47,7 +54,10 @@ fn test_build_override_chain_last_wins() {
     for mod_id in &["mod_a", "mod_b", "mod_c", "mod_d"] {
         mod_files.insert(
             ModId::from(*mod_id),
-            vec![(shared_file.clone(), PathBuf::from(format!("/store/{mod_id}/texture.dds")))],
+            vec![(
+                shared_file.clone(),
+                PathBuf::from(format!("/store/{mod_id}/texture.dds")),
+            )],
         );
     }
 
@@ -61,14 +71,20 @@ fn test_build_partial_overlap() {
     // mod_a provides file1, file2; mod_b provides file2, file3
     let resolved = make_resolved(vec!["mod_a", "mod_b"]);
     let mut mod_files: ModFiles = HashMap::new();
-    mod_files.insert(ModId::from("mod_a"), vec![
-        ("file1.txt".into(), PathBuf::from("/store/mod_a/file1.txt")),
-        ("file2.txt".into(), PathBuf::from("/store/mod_a/file2.txt")),
-    ]);
-    mod_files.insert(ModId::from("mod_b"), vec![
-        ("file2.txt".into(), PathBuf::from("/store/mod_b/file2.txt")),
-        ("file3.txt".into(), PathBuf::from("/store/mod_b/file3.txt")),
-    ]);
+    mod_files.insert(
+        ModId::from("mod_a"),
+        vec![
+            ("file1.txt".into(), PathBuf::from("/store/mod_a/file1.txt")),
+            ("file2.txt".into(), PathBuf::from("/store/mod_a/file2.txt")),
+        ],
+    );
+    mod_files.insert(
+        ModId::from("mod_b"),
+        vec![
+            ("file2.txt".into(), PathBuf::from("/store/mod_b/file2.txt")),
+            ("file3.txt".into(), PathBuf::from("/store/mod_b/file3.txt")),
+        ],
+    );
 
     let farm = SymlinkFarm::build("partial_overlap", &resolved, &mod_files, None, None).unwrap();
     assert_eq!(farm.links.len(), 3);
@@ -84,9 +100,10 @@ fn test_build_partial_overlap() {
 fn test_build_empty_order_with_nonempty_mod_files() {
     let resolved = make_resolved(vec![]);
     let mut mod_files: ModFiles = HashMap::new();
-    mod_files.insert(ModId::from("orphan_mod"), vec![
-        ("file.txt".into(), PathBuf::from("/store/orphan/file.txt")),
-    ]);
+    mod_files.insert(
+        ModId::from("orphan_mod"),
+        vec![("file.txt".into(), PathBuf::from("/store/orphan/file.txt"))],
+    );
 
     let farm = SymlinkFarm::build("empty_order", &resolved, &mod_files, None, None).unwrap();
     assert!(farm.links.is_empty(), "mods not in order should not appear");
@@ -106,7 +123,12 @@ fn test_build_staging_dir_path_format() {
 fn test_build_mod_with_many_files() {
     let resolved = make_resolved(vec!["big_mod"]);
     let files: Vec<(String, PathBuf)> = (0..1000)
-        .map(|i| (format!("data/file_{i}.esp"), PathBuf::from(format!("/store/big_mod/file_{i}.esp"))))
+        .map(|i| {
+            (
+                format!("data/file_{i}.esp"),
+                PathBuf::from(format!("/store/big_mod/file_{i}.esp")),
+            )
+        })
         .collect();
     let mut mod_files: ModFiles = HashMap::new();
     mod_files.insert(ModId::from("big_mod"), files);
@@ -140,7 +162,10 @@ async fn test_materialize_many_files() {
     for i in 0..100 {
         let link = staging_dir.join(format!("data/file_{i}.txt"));
         assert!(link.symlink_metadata().unwrap().file_type().is_symlink());
-        assert_eq!(std::fs::read_to_string(&link).unwrap(), format!("content_{i}"));
+        assert_eq!(
+            std::fs::read_to_string(&link).unwrap(),
+            format!("content_{i}")
+        );
     }
 }
 
@@ -212,7 +237,13 @@ async fn test_deploy_replaces_symlink_with_new_symlink() {
 
     // Should read the new content through symlink chain
     let deployed = target_dir.join("mod.esp");
-    assert!(deployed.symlink_metadata().unwrap().file_type().is_symlink());
+    assert!(
+        deployed
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
     assert_eq!(std::fs::read_to_string(&deployed).unwrap(), "version2");
 }
 
@@ -221,7 +252,9 @@ async fn test_deploy_replaces_symlink_with_new_symlink() {
 #[tokio::test]
 async fn test_rollback_when_staging_does_not_exist_but_backup_does() {
     let tmp = TempDir::new().unwrap();
-    unsafe { std::env::set_var("XDG_DATA_HOME", tmp.path()); }
+    unsafe {
+        std::env::set_var("XDG_DATA_HOME", tmp.path());
+    }
 
     let profile_dir = tmp.path().join("modde/profiles/rollback_no_staging");
     let backup = profile_dir.join("staging.bak");
@@ -229,10 +262,15 @@ async fn test_rollback_when_staging_does_not_exist_but_backup_does() {
     std::fs::create_dir_all(&backup).unwrap();
     std::fs::write(backup.join("restored.txt"), "from backup").unwrap();
 
-    modde_core::vfs::rollback("rollback_no_staging").await.unwrap();
+    modde_core::vfs::rollback("rollback_no_staging")
+        .await
+        .unwrap();
 
     let staging = profile_dir.join("staging");
     assert!(staging.join("restored.txt").exists());
-    assert_eq!(std::fs::read_to_string(staging.join("restored.txt")).unwrap(), "from backup");
+    assert_eq!(
+        std::fs::read_to_string(staging.join("restored.txt")).unwrap(),
+        "from backup"
+    );
     assert!(!backup.exists());
 }

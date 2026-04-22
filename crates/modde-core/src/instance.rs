@@ -22,6 +22,7 @@ pub struct InstanceRegistry {
 
 impl InstanceRegistry {
     /// Load the registry from the default config location.
+    #[must_use]
     pub fn load() -> Self {
         let path = registry_path();
         if !path.exists() {
@@ -77,6 +78,7 @@ impl InstanceRegistry {
     }
 
     /// Get the active instance's data directory.
+    #[must_use]
     pub fn active_data_dir(&self) -> Option<&Path> {
         let name = self.active.as_ref()?;
         self.instances
@@ -86,11 +88,13 @@ impl InstanceRegistry {
     }
 
     /// List all instances.
+    #[must_use]
     pub fn list(&self) -> &[Instance] {
         &self.instances
     }
 
     /// Load the registry from a specific file path (for testing).
+    #[must_use]
     pub fn load_from(path: &Path) -> Self {
         if !path.exists() {
             return Self::default();
@@ -183,18 +187,10 @@ mod tests {
         let registry_path = tmp.path().join("instances.toml");
 
         let mut reg = InstanceRegistry::default();
-        reg.create_with_path(
-            "first",
-            tmp.path().join("first"),
-            &registry_path,
-        )
-        .unwrap();
-        reg.create_with_path(
-            "second",
-            tmp.path().join("second"),
-            &registry_path,
-        )
-        .unwrap();
+        reg.create_with_path("first", tmp.path().join("first"), &registry_path)
+            .unwrap();
+        reg.create_with_path("second", tmp.path().join("second"), &registry_path)
+            .unwrap();
 
         assert_eq!(reg.active.as_deref(), Some("first"));
 
@@ -208,18 +204,10 @@ mod tests {
         let registry_path = tmp.path().join("instances.toml");
 
         let mut reg = InstanceRegistry::default();
-        reg.create_with_path(
-            "myinstance",
-            tmp.path().join("data1"),
-            &registry_path,
-        )
-        .unwrap();
+        reg.create_with_path("myinstance", tmp.path().join("data1"), &registry_path)
+            .unwrap();
 
-        let result = reg.create_with_path(
-            "myinstance",
-            tmp.path().join("data2"),
-            &registry_path,
-        );
+        let result = reg.create_with_path("myinstance", tmp.path().join("data2"), &registry_path);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(

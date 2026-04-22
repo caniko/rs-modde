@@ -1,4 +1,4 @@
-//! Integration tests for MegaSource.
+//! Integration tests for `MegaSource`.
 //!
 //! The core crypto functions (`parse_mega_url`, `decode_mega_key`) are private
 //! and are thoroughly tested via inline `#[cfg(test)] mod tests` in
@@ -6,8 +6,8 @@
 
 use modde_core::GameId;
 use modde_core::manifest::wabbajack::DownloadDirective;
-use modde_sources::mega::MegaSource;
 use modde_sources::DownloadSource;
+use modde_sources::mega::MegaSource;
 use reqwest::Client;
 use std::collections::HashMap;
 

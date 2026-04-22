@@ -1,6 +1,6 @@
+use modde_games::GamePlugin;
 use modde_games::cyberpunk::Cyberpunk2077;
 use modde_games::cyberpunk::manifest::RedModManifest;
-use modde_games::GamePlugin;
 
 // ── Cyberpunk2077 game_id and display_name ──────────────────────────
 
@@ -53,11 +53,17 @@ fn test_redmod_manifest_parse_full() {
     assert_eq!(manifest.version.as_deref(), Some("1.2.3"));
     assert_eq!(manifest.custom_sounds.len(), 1);
     assert_eq!(manifest.custom_sounds[0].name, "ambient_rain");
-    assert_eq!(manifest.custom_sounds[0].sound_type.as_deref(), Some("ambient"));
+    assert_eq!(
+        manifest.custom_sounds[0].sound_type.as_deref(),
+        Some("ambient")
+    );
     assert_eq!(manifest.custom_sounds[0].file, "sounds/rain.wav");
     assert_eq!(manifest.scripts.len(), 1);
     assert_eq!(manifest.scripts[0].name, "main_script");
-    assert_eq!(manifest.scripts[0].path.as_deref(), Some("scripts/main.reds"));
+    assert_eq!(
+        manifest.scripts[0].path.as_deref(),
+        Some("scripts/main.reds")
+    );
 }
 
 // ── RedModManifest::parse with minimal JSON (no optional fields) ─────
@@ -119,7 +125,10 @@ fn test_redmod_manifest_parse_multiple_scripts() {
     let manifest = RedModManifest::parse(json).unwrap();
     assert_eq!(manifest.scripts.len(), 2);
     assert_eq!(manifest.scripts[0].name, "init");
-    assert_eq!(manifest.scripts[0].path.as_deref(), Some("scripts/init.reds"));
+    assert_eq!(
+        manifest.scripts[0].path.as_deref(),
+        Some("scripts/init.reds")
+    );
     assert_eq!(manifest.scripts[1].name, "cleanup");
     assert!(manifest.scripts[1].path.is_none());
 }
@@ -170,7 +179,13 @@ fn test_cyberpunk_deploy_creates_symlinks() {
     // The mod directory should be symlinked
     let deployed = target.path().join("mymod");
     assert!(deployed.exists());
-    assert!(deployed.symlink_metadata().unwrap().file_type().is_symlink());
+    assert!(
+        deployed
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
 }
 
 #[test]

@@ -1,4 +1,4 @@
-//! Edge case tests for CoreError variants and error handling.
+//! Edge case tests for `CoreError` variants and error handling.
 
 use std::path::PathBuf;
 
@@ -135,7 +135,10 @@ fn error_toml_ser_to_core_error_conversion() {
     // toml::ser::Error can be triggered by serializing types that toml does not support.
     // An enum variant (not a struct/map) at the top level triggers an error.
     let result = toml::to_string("bare string");
-    assert!(result.is_err(), "bare string should fail toml serialization");
+    assert!(
+        result.is_err(),
+        "bare string should fail toml serialization"
+    );
     let core_err: CoreError = result.unwrap_err().into();
     let msg = format!("{core_err}");
     assert!(msg.contains("TOML"));
@@ -154,7 +157,7 @@ fn error_send_sync() {
 #[test]
 fn error_debug_output_reasonable() {
     let errors: Vec<CoreError> = vec![
-        CoreError::Io(std::io::Error::new(std::io::ErrorKind::Other, "test")),
+        CoreError::Io(std::io::Error::other("test")),
         CoreError::HashMismatch {
             path: PathBuf::from("/test"),
             expected: "aaa".into(),

@@ -34,6 +34,7 @@ pub struct DownloadTask {
 }
 
 /// Render the downloads view.
+#[must_use]
 pub fn view(tasks: &[DownloadTask]) -> Element<'static, Message> {
     let title_bar = row![
         text("Downloads").size(20),

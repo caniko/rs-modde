@@ -20,11 +20,7 @@ impl CollisionClassifier for CyberpunkCollisionClassifier {
     }
 
     fn classify_severity(&self, file_path: &str) -> CollisionSeverity {
-        let ext = file_path
-            .rsplit('.')
-            .next()
-            .unwrap_or("")
-            .to_lowercase();
+        let ext = file_path.rsplit('.').next().unwrap_or("").to_lowercase();
 
         match ext.as_str() {
             // Scripts, tweaks, DLLs — save-breaking / dangerous

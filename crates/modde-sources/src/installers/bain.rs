@@ -18,6 +18,7 @@ pub struct BainSubPackage {
 }
 
 /// Detect if a directory contains a BAIN package structure.
+#[must_use]
 pub fn detect_bain(dir: &Path) -> Option<BainPackage> {
     if !dir.is_dir() {
         return None;
@@ -32,14 +33,14 @@ pub fn detect_bain(dir: &Path) -> Option<BainPackage> {
 
         let name = entry.file_name().to_string_lossy().to_string();
         // BAIN subdirs start with digits: "00 Core", "01 Optional", etc.
-        if let Some(idx_str) = name.split_whitespace().next() {
-            if let Ok(idx) = idx_str.parse::<u32>() {
-                subs.push(BainSubPackage {
-                    index: idx,
-                    name: name.clone(),
-                    path: entry.path().to_string_lossy().to_string(),
-                });
-            }
+        if let Some(idx_str) = name.split_whitespace().next()
+            && let Ok(idx) = idx_str.parse::<u32>()
+        {
+            subs.push(BainSubPackage {
+                index: idx,
+                name: name.clone(),
+                path: entry.path().to_string_lossy().to_string(),
+            });
         }
     }
 
@@ -122,7 +123,10 @@ mod tests {
         std::fs::create_dir(root.join("textures")).unwrap();
         std::fs::create_dir(root.join("meshes")).unwrap();
 
-        assert!(detect_bain(root).is_none(), "should not detect non-BAIN dirs");
+        assert!(
+            detect_bain(root).is_none(),
+            "should not detect non-BAIN dirs"
+        );
     }
 
     #[test]
@@ -146,7 +150,10 @@ mod tests {
         // Only install sub-package 0
         let count = install_bain(&pkg, &[0], dest).unwrap();
         assert_eq!(count, 1);
-        assert!(dest.join("plugin.esp").exists(), "core file should be copied");
+        assert!(
+            dest.join("plugin.esp").exists(),
+            "core file should be copied"
+        );
         assert!(
             !dest.join("texture.dds").exists(),
             "optional file should not be copied"

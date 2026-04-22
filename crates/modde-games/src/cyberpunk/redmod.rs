@@ -4,10 +4,14 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 use tracing::{info, warn};
 
-/// Locate the REDmod binary.
+/// Locate the `REDmod` binary.
 fn find_redmod(game_dir: &Path) -> Option<PathBuf> {
     // Check within game directory (platform-aware binary name)
-    let bin_name = if cfg!(windows) { "redmod.exe" } else { "redmod" };
+    let bin_name = if cfg!(windows) {
+        "redmod.exe"
+    } else {
+        "redmod"
+    };
     let in_game = game_dir.join("tools/redmod/bin").join(bin_name);
     if in_game.exists() {
         return Some(in_game);
@@ -19,8 +23,8 @@ fn find_redmod(game_dir: &Path) -> Option<PathBuf> {
 
 /// Run `redmod deploy` for the given mod directories.
 pub fn deploy(mod_dirs: &[PathBuf], game_dir: &Path) -> Result<()> {
-    let redmod_bin = find_redmod(game_dir)
-        .ok_or_else(|| anyhow::anyhow!("REDmod binary not found"))?;
+    let redmod_bin =
+        find_redmod(game_dir).ok_or_else(|| anyhow::anyhow!("REDmod binary not found"))?;
 
     let mut cmd = Command::new(&redmod_bin);
     cmd.arg("deploy");
@@ -45,7 +49,7 @@ pub fn deploy(mod_dirs: &[PathBuf], game_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Run REDmod deploy if the binary is available; warn and skip if not.
+/// Run `REDmod` deploy if the binary is available; warn and skip if not.
 pub fn deploy_if_available(game_dir: &Path) -> Result<()> {
     if find_redmod(game_dir).is_none() {
         warn!("REDmod not found; skipping post-deploy step");
@@ -58,7 +62,7 @@ pub fn deploy_if_available(game_dir: &Path) -> Result<()> {
     }
 
     let mod_dirs: Vec<PathBuf> = std::fs::read_dir(&mods_dir)?
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| e.path().is_dir())
         .map(|e| e.path())
         .collect();

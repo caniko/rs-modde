@@ -126,6 +126,7 @@ impl ConflictMap {
     }
 
     /// Return all file paths that have more than one provider.
+    #[must_use]
     pub fn conflicts(&self) -> Vec<(&str, &HashSet<ModId>)> {
         self.files
             .iter()
@@ -139,6 +140,7 @@ impl ConflictMap {
     /// `priority_order` lists mods from lowest to highest priority.
     /// The last mod in the list that provides the file wins.
     /// Hidden `(mod_id, rel_path)` pairs are excluded.
+    #[must_use]
     pub fn winner_for(
         &self,
         file_path: &str,
@@ -159,6 +161,7 @@ impl ConflictMap {
     /// Return all conflicts with their resolved winners.
     ///
     /// Returns `(file_path, all_providers, winner)` tuples.
+    #[must_use]
     pub fn resolved_conflicts(
         &self,
         priority_order: &[ModId],
@@ -192,7 +195,7 @@ pub struct ResolvedLoadOrder {
 /// 2. **Round-trip via swap.** Swapping two adjacent mods in `profile.mods`
 ///    produces a resolved order with those two mods swapped, as long as no
 ///    rule spans the swap. This is what makes `Message::ReorderMod` visible
-///    in the load_order view — without stability, reordering could
+///    in the `load_order` view — without stability, reordering could
 ///    silently vanish.
 /// 3. **Minimal change under rules.** When a rule *does* force movement,
 ///    only the rule-involved pair shifts; unrelated neighbors stay put.
@@ -234,21 +237,21 @@ pub fn resolve(profile: &Profile) -> Result<ResolvedLoadOrder> {
 
     // Check for incompatible mods — must fail before we try to resolve.
     for rule in &profile.load_order_rules {
-        if let LoadOrderRule::Incompatible { mod_a, mod_b } = rule {
-            if enabled_set.contains(mod_a.as_str()) && enabled_set.contains(mod_b.as_str()) {
-                return Err(CoreError::FileConflict {
-                    path: String::new(),
-                    mods: Box::new(smallvec::smallvec![mod_a.0.clone(), mod_b.0.clone()]),
-                });
-            }
+        if let LoadOrderRule::Incompatible { mod_a, mod_b } = rule
+            && enabled_set.contains(mod_a.as_str())
+            && enabled_set.contains(mod_b.as_str())
+        {
+            return Err(CoreError::FileConflict {
+                path: String::new(),
+                mods: Box::new(smallvec::smallvec![mod_a.0.clone(), mod_b.0.clone()]),
+            });
         }
     }
 
     // Build adjacency + in-degree. `successors[u] = [v, ...]` means "u must
     // be emitted before v".
     let mut successors: HashMap<&str, Vec<&str>> = HashMap::new();
-    let mut in_degree: HashMap<&str, usize> =
-        enabled_mods.iter().map(|&m| (m, 0usize)).collect();
+    let mut in_degree: HashMap<&str, usize> = enabled_mods.iter().map(|&m| (m, 0usize)).collect();
 
     for rule in &profile.load_order_rules {
         let (from, to) = match rule {
@@ -310,7 +313,7 @@ pub fn resolve(profile: &Profile) -> Result<ResolvedLoadOrder> {
 mod tests {
     use super::*;
     use crate::profile::{EnabledMod, ProfileSource};
-    use smallvec::{smallvec, SmallVec};
+    use smallvec::{SmallVec, smallvec};
     use std::path::PathBuf;
 
     fn make_profile(mods: Vec<&str>, rules: SmallVec<[LoadOrderRule; 4]>) -> Profile {
@@ -325,7 +328,8 @@ mod tests {
                     mod_id: id.to_string(),
                     enabled: true,
                     version: None,
-                    fomod_config: None, ..Default::default()
+                    fomod_config: None,
+                    ..Default::default()
                 })
                 .collect(),
             overrides: PathBuf::from("/tmp/overrides"),
@@ -427,13 +431,15 @@ mod tests {
                     mod_id: "mod_a".to_string(),
                     enabled: true,
                     version: None,
-                    fomod_config: None, ..Default::default()
+                    fomod_config: None,
+                    ..Default::default()
                 },
                 EnabledMod {
                     mod_id: "mod_b".to_string(),
                     enabled: false,
                     version: None,
-                    fomod_config: None, ..Default::default()
+                    fomod_config: None,
+                    ..Default::default()
                 },
             ],
             overrides: PathBuf::from("/tmp"),
@@ -454,7 +460,7 @@ mod tests {
     // didn't necessarily shift anything in `resolved_order`.
 
     fn ids(order: &[ModId]) -> Vec<&str> {
-        order.iter().map(|m| m.as_str()).collect()
+        order.iter().map(super::ModId::as_str).collect()
     }
 
     #[test]
@@ -530,8 +536,8 @@ mod tests {
         // a largeish mod set to give HashMap iteration a chance to
         // scramble things.
         let mods: Vec<&str> = vec![
-            "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota",
-            "kappa", "lambda", "mu", "nu", "xi", "omicron",
+            "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota", "kappa",
+            "lambda", "mu", "nu", "xi", "omicron",
         ];
         let profile = make_profile(mods.clone(), smallvec![]);
         let a = resolve(&profile).unwrap();

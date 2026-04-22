@@ -1,6 +1,6 @@
-//! ReShade — shader injection for Wine/Proton games.
+//! `ReShade` — shader injection for Wine/Proton games.
 //!
-//! ReShade works by placing a proxy DLL (typically `dxgi.dll` or `d3d11.dll`)
+//! `ReShade` works by placing a proxy DLL (typically `dxgi.dll` or `d3d11.dll`)
 //! in the game directory. Wine needs `WINEDLLOVERRIDES` set to load the native
 //! version instead of its built-in stub.
 
@@ -10,9 +10,7 @@ use anyhow::{Context, Result};
 use smallvec::{SmallVec, smallvec};
 use tracing::info;
 
-use super::{
-    AppliedFiles, GameTool, ToolAvailability, ToolCategory, ToolConfig,
-};
+use super::{AppliedFiles, GameTool, ToolAvailability, ToolCategory, ToolConfig};
 
 pub static RESHADE: ReShade = ReShade;
 

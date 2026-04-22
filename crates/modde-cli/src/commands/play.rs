@@ -33,10 +33,11 @@ pub async fn handle(
     if !no_switch {
         let already_active = pm
             .active(&game_id)?
-            .map(|info| info.profile.name == target_profile)
-            .unwrap_or(false);
+            .is_some_and(|info| info.profile.name == target_profile);
 
-        if !already_active {
+        if already_active {
+            info!(profile = %target_profile, "profile already active, skipping switch");
+        } else {
             let save_dir = resolve_save_dir(&game_id);
             let fp = compute_fingerprint(&pm, &target_profile, &game_id);
             match pm.activate_with_fingerprint(
@@ -59,8 +60,6 @@ pub async fn handle(
                     );
                 }
             }
-        } else {
-            info!(profile = %target_profile, "profile already active, skipping switch");
         }
     }
 
@@ -71,9 +70,7 @@ pub async fn handle(
 
     // 4. Detect launcher and launch
     let detected = modde_games::find_detected_game(&game_id).ok_or_else(|| {
-        anyhow::anyhow!(
-            "could not detect launcher for '{game_id}'. Is the game installed?"
-        )
+        anyhow::anyhow!("could not detect launcher for '{game_id}'. Is the game installed?")
     })?;
 
     println!("Launching via {}...", detected.source);

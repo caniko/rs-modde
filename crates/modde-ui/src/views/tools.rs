@@ -1,10 +1,10 @@
 use iced::widget::{button, column, container, row, scrollable, text, toggler};
-use iced::{color, Alignment, Element, Length};
+use iced::{Alignment, Element, Length, color};
 
 use crate::app::{Message, ToolState, ToolUiEntry};
 
 /// Render the gaming tools/overlays management view.
-pub fn view<'a>(state: &'a ToolState) -> Element<'a, Message> {
+pub fn view(state: &ToolState) -> Element<'_, Message> {
     let title_bar = row![
         text("Gaming Tools").size(20),
         iced::widget::space::horizontal(),
@@ -16,24 +16,18 @@ pub fn view<'a>(state: &'a ToolState) -> Element<'a, Message> {
     .align_y(Alignment::Center);
 
     let content: Element<'_, Message> = if state.entries.is_empty() {
-        container(
-            text("Select a game to manage tools, or click Refresh.").size(14),
-        )
-        .padding(20)
-        .width(Length::Fill)
-        .center_x(Length::Fill)
-        .into()
+        container(text("Select a game to manage tools, or click Refresh.").size(14))
+            .padding(20)
+            .width(Length::Fill)
+            .center_x(Length::Fill)
+            .into()
     } else {
-        let cards = state.entries.iter().fold(column![].spacing(8), |col: iced::widget::Column<'_, Message>, entry| {
-            col.push(tool_card(entry))
-        });
+        let cards = state.entries.iter().fold(
+            column![].spacing(8),
+            |col: iced::widget::Column<'_, Message>, entry| col.push(tool_card(entry)),
+        );
 
-        scrollable(
-            container(cards)
-                .padding(12)
-                .width(Length::Fill),
-        )
-        .into()
+        scrollable(container(cards).padding(12).width(Length::Fill)).into()
     };
 
     column![title_bar, content]
@@ -84,9 +78,12 @@ fn tool_card(entry: &ToolUiEntry) -> Element<'_, Message> {
 
     if entry.applied_files > 0 {
         body = body.push(
-            text(format!("{} file(s) applied to game directory", entry.applied_files))
-                .size(12)
-                .color(color!(0xAAAA66)),
+            text(format!(
+                "{} file(s) applied to game directory",
+                entry.applied_files
+            ))
+            .size(12)
+            .color(color!(0xAAAA66)),
         );
     }
 
@@ -120,11 +117,7 @@ fn tool_card(entry: &ToolUiEntry) -> Element<'_, Message> {
 
     // Status message
     if let Some(ref msg) = entry.status_message {
-        body = body.push(
-            text(msg.as_str())
-                .size(12)
-                .color(color!(0x88CC88)),
-        );
+        body = body.push(text(msg.as_str()).size(12).color(color!(0x88CC88)));
     }
 
     let card = column![header, body].spacing(6);

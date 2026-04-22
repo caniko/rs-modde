@@ -20,7 +20,7 @@ use super::types::InstallMethod;
 pub struct InstallProbe {
     /// Return a game-specific [`InstallMethod`] if the plugin recognizes
     /// the extracted archive authoritatively (e.g. Cyberpunk identifying
-    /// a REDmod by `info.json` + `archives/` presence). Runs **before**
+    /// a `REDmod` by `info.json` + `archives/` presence). Runs **before**
     /// the generic probes so it can claim layouts that also happen to
     /// trigger generic heuristics.
     pub analyze: Box<dyn Fn(&Path) -> Option<InstallMethod> + Send + Sync>,
@@ -47,6 +47,7 @@ impl InstallProbe {
     /// A probe that never claims anything game-specific. Used by tests of
     /// the generic detection pipeline and as a "no plugin available"
     /// fallback.
+    #[must_use]
     pub fn noop() -> Self {
         Self {
             analyze: Box::new(|_| None),

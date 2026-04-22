@@ -31,6 +31,7 @@ pub struct DownloadManager {
 }
 
 impl DownloadManager {
+    #[must_use]
     pub fn new(max_concurrent: usize) -> Self {
         Self {
             downloads: Vec::new(),
@@ -55,21 +56,21 @@ impl DownloadManager {
 
     /// Pause an active download, recording how many bytes were fetched so far.
     pub fn pause(&mut self, id: usize, bytes_so_far: u64) {
-        if let Some(dl) = self.get_mut(id) {
-            if matches!(dl.state, DownloadState::Active { .. }) {
-                dl.state = DownloadState::Paused {
-                    bytes: bytes_so_far,
-                };
-            }
+        if let Some(dl) = self.get_mut(id)
+            && matches!(dl.state, DownloadState::Active { .. })
+        {
+            dl.state = DownloadState::Paused {
+                bytes: bytes_so_far,
+            };
         }
     }
 
     /// Move a paused download back to the queue.
     pub fn resume(&mut self, id: usize) {
-        if let Some(dl) = self.get_mut(id) {
-            if matches!(dl.state, DownloadState::Paused { .. }) {
-                dl.state = DownloadState::Queued;
-            }
+        if let Some(dl) = self.get_mut(id)
+            && matches!(dl.state, DownloadState::Paused { .. })
+        {
+            dl.state = DownloadState::Queued;
         }
     }
 
@@ -79,6 +80,7 @@ impl DownloadManager {
     }
 
     /// Number of currently active downloads.
+    #[must_use]
     pub fn active_count(&self) -> usize {
         self.downloads
             .iter()
@@ -87,11 +89,13 @@ impl DownloadManager {
     }
 
     /// Maximum number of concurrent downloads allowed.
+    #[must_use]
     pub fn max_concurrent(&self) -> usize {
         self.max_concurrent
     }
 
     /// View all tracked downloads.
+    #[must_use]
     pub fn all(&self) -> &[ManagedDownload] {
         &self.downloads
     }
@@ -102,17 +106,20 @@ impl DownloadManager {
     }
 
     /// Get an immutable reference to a download by ID.
+    #[must_use]
     pub fn get(&self, id: usize) -> Option<&ManagedDownload> {
         self.downloads.iter().find(|dl| dl.id == id)
     }
 
     /// Returns true if there is room to start another download.
+    #[must_use]
     pub fn can_start_more(&self) -> bool {
         self.active_count() < self.max_concurrent
     }
 
     /// Return IDs of queued downloads that could be activated, up to the
     /// remaining concurrency budget.
+    #[must_use]
     pub fn next_queued(&self) -> Vec<usize> {
         let budget = self.max_concurrent.saturating_sub(self.active_count());
         self.downloads

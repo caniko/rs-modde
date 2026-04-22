@@ -18,7 +18,7 @@ pub async fn handle(action: NexusAction) -> Result<()> {
 /// Build a reqwest client with Nexus-appropriate timeouts.
 fn nexus_client() -> Result<reqwest::Client> {
     reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(300))
+        .timeout(std::time::Duration::from_mins(5))
         .connect_timeout(std::time::Duration::from_secs(30))
         .build()
         .context("failed to build HTTP client")
@@ -58,17 +58,20 @@ async fn handle_auth() -> Result<()> {
     }
 
     let client = nexus_client()?;
-    let is_premium = auth::check_premium(&client, &api_key).await
-        .map_err(|e| map_nexus_error(e,
-            "Verify your key at https://www.nexusmods.com/users/myaccount?tab=api+access"
-        ))?;
+    let is_premium = auth::check_premium(&client, &api_key).await.map_err(|e| {
+        map_nexus_error(
+            e,
+            "Verify your key at https://www.nexusmods.com/users/myaccount?tab=api+access",
+        )
+    })?;
 
     // Store the key at XDG config path
     let key_path = config_key_path();
     if let Some(parent) = key_path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
-    tokio::fs::write(&key_path, &api_key).await
+    tokio::fs::write(&key_path, &api_key)
+        .await
         .context("failed to write API key to config")?;
 
     // Restrict file permissions to owner-only
@@ -91,14 +94,16 @@ async fn handle_auth() -> Result<()> {
 }
 
 async fn handle_status() -> Result<()> {
-    let api_key = auth::load_api_key()
-        .context("no API key configured; run `modde nexus auth` first")?;
+    let api_key =
+        auth::load_api_key().context("no API key configured; run `modde nexus auth` first")?;
 
     let client = nexus_client()?;
-    let is_premium = auth::check_premium(&client, &api_key).await
-        .map_err(|e| map_nexus_error(e,
-            "Your stored key may have been revoked. Re-run `modde nexus auth` to set a new key."
-        ))?;
+    let is_premium = auth::check_premium(&client, &api_key).await.map_err(|e| {
+        map_nexus_error(
+            e,
+            "Your stored key may have been revoked. Re-run `modde nexus auth` to set a new key.",
+        )
+    })?;
 
     println!("Nexus API key: valid");
     if is_premium {

@@ -50,7 +50,9 @@ pub async fn validate_install(
         let data = tokio::fs::read(&full_path).await?;
         let actual_hash = xxh3_64(&data);
 
-        if actual_hash != *expected_hash {
+        if actual_hash == *expected_hash {
+            verified += 1;
+        } else {
             warn!(
                 path = %rel_path,
                 expected = format!("{expected_hash:016x}"),
@@ -62,8 +64,6 @@ pub async fn validate_install(
                 expected_hash: *expected_hash,
                 actual_hash,
             });
-        } else {
-            verified += 1;
         }
     }
 
@@ -100,7 +100,7 @@ pub async fn preflight_staging(manifest: &WabbajackManifest, staging_dir: &Path)
     true
 }
 
-/// Collect expected (relative_path, hash) pairs from the manifest.
+/// Collect expected (`relative_path`, hash) pairs from the manifest.
 ///
 /// Uses archive entries as the source of truth for expected hashes. Install
 /// directives reference archives by hash, so we build a lookup from archive
@@ -111,8 +111,10 @@ pub(crate) fn collect_expected_files(manifest: &WabbajackManifest) -> Vec<(Strin
     let mut files = Vec::new();
 
     // Build archive hash -> archive entry lookup
-    let archive_map: std::collections::HashMap<u64, &modde_core::manifest::wabbajack::ArchiveEntry> =
-        manifest.archives.iter().map(|a| (a.hash, a)).collect();
+    let archive_map: std::collections::HashMap<
+        u64,
+        &modde_core::manifest::wabbajack::ArchiveEntry,
+    > = manifest.archives.iter().map(|a| (a.hash, a)).collect();
 
     for directive in &manifest.directives {
         match directive {
@@ -125,7 +127,11 @@ pub(crate) fn collect_expected_files(manifest: &WabbajackManifest) -> Vec<(Strin
                     .first()
                     .and_then(|v| v.as_str())
                     .and_then(modde_core::manifest::wabbajack::parse_b64_hash)
-                    .or_else(|| archive_hash_path.first().and_then(|v| v.as_u64()))
+                    .or_else(|| {
+                        archive_hash_path
+                            .first()
+                            .and_then(serde_json::Value::as_u64)
+                    })
                     .unwrap_or(0);
 
                 // Use the archive's hash as a proxy for the expected output hash
@@ -134,9 +140,7 @@ pub(crate) fn collect_expected_files(manifest: &WabbajackManifest) -> Vec<(Strin
                     files.push((to.clone(), archive.hash));
                 }
             }
-            RawDirective::PatchedFromArchive {
-                to, hash, ..
-            } => {
+            RawDirective::PatchedFromArchive { to, hash, .. } => {
                 // The hash field on PatchedFromArchive is the expected output hash
                 files.push((to.clone(), *hash));
             }
@@ -212,7 +216,9 @@ mod tests {
     async fn test_validate_hash_mismatch() {
         let staging = tempfile::tempdir().unwrap();
         let file_path = staging.path().join("test.txt");
-        tokio::fs::write(&file_path, b"wrong content").await.unwrap();
+        tokio::fs::write(&file_path, b"wrong content")
+            .await
+            .unwrap();
 
         let manifest = WabbajackManifest {
             name: "test".to_string(),
@@ -413,17 +419,18 @@ mod tests {
             game: "skyrimse".to_string(),
             version: "1.0".to_string(),
             archives: vec![],
-            directives: vec![
-                modde_core::manifest::wabbajack::RawDirective::CreateBSA {
-                    temp_id: "bsa_temp_001".to_string(),
-                    to: "output.bsa".to_string(),
-                    file_states: vec![],
-                },
-            ],
+            directives: vec![modde_core::manifest::wabbajack::RawDirective::CreateBSA {
+                temp_id: "bsa_temp_001".to_string(),
+                to: "output.bsa".to_string(),
+                file_states: vec![],
+            }],
         };
 
         let expected = collect_expected_files(&manifest);
-        assert!(expected.is_empty(), "CreateBSA should not produce expected files");
+        assert!(
+            expected.is_empty(),
+            "CreateBSA should not produce expected files"
+        );
 
         let report = validate_install(&manifest, staging.path()).await.unwrap();
         assert_eq!(report.total_files, 0);
@@ -440,13 +447,14 @@ mod tests {
             game: "skyrimse".to_string(),
             version: "1.0".to_string(),
             archives: vec![],
-            directives: vec![
-                modde_core::manifest::wabbajack::RawDirective::Unknown,
-            ],
+            directives: vec![modde_core::manifest::wabbajack::RawDirective::Unknown],
         };
 
         let expected = collect_expected_files(&manifest);
-        assert!(expected.is_empty(), "Unknown directives should be filtered out");
+        assert!(
+            expected.is_empty(),
+            "Unknown directives should be filtered out"
+        );
 
         let report = validate_install(&manifest, staging.path()).await.unwrap();
         assert_eq!(report.total_files, 0);

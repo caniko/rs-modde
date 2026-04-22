@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-/// REDmod mod manifest (`info.json`).
+/// `REDmod` mod manifest (`info.json`).
 #[derive(Debug, Clone, Deserialize)]
 pub struct RedModManifest {
     pub name: String,
@@ -26,7 +26,7 @@ pub struct ScriptEntry {
 }
 
 impl RedModManifest {
-    /// Parse a REDmod `info.json` file.
+    /// Parse a `REDmod` `info.json` file.
     pub fn parse(json: &str) -> anyhow::Result<Self> {
         Ok(serde_json::from_str(json)?)
     }

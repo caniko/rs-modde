@@ -1,5 +1,5 @@
 use anyhow::Result;
-use modde_core::filter::{export_csv, CsvColumn};
+use modde_core::filter::{CsvColumn, export_csv};
 use modde_core::profile::ProfileManager;
 
 pub fn handle(
@@ -9,8 +9,7 @@ pub fn handle(
     output: Option<String>,
 ) -> Result<()> {
     let pm = ProfileManager::open()?;
-    let profile =
-        super::load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref())?;
+    let profile = super::load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref())?;
 
     let cols: Vec<CsvColumn> = match columns {
         Some(col_str) => col_str
@@ -32,17 +31,14 @@ pub fn handle(
         None => CsvColumn::all().to_vec(),
     };
 
-    match output {
-        Some(path) => {
-            let mut file = std::fs::File::create(&path)?;
-            export_csv(&profile.mods, &cols, &mut file)?;
-            println!("Exported {} mods to {path}", profile.mods.len());
-        }
-        None => {
-            let stdout = std::io::stdout();
-            let mut handle = stdout.lock();
-            export_csv(&profile.mods, &cols, &mut handle)?;
-        }
+    if let Some(path) = output {
+        let mut file = std::fs::File::create(&path)?;
+        export_csv(&profile.mods, &cols, &mut file)?;
+        println!("Exported {} mods to {path}", profile.mods.len());
+    } else {
+        let stdout = std::io::stdout();
+        let mut handle = stdout.lock();
+        export_csv(&profile.mods, &cols, &mut handle)?;
     }
 
     Ok(())

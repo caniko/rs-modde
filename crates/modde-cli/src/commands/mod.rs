@@ -30,11 +30,11 @@ use modde_core::PluginEntry;
 use modde_core::profile::{Profile, ProfileManager};
 use modde_core::save::SaveFingerprint;
 
-/// Resolve the game's save directory via the GamePlugin trait.
+/// Resolve the game's save directory via the `GamePlugin` trait.
 ///
 /// Shared across profile and save commands to avoid duplication.
 pub fn resolve_save_dir(game_id: &str) -> Option<PathBuf> {
-    modde_games::resolve_game_plugin(game_id).and_then(|p| p.save_directory())
+    modde_games::resolve_game_plugin(game_id).and_then(modde_games::GamePlugin::save_directory)
 }
 
 /// Resolve the game's save directory, returning an error if not found.
@@ -78,17 +78,16 @@ pub fn load_profile_or_default(
     name: Option<&str>,
     game_id: Option<&str>,
 ) -> Result<Profile> {
-    match name {
-        Some(name) => Ok(pm.load(name, game_id)?),
-        None => {
-            let profiles = pm.list()?;
-            let first = profiles.first().ok_or_else(|| {
-                anyhow::anyhow!(
-                    "no profiles found. Create one with: modde profile create <name> --game <id>"
-                )
-            })?;
-            Ok(pm.load(&first.name, Some(&first.game_id))?)
-        }
+    if let Some(name) = name {
+        Ok(pm.load(name, game_id)?)
+    } else {
+        let profiles = pm.list()?;
+        let first = profiles.first().ok_or_else(|| {
+            anyhow::anyhow!(
+                "no profiles found. Create one with: modde profile create <name> --game <id>"
+            )
+        })?;
+        Ok(pm.load(&first.name, Some(&first.game_id))?)
     }
 }
 
@@ -104,10 +103,10 @@ pub fn load_plugin_order(pm: &ProfileManager, profile: &Profile) -> Result<Vec<P
     if plugins.is_empty() {
         plugins =
             modde_games::read_native_plugin_order(profile.game_id.as_str()).unwrap_or_default();
-        if !plugins.is_empty() {
-            if let Some(profile_id) = profile.id {
-                pm.db().set_plugin_order(profile_id, &plugins)?;
-            }
+        if !plugins.is_empty()
+            && let Some(profile_id) = profile.id
+        {
+            pm.db().set_plugin_order(profile_id, &plugins)?;
         }
     }
 

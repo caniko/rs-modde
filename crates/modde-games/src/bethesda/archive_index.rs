@@ -172,7 +172,7 @@ fn read_bsa(file: &mut (impl Read + Seek)) -> Result<Vec<ArchiveFileEntry>> {
             read_u64_le(file)?
         } else {
             // v104: 4-byte offset
-            read_u32_le(file)? as u64
+            u64::from(read_u32_le(file)?)
         };
         folder_records.push(BsaFolderRecord {
             _name_hash: name_hash,
@@ -222,10 +222,10 @@ fn read_bsa(file: &mut (impl Read + Seek)) -> Result<Vec<ArchiveFileEntry>> {
             let file_name = &file_names[name_idx];
             name_idx += 1;
 
-            let path = normalize_path(&format!("{}/{}", folder, file_name));
+            let path = normalize_path(&format!("{folder}/{file_name}"));
             entries.push(ArchiveFileEntry {
                 path,
-                size: rec.size as u64,
+                size: u64::from(rec.size),
             });
         }
     }
@@ -255,14 +255,14 @@ fn read_ba2(file: &mut (impl Read + Seek)) -> Result<Vec<ArchiveFileEntry>> {
         "GNRL" => {
             for _ in 0..file_count {
                 let _name_hash = read_u32_le(file)?;
-                let _ext = read_u32_le(file)?;      // 4-byte extension
+                let _ext = read_u32_le(file)?; // 4-byte extension
                 let _dir_hash = read_u32_le(file)?;
-                let _unknown = read_u32_le(file)?;   // flags / unknown
+                let _unknown = read_u32_le(file)?; // flags / unknown
                 let _offset = read_u64_le(file)?;
                 let _packed_size = read_u32_le(file)?;
                 let unpacked_size = read_u32_le(file)?;
-                let _sentinel = read_u32_le(file)?;  // 0xBAADF00D
-                sizes.push(unpacked_size as u64);
+                let _sentinel = read_u32_le(file)?; // 0xBAADF00D
+                sizes.push(u64::from(unpacked_size));
             }
         }
         "DX10" => {
@@ -314,7 +314,9 @@ fn read_ba2(file: &mut (impl Read + Seek)) -> Result<Vec<ArchiveFileEntry>> {
 /// Normalize a file path: lowercase, forward slashes, strip leading slash/dot.
 fn normalize_path(raw: &str) -> String {
     let s = raw.replace('\\', "/").to_lowercase();
-    s.trim_start_matches('/').trim_start_matches("./").to_string()
+    s.trim_start_matches('/')
+        .trim_start_matches("./")
+        .to_string()
 }
 
 #[cfg(test)]
@@ -412,7 +414,7 @@ mod tests {
         // We need to know the name table offset. Header is 4+4+4+4+8 = 24 bytes.
         // Each GNRL record is 36 bytes.
         let header_size: u64 = 24;
-        let records_size: u64 = file_count as u64 * 36;
+        let records_size: u64 = u64::from(file_count) * 36;
         let name_table_offset = header_size + records_size;
 
         buf.extend_from_slice(&name_table_offset.to_le_bytes());
@@ -425,7 +427,7 @@ mod tests {
             buf.extend_from_slice(&0u32.to_le_bytes()); // unknown/flags
             buf.extend_from_slice(&0u64.to_le_bytes()); // offset
             buf.extend_from_slice(&0u32.to_le_bytes()); // packed_size
-            buf.extend_from_slice(&size.to_le_bytes());  // unpacked_size
+            buf.extend_from_slice(&size.to_le_bytes()); // unpacked_size
             buf.extend_from_slice(&0xBAADF00Du32.to_le_bytes()); // sentinel
         }
 
@@ -462,10 +464,7 @@ mod tests {
 
     #[test]
     fn parse_synthetic_ba2_gnrl() {
-        let data = build_test_ba2(&[
-            ("textures\\sky.dds", 1024),
-            ("meshes\\tree.nif", 512),
-        ]);
+        let data = build_test_ba2(&[("textures\\sky.dds", 1024), ("meshes\\tree.nif", 512)]);
 
         let mut cursor = Cursor::new(&data);
         cursor.set_position(4);

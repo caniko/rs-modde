@@ -8,7 +8,10 @@ pub fn handle() -> Result<()> {
 
     let profiles_dir = paths::modde_data_dir().join("profiles");
     if !profiles_dir.exists() {
-        println!("No legacy profiles directory found at {}", profiles_dir.display());
+        println!(
+            "No legacy profiles directory found at {}",
+            profiles_dir.display()
+        );
         return Ok(());
     }
 

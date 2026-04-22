@@ -20,21 +20,15 @@ pub async fn handle(
     let profile = load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref())?;
 
     let classifier = modde_games::resolve_collision_classifier(&profile.game_id)
-        .ok_or_else(|| anyhow::anyhow!(
-            "no collision classifier for game '{}'", profile.game_id
-        ))?;
+        .ok_or_else(|| anyhow::anyhow!("no collision classifier for game '{}'", profile.game_id))?;
 
-    let resolved = resolver::resolve(&profile)
-        .context("failed to resolve load order")?;
+    let resolved = resolver::resolve(&profile).context("failed to resolve load order")?;
 
     let store = paths::store_dir();
 
-    let (conflict_map, origins) = collision::build_full_conflict_map(
-        &store,
-        &resolved.order,
-        classifier.as_ref(),
-    )
-    .context("failed to build conflict map")?;
+    let (conflict_map, origins) =
+        collision::build_full_conflict_map(&store, &resolved.order, classifier.as_ref())
+            .context("failed to build conflict map")?;
 
     // Load hidden files.
     let hidden: HashSet<(String, String)> = profile
@@ -141,7 +135,7 @@ pub async fn handle(
         if suggest_hides {
             println!("Suggested hide commands:");
             for (mod_id, file_path) in &report.redundant_files {
-                println!("  modde profile hide \"{}\" \"{}\"", mod_id, file_path);
+                println!("  modde profile hide \"{mod_id}\" \"{file_path}\"");
             }
         } else {
             println!("  Run with --suggest-hides to get hide commands");

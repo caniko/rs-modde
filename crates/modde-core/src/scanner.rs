@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::manifest::wabbajack::{
-    compute_manifest_hash, ArchiveEntry, ArchiveState, InstallDirective, WabbajackManifest,
+    ArchiveEntry, ArchiveState, InstallDirective, WabbajackManifest, compute_manifest_hash,
 };
 use crate::profile::{EnabledMod, LoadOrderLock, LockReason, Profile};
 
@@ -15,6 +15,7 @@ use crate::profile::{EnabledMod, LoadOrderLock, LockReason, Profile};
 ///
 /// - Nexus-sourced archives: `nexus_{game_domain}_{mod_id}_{file_id}`
 /// - Everything else:        `wj_{archive_hash}`
+#[must_use]
 pub fn archive_mod_id(archive: &ArchiveEntry) -> String {
     if let Some(ArchiveState::NexusDownloader {
         game_name,
@@ -56,6 +57,7 @@ pub struct ManifestMatch {
 ///
 /// `on_disk_files` should contain lowercased, forward-slash relative paths
 /// from the game install root.
+#[must_use]
 pub fn match_wabbajack_manifest(
     manifest: &WabbajackManifest,
     on_disk_files: &HashSet<String>,
@@ -79,10 +81,10 @@ pub fn match_wabbajack_manifest(
                 let normalized = to.replace('\\', "/");
 
                 // Extract the MO2 mod name before lowercasing (preserves casing).
-                if archive_mod_names.get(archive_hash).is_none() {
-                    if let Some(name) = extract_mo2_mod_name(&normalized) {
-                        archive_mod_names.insert(*archive_hash, name);
-                    }
+                if archive_mod_names.get(archive_hash).is_none()
+                    && let Some(name) = extract_mo2_mod_name(&normalized)
+                {
+                    archive_mod_names.insert(*archive_hash, name);
                 }
 
                 // Strip prefix and lowercase for matching.
@@ -97,11 +99,8 @@ pub fn match_wabbajack_manifest(
     }
 
     // Build archive hash → ArchiveEntry lookup for metadata.
-    let archive_map: HashMap<u64, &crate::manifest::wabbajack::ArchiveEntry> = manifest
-        .archives
-        .iter()
-        .map(|a| (a.hash, a))
-        .collect();
+    let archive_map: HashMap<u64, &crate::manifest::wabbajack::ArchiveEntry> =
+        manifest.archives.iter().map(|a| (a.hash, a)).collect();
 
     let mut results = Vec::new();
 
@@ -124,16 +123,14 @@ pub fn match_wabbajack_manifest(
         }
 
         let archive = archive_map.get(hash);
-        let archive_name = archive
-            .map(|a| a.name.clone())
-            .unwrap_or_else(|| format!("unknown_{hash}"));
+        let archive_name = archive.map_or_else(|| format!("unknown_{hash}"), |a| a.name.clone());
 
         // Display name: prefer cleaned archive filename (unique per archive).
         let display_name = clean_archive_name(&archive_name);
 
         let (nexus_mod_id, nexus_file_id, nexus_game_domain) = archive
             .and_then(|a| a.state.as_ref())
-            .map(|state| match state {
+            .map_or((None, None, None), |state| match state {
                 ArchiveState::NexusDownloader {
                     game_name,
                     mod_id,
@@ -144,8 +141,7 @@ pub fn match_wabbajack_manifest(
                     Some(game_name.clone()),
                 ),
                 _ => (None, None, None),
-            })
-            .unwrap_or((None, None, None));
+            });
 
         // Canonical mod_id — must match `archive_mod_id` exactly so Wabbajack
         // installs + retroactive scans dedup correctly.
@@ -179,6 +175,7 @@ pub fn match_wabbajack_manifest(
 }
 
 /// Convert a `ManifestMatch` into an `EnabledMod` for database storage.
+#[must_use]
 pub fn manifest_match_to_enabled(m: &ManifestMatch) -> EnabledMod {
     EnabledMod {
         mod_id: m.mod_id.clone(),
@@ -218,10 +215,10 @@ fn extract_mo2_mod_name(path: &str) -> Option<String> {
 /// `mods/<mod_name>/<game_relative_path>` → `<game_relative_path>`.
 /// Non-mod paths (e.g., MO2 executables) are returned as-is.
 fn strip_mo2_prefix(path: &str) -> String {
-    if let Some(rest) = path.strip_prefix("mods/") {
-        if let Some(idx) = rest.find('/') {
-            return rest[idx + 1..].to_string();
-        }
+    if let Some(rest) = path.strip_prefix("mods/")
+        && let Some(idx) = rest.find('/')
+    {
+        return rest[idx + 1..].to_string();
     }
     path.to_string()
 }
@@ -232,9 +229,9 @@ fn strip_mo2_prefix(path: &str) -> String {
 /// Strips the Nexus suffix pattern (mod_id-version-timestamp.ext).
 fn clean_archive_name(name: &str) -> String {
     // Strip extension.
-    let stem = name.rsplit_once('.').map(|(s, _)| s).unwrap_or(name);
+    let stem = name.rsplit_once('.').map_or(name, |(s, _)| s);
     // Nexus filenames: "ModName-modid-version-timestamp". Strip from first `-{digits}`.
-    if let Some(idx) = stem.find(|c: char| c == '-').and_then(|i| {
+    if let Some(idx) = stem.find('-').and_then(|i| {
         if stem[i + 1..].starts_with(|c: char| c.is_ascii_digit()) {
             Some(i)
         } else {
@@ -260,6 +257,7 @@ fn clean_archive_name(name: &str) -> String {
 /// appear in the install directives. Archives that never appear in a
 /// [`InstallDirective::FromArchive`] / [`InstallDirective::PatchedFromArchive`]
 /// are omitted.
+#[must_use]
 pub fn manifest_directive_order(manifest: &WabbajackManifest) -> Vec<String> {
     let archive_by_hash: HashMap<u64, &ArchiveEntry> =
         manifest.archives.iter().map(|a| (a.hash, a)).collect();
@@ -359,7 +357,7 @@ pub fn apply_wabbajack_lock(
 /// The filesystem footprint of a mod discovered by a game-specific
 /// filesystem scanner.
 ///
-/// Game scanners produce mod_ids in schemes like `cet/<name>`,
+/// Game scanners produce `mod_ids` in schemes like `cet/<name>`,
 /// `archive/<stem>`, etc. To correlate those rows against a Wabbajack
 /// manifest's install directives, we need to know what portion of the
 /// game directory each mod owns. That's what this enum expresses.
@@ -387,19 +385,19 @@ pub enum ModFootprint {
 /// filesystem-scanner rows into "covered by the manifest" (leaked
 /// duplicates) and "not covered" (genuine additions).
 ///
-/// mod_ids whose footprint cannot be determined by the supplied
+/// `mod_ids` whose footprint cannot be determined by the supplied
 /// `mod_id_to_footprint` closure (typically `nexus_*`, `wj_*`, or any
 /// non-filesystem-scheme row) are **not** included in either list —
 /// they're skipped silently because they aren't candidates for this
 /// kind of dedup.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DuplicateReport {
-    /// Filesystem-scanner mod_ids whose footprint is covered by the
+    /// Filesystem-scanner `mod_ids` whose footprint is covered by the
     /// manifest. These are safe to delete from the profile: a
     /// manifest-authored row (usually `nexus_*`) already deploys the
     /// same files under a different ID.
     pub leaked: Vec<String>,
-    /// Filesystem-scanner mod_ids whose footprint is **not** covered
+    /// Filesystem-scanner `mod_ids` whose footprint is **not** covered
     /// by the manifest. These are genuine additions the user made on
     /// top of the Wabbajack modlist and must be preserved.
     pub genuine: Vec<String>,
@@ -414,7 +412,7 @@ pub struct DuplicateReport {
 /// discussion in `docs/` (if present) for the design rationale.
 ///
 /// The `mod_id_to_footprint` closure is the game-specific bridge: it
-/// maps a filesystem-scanner mod_id (e.g. `cet/ImmersiveHealing`) back
+/// maps a filesystem-scanner `mod_id` (e.g. `cet/ImmersiveHealing`) back
 /// to the directory or file the mod owns in the game install. For
 /// Cyberpunk 2077 this is
 /// [`modde_games::cyberpunk::scanner::mod_id_footprint`]. Profiles
@@ -424,7 +422,7 @@ pub struct DuplicateReport {
 ///
 /// Classification rules:
 ///
-/// 1. If the closure returns `None` for a mod_id, the row is **not a
+/// 1. If the closure returns `None` for a `mod_id`, the row is **not a
 ///    candidate** — it's skipped silently. `nexus_*` and `wj_*` rows
 ///    are manifest-authored and shouldn't be classified as duplicates
 ///    of themselves.

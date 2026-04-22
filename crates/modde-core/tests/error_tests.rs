@@ -29,7 +29,10 @@ fn test_dependency_cycle_display() {
 fn test_file_conflict_display() {
     let err = CoreError::FileConflict {
         path: "textures/sky.dds".to_string(),
-        mods: Box::new(smallvec::smallvec!["mod_a".to_string(), "mod_b".to_string()]),
+        mods: Box::new(smallvec::smallvec![
+            "mod_a".to_string(),
+            "mod_b".to_string()
+        ]),
     };
     let msg = format!("{err}");
     assert!(msg.contains("textures/sky.dds"));
