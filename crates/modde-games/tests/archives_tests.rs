@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use modde_games::bethesda::archives::{is_archive, staging_path, BSA_EXTENSIONS};
+use modde_games::bethesda::archives::{BSA_EXTENSIONS, is_archive, staging_path};
 
 // ── is_archive tests ────────────────────────────────────────────────
 

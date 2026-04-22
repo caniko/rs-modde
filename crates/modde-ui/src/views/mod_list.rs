@@ -69,9 +69,21 @@ pub fn view_filtered<'a>(
 
     let filter_buttons = row![
         mode_btn,
-        tri_state_button("Enabled", FilterKind::Enabled, find_filter_state(active_filters, FilterKind::Enabled)),
-        tri_state_button("Notes", FilterKind::HasNotes, find_filter_state(active_filters, FilterKind::HasNotes)),
-        tri_state_button("Nexus", FilterKind::HasNexusId, find_filter_state(active_filters, FilterKind::HasNexusId)),
+        tri_state_button(
+            "Enabled",
+            FilterKind::Enabled,
+            find_filter_state(active_filters, FilterKind::Enabled)
+        ),
+        tri_state_button(
+            "Notes",
+            FilterKind::HasNotes,
+            find_filter_state(active_filters, FilterKind::HasNotes)
+        ),
+        tri_state_button(
+            "Nexus",
+            FilterKind::HasNexusId,
+            find_filter_state(active_filters, FilterKind::HasNexusId)
+        ),
         button(text("Clear").size(11))
             .on_press(Message::ClearFilters)
             .style(button::secondary)
@@ -109,11 +121,8 @@ pub fn view_filtered<'a>(
         .map(|(id, name)| (*id, name.as_str()))
         .collect();
 
-    let mut grouped: Vec<(Option<i64>, &str, Vec<usize>)> = build_category_groups(
-        &filtered_indices,
-        mods,
-        &category_map,
-    );
+    let mut grouped: Vec<(Option<i64>, &str, Vec<usize>)> =
+        build_category_groups(&filtered_indices, mods, &category_map);
 
     // Sort: uncategorized (None) first, then by category name
     grouped.sort_by(|a, b| {
@@ -128,16 +137,20 @@ pub fn view_filtered<'a>(
 
     // ── Build rows ──
     let mod_rows: Element<Message> = if filtered_indices.is_empty() {
-        container(
-            text("No mods found. Click 'Add Mod' to get started.").size(14),
-        )
-        .padding(20)
-        .width(Length::Fill)
-        .center_x(Length::Fill)
-        .into()
+        container(text("No mods found. Click 'Add Mod' to get started.").size(14))
+            .padding(20)
+            .width(Length::Fill)
+            .center_x(Length::Fill)
+            .into()
     } else if categories.is_empty() {
         // No categories defined — flat list
-        let rows = build_flat_mod_rows(&filtered_indices, mods, selected_index, compact, profile_locked);
+        let rows = build_flat_mod_rows(
+            &filtered_indices,
+            mods,
+            selected_index,
+            compact,
+            profile_locked,
+        );
         scrollable(rows).height(Length::Fill).into()
     } else {
         // Categorized list with collapsible separators
@@ -214,7 +227,11 @@ fn build_category_groups<'a>(
             let name = category_map
                 .get(&cat_id)
                 .copied()
-                .unwrap_or(if cat_id.is_none() { UNCATEGORIZED_LABEL } else { "Unknown" });
+                .unwrap_or(if cat_id.is_none() {
+                    UNCATEGORIZED_LABEL
+                } else {
+                    "Unknown"
+                });
             (cat_id, name, indices)
         })
         .collect()
@@ -229,7 +246,14 @@ fn build_flat_mod_rows<'a>(
     profile_locked: bool,
 ) -> iced::widget::Column<'a, Message> {
     indices.iter().fold(column![].spacing(2), |col, &idx| {
-        col.push(mod_row(idx, &mods[idx], selected_index, mods.len(), compact, profile_locked))
+        col.push(mod_row(
+            idx,
+            &mods[idx],
+            selected_index,
+            mods.len(),
+            compact,
+            profile_locked,
+        ))
     })
 }
 
@@ -250,12 +274,9 @@ fn build_categorized_rows<'a>(
         let count_label = format!("{} ({} mods)", cat_name, indices.len());
 
         let separator = button(
-            row![
-                text(toggle_icon).size(12),
-                text(count_label).size(12),
-            ]
-            .spacing(6)
-            .align_y(Alignment::Center),
+            row![text(toggle_icon).size(12), text(count_label).size(12),]
+                .spacing(6)
+                .align_y(Alignment::Center),
         )
         .on_press(Message::ToggleSeparator(*cat_id))
         .style(button::text)
@@ -267,7 +288,14 @@ fn build_categorized_rows<'a>(
 
         if !is_collapsed {
             for &idx in indices {
-                col = col.push(mod_row(idx, &mods[idx], selected_index, mods.len(), compact, profile_locked));
+                col = col.push(mod_row(
+                    idx,
+                    &mods[idx],
+                    selected_index,
+                    mods.len(),
+                    compact,
+                    profile_locked,
+                ));
             }
         }
     }

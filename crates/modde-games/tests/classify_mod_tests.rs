@@ -1,8 +1,8 @@
 //! Tests for `classify_mod_by_content` and the per-game `classify_mod` methods.
 
-use modde_games::{classify_mod_by_content, GamePlugin, ModClassifyConfig, ModSafety};
 use modde_games::bethesda::{FALLOUT4, SKYRIM_SE};
 use modde_games::cyberpunk::Cyberpunk2077;
+use modde_games::{GamePlugin, ModClassifyConfig, ModSafety, classify_mod_by_content};
 
 // ── classify_mod_by_content shared walker ────────────────────────────────────
 
@@ -105,35 +105,50 @@ fn classify_nested_cosmetic_files() {
 fn cyberpunk_classify_reds_is_save_breaking() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join("mymod.reds"), b"redscript").unwrap();
-    assert_eq!(Cyberpunk2077.classify_mod(tmp.path()), ModSafety::SaveBreaking);
+    assert_eq!(
+        Cyberpunk2077.classify_mod(tmp.path()),
+        ModSafety::SaveBreaking
+    );
 }
 
 #[test]
 fn cyberpunk_classify_lua_is_save_breaking() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join("init.lua"), b"lua").unwrap();
-    assert_eq!(Cyberpunk2077.classify_mod(tmp.path()), ModSafety::SaveBreaking);
+    assert_eq!(
+        Cyberpunk2077.classify_mod(tmp.path()),
+        ModSafety::SaveBreaking
+    );
 }
 
 #[test]
 fn cyberpunk_classify_tweak_is_save_breaking() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join("damage.tweak"), b"tweak").unwrap();
-    assert_eq!(Cyberpunk2077.classify_mod(tmp.path()), ModSafety::SaveBreaking);
+    assert_eq!(
+        Cyberpunk2077.classify_mod(tmp.path()),
+        ModSafety::SaveBreaking
+    );
 }
 
 #[test]
 fn cyberpunk_classify_xl_is_save_breaking() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join("mod.xl"), b"xl").unwrap();
-    assert_eq!(Cyberpunk2077.classify_mod(tmp.path()), ModSafety::SaveBreaking);
+    assert_eq!(
+        Cyberpunk2077.classify_mod(tmp.path()),
+        ModSafety::SaveBreaking
+    );
 }
 
 #[test]
 fn cyberpunk_classify_yaml_is_save_breaking() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join("config.yaml"), b"yaml").unwrap();
-    assert_eq!(Cyberpunk2077.classify_mod(tmp.path()), ModSafety::SaveBreaking);
+    assert_eq!(
+        Cyberpunk2077.classify_mod(tmp.path()),
+        ModSafety::SaveBreaking
+    );
 }
 
 #[test]
@@ -144,7 +159,10 @@ fn cyberpunk_classify_cet_dir_is_save_breaking() {
         .join("bin/x64/plugins/cyber_engine_tweaks/mods/mymod");
     std::fs::create_dir_all(&cet).unwrap();
     std::fs::write(cet.join("init.lua"), b"lua").unwrap();
-    assert_eq!(Cyberpunk2077.classify_mod(tmp.path()), ModSafety::SaveBreaking);
+    assert_eq!(
+        Cyberpunk2077.classify_mod(tmp.path()),
+        ModSafety::SaveBreaking
+    );
 }
 
 #[test]
@@ -153,7 +171,10 @@ fn cyberpunk_classify_r6_scripts_dir_is_save_breaking() {
     let scripts = tmp.path().join("r6/scripts");
     std::fs::create_dir_all(&scripts).unwrap();
     std::fs::write(scripts.join("mod.reds"), b"reds").unwrap();
-    assert_eq!(Cyberpunk2077.classify_mod(tmp.path()), ModSafety::SaveBreaking);
+    assert_eq!(
+        Cyberpunk2077.classify_mod(tmp.path()),
+        ModSafety::SaveBreaking
+    );
 }
 
 #[test]

@@ -53,9 +53,7 @@ impl DownloadSource for GitHubSource {
             anyhow::bail!("not a GitHub directive");
         };
 
-        let url = format!(
-            "https://api.github.com/repos/{user}/{repo}/releases/tags/{tag}"
-        );
+        let url = format!("https://api.github.com/repos/{user}/{repo}/releases/tags/{tag}");
 
         let mut req = self.client.get(&url).header("User-Agent", "modde");
         if let Some(token) = &self.token {

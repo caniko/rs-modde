@@ -1,5 +1,5 @@
 use iced::widget::{button, column, container, row, scrollable, text};
-use iced::{color, Alignment, Element, Length};
+use iced::{Alignment, Element, Length, color};
 
 use crate::app::{Message, VerifyState};
 
@@ -10,20 +10,24 @@ pub fn view(state: &VerifyState) -> Element<'_, Message> {
         text("Verification").size(20),
         iced::widget::space::horizontal(),
         button(text(if running { "Running..." } else { "Run Verify" }).size(14))
-            .on_press_maybe(if running { None } else { Some(Message::RunVerify) })
+            .on_press_maybe(if running {
+                None
+            } else {
+                Some(Message::RunVerify)
+            })
             .style(button::primary)
             .padding([6, 14]),
     ]
     .align_y(Alignment::Center);
 
     let content: Element<Message> = match state {
-        VerifyState::Idle | VerifyState::Running => container(
-            text("Click 'Run Verify' to check installed mod integrity.").size(14),
-        )
-        .padding(20)
-        .width(Length::Fill)
-        .center_x(Length::Fill)
-        .into(),
+        VerifyState::Idle | VerifyState::Running => {
+            container(text("Click 'Run Verify' to check installed mod integrity.").size(14))
+                .padding(20)
+                .width(Length::Fill)
+                .center_x(Length::Fill)
+                .into()
+        }
 
         VerifyState::Complete(results) => {
             let mut col = column![].spacing(12);
@@ -43,12 +47,12 @@ pub fn view(state: &VerifyState) -> Element<'_, Message> {
                 .size(16)
                 .color(color!(0xFF4444));
 
-                let broken_list = results.broken_symlinks.iter().fold(
-                    column![].spacing(2),
-                    |col, path| {
+                let broken_list = results
+                    .broken_symlinks
+                    .iter()
+                    .fold(column![].spacing(2), |col, path| {
                         col.push(text(path.display().to_string()).size(12))
-                    },
-                );
+                    });
 
                 col = col.push(broken_header);
                 col = col.push(
@@ -94,17 +98,16 @@ pub fn view(state: &VerifyState) -> Element<'_, Message> {
 
             // Missing mods
             if !results.missing_mods.is_empty() {
-                let missing_header = text(format!(
-                    "{} missing mod(s)",
-                    results.missing_mods.len()
-                ))
-                .size(16)
-                .color(color!(0xFF8844));
+                let missing_header = text(format!("{} missing mod(s)", results.missing_mods.len()))
+                    .size(16)
+                    .color(color!(0xFF8844));
 
-                let missing_list = results.missing_mods.iter().fold(
-                    column![].spacing(2),
-                    |col, mod_id| col.push(text(mod_id).size(12)),
-                );
+                let missing_list = results
+                    .missing_mods
+                    .iter()
+                    .fold(column![].spacing(2), |col, mod_id| {
+                        col.push(text(mod_id).size(12))
+                    });
 
                 col = col.push(missing_header);
                 col = col.push(

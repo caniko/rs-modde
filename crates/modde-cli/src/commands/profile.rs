@@ -8,8 +8,8 @@ use modde_core::profile::{
 };
 use modde_core::save::SaveFingerprint;
 
-use crate::ProfileAction;
 use super::{compute_fingerprint, resolve_save_dir};
+use crate::ProfileAction;
 
 /// Human-readable byte size (KB/MB/GB) for `lock-info` output.
 fn format_bytes(bytes: u64) -> String {
@@ -74,7 +74,10 @@ pub fn handle(action: ProfileAction) -> Result<()> {
                 println!("No profiles found.");
             } else {
                 for p in profiles {
-                    println!("  {} (game: {}, {} mods, source: {})", p.name, p.game_id, p.mod_count, p.source_type);
+                    println!(
+                        "  {} (game: {}, {} mods, source: {})",
+                        p.name, p.game_id, p.mod_count, p.source_type
+                    );
                 }
             }
         }
@@ -121,25 +124,24 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             let save_dir = resolve_save_dir(&game);
             let fp = compute_fingerprint(&pm, &name, &game);
             pm.try_profile_with_fingerprint(&name, &game, save_dir.as_deref(), fp.as_ref())?;
-            let depth = pm.active(&game)?
-                .map(|a| a.experiment_depth)
-                .unwrap_or(0);
+            let depth = pm.active(&game)?.map(|a| a.experiment_depth).unwrap_or(0);
             println!("Experimenting with profile: {name} (stack depth: {depth})");
-            println!("Use `modde profile rollback --game {game}` to undo, or `modde profile commit --game {game}` to accept.");
+            println!(
+                "Use `modde profile rollback --game {game}` to undo, or `modde profile commit --game {game}` to accept."
+            );
         }
         ProfileAction::Rollback { game } => {
             let save_dir = resolve_save_dir(&game);
 
             // Compute fingerprint for the current (about-to-be-rolled-back) profile
-            let fp = pm.active(&game)?
-                .and_then(|info| {
-                    let game_plugin = modde_games::resolve_game_plugin(&game)?;
-                    let staging_dir = ProfileManager::staging_dir(&info.profile.name);
-                    Some(SaveFingerprint::compute(&info.profile.mods, |mod_id| {
-                        let mod_path = staging_dir.join(mod_id);
-                        game_plugin.classify_mod(&mod_path).affects_saves()
-                    }))
-                });
+            let fp = pm.active(&game)?.and_then(|info| {
+                let game_plugin = modde_games::resolve_game_plugin(&game)?;
+                let staging_dir = ProfileManager::staging_dir(&info.profile.name);
+                Some(SaveFingerprint::compute(&info.profile.mods, |mod_id| {
+                    let mod_path = staging_dir.join(mod_id);
+                    game_plugin.classify_mod(&mod_path).affects_saves()
+                }))
+            });
 
             let restored = pm.rollback_with_fingerprint(&game, save_dir.as_deref(), fp.as_ref())?;
             println!("Rolled back to profile: {restored}");
@@ -151,16 +153,28 @@ pub fn handle(action: ProfileAction) -> Result<()> {
         ProfileAction::Active { game } => {
             match pm.active(&game)? {
                 Some(info) => {
-                    println!("Active profile: {} (game: {})", info.profile.name, info.profile.game_id);
+                    println!(
+                        "Active profile: {} (game: {})",
+                        info.profile.name, info.profile.game_id
+                    );
                     println!("  Mods: {}", info.profile.mods.len());
                     if info.experiment_depth > 0 {
-                        println!("  Experiment depth: {} (use `rollback` to undo or `commit` to accept)", info.experiment_depth);
+                        println!(
+                            "  Experiment depth: {} (use `rollback` to undo or `commit` to accept)",
+                            info.experiment_depth
+                        );
                     }
 
                     // Show fingerprint info
-                    if let Some(fp) = compute_fingerprint(&pm, &info.profile.name, info.profile.game_id.as_str()) {
+                    if let Some(fp) =
+                        compute_fingerprint(&pm, &info.profile.name, info.profile.game_id.as_str())
+                    {
                         if !fp.is_empty() {
-                            println!("  Save fingerprint: {} ({} save-breaking mod(s))", fp.short_hash(), fp.mod_ids.len());
+                            println!(
+                                "  Save fingerprint: {} ({} save-breaking mod(s))",
+                                fp.short_hash(),
+                                fp.mod_ids.len()
+                            );
                         } else {
                             println!("  Save fingerprint: none (no save-breaking mods)");
                         }
@@ -171,7 +185,12 @@ pub fn handle(action: ProfileAction) -> Result<()> {
                 }
             }
         }
-        ProfileAction::Fork { source, name, game, unlock } => {
+        ProfileAction::Fork {
+            source,
+            name,
+            game,
+            unlock,
+        } => {
             let id = pm.fork_with_options(
                 &source,
                 &name,
@@ -228,8 +247,7 @@ pub fn handle(action: ProfileAction) -> Result<()> {
                     // For Wabbajack locks, also show the cached source file
                     // status so the user can re-verify / re-import from it.
                     if let LockReason::Wabbajack { manifest_hash } = &lock.reason {
-                        let cache_path =
-                            modde_core::paths::wabbajack_cache_path(manifest_hash);
+                        let cache_path = modde_core::paths::wabbajack_cache_path(manifest_hash);
                         match std::fs::metadata(&cache_path) {
                             Ok(meta) => println!(
                                 "  Source:    {} ({})",
@@ -292,10 +310,7 @@ pub fn handle(action: ProfileAction) -> Result<()> {
                 None => println!("'{mod_id}' was not pinned"),
                 Some(prior) => {
                     pm.update(&profile)?;
-                    println!(
-                        "Unpinned '{mod_id}' (was {})",
-                        format_lock_reason(&prior)
-                    );
+                    println!("Unpinned '{mod_id}' (was {})", format_lock_reason(&prior));
                 }
             }
         }
@@ -387,16 +402,13 @@ fn dedup(
     // Resolve the per-game footprint mapping once. For games we don't
     // yet support, `mod_id_footprint` returns None for every row, which
     // means layer-2 classification is a no-op and we surface it cleanly.
-    let scanner = modde_games::resolve_mod_scanner(profile.game_id.as_str())
-        .ok_or_else(|| anyhow::anyhow!(
-            "no mod scanner available for game '{}'", profile.game_id
-        ))?;
+    let scanner = modde_games::resolve_mod_scanner(profile.game_id.as_str()).ok_or_else(|| {
+        anyhow::anyhow!("no mod scanner available for game '{}'", profile.game_id)
+    })?;
 
-    let report = modde_core::scanner::detect_stale_duplicates(
-        &profile,
-        &wj_manifest,
-        |mod_id| scanner.mod_id_footprint(mod_id),
-    );
+    let report = modde_core::scanner::detect_stale_duplicates(&profile, &wj_manifest, |mod_id| {
+        scanner.mod_id_footprint(mod_id)
+    });
 
     println!(
         "\nManifest: {} by {} ({} archives, {} directives)",
@@ -446,7 +458,9 @@ fn dedup(
     let leaked_set: std::collections::HashSet<&str> =
         report.leaked.iter().map(|s| s.as_str()).collect();
     let before = profile.mods.len();
-    profile.mods.retain(|m| !leaked_set.contains(m.mod_id.as_str()));
+    profile
+        .mods
+        .retain(|m| !leaked_set.contains(m.mod_id.as_str()));
     let deleted = before - profile.mods.len();
 
     pm.update(&profile).context("failed to save profile")?;

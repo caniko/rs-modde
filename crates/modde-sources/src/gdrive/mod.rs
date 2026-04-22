@@ -77,11 +77,16 @@ async fn do_download(
     if content_type.contains("text/html") {
         debug!("got virus scan warning page, extracting confirm token");
         let body = resp.text().await?;
-        let confirm_token = extract_confirm_token(&body)
-            .ok_or_else(|| anyhow::anyhow!("failed to extract confirm token from virus scan page"))?;
+        let confirm_token = extract_confirm_token(&body).ok_or_else(|| {
+            anyhow::anyhow!("failed to extract confirm token from virus scan page")
+        })?;
 
         let confirmed_url = format!("{}&confirm={confirm_token}", handle.url);
-        let resp = client.get(&confirmed_url).send().await?.error_for_status()?;
+        let resp = client
+            .get(&confirmed_url)
+            .send()
+            .await?
+            .error_for_status()?;
         stream_to_file(resp, dest, handle.size_hint.unwrap_or(0), progress).await?;
     } else {
         stream_to_file(resp, dest, handle.size_hint.unwrap_or(0), progress).await?;
@@ -137,7 +142,8 @@ mod tests {
 
     #[test]
     fn confirm_token_pattern1_ampersand_delimited() {
-        let html = r#"<a href="https://drive.google.com/uc?id=ID&confirm=t&export=download">Download</a>"#;
+        let html =
+            r#"<a href="https://drive.google.com/uc?id=ID&confirm=t&export=download">Download</a>"#;
         assert_eq!(extract_confirm_token(html), Some("t".to_string()));
     }
 
@@ -172,18 +178,13 @@ mod tests {
 
     #[test]
     fn confirm_token_pattern2_input_field() {
-        let html =
-            r#"<input type="hidden" name="confirm" value="SecretVal"><input type="submit">"#;
-        assert_eq!(
-            extract_confirm_token(html),
-            Some("SecretVal".to_string())
-        );
+        let html = r#"<input type="hidden" name="confirm" value="SecretVal"><input type="submit">"#;
+        assert_eq!(extract_confirm_token(html), Some("SecretVal".to_string()));
     }
 
     #[test]
     fn confirm_token_pattern2_with_extra_attrs() {
-        let html =
-            r#"<input class="foo" name="confirm" id="bar" value="TOKEN42">"#;
+        let html = r#"<input class="foo" name="confirm" id="bar" value="TOKEN42">"#;
         assert_eq!(extract_confirm_token(html), Some("TOKEN42".to_string()));
     }
 
@@ -197,8 +198,7 @@ mod tests {
 
     #[test]
     fn confirm_token_pattern3_uc_download_link_quote_end() {
-        let html =
-            r#"<a id="uc-download-link" href="/uc?export=download&confirm=TOK">"#;
+        let html = r#"<a id="uc-download-link" href="/uc?export=download&confirm=TOK">"#;
         assert_eq!(extract_confirm_token(html), Some("TOK".to_string()));
     }
 

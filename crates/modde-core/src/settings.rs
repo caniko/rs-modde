@@ -59,7 +59,8 @@ impl AppSettings {
 
     /// Get the install path for a game, if configured.
     pub fn game_path(&self, game_id: &str) -> Option<&PathBuf> {
-        self.game_paths.iter()
+        self.game_paths
+            .iter()
             .find(|gp| gp.game_id == game_id)
             .map(|gp| &gp.path)
     }

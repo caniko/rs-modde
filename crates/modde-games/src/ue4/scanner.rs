@@ -4,7 +4,7 @@ use std::path::Path;
 use anyhow::Result;
 
 use crate::traits::{
-    walk_files_relative, DiscoveredFile, DiscoveredMod, ModScanner, ModSource, ScanContext,
+    DiscoveredFile, DiscoveredMod, ModScanner, ModSource, ScanContext, walk_files_relative,
 };
 
 /// Data-driven scanner for UE4 pak-based mods.

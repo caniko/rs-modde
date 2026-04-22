@@ -63,7 +63,10 @@ fn cli_profile_help() {
 
 #[test]
 fn cli_install_mod_help() {
-    modde().args(["install", "mod", "--help"]).assert().success();
+    modde()
+        .args(["install", "mod", "--help"])
+        .assert()
+        .success();
 }
 
 #[test]

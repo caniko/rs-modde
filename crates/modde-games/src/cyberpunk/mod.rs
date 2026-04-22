@@ -17,19 +17,17 @@ pub struct Cyberpunk2077;
 pub static CYBERPUNK2077: Cyberpunk2077 = Cyberpunk2077;
 
 /// File extensions that indicate a mod alters game logic.
-const CYBERPUNK_SAVE_BREAKING_EXT: &[&str] = &[
-    "reds", "lua", "tweak", "xl", "yaml", "yls",
-];
+const CYBERPUNK_SAVE_BREAKING_EXT: &[&str] = &["reds", "lua", "tweak", "xl", "yaml", "yls"];
 
 /// Directories within a mod that signal save-breaking content.
 const CYBERPUNK_SAVE_BREAKING_DIRS: &[&str] = &[
-    "r6/scripts", "r6/tweaks", "bin/x64/plugins/cyber_engine_tweaks/mods",
+    "r6/scripts",
+    "r6/tweaks",
+    "bin/x64/plugins/cyber_engine_tweaks/mods",
 ];
 
 /// Extensions that are purely cosmetic.
-const CYBERPUNK_COSMETIC_EXT: &[&str] = &[
-    "archive", "xl", "png", "jpg", "dds", "tga", "ini",
-];
+const CYBERPUNK_COSMETIC_EXT: &[&str] = &["archive", "xl", "png", "jpg", "dds", "tga", "ini"];
 
 const CYBERPUNK_CLASSIFY_CONFIG: ModClassifyConfig = ModClassifyConfig {
     save_breaking_ext: CYBERPUNK_SAVE_BREAKING_EXT,
@@ -41,13 +39,13 @@ const CYBERPUNK_CLASSIFY_CONFIG: ModClassifyConfig = ModClassifyConfig {
 /// When present in the game's executable directory, these need Wine `n,b` overrides
 /// so Wine loads the native (mod) version instead of its built-in stub.
 const KNOWN_PROXY_DLLS: &[&str] = &[
-    "version",    // CET (Cyber Engine Tweaks), ASI loaders
-    "winmm",      // ASI loader, some mod frameworks
-    "dinput8",    // Various mod frameworks
-    "d3d11",      // ReShade, ENB
-    "dxgi",       // OptiScaler, ReShade (often handled by fgmod)
-    "winhttp",    // Some mod loaders
-    "xinput1_3",  // Controller hook mods
+    "version",   // CET (Cyber Engine Tweaks), ASI loaders
+    "winmm",     // ASI loader, some mod frameworks
+    "dinput8",   // Various mod frameworks
+    "d3d11",     // ReShade, ENB
+    "dxgi",      // OptiScaler, ReShade (often handled by fgmod)
+    "winhttp",   // Some mod loaders
+    "xinput1_3", // Controller hook mods
 ];
 
 impl GamePlugin for Cyberpunk2077 {
@@ -92,8 +90,8 @@ impl GamePlugin for Cyberpunk2077 {
         let save_suffix = "pfx/drive_c/users/steamuser/Saved Games/CD Projekt Red/Cyberpunk 2077";
 
         // Check Heroic prefixes (GOG / sideload)
-        let heroic_prefixes = modde_core::paths::home_dir()
-            .join("Games/Heroic/Prefixes/default/Cyberpunk 2077");
+        let heroic_prefixes =
+            modde_core::paths::home_dir().join("Games/Heroic/Prefixes/default/Cyberpunk 2077");
         let heroic_path = heroic_prefixes.join(save_suffix);
         if heroic_path.exists() {
             return Some(heroic_path);
@@ -101,7 +99,7 @@ impl GamePlugin for Cyberpunk2077 {
 
         // Steam Proton prefix
         let compat = modde_core::paths::steam_common()
-            .parent()?  // steamapps/
+            .parent()? // steamapps/
             .join("compatdata/1091500")
             .join(save_suffix);
         if compat.exists() {
@@ -145,7 +143,11 @@ impl GamePlugin for Cyberpunk2077 {
                 continue;
             }
 
-            for dll_entry in std::fs::read_dir(&mod_bin_x64).into_iter().flatten().flatten() {
+            for dll_entry in std::fs::read_dir(&mod_bin_x64)
+                .into_iter()
+                .flatten()
+                .flatten()
+            {
                 let name = dll_entry.file_name().to_string_lossy().to_lowercase();
                 if let Some(stem) = name.strip_suffix(".dll") {
                     if KNOWN_PROXY_DLLS.contains(&stem) && !overrides.contains(&stem.to_string()) {
@@ -206,7 +208,9 @@ impl GamePlugin for Cyberpunk2077 {
         // If any of them exist at the extraction root, treat the archive
         // as a bare extract — the deploy step will symlink into
         // `<install>/mods/<name>/` via the REDmod loader.
-        for name in ["r6", "archive", "archives", "bin", "engine", "mods", "red4ext"] {
+        for name in [
+            "r6", "archive", "archives", "bin", "engine", "mods", "red4ext",
+        ] {
             if extracted_dir.join(name).is_dir() {
                 return true;
             }
@@ -214,4 +218,3 @@ impl GamePlugin for Cyberpunk2077 {
         false
     }
 }
-

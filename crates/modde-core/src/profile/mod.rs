@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
-pub use crate::db::ProfileSummary;
 use crate::db::ModdeDb;
+pub use crate::db::ProfileSummary;
 use crate::error::{CoreError, Result};
 use crate::resolver::{GameId, LoadOrderRule};
 use crate::save::{SaveFingerprint, SaveManager};
@@ -81,8 +81,13 @@ pub struct EnabledMod {
 pub enum ProfileSource {
     #[default]
     Manual,
-    NexusCollection { slug: String, version: String },
-    Wabbajack { manifest_hash: String },
+    NexusCollection {
+        slug: String,
+        version: String,
+    },
+    Wabbajack {
+        manifest_hash: String,
+    },
 }
 
 /// Why a profile's load order (or an individual mod) is locked.
@@ -285,7 +290,9 @@ pub fn validate_profile_name(name: &str) -> Result<()> {
         return Err(CoreError::Validation("profile name cannot be empty".into()));
     }
     if name.len() > 255 {
-        return Err(CoreError::Validation("profile name too long (max 255 characters)".into()));
+        return Err(CoreError::Validation(
+            "profile name too long (max 255 characters)".into(),
+        ));
     }
     // Check for filesystem-unsafe characters
     if name.contains(['/', '\\', '\0', ':', '*', '?', '"', '<', '>', '|']) {
@@ -355,7 +362,9 @@ impl ProfileManager {
             Err(CoreError::Database(_)) => {
                 self.db.update_profile(profile)?;
                 // Return the existing ID
-                let loaded = self.db.load_profile(&profile.name, profile.game_id.as_str())?;
+                let loaded = self
+                    .db
+                    .load_profile(&profile.name, profile.game_id.as_str())?;
                 Ok(loaded.id.unwrap_or(0))
             }
             Err(e) => Err(e),
@@ -420,9 +429,9 @@ impl ProfileManager {
         fingerprint: Option<&SaveFingerprint>,
     ) -> Result<ActivateResult> {
         let profile = self.db.load_profile(name, game_id)?;
-        let profile_id = profile.id.ok_or_else(|| {
-            CoreError::Other("profile has no database ID".into())
-        })?;
+        let profile_id = profile
+            .id
+            .ok_or_else(|| CoreError::Other("profile has no database ID".into()))?;
 
         if let Some(dir) = save_dir {
             let sm = SaveManager::new(&self.db);
@@ -436,13 +445,7 @@ impl ProfileManager {
             let current = self.db.get_active_profile(game_id)?;
             let current_name = current.map(|(_, name)| name);
 
-            sm.activate_with_fingerprint(
-                game_id,
-                name,
-                current_name.as_deref(),
-                dir,
-                fingerprint,
-            )?;
+            sm.activate_with_fingerprint(game_id, name, current_name.as_deref(), dir, fingerprint)?;
         }
 
         self.db.set_active_profile(game_id, profile_id)?;
@@ -454,12 +457,7 @@ impl ProfileManager {
     ///
     /// `save_dir` is the game's save directory. If `None`, save swapping is skipped.
     /// `fingerprint` is the current profile's mod fingerprint.
-    pub fn try_profile(
-        &self,
-        name: &str,
-        game_id: &str,
-        save_dir: Option<&Path>,
-    ) -> Result<()> {
+    pub fn try_profile(&self, name: &str, game_id: &str, save_dir: Option<&Path>) -> Result<()> {
         self.try_profile_with_fingerprint(name, game_id, save_dir, None)
     }
 
@@ -471,26 +469,22 @@ impl ProfileManager {
         save_dir: Option<&Path>,
         fingerprint: Option<&SaveFingerprint>,
     ) -> Result<()> {
-        let (current_id, current_name) = self.db.get_active_profile(game_id)?
+        let (current_id, current_name) = self
+            .db
+            .get_active_profile(game_id)?
             .ok_or_else(|| CoreError::NoActiveProfile(game_id.to_string()))?;
 
         let new_profile = self.db.load_profile(name, game_id)?;
-        let new_id = new_profile.id.ok_or_else(|| {
-            CoreError::Other("profile has no database ID".into())
-        })?;
+        let new_id = new_profile
+            .id
+            .ok_or_else(|| CoreError::Other("profile has no database ID".into()))?;
 
         // Push current profile onto experiment stack (before switching)
         self.db.push_experiment(game_id, current_id)?;
 
         if let Some(dir) = save_dir {
             let sm = SaveManager::new(&self.db);
-            sm.activate_with_fingerprint(
-                game_id,
-                name,
-                Some(&current_name),
-                dir,
-                fingerprint,
-            )?;
+            sm.activate_with_fingerprint(game_id, name, Some(&current_name), dir, fingerprint)?;
         }
 
         self.db.set_active_profile(game_id, new_id)?;
@@ -503,11 +497,7 @@ impl ProfileManager {
     ///
     /// `save_dir` is the game's save directory. If `None`, save swapping is skipped.
     /// `fingerprint` is the current profile's mod fingerprint.
-    pub fn rollback(
-        &self,
-        game_id: &str,
-        save_dir: Option<&Path>,
-    ) -> Result<String> {
+    pub fn rollback(&self, game_id: &str, save_dir: Option<&Path>) -> Result<String> {
         self.rollback_with_fingerprint(game_id, save_dir, None)
     }
 
@@ -518,10 +508,14 @@ impl ProfileManager {
         save_dir: Option<&Path>,
         fingerprint: Option<&SaveFingerprint>,
     ) -> Result<String> {
-        let prev_id = self.db.pop_experiment(game_id)?
+        let prev_id = self
+            .db
+            .pop_experiment(game_id)?
             .ok_or_else(|| CoreError::NotInExperiment(game_id.to_string()))?;
 
-        let (_current_id, current_name) = self.db.get_active_profile(game_id)?
+        let (_current_id, current_name) = self
+            .db
+            .get_active_profile(game_id)?
             .ok_or_else(|| CoreError::NoActiveProfile(game_id.to_string()))?;
 
         let prev_profile = self.db.load_profile_by_id(prev_id)?;
@@ -575,12 +569,7 @@ impl ProfileManager {
     /// [`Self::fork_with_options`] (or `modde profile fork --unlock`) for
     /// the "fork to diverge" workflow where the new profile starts
     /// unlocked so it can be freely reorganised.
-    pub fn fork(
-        &self,
-        source_name: &str,
-        new_name: &str,
-        game_id: &str,
-    ) -> Result<i64> {
+    pub fn fork(&self, source_name: &str, new_name: &str, game_id: &str) -> Result<i64> {
         self.fork_with_options(source_name, new_name, game_id, ForkOptions::default())
     }
 

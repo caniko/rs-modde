@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 use modde_core::fs::walk_files;
 use modde_core::hash;
@@ -55,7 +55,9 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
                                     );
                                     mismatches.push(format!(
                                         "{}:{} (broken symlink -> {})",
-                                        enabled_mod.mod_id, file_path.display(), target.display()
+                                        enabled_mod.mod_id,
+                                        file_path.display(),
+                                        target.display()
                                     ));
                                 }
                             }
@@ -63,7 +65,8 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
                                 error!(file = %file_path.display(), error = %e, "failed to read symlink");
                                 mismatches.push(format!(
                                     "{}:{} (symlink read error: {e})",
-                                    enabled_mod.mod_id, file_path.display()
+                                    enabled_mod.mod_id,
+                                    file_path.display()
                                 ));
                             }
                         }
@@ -73,7 +76,8 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
                     error!(file = %file_path.display(), error = %e, "failed to hash file");
                     mismatches.push(format!(
                         "{}:{} (hash error: {e})",
-                        enabled_mod.mod_id, file_path.display()
+                        enabled_mod.mod_id,
+                        file_path.display()
                     ));
                 }
             }

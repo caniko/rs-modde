@@ -26,7 +26,9 @@ pub fn tracked_inis(game_id: &str) -> &'static [&'static str] {
 
 /// Get the profile-specific INI storage directory.
 pub fn profile_ini_dir(profile_name: &str) -> PathBuf {
-    modde_core::paths::profiles_dir().join(profile_name).join("ini")
+    modde_core::paths::profiles_dir()
+        .join(profile_name)
+        .join("ini")
 }
 
 /// Get the game's INI directory (under Proton prefix).
@@ -40,22 +42,14 @@ pub fn game_ini_dir(steam_app_id: &str, my_games_dir: &str) -> Option<PathBuf> {
         .join(steam_app_id)
         .join("pfx/drive_c/Users/steamuser/Documents/My Games")
         .join(my_games_dir);
-    if path.exists() {
-        Some(path)
-    } else {
-        None
-    }
+    if path.exists() { Some(path) } else { None }
 }
 
 /// Capture current game INIs into a profile's INI storage.
 ///
 /// Copies INI files from the game directory into the profile's `ini/` subdirectory.
 /// Existing profile INIs are overwritten.
-pub fn capture_inis(
-    game_id: &str,
-    profile_name: &str,
-    game_ini_path: &Path,
-) -> Result<usize> {
+pub fn capture_inis(game_id: &str, profile_name: &str, game_ini_path: &Path) -> Result<usize> {
     let inis = tracked_inis(game_id);
     if inis.is_empty() {
         return Ok(0);
@@ -70,15 +64,24 @@ pub fn capture_inis(
         let src = game_ini_path.join(ini_name);
         if src.exists() {
             let dst = dest_dir.join(ini_name);
-            std::fs::copy(&src, &dst)
-                .with_context(|| format!("failed to capture INI: {} -> {}", src.display(), dst.display()))?;
+            std::fs::copy(&src, &dst).with_context(|| {
+                format!(
+                    "failed to capture INI: {} -> {}",
+                    src.display(),
+                    dst.display()
+                )
+            })?;
             debug!(ini = *ini_name, "captured INI to profile");
             count += 1;
         }
     }
 
     if count > 0 {
-        info!(profile = profile_name, ini_count = count, "captured game INIs to profile");
+        info!(
+            profile = profile_name,
+            ini_count = count,
+            "captured game INIs to profile"
+        );
     }
     Ok(count)
 }
@@ -87,11 +90,7 @@ pub fn capture_inis(
 ///
 /// Copies INI files from the profile's `ini/` subdirectory back to the game directory.
 /// Only overwrites game INIs for files that exist in the profile's storage.
-pub fn restore_inis(
-    game_id: &str,
-    profile_name: &str,
-    game_ini_path: &Path,
-) -> Result<usize> {
+pub fn restore_inis(game_id: &str, profile_name: &str, game_ini_path: &Path) -> Result<usize> {
     let inis = tracked_inis(game_id);
     if inis.is_empty() {
         return Ok(0);
@@ -99,7 +98,10 @@ pub fn restore_inis(
 
     let src_dir = profile_ini_dir(profile_name);
     if !src_dir.exists() {
-        debug!(profile = profile_name, "no stored INIs for profile, skipping restore");
+        debug!(
+            profile = profile_name,
+            "no stored INIs for profile, skipping restore"
+        );
         return Ok(0);
     }
 
@@ -108,15 +110,24 @@ pub fn restore_inis(
         let src = src_dir.join(ini_name);
         if src.exists() {
             let dst = game_ini_path.join(ini_name);
-            std::fs::copy(&src, &dst)
-                .with_context(|| format!("failed to restore INI: {} -> {}", src.display(), dst.display()))?;
+            std::fs::copy(&src, &dst).with_context(|| {
+                format!(
+                    "failed to restore INI: {} -> {}",
+                    src.display(),
+                    dst.display()
+                )
+            })?;
             debug!(ini = *ini_name, "restored INI from profile");
             count += 1;
         }
     }
 
     if count > 0 {
-        info!(profile = profile_name, ini_count = count, "restored profile INIs to game");
+        info!(
+            profile = profile_name,
+            ini_count = count,
+            "restored profile INIs to game"
+        );
     }
     Ok(count)
 }
@@ -162,7 +173,11 @@ mod tests {
 
         // Create fake game INIs
         std::fs::write(game_dir.path().join("Skyrim.ini"), "[General]\nbOK=1\n").unwrap();
-        std::fs::write(game_dir.path().join("SkyrimPrefs.ini"), "[Display]\niRes=1920\n").unwrap();
+        std::fs::write(
+            game_dir.path().join("SkyrimPrefs.ini"),
+            "[Display]\niRes=1920\n",
+        )
+        .unwrap();
 
         // Override profiles_dir for this test
         let profile_ini = profiles_dir.path().join("test_profile").join("ini");

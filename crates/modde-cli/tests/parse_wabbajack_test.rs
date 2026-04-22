@@ -13,7 +13,10 @@ fn parse_real_wabbajack_file() {
         .join("3077.wabbajack");
 
     if !wj_path.exists() {
-        eprintln!("skipping: 3077.wabbajack not found at {}", wj_path.display());
+        eprintln!(
+            "skipping: 3077.wabbajack not found at {}",
+            wj_path.display()
+        );
         return;
     }
 
@@ -32,8 +35,8 @@ fn parse_real_wabbajack_file() {
         s
     };
 
-    let manifest: WabbajackManifest = serde_json::from_str(&json_str)
-        .expect("failed to parse 3077.wabbajack manifest");
+    let manifest: WabbajackManifest =
+        serde_json::from_str(&json_str).expect("failed to parse 3077.wabbajack manifest");
 
     assert_eq!(manifest.name, "3077_v2");
     assert_eq!(manifest.author, "Ultra Place");

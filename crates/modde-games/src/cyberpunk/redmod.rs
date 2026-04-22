@@ -7,7 +7,11 @@ use tracing::{info, warn};
 /// Locate the REDmod binary.
 fn find_redmod(game_dir: &Path) -> Option<PathBuf> {
     // Check within game directory (platform-aware binary name)
-    let bin_name = if cfg!(windows) { "redmod.exe" } else { "redmod" };
+    let bin_name = if cfg!(windows) {
+        "redmod.exe"
+    } else {
+        "redmod"
+    };
     let in_game = game_dir.join("tools/redmod/bin").join(bin_name);
     if in_game.exists() {
         return Some(in_game);
@@ -19,8 +23,8 @@ fn find_redmod(game_dir: &Path) -> Option<PathBuf> {
 
 /// Run `redmod deploy` for the given mod directories.
 pub fn deploy(mod_dirs: &[PathBuf], game_dir: &Path) -> Result<()> {
-    let redmod_bin = find_redmod(game_dir)
-        .ok_or_else(|| anyhow::anyhow!("REDmod binary not found"))?;
+    let redmod_bin =
+        find_redmod(game_dir).ok_or_else(|| anyhow::anyhow!("REDmod binary not found"))?;
 
     let mut cmd = Command::new(&redmod_bin);
     cmd.arg("deploy");

@@ -59,12 +59,7 @@ pub struct ModDetailsState {
 impl ModDetailsState {
     /// Construct the initial "loading" state as soon as a Nexus-tracked mod
     /// is selected, before any HTTP requests complete.
-    pub fn loading(
-        nexus_mod_id: i64,
-        game_domain: String,
-        name: String,
-        version: String,
-    ) -> Self {
+    pub fn loading(nexus_mod_id: i64, game_domain: String, name: String, version: String) -> Self {
         let mod_page_url = format!("https://www.nexusmods.com/{game_domain}/mods/{nexus_mod_id}");
         Self {
             nexus_mod_id,

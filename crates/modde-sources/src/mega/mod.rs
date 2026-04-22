@@ -5,8 +5,8 @@ use aes::Aes128;
 use anyhow::{Context, Result, bail};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use ctr::cipher::{KeyIvInit, StreamCipher};
 use ctr::Ctr128BE;
+use ctr::cipher::{KeyIvInit, StreamCipher};
 use futures::StreamExt;
 use reqwest::Client;
 use serde::Deserialize;
@@ -68,10 +68,7 @@ fn decode_mega_key(key_b64: &str) -> Result<([u8; 16], [u8; 16])> {
         .context("failed to decode Mega key from base64url")?;
 
     if key_bytes.len() != 32 {
-        bail!(
-            "expected 32-byte Mega key, got {} bytes",
-            key_bytes.len()
-        );
+        bail!("expected 32-byte Mega key, got {} bytes", key_bytes.len());
     }
 
     // XOR first 16 bytes with second 16 bytes to get AES key
@@ -191,16 +188,14 @@ mod tests {
 
     #[test]
     fn parse_new_format_https() {
-        let (handle, key) =
-            parse_mega_url("https://mega.nz/file/ABC123#some_key_base64").unwrap();
+        let (handle, key) = parse_mega_url("https://mega.nz/file/ABC123#some_key_base64").unwrap();
         assert_eq!(handle, "ABC123");
         assert_eq!(key, "some_key_base64");
     }
 
     #[test]
     fn parse_new_format_http() {
-        let (handle, key) =
-            parse_mega_url("http://mega.nz/file/XYZ789#another_key").unwrap();
+        let (handle, key) = parse_mega_url("http://mega.nz/file/XYZ789#another_key").unwrap();
         assert_eq!(handle, "XYZ789");
         assert_eq!(key, "another_key");
     }
@@ -212,10 +207,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(handle, "AbCdEfGhIjKlMnOp");
-        assert_eq!(
-            key,
-            "AAAAAAAAAAAABBBBBBBBBBBBCCCCCCCCCCCCDDDDDDDDDDDD"
-        );
+        assert_eq!(key, "AAAAAAAAAAAABBBBBBBBBBBBCCCCCCCCCCCCDDDDDDDDDDDD");
     }
 
     #[test]
@@ -231,16 +223,14 @@ mod tests {
 
     #[test]
     fn parse_old_format_https() {
-        let (handle, key) =
-            parse_mega_url("https://mega.nz/#!ABC123!some_key_base64").unwrap();
+        let (handle, key) = parse_mega_url("https://mega.nz/#!ABC123!some_key_base64").unwrap();
         assert_eq!(handle, "ABC123");
         assert_eq!(key, "some_key_base64");
     }
 
     #[test]
     fn parse_old_format_http() {
-        let (handle, key) =
-            parse_mega_url("http://mega.nz/#!OldHandle!OldKey123").unwrap();
+        let (handle, key) = parse_mega_url("http://mega.nz/#!OldHandle!OldKey123").unwrap();
         assert_eq!(handle, "OldHandle");
         assert_eq!(key, "OldKey123");
     }
@@ -248,8 +238,7 @@ mod tests {
     #[test]
     fn parse_old_format_with_extra_prefix() {
         // The old-format parser uses find("#!"), so it works even with odd prefixes
-        let (handle, key) =
-            parse_mega_url("https://mega.co.nz/#!HANDLE!KEY").unwrap();
+        let (handle, key) = parse_mega_url("https://mega.co.nz/#!HANDLE!KEY").unwrap();
         assert_eq!(handle, "HANDLE");
         assert_eq!(key, "KEY");
     }
@@ -291,8 +280,7 @@ mod tests {
     #[test]
     fn parse_url_with_query_params_new_format() {
         // Query params end up as part of the key (since we only split on #)
-        let (handle, key) =
-            parse_mega_url("https://mega.nz/file/HANDLE#KEY?foo=bar").unwrap();
+        let (handle, key) = parse_mega_url("https://mega.nz/file/HANDLE#KEY?foo=bar").unwrap();
         assert_eq!(handle, "HANDLE");
         assert_eq!(key, "KEY?foo=bar");
     }
@@ -300,8 +288,7 @@ mod tests {
     #[test]
     fn parse_url_with_extra_path_segments() {
         // "/file/" prefix is stripped, then everything up to # is handle
-        let (handle, key) =
-            parse_mega_url("https://mega.nz/file/HANDLE/extra#KEY").unwrap();
+        let (handle, key) = parse_mega_url("https://mega.nz/file/HANDLE/extra#KEY").unwrap();
         assert_eq!(handle, "HANDLE/extra");
         assert_eq!(key, "KEY");
     }

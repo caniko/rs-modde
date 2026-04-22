@@ -15,7 +15,10 @@ use tracing::{debug, info, warn};
 #[derive(Debug)]
 pub enum Launcher {
     /// Heroic Games Launcher — config at `~/.config/heroic/GamesConfig/<id>.json`
-    Heroic { config_path: PathBuf, game_id: String },
+    Heroic {
+        config_path: PathBuf,
+        game_id: String,
+    },
     /// Steam — uses launch options in Steam client
     Steam { app_id: String },
     /// Unknown launcher — print instructions for manual setup
@@ -97,8 +100,12 @@ fn heroic_game_matches(config_dir: &Path, game_id: &str, game_dir: &Path) -> boo
             for game in games {
                 if game.get("appName").and_then(|v| v.as_str()) == Some(game_id) {
                     if let Some(install_path) = game.get("install_path").and_then(|v| v.as_str()) {
-                        let canonical_game = game_dir.canonicalize().unwrap_or_else(|_| game_dir.to_path_buf());
-                        let canonical_install = PathBuf::from(install_path).canonicalize().unwrap_or_else(|_| PathBuf::from(install_path));
+                        let canonical_game = game_dir
+                            .canonicalize()
+                            .unwrap_or_else(|_| game_dir.to_path_buf());
+                        let canonical_install = PathBuf::from(install_path)
+                            .canonicalize()
+                            .unwrap_or_else(|_| PathBuf::from(install_path));
                         return canonical_game == canonical_install;
                     }
                 }
@@ -109,13 +116,16 @@ fn heroic_game_matches(config_dir: &Path, game_id: &str, game_dir: &Path) -> boo
     false
 }
 
-
 /// Try to detect Steam by checking if the game is under steamapps/common/.
 fn detect_steam(game_dir: &Path) -> Option<String> {
     let path_str = game_dir.to_string_lossy().replace('\\', "/");
     if path_str.contains("steamapps/common/") {
         // Try to find the appmanifest to get the app ID
-        if let Some(steamapps) = game_dir.ancestors().find(|p| p.file_name().and_then(|f| f.to_str()) == Some("common")).and_then(|p| p.parent()) {
+        if let Some(steamapps) = game_dir
+            .ancestors()
+            .find(|p| p.file_name().and_then(|f| f.to_str()) == Some("common"))
+            .and_then(|p| p.parent())
+        {
             let game_name = game_dir.file_name()?.to_string_lossy();
             let manifests = std::fs::read_dir(steamapps).ok()?;
             for entry in manifests.flatten() {
@@ -250,8 +260,7 @@ pub fn generate_launch_wrapper(
 
     // Generate the wrapper script
     let wrapper_dir = modde_core::paths::modde_data_dir().join("bin");
-    std::fs::create_dir_all(&wrapper_dir)
-        .context("failed to create modde bin directory")?;
+    std::fs::create_dir_all(&wrapper_dir).context("failed to create modde bin directory")?;
 
     let modde_bin = std::env::current_exe()
         .map(|p| p.to_string_lossy().to_string())
@@ -314,7 +323,8 @@ pub fn generate_launch_wrapper(
 /// Wine DLL overrides are only relevant on Linux (where games run via Wine/Proton).
 #[cfg(target_os = "linux")]
 fn format_wine_overrides(overrides: &[String]) -> String {
-    overrides.iter()
+    overrides
+        .iter()
         .map(|dll| format!("{dll}=n,b"))
         .collect::<Vec<_>>()
         .join(";")
@@ -332,9 +342,10 @@ pub fn apply_wine_overrides(launcher: &Launcher, overrides: &[String]) -> Result
     }
 
     match launcher {
-        Launcher::Heroic { config_path, game_id } => {
-            apply_heroic_overrides(config_path, game_id, overrides)
-        }
+        Launcher::Heroic {
+            config_path,
+            game_id,
+        } => apply_heroic_overrides(config_path, game_id, overrides),
         Launcher::Steam { app_id } => {
             let override_str = format_wine_overrides(overrides);
             warn!(
@@ -349,9 +360,7 @@ pub fn apply_wine_overrides(launcher: &Launcher, overrides: &[String]) -> Result
         }
         Launcher::Unknown => {
             let override_str = format_wine_overrides(overrides);
-            warn!(
-                "Unknown launcher: set WINEDLLOVERRIDES=\"{override_str}\" before launching"
-            );
+            warn!("Unknown launcher: set WINEDLLOVERRIDES=\"{override_str}\" before launching");
             println!(
                 "\nSet this environment variable before launching:\n  \
                  WINEDLLOVERRIDES=\"{override_str}\""
@@ -363,16 +372,16 @@ pub fn apply_wine_overrides(launcher: &Launcher, overrides: &[String]) -> Result
 
 /// Update Heroic's GamesConfig JSON to include WINEDLLOVERRIDES.
 #[cfg(target_os = "linux")]
-fn apply_heroic_overrides(
-    config_path: &Path,
-    game_id: &str,
-    overrides: &[String],
-) -> Result<bool> {
+fn apply_heroic_overrides(config_path: &Path, game_id: &str, overrides: &[String]) -> Result<bool> {
     let data = std::fs::read_to_string(config_path)
         .with_context(|| format!("failed to read Heroic config: {}", config_path.display()))?;
 
-    let mut config: Value = serde_json::from_str(&data)
-        .with_context(|| format!("failed to parse Heroic config JSON: {}", config_path.display()))?;
+    let mut config: Value = serde_json::from_str(&data).with_context(|| {
+        format!(
+            "failed to parse Heroic config JSON: {}",
+            config_path.display()
+        )
+    })?;
 
     let game_config = config
         .get_mut(game_id)
@@ -402,9 +411,9 @@ fn apply_heroic_overrides(
         .context("enviromentOptions is not an array")?;
 
     // Check if WINEDLLOVERRIDES is already set
-    let existing_idx = env_array.iter().position(|entry| {
-        entry.get("key").and_then(|k| k.as_str()) == Some("WINEDLLOVERRIDES")
-    });
+    let existing_idx = env_array
+        .iter()
+        .position(|entry| entry.get("key").and_then(|k| k.as_str()) == Some("WINEDLLOVERRIDES"));
 
     if let Some(idx) = existing_idx {
         // Update existing entry — merge with existing overrides
@@ -448,13 +457,19 @@ fn apply_heroic_overrides(
     }
 
     // Write back
-    let output = serde_json::to_string_pretty(&config)
-        .context("failed to serialize Heroic config")?;
+    let output =
+        serde_json::to_string_pretty(&config).context("failed to serialize Heroic config")?;
     std::fs::write(config_path, output)
         .with_context(|| format!("failed to write Heroic config: {}", config_path.display()))?;
 
-    println!("  Updated Heroic config with WINEDLLOVERRIDES: {}",
-        if existing_idx.is_some() { "merged with existing" } else { &override_value });
+    println!(
+        "  Updated Heroic config with WINEDLLOVERRIDES: {}",
+        if existing_idx.is_some() {
+            "merged with existing"
+        } else {
+            &override_value
+        }
+    );
 
     Ok(true)
 }
@@ -464,19 +479,25 @@ fn apply_heroic_overrides(
 /// The wrapper is inserted **after** fgmod (if present) so it can restore DLLs
 /// that fgmod deletes before the game launches.
 pub fn register_heroic_wrapper(launcher: &Launcher, wrapper_path: &Path) -> Result<bool> {
-    let Launcher::Heroic { config_path, game_id } = launcher else {
+    let Launcher::Heroic {
+        config_path,
+        game_id,
+    } = launcher
+    else {
         let wrapper_str = wrapper_path.display();
-        println!(
-            "\nAdd this wrapper before your game launcher:\n  {wrapper_str} --"
-        );
+        println!("\nAdd this wrapper before your game launcher:\n  {wrapper_str} --");
         return Ok(false);
     };
 
     let data = std::fs::read_to_string(config_path)
         .with_context(|| format!("failed to read Heroic config: {}", config_path.display()))?;
 
-    let mut config: Value = serde_json::from_str(&data)
-        .with_context(|| format!("failed to parse Heroic config JSON: {}", config_path.display()))?;
+    let mut config: Value = serde_json::from_str(&data).with_context(|| {
+        format!(
+            "failed to parse Heroic config JSON: {}",
+            config_path.display()
+        )
+    })?;
 
     let game_config = config
         .get_mut(game_id)
@@ -493,9 +514,9 @@ pub fn register_heroic_wrapper(launcher: &Launcher, wrapper_path: &Path) -> Resu
     let wrapper_exe = wrapper_path.to_string_lossy().to_string();
 
     // Check if modde wrapper is already registered
-    let already_registered = wrappers.iter().any(|w| {
-        w.get("exe").and_then(|e| e.as_str()) == Some(&wrapper_exe)
-    });
+    let already_registered = wrappers
+        .iter()
+        .any(|w| w.get("exe").and_then(|e| e.as_str()) == Some(&wrapper_exe));
 
     if already_registered {
         info!("modde launch wrapper already registered in Heroic config");
@@ -513,7 +534,7 @@ pub fn register_heroic_wrapper(launcher: &Launcher, wrapper_path: &Path) -> Resu
     });
 
     let insert_idx = match fgmod_idx {
-        Some(idx) => idx + 1, // After fgmod
+        Some(idx) => idx + 1,   // After fgmod
         None => wrappers.len(), // At the end
     };
 
@@ -525,8 +546,8 @@ pub fn register_heroic_wrapper(launcher: &Launcher, wrapper_path: &Path) -> Resu
     wrappers.insert(insert_idx, wrapper_entry);
 
     // Write back
-    let output = serde_json::to_string_pretty(&config)
-        .context("failed to serialize Heroic config")?;
+    let output =
+        serde_json::to_string_pretty(&config).context("failed to serialize Heroic config")?;
     std::fs::write(config_path, output)
         .with_context(|| format!("failed to write Heroic config: {}", config_path.display()))?;
 
@@ -635,10 +656,7 @@ pub fn collect_tool_wrappers(
 /// Generate per-game config files for all enabled tools.
 ///
 /// Writes configs to `~/.local/share/modde/tools/{game_id}/`.
-pub fn generate_tool_configs(
-    game_id: &str,
-    db: &modde_core::db::ModdeDb,
-) -> Result<()> {
+pub fn generate_tool_configs(game_id: &str, db: &modde_core::db::ModdeDb) -> Result<()> {
     let rows = db.load_tool_configs(game_id)?;
 
     for row in &rows {
@@ -661,8 +679,9 @@ pub fn generate_tool_configs(
             if let Some(parent) = generated.path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::write(&generated.path, &generated.content)
-                .with_context(|| format!("failed to write tool config: {}", generated.path.display()))?;
+            std::fs::write(&generated.path, &generated.content).with_context(|| {
+                format!("failed to write tool config: {}", generated.path.display())
+            })?;
             info!(tool = tool.tool_id(), path = %generated.path.display(), "wrote tool config");
         }
     }
@@ -687,8 +706,12 @@ pub fn apply_tool_environment_heroic(
     let data = std::fs::read_to_string(config_path)
         .with_context(|| format!("failed to read Heroic config: {}", config_path.display()))?;
 
-    let mut config: Value = serde_json::from_str(&data)
-        .with_context(|| format!("failed to parse Heroic config JSON: {}", config_path.display()))?;
+    let mut config: Value = serde_json::from_str(&data).with_context(|| {
+        format!(
+            "failed to parse Heroic config JSON: {}",
+            config_path.display()
+        )
+    })?;
 
     let game_config = config
         .get_mut(game_id_heroic)
@@ -705,9 +728,7 @@ pub fn apply_tool_environment_heroic(
 
         for (key, value) in env_vars {
             // Remove existing entry for this key
-            env_array.retain(|entry| {
-                entry.get("key").and_then(|k| k.as_str()) != Some(key)
-            });
+            env_array.retain(|entry| entry.get("key").and_then(|k| k.as_str()) != Some(key));
             env_array.push(serde_json::json!({ "key": key, "value": value }));
         }
     }
@@ -722,9 +743,9 @@ pub fn apply_tool_environment_heroic(
             .context("wrapperOptions is not an array")?;
 
         for wrapper in wrappers {
-            let already = wrapper_array.iter().any(|w| {
-                w.get("exe").and_then(|e| e.as_str()) == Some(&wrapper.exe)
-            });
+            let already = wrapper_array
+                .iter()
+                .any(|w| w.get("exe").and_then(|e| e.as_str()) == Some(&wrapper.exe));
             if !already {
                 wrapper_array.push(serde_json::json!({
                     "exe": wrapper.exe,
@@ -734,16 +755,22 @@ pub fn apply_tool_environment_heroic(
         }
     }
 
-    let output = serde_json::to_string_pretty(&config)
-        .context("failed to serialize Heroic config")?;
+    let output =
+        serde_json::to_string_pretty(&config).context("failed to serialize Heroic config")?;
     std::fs::write(config_path, output)
         .with_context(|| format!("failed to write Heroic config: {}", config_path.display()))?;
 
     if !env_vars.is_empty() {
-        println!("  Applied {} tool env var(s) to Heroic config", env_vars.len());
+        println!(
+            "  Applied {} tool env var(s) to Heroic config",
+            env_vars.len()
+        );
     }
     if !wrappers.is_empty() {
-        println!("  Registered {} tool wrapper(s) in Heroic config", wrappers.len());
+        println!(
+            "  Registered {} tool wrapper(s) in Heroic config",
+            wrappers.len()
+        );
     }
 
     Ok(())

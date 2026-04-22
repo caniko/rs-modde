@@ -51,21 +51,25 @@ impl BethesdaGame {
         plugins_txt_folder_name: &'static str,
     ) -> Self {
         Self {
-            game_id, display_name, steam_app_id, my_games_dir,
-            ini_files, archive_ext, nexus_domain, plugins_txt_folder_name,
+            game_id,
+            display_name,
+            steam_app_id,
+            my_games_dir,
+            ini_files,
+            archive_ext,
+            nexus_domain,
+            plugins_txt_folder_name,
         }
     }
 }
 
 /// File extensions that indicate a Bethesda mod alters game logic.
-const BETHESDA_SAVE_BREAKING_EXT: &[&str] = &[
-    "esp", "esm", "esl", "pex", "dll", "psc",
-];
+const BETHESDA_SAVE_BREAKING_EXT: &[&str] = &["esp", "esm", "esl", "pex", "dll", "psc"];
 
 /// Extensions that are purely cosmetic in Bethesda games.
 const BETHESDA_COSMETIC_EXT: &[&str] = &[
-    "nif", "bsa", "ba2", "dds", "png", "tga", "jpg",
-    "hkx", "fuz", "wav", "xwm", "swf", "ini", "json",
+    "nif", "bsa", "ba2", "dds", "png", "tga", "jpg", "hkx", "fuz", "wav", "xwm", "swf", "ini",
+    "json",
 ];
 
 const BETHESDA_CLASSIFY_CONFIG: ModClassifyConfig = ModClassifyConfig {
@@ -145,7 +149,7 @@ impl GamePlugin for BethesdaGame {
     fn save_directory(&self) -> Option<PathBuf> {
         // Proton prefix: compatdata/<APP_ID>/pfx/drive_c/Users/steamuser/Documents/My Games/<DIR>/Saves
         let compat = paths::steam_common()
-            .parent()?  // steamapps/
+            .parent()? // steamapps/
             .join("compatdata")
             .join(self.steam_app_id)
             .join("pfx/drive_c/Users/steamuser/Documents/My Games")

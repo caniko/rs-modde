@@ -175,19 +175,13 @@ pub fn build_full_conflict_map(
                 };
 
                 for (archive_file_path, _size) in archive_files {
-                    conflict_map.register(
-                        archive_file_path.clone(),
+                    conflict_map.register(archive_file_path.clone(), mod_id.clone());
+                    origins.entry(archive_file_path).or_default().insert(
                         mod_id.clone(),
+                        FileOrigin::Archive {
+                            archive_rel: rel_path.clone(),
+                        },
                     );
-                    origins
-                        .entry(archive_file_path)
-                        .or_default()
-                        .insert(
-                            mod_id.clone(),
-                            FileOrigin::Archive {
-                                archive_rel: rel_path.clone(),
-                            },
-                        );
                 }
             }
         }
@@ -372,11 +366,7 @@ pub fn analyze_collisions(
 }
 
 /// Order a (mod_a, mod_b) pair so the lower-priority mod is first.
-fn order_pair(
-    a: &ModId,
-    b: &ModId,
-    priority_rank: &HashMap<&ModId, usize>,
-) -> (ModId, ModId) {
+fn order_pair(a: &ModId, b: &ModId, priority_rank: &HashMap<&ModId, usize>) -> (ModId, ModId) {
     let rank_a = priority_rank.get(a).copied().unwrap_or(0);
     let rank_b = priority_rank.get(b).copied().unwrap_or(0);
     if rank_a <= rank_b {
@@ -510,12 +500,15 @@ mod tests {
         let hidden = HashSet::new();
 
         let mut origins: OriginMap = HashMap::new();
-        origins.entry("textures/sky.dds".into()).or_default().insert(
-            mod_id("mod_a"),
-            FileOrigin::Archive {
-                archive_rel: "mod_a.bsa".into(),
-            },
-        );
+        origins
+            .entry("textures/sky.dds".into())
+            .or_default()
+            .insert(
+                mod_id("mod_a"),
+                FileOrigin::Archive {
+                    archive_rel: "mod_a.bsa".into(),
+                },
+            );
         origins
             .entry("textures/sky.dds".into())
             .or_default()

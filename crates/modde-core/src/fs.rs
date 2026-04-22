@@ -210,8 +210,20 @@ mod tests {
 
         deploy_symlinks(&src, &dst).unwrap();
 
-        assert!(dst.join("a.txt").symlink_metadata().unwrap().file_type().is_symlink());
-        assert!(dst.join("sub/b.txt").symlink_metadata().unwrap().file_type().is_symlink());
+        assert!(
+            dst.join("a.txt")
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert!(
+            dst.join("sub/b.txt")
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
         assert_eq!(std::fs::read_to_string(dst.join("a.txt")).unwrap(), "a");
         assert_eq!(std::fs::read_to_string(dst.join("sub/b.txt")).unwrap(), "b");
     }

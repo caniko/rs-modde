@@ -49,7 +49,11 @@ pub fn execute(
                 .unwrap_or("redmod");
             let nested = store_mod_dir.join("mods").join(mod_name);
             fs::create_dir_all(&nested)?;
-            stage_tree(&source_root, &nested, Some(PathBuf::from("mods").join(mod_name)))?
+            stage_tree(
+                &source_root,
+                &nested,
+                Some(PathBuf::from("mods").join(mod_name)),
+            )?
         }
 
         InstallMethod::DllOverlay { .. } => {
@@ -64,7 +68,10 @@ pub fn execute(
             )?
         }
 
-        InstallMethod::Fomod { module_config, config_toml } => {
+        InstallMethod::Fomod {
+            module_config,
+            config_toml,
+        } => {
             let config_str = match config_toml {
                 Some(s) => s,
                 None => return Err(InstallerError::RequiresUserInput { method: "fomod" }),
@@ -76,10 +83,9 @@ pub fn execute(
 
             // Read and parse the ModuleConfig.xml.
             let xml_path = source_root.join(module_config);
-            let xml = fs::read_to_string(&xml_path)
-                .map_err(|e| InstallerError::FomodError(format!(
-                    "cannot read {}: {e}", xml_path.display()
-                )))?;
+            let xml = fs::read_to_string(&xml_path).map_err(|e| {
+                InstallerError::FomodError(format!("cannot read {}: {e}", xml_path.display()))
+            })?;
             let module_cfg = fomod_oxide::ModuleConfig::parse(&xml)
                 .map_err(|e| InstallerError::FomodError(format!("FOMOD parse error: {e}")))?;
 

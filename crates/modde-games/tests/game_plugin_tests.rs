@@ -142,12 +142,32 @@ fn test_deploy_creates_symlinks_in_target() {
     game.deploy(&staging, &target).unwrap();
 
     // Verify symlinks exist
-    assert!(target.join("mod.esp").symlink_metadata().unwrap().file_type().is_symlink());
-    assert!(target.join("textures/sky.dds").symlink_metadata().unwrap().file_type().is_symlink());
+    assert!(
+        target
+            .join("mod.esp")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert!(
+        target
+            .join("textures/sky.dds")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
 
     // Verify content accessible
-    assert_eq!(std::fs::read_to_string(target.join("mod.esp")).unwrap(), "plugin data");
-    assert_eq!(std::fs::read_to_string(target.join("textures/sky.dds")).unwrap(), "texture");
+    assert_eq!(
+        std::fs::read_to_string(target.join("mod.esp")).unwrap(),
+        "plugin data"
+    );
+    assert_eq!(
+        std::fs::read_to_string(target.join("textures/sky.dds")).unwrap(),
+        "texture"
+    );
 }
 
 #[test]
@@ -162,7 +182,14 @@ fn test_deploy_creates_target_if_missing() {
     game.deploy(&staging, &target).unwrap();
 
     assert!(target.exists());
-    assert!(target.join("test.esp").symlink_metadata().unwrap().file_type().is_symlink());
+    assert!(
+        target
+            .join("test.esp")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
 }
 
 #[test]
@@ -180,8 +207,18 @@ fn test_deploy_overwrites_existing_files() {
     game.deploy(&staging, &target).unwrap();
 
     // Should now be a symlink pointing to staging
-    assert!(target.join("mod.esp").symlink_metadata().unwrap().file_type().is_symlink());
-    assert_eq!(std::fs::read_to_string(target.join("mod.esp")).unwrap(), "new version");
+    assert!(
+        target
+            .join("mod.esp")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(
+        std::fs::read_to_string(target.join("mod.esp")).unwrap(),
+        "new version"
+    );
 }
 
 #[test]

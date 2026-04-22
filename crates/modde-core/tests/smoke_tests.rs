@@ -6,6 +6,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use modde_core::GameId;
+use modde_core::ModdeDb;
 use modde_core::error::CoreError;
 use modde_core::hash::{hash_file_sha256, hash_file_xxhash, verify_sha256, verify_xxhash};
 use modde_core::manifest::collection::{
@@ -13,10 +14,9 @@ use modde_core::manifest::collection::{
 };
 use modde_core::manifest::wabbajack::WabbajackManifest;
 use modde_core::profile::{EnabledMod, Profile, ProfileManager, ProfileSource};
-use modde_core::resolver::{resolve, ConflictMap, LoadOrderRule, ModId, ResolvedLoadOrder};
+use modde_core::resolver::{ConflictMap, LoadOrderRule, ModId, ResolvedLoadOrder, resolve};
 use modde_core::stock::StockGameManager;
 use modde_core::vfs::SymlinkFarm;
-use modde_core::ModdeDb;
 use tempfile::TempDir;
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -26,20 +26,22 @@ fn simple_mod(id: &str, enabled: bool) -> EnabledMod {
         mod_id: id.to_string(),
         enabled,
         version: Some("1.0".to_string()),
-        fomod_config: None, ..Default::default()
+        fomod_config: None,
+        ..Default::default()
     }
 }
 
-fn make_profile(name: &str, mods: Vec<&str>, rules: smallvec::SmallVec<[LoadOrderRule; 4]>) -> Profile {
+fn make_profile(
+    name: &str,
+    mods: Vec<&str>,
+    rules: smallvec::SmallVec<[LoadOrderRule; 4]>,
+) -> Profile {
     Profile {
         id: None,
         name: name.to_string(),
         game_id: GameId::from("skyrim-se"),
         source: ProfileSource::Manual,
-        mods: mods
-            .into_iter()
-            .map(|id| simple_mod(id, true))
-            .collect(),
+        mods: mods.into_iter().map(|id| simple_mod(id, true)).collect(),
         overrides: PathBuf::from("/tmp/overrides"),
         load_order_rules: rules,
         load_order_lock: None,
@@ -59,10 +61,7 @@ fn smoke_profile_roundtrip() {
         source: ProfileSource::Wabbajack {
             manifest_hash: "deadbeef".to_string(),
         },
-        mods: vec![
-            simple_mod("mod_a", true),
-            simple_mod("mod_b", false),
-        ],
+        mods: vec![simple_mod("mod_a", true), simple_mod("mod_b", false)],
         overrides: PathBuf::from("/tmp/overrides"),
         load_order_rules: smallvec![LoadOrderRule::LoadAfter {
             mod_id: ModId::from("mod_b"),
@@ -224,11 +223,17 @@ fn smoke_symlink_farm_build() {
     let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
     mod_files.insert(
         ModId::from("mod_a"),
-        vec![("textures/sky.dds".into(), PathBuf::from("/store/mod_a/sky.dds"))],
+        vec![(
+            "textures/sky.dds".into(),
+            PathBuf::from("/store/mod_a/sky.dds"),
+        )],
     );
     mod_files.insert(
         ModId::from("mod_b"),
-        vec![("textures/sky.dds".into(), PathBuf::from("/store/mod_b/sky.dds"))],
+        vec![(
+            "textures/sky.dds".into(),
+            PathBuf::from("/store/mod_b/sky.dds"),
+        )],
     );
 
     let farm = SymlinkFarm::build("smoke_profile", &resolved, &mod_files, None, None).unwrap();

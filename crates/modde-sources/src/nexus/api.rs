@@ -238,8 +238,7 @@ impl NexusApi {
         game_domain: &str,
         term: Option<&str>,
     ) -> Result<Vec<super::graphql::GqlCollectionTile>> {
-        match super::graphql::collections_feed(&self.client, &self.api_key, game_domain, term)
-            .await
+        match super::graphql::collections_feed(&self.client, &self.api_key, game_domain, term).await
         {
             Ok(tiles) => Ok(tiles),
             Err(e) => {
@@ -324,7 +323,11 @@ impl NexusApi {
 
         let urls: Vec<String> = images
             .iter()
-            .filter_map(|img| img.get("url").and_then(|u| u.as_str()).map(|s| s.to_string()))
+            .filter_map(|img| {
+                img.get("url")
+                    .and_then(|u| u.as_str())
+                    .map(|s| s.to_string())
+            })
             .collect();
         Ok(urls)
     }
@@ -342,9 +345,8 @@ impl NexusApi {
         query: &str,
         page: u32,
     ) -> Result<NexusSearchResults> {
-        let url = format!(
-            "{BASE_URL}/games/{game_domain}/mods/search.json?search={query}&page={page}",
-        );
+        let url =
+            format!("{BASE_URL}/games/{game_domain}/mods/search.json?search={query}&page={page}",);
         self.get(&url).await
     }
 
@@ -370,9 +372,7 @@ impl NexusApi {
         game_domain: &str,
         query: &str,
     ) -> Result<Vec<CollectionManifest>> {
-        let url = format!(
-            "{BASE_URL}/games/{game_domain}/collections.json?search={query}",
-        );
+        let url = format!("{BASE_URL}/games/{game_domain}/collections.json?search={query}",);
         self.get(&url).await
     }
 
@@ -393,9 +393,8 @@ impl NexusApi {
         slug: &str,
         revision: u64,
     ) -> Result<CollectionManifest> {
-        let url = format!(
-            "{BASE_URL}/games/{game_domain}/collections/{slug}/revisions/{revision}.json"
-        );
+        let url =
+            format!("{BASE_URL}/games/{game_domain}/collections/{slug}/revisions/{revision}.json");
         self.get(&url).await
     }
 
@@ -416,12 +415,7 @@ impl NexusApi {
     /// installs. Callers should pass the version string from the currently
     /// loaded `NexusMod` response (not the local install, which may be
     /// stale).
-    pub async fn endorse_mod(
-        &self,
-        game_domain: &str,
-        mod_id: u64,
-        version: &str,
-    ) -> Result<()> {
+    pub async fn endorse_mod(&self, game_domain: &str, mod_id: u64, version: &str) -> Result<()> {
         let url = format!("{BASE_URL}/games/{game_domain}/mods/{mod_id}/endorse.json");
         self.client
             .post(&url)
@@ -434,12 +428,7 @@ impl NexusApi {
     }
 
     /// Abstain from endorsing (won't be asked again).
-    pub async fn abstain_mod(
-        &self,
-        game_domain: &str,
-        mod_id: u64,
-        version: &str,
-    ) -> Result<()> {
+    pub async fn abstain_mod(&self, game_domain: &str, mod_id: u64, version: &str) -> Result<()> {
         let url = format!("{BASE_URL}/games/{game_domain}/mods/{mod_id}/abstain.json");
         self.client
             .post(&url)
@@ -508,13 +497,14 @@ impl NexusApi {
                 let rev = meta
                     .latest_published_revision
                     .map(|r| r.revision_number)
-                    .ok_or_else(|| anyhow::anyhow!(
-                        "collection '{slug}' has no published revisions"
-                    ))?;
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("collection '{slug}' has no published revisions")
+                    })?;
                 (meta.game.domain_name, rev)
             }
         };
 
-        self.get_collection_revision(&game_domain, slug, revision).await
+        self.get_collection_revision(&game_domain, slug, revision)
+            .await
     }
 }

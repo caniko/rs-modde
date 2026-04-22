@@ -3,17 +3,16 @@
 //! Tests parallel hashing, concurrent profile operations, and large-scale
 //! resolution under load.
 
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-
 use modde_core::GameId;
+use modde_core::ModdeDb;
 use modde_core::hash::{hash_file_sha256, hash_file_xxhash, verify_sha256, verify_xxhash};
 use modde_core::profile::{EnabledMod, Profile, ProfileManager, ProfileSource};
-use modde_core::resolver::{resolve, ConflictMap, LoadOrderRule, ModId, ResolvedLoadOrder};
+use modde_core::resolver::{ConflictMap, LoadOrderRule, ModId, ResolvedLoadOrder, resolve};
 use modde_core::vfs::SymlinkFarm;
-use modde_core::ModdeDb;
 use tempfile::TempDir;
 
 fn simple_mod(id: &str, enabled: bool) -> EnabledMod {
@@ -21,7 +20,8 @@ fn simple_mod(id: &str, enabled: bool) -> EnabledMod {
         mod_id: id.to_string(),
         enabled,
         version: None,
-        fomod_config: None, ..Default::default()
+        fomod_config: None,
+        ..Default::default()
     }
 }
 
@@ -100,13 +100,7 @@ async fn test_concurrent_hash_same_file() {
         })
         .collect();
 
-    let first = handles
-        .into_iter()
-        .next()
-        .unwrap()
-        .await
-        .unwrap()
-        .unwrap();
+    let first = handles.into_iter().next().unwrap().await.unwrap().unwrap();
     // All should produce the same hash (verified indirectly by first being valid)
     verify_xxhash(&p, first).await.unwrap();
 }
@@ -180,7 +174,11 @@ fn test_resolve_200_mods_linear_chain() {
             .iter()
             .position(|m| m == format!("mod_{:04}", i + 1).as_str())
             .unwrap();
-        assert!(pos_a < pos_b, "mod_{i:04} should be before mod_{:04}", i + 1);
+        assert!(
+            pos_a < pos_b,
+            "mod_{i:04} should be before mod_{:04}",
+            i + 1
+        );
     }
 }
 
@@ -208,10 +206,7 @@ fn test_resolve_500_mods_no_rules() {
 #[test]
 fn test_resolve_diamond_dependency_50_wide() {
     // Root → 50 mods → Sink
-    let mut mods = vec![
-        simple_mod("root", true),
-        simple_mod("sink", true),
-    ];
+    let mut mods = vec![simple_mod("root", true), simple_mod("sink", true)];
     let mut rules: SmallVec<[LoadOrderRule; 4]> = SmallVec::new();
 
     for i in 0..50 {
@@ -260,7 +255,10 @@ fn test_resolve_diamond_dependency_50_wide() {
 fn test_conflict_map_many_providers() {
     let mut cm = ConflictMap::default();
     for i in 0..100 {
-        cm.register("shared_file.dds".to_string(), ModId::from(format!("mod_{i}").as_str()));
+        cm.register(
+            "shared_file.dds".to_string(),
+            ModId::from(format!("mod_{i}").as_str()),
+        );
     }
 
     let conflicts = cm.conflicts();
@@ -272,7 +270,10 @@ fn test_conflict_map_many_providers() {
 fn test_conflict_map_many_files_no_conflicts() {
     let mut cm = ConflictMap::default();
     for i in 0..1000 {
-        cm.register(format!("unique_file_{i}.dds"), ModId::from(format!("mod_{i}").as_str()));
+        cm.register(
+            format!("unique_file_{i}.dds"),
+            ModId::from(format!("mod_{i}").as_str()),
+        );
     }
 
     let conflicts = cm.conflicts();
@@ -307,7 +308,9 @@ fn test_conflict_map_mixed() {
 #[test]
 fn test_vfs_build_100_mods_10_files_each() {
     let resolved = ResolvedLoadOrder {
-        order: (0..100).map(|i| ModId::from(format!("mod_{i}").as_str())).collect(),
+        order: (0..100)
+            .map(|i| ModId::from(format!("mod_{i}").as_str()))
+            .collect(),
     };
 
     let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
@@ -331,7 +334,9 @@ fn test_vfs_build_100_mods_10_files_each() {
 fn test_vfs_build_override_cascade() {
     // 50 mods all providing the same file → only the last one wins
     let resolved = ResolvedLoadOrder {
-        order: (0..50).map(|i| ModId::from(format!("mod_{i}").as_str())).collect(),
+        order: (0..50)
+            .map(|i| ModId::from(format!("mod_{i}").as_str()))
+            .collect(),
     };
 
     let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
@@ -591,10 +596,7 @@ fn test_resolve_incompatible_one_disabled_is_ok() {
         name: "incompat_ok".to_string(),
         game_id: GameId::from("skyrim-se"),
         source: ProfileSource::Manual,
-        mods: vec![
-            simple_mod("a", true),
-            simple_mod("b", false),
-        ],
+        mods: vec![simple_mod("a", true), simple_mod("b", false)],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![LoadOrderRule::Incompatible {
             mod_a: ModId::from("a"),
@@ -644,19 +646,22 @@ fn test_profile_with_unicode_mod_names() {
                 mod_id: "日本語モッド".to_string(),
                 enabled: true,
                 version: Some("1.0α".to_string()),
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
             EnabledMod {
                 mod_id: "Ñoño_Ñuñez".to_string(),
                 enabled: true,
                 version: Some("2.0".to_string()),
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
             EnabledMod {
                 mod_id: "模组_中文".to_string(),
                 enabled: false,
                 version: None,
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
         ],
         overrides: PathBuf::from("/tmp/overrides"),
@@ -685,7 +690,8 @@ fn test_profile_with_fomod_config_roundtrip() {
             mod_id: "texture_pack".to_string(),
             enabled: true,
             version: Some("3.0".to_string()),
-            fomod_config: Some(fomod_json.to_string()), ..Default::default()
+            fomod_config: Some(fomod_json.to_string()),
+            ..Default::default()
         }],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![],
@@ -730,8 +736,14 @@ fn test_profile_all_source_types_roundtrip() {
         match (&profile.source, &loaded.source) {
             (ProfileSource::Manual, ProfileSource::Manual) => {}
             (
-                ProfileSource::NexusCollection { slug: s1, version: v1 },
-                ProfileSource::NexusCollection { slug: s2, version: v2 },
+                ProfileSource::NexusCollection {
+                    slug: s1,
+                    version: v1,
+                },
+                ProfileSource::NexusCollection {
+                    slug: s2,
+                    version: v2,
+                },
             ) => {
                 assert_eq!(s1, s2);
                 assert_eq!(v1, v2);

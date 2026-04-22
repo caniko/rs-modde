@@ -24,7 +24,12 @@ fn minimal_manifest() -> WabbajackManifest {
 fn new_creates_installer_with_correct_fields() {
     let store = PathBuf::from("/tmp/store");
     let staging = PathBuf::from("/tmp/staging");
-    let installer = WabbajackInstaller::new(minimal_manifest(), PathBuf::new(),store.clone(), staging.clone());
+    let installer = WabbajackInstaller::new(
+        minimal_manifest(),
+        PathBuf::new(),
+        store.clone(),
+        staging.clone(),
+    );
 
     // We can't inspect private fields directly, but we can confirm no panic
     // and that set_concurrency works (proving the struct was created).
@@ -36,8 +41,12 @@ fn new_creates_installer_with_correct_fields() {
 // ---------------------------------------------------------------------------
 #[test]
 fn set_concurrency_clamps_to_at_least_one() {
-    let mut installer =
-        WabbajackInstaller::new(minimal_manifest(), PathBuf::new(),PathBuf::new(), PathBuf::new());
+    let mut installer = WabbajackInstaller::new(
+        minimal_manifest(),
+        PathBuf::new(),
+        PathBuf::new(),
+        PathBuf::new(),
+    );
 
     // Setting to zero should clamp to 1 (no panic, proves logic works)
     installer.set_concurrency(0);
@@ -56,8 +65,12 @@ async fn archive_path_format_visible_in_error() {
     let store = tempfile::tempdir().unwrap();
     let staging = tempfile::tempdir().unwrap();
 
-    let installer =
-        WabbajackInstaller::new(minimal_manifest(), PathBuf::new(),store.path().into(), staging.path().into());
+    let installer = WabbajackInstaller::new(
+        minimal_manifest(),
+        PathBuf::new(),
+        store.path().into(),
+        staging.path().into(),
+    );
 
     // We cannot call the private apply_from_archive, but we verify the public
     // install pathway would use the correct hash format indirectly via manifest

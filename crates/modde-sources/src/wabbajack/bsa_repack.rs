@@ -175,7 +175,11 @@ async fn create_bsa_inner(
         write_u32_le(&mut buf, block_offset as u32)?;
 
         // Size of this block: name_length(1) + name_bytes + null(1) + file_records
-        let name_len = if folder_name.is_empty() { 0 } else { folder_name.len() };
+        let name_len = if folder_name.is_empty() {
+            0
+        } else {
+            folder_name.len()
+        };
         block_offset += 1 + name_len as u64 + 1 + file_count_in_folder as u64 * 16;
     }
 
@@ -251,11 +255,7 @@ async fn create_bsa_inner(
 /// 2. File records (36 bytes each): name_hash(4) + ext(4) + dir_hash(4) + flags(4) + offset(8) + packed_size(4) + unpacked_size(4)
 /// 3. File data blocks
 /// 4. Name table
-async fn create_ba2(
-    file_states: &[BSAFileState],
-    staging_dir: &Path,
-    output: &Path,
-) -> Result<()> {
+async fn create_ba2(file_states: &[BSAFileState], staging_dir: &Path, output: &Path) -> Result<()> {
     if file_states.is_empty() {
         bail!("no file states provided for BA2 creation");
     }
@@ -440,7 +440,9 @@ fn bsa_hash_path(path: &str) -> u64 {
 fn ba2_crc32(data: &[u8]) -> u32 {
     let mut hash: u32 = 0;
     for &b in data {
-        hash = hash.wrapping_mul(31).wrapping_add(b.to_ascii_lowercase() as u32);
+        hash = hash
+            .wrapping_mul(31)
+            .wrapping_add(b.to_ascii_lowercase() as u32);
     }
     hash
 }
@@ -820,7 +822,10 @@ mod tests {
         let hashes = [nif, kf, dds, wav, txt];
         for i in 0..hashes.len() {
             for j in (i + 1)..hashes.len() {
-                assert_ne!(hashes[i], hashes[j], "hash collision between index {i} and {j}");
+                assert_ne!(
+                    hashes[i], hashes[j],
+                    "hash collision between index {i} and {j}"
+                );
             }
         }
     }

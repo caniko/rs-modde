@@ -378,9 +378,7 @@ enum ModAction {
     /// Print the skill dossier path and inline prompt for a mod whose
     /// install type could not be detected. Handy for piping into
     /// `claude` or pasting into a chat manually.
-    Diagnose {
-        mod_id: String,
-    },
+    Diagnose { mod_id: String },
 }
 
 #[derive(Subcommand)]
@@ -678,7 +676,15 @@ fn main() -> Result<()> {
     // Sync commands that don't need the tokio runtime
     match cli.command {
         Commands::Profile { action } => return commands::profile::handle(action),
-        Commands::Scan { game, game_dir, manifest, import_to, threshold, dry_run, prune_duplicates } => {
+        Commands::Scan {
+            game,
+            game_dir,
+            manifest,
+            import_to,
+            threshold,
+            dry_run,
+            prune_duplicates,
+        } => {
             return commands::scan::handle(
                 game,
                 game_dir,
@@ -692,7 +698,12 @@ fn main() -> Result<()> {
         Commands::Diagnostics { game, profile } => {
             return commands::diagnostics::handle(&game, profile);
         }
-        Commands::Export { profile, game, columns, output } => {
+        Commands::Export {
+            profile,
+            game,
+            columns,
+            output,
+        } => {
             return commands::export::handle(profile, game, columns, output);
         }
         Commands::Backup { action } => {
@@ -701,7 +712,9 @@ fn main() -> Result<()> {
         Commands::Detect => return commands::detect::handle(),
         Commands::Instance { action } => {
             return match action {
-                InstanceAction::Create { name, data_dir } => commands::instance::handle_create(&name, data_dir),
+                InstanceAction::Create { name, data_dir } => {
+                    commands::instance::handle_create(&name, data_dir)
+                }
                 InstanceAction::List => commands::instance::handle_list(),
                 InstanceAction::Switch { name } => commands::instance::handle_switch(&name),
             };
@@ -714,28 +727,49 @@ fn main() -> Result<()> {
                 LootAction::Validate { game } => commands::loot::handle_validate(&game),
             };
         }
-        Commands::Tool { action: ToolAction::List { game } } => {
+        Commands::Tool {
+            action: ToolAction::List { game },
+        } => {
             return commands::tool::handle_list(&game);
         }
-        Commands::Tool { action: ToolAction::Status { game } } => {
+        Commands::Tool {
+            action: ToolAction::Status { game },
+        } => {
             return commands::tool::handle_status(&game);
         }
-        Commands::Tool { action: ToolAction::Enable { tool_id, game } } => {
+        Commands::Tool {
+            action: ToolAction::Enable { tool_id, game },
+        } => {
             return commands::tool::handle_enable(&tool_id, &game);
         }
-        Commands::Tool { action: ToolAction::Disable { tool_id, game } } => {
+        Commands::Tool {
+            action: ToolAction::Disable { tool_id, game },
+        } => {
             return commands::tool::handle_disable(&tool_id, &game);
         }
-        Commands::Tool { action: ToolAction::Configure { tool_id, game, settings } } => {
+        Commands::Tool {
+            action:
+                ToolAction::Configure {
+                    tool_id,
+                    game,
+                    settings,
+                },
+        } => {
             return commands::tool::handle_configure(&tool_id, &game, &settings);
         }
-        Commands::Tool { action: ToolAction::Apply { tool_id, game } } => {
+        Commands::Tool {
+            action: ToolAction::Apply { tool_id, game },
+        } => {
             return commands::tool::handle_apply(&tool_id, &game);
         }
-        Commands::Tool { action: ToolAction::Revert { tool_id, game } } => {
+        Commands::Tool {
+            action: ToolAction::Revert { tool_id, game },
+        } => {
             return commands::tool::handle_revert(&tool_id, &game);
         }
-        Commands::Nxm { action: NxmAction::Install } => {
+        Commands::Nxm {
+            action: NxmAction::Install,
+        } => {
             commands::nxm::install_handler()?;
             return Ok(());
         }
@@ -744,13 +778,20 @@ fn main() -> Result<()> {
 
     tokio::runtime::Runtime::new()?.block_on(async {
         match cli.command {
-            Commands::Play { profile, game, no_deploy, no_switch, no_capture } => {
-                commands::play::handle(profile, game, no_deploy, no_switch, no_capture).await?
-            }
+            Commands::Play {
+                profile,
+                game,
+                no_deploy,
+                no_switch,
+                no_capture,
+            } => commands::play::handle(profile, game, no_deploy, no_switch, no_capture).await?,
             Commands::Deploy { profile, game } => commands::deploy::handle(profile, game).await?,
-            Commands::Collisions { profile, game, all, suggest_hides } => {
-                commands::collisions::handle(profile, game, all, suggest_hides).await?
-            }
+            Commands::Collisions {
+                profile,
+                game,
+                all,
+                suggest_hides,
+            } => commands::collisions::handle(profile, game, all, suggest_hides).await?,
             Commands::Rollback { profile, game } => {
                 commands::rollback::handle(profile, game).await?
             }
@@ -763,21 +804,24 @@ fn main() -> Result<()> {
                     commands::uninstall::handle_diagnose(mod_id).await?
                 }
             },
-            Commands::Verify { profile, game } => {
-                commands::verify::handle(profile, game).await?
-            }
+            Commands::Verify { profile, game } => commands::verify::handle(profile, game).await?,
             Commands::Nexus { action } => commands::nexus::handle(action).await?,
             Commands::Stock { action } => commands::stock::handle(action).await?,
             Commands::Save { action } => commands::save::handle(action).await?,
             Commands::Update { action } => match action {
-                UpdateAction::Check { profile, game, period } => {
-                    commands::update::handle_check(profile, game, period).await?
-                }
+                UpdateAction::Check {
+                    profile,
+                    game,
+                    period,
+                } => commands::update::handle_check(profile, game, period).await?,
             },
             Commands::Tool { action } => match action {
-                ToolAction::Run { executable, profile, game, args } => {
-                    commands::tool::handle_run(executable, args, profile, game).await?
-                }
+                ToolAction::Run {
+                    executable,
+                    profile,
+                    game,
+                    args,
+                } => commands::tool::handle_run(executable, args, profile, game).await?,
                 ToolAction::List { .. }
                 | ToolAction::Status { .. }
                 | ToolAction::Enable { .. }
@@ -787,15 +831,20 @@ fn main() -> Result<()> {
                 | ToolAction::Revert { .. } => unreachable!(),
             },
             Commands::Nxm { action } => match action {
-                NxmAction::Handle { uri, profile } => {
-                    commands::nxm::handle(uri, profile).await?
-                }
+                NxmAction::Handle { uri, profile } => commands::nxm::handle(uri, profile).await?,
                 NxmAction::Install => unreachable!(),
             },
             // Already handled above
-            Commands::Profile { .. } | Commands::Scan { .. } | Commands::Detect | Commands::Import
-            | Commands::Instance { .. } | Commands::Backup { .. } | Commands::Diagnostics { .. }
-            | Commands::Export { .. } | Commands::Fomod { .. } | Commands::Loot { .. }
+            Commands::Profile { .. }
+            | Commands::Scan { .. }
+            | Commands::Detect
+            | Commands::Import
+            | Commands::Instance { .. }
+            | Commands::Backup { .. }
+            | Commands::Diagnostics { .. }
+            | Commands::Export { .. }
+            | Commands::Fomod { .. }
+            | Commands::Loot { .. }
             | Commands::Gui => unreachable!(),
         }
         Ok(())

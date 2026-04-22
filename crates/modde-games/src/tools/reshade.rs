@@ -10,9 +10,7 @@ use anyhow::{Context, Result};
 use smallvec::{SmallVec, smallvec};
 use tracing::info;
 
-use super::{
-    AppliedFiles, GameTool, ToolAvailability, ToolCategory, ToolConfig,
-};
+use super::{AppliedFiles, GameTool, ToolAvailability, ToolCategory, ToolConfig};
 
 pub static RESHADE: ReShade = ReShade;
 

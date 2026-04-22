@@ -21,11 +21,7 @@ impl CollisionClassifier for BethesdaCollisionClassifier {
     }
 
     fn classify_severity(&self, file_path: &str) -> CollisionSeverity {
-        let ext = file_path
-            .rsplit('.')
-            .next()
-            .unwrap_or("")
-            .to_lowercase();
+        let ext = file_path.rsplit('.').next().unwrap_or("").to_lowercase();
 
         match ext.as_str() {
             // Scripts, plugins, DLLs — save-breaking / dangerous

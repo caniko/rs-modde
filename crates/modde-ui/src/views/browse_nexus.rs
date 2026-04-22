@@ -71,10 +71,7 @@ impl Default for NexusBrowseState {
 /// the install button). Taken by value so the inner buttons can
 /// clone it into their message payloads without tying the returned
 /// `Element`'s lifetime to a local borrow.
-pub fn view<'a>(
-    state: &'a NexusBrowseState,
-    game_domain: Option<String>,
-) -> Element<'a, Message> {
+pub fn view<'a>(state: &'a NexusBrowseState, game_domain: Option<String>) -> Element<'a, Message> {
     let title = text("Browse Nexus").size(20);
 
     let tab_bar = render_tab_bar(state.active_tab);
@@ -86,13 +83,11 @@ pub fn view<'a>(
         .width(Length::Fill);
 
     let content: Element<'a, Message> = if game_domain.is_none() {
-        container(
-            text("Load a profile to browse Nexus mods for its game.").size(14),
-        )
-        .padding(20)
-        .width(Length::Fill)
-        .center_x(Length::Fill)
-        .into()
+        container(text("Load a profile to browse Nexus mods for its game.").size(14))
+            .padding(20)
+            .width(Length::Fill)
+            .center_x(Length::Fill)
+            .into()
     } else if state.loading {
         container(text("Loading…").size(14))
             .padding(20)
@@ -149,10 +144,7 @@ fn render_tab_bar(active: BrowseTab) -> Element<'static, Message> {
     bar.align_y(Alignment::Center).into()
 }
 
-fn mods_grid<'a>(
-    mods: &'a [GqlModTile],
-    game_domain: Option<String>,
-) -> Element<'a, Message> {
+fn mods_grid<'a>(mods: &'a [GqlModTile], game_domain: Option<String>) -> Element<'a, Message> {
     if mods.is_empty() {
         return container(text("No mods in this feed yet.").size(13))
             .padding(16)
@@ -187,10 +179,7 @@ fn mod_card<'a>(tile: &'a GqlModTile, game_domain: Option<String>) -> Element<'a
             .unwrap_or_default(),
     );
 
-    let summary = tile
-        .summary
-        .as_deref()
-        .unwrap_or("No summary provided.");
+    let summary = tile.summary.as_deref().unwrap_or("No summary provided.");
 
     let install_btn: Element<Message> = match game_domain {
         Some(domain) => button(text("Install").size(13))
@@ -254,10 +243,7 @@ fn collection_card<'a>(
     ]
     .align_y(Alignment::Center);
 
-    let summary = tile
-        .summary
-        .as_deref()
-        .unwrap_or("No summary provided.");
+    let summary = tile.summary.as_deref().unwrap_or("No summary provided.");
 
     let install_btn = button(text("Install collection").size(13))
         .on_press(Message::InstallCollection {

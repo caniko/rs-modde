@@ -10,10 +10,7 @@ fn build_test_bsa(folders: &[(&str, &[(&str, u32)])]) -> Vec<u8> {
     let folder_count = folders.len() as u32;
     let file_count: u32 = folders.iter().map(|(_, files)| files.len() as u32).sum();
 
-    let total_folder_name_len: u32 = folders
-        .iter()
-        .map(|(name, _)| name.len() as u32 + 2)
-        .sum();
+    let total_folder_name_len: u32 = folders.iter().map(|(name, _)| name.len() as u32 + 2).sum();
 
     let _total_file_name_len: u32 = folders
         .iter()

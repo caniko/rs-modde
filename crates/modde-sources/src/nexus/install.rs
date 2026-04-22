@@ -73,9 +73,8 @@ pub async fn install_single_mod(
     // `modde_cli::commands::install::handle_single_mod` for the mirror
     // of this flow (kept separate so the CLI can print progress while
     // the UI can drive it from a `Task::perform`).
-    let staging_root = paths::staging_dir().join(format!(
-        "install_{game_domain}_{mod_id}_{file_id}"
-    ));
+    let staging_root =
+        paths::staging_dir().join(format!("install_{game_domain}_{mod_id}_{file_id}"));
 
     std::fs::create_dir_all(store.as_path())?;
     std::fs::create_dir_all(paths::staging_dir().as_path())?;
@@ -99,8 +98,8 @@ pub async fn install_single_mod(
         .context("failed to extract mod archive")?;
 
     // 3. Hash the archive for the plan, then remove it.
-    let source_hash = installer::xxh64_file_hex(&archive_path)
-        .context("failed to hash downloaded archive")?;
+    let source_hash =
+        installer::xxh64_file_hex(&archive_path).context("failed to hash downloaded archive")?;
     let _ = std::fs::remove_file(&archive_path);
 
     // 4. Analyze.
@@ -109,8 +108,14 @@ pub async fn install_single_mod(
 
     let outcome = match &plan.method {
         InstallMethod::Unknown { .. } => {
-            let dossier =
-                write_dossier(&staging_root, game_domain, mod_id, file_id, mod_info, &plan.method)?;
+            let dossier = write_dossier(
+                &staging_root,
+                game_domain,
+                mod_id,
+                file_id,
+                mod_info,
+                &plan.method,
+            )?;
             InstallOutcome::Unknown {
                 dossier_path: dossier,
                 method: plan.method.clone(),
@@ -167,11 +172,7 @@ pub async fn install_single_mod(
     Ok(outcome)
 }
 
-async fn download_with_reqwest(
-    client: &Client,
-    url: &str,
-    dest: &Path,
-) -> Result<()> {
+async fn download_with_reqwest(client: &Client, url: &str, dest: &Path) -> Result<()> {
     use tokio::io::AsyncWriteExt as _;
 
     let resp = client
@@ -181,10 +182,7 @@ async fn download_with_reqwest(
         .context("download GET failed")?
         .error_for_status()
         .context("download HTTP error")?;
-    let bytes = resp
-        .bytes()
-        .await
-        .context("failed to read download body")?;
+    let bytes = resp.bytes().await.context("failed to read download body")?;
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
     }

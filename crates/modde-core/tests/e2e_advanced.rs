@@ -3,20 +3,19 @@
 //! These tests exercise multi-mod pipelines, conflict chains, rollback,
 //! profile management, and hash verification flows.
 
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-
 use modde_core::GameId;
+use modde_core::ModdeDb;
 use modde_core::error::CoreError;
 use modde_core::hash::{hash_file_sha256, hash_file_xxhash, verify_sha256, verify_xxhash};
 use modde_core::manifest::collection::CollectionManifest;
 use modde_core::manifest::wabbajack::WabbajackManifest;
 use modde_core::profile::{EnabledMod, Profile, ProfileManager, ProfileSource};
-use modde_core::resolver::{resolve, ConflictMap, LoadOrderRule, ModId, ResolvedLoadOrder};
+use modde_core::resolver::{ConflictMap, LoadOrderRule, ModId, ResolvedLoadOrder, resolve};
 use modde_core::vfs::{Built, SymlinkFarm};
-use modde_core::ModdeDb;
 use tempfile::TempDir;
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -26,7 +25,8 @@ fn simple_mod(id: &str, enabled: bool) -> EnabledMod {
         mod_id: id.to_string(),
         enabled,
         version: Some("1.0".to_string()),
-        fomod_config: None, ..Default::default()
+        fomod_config: None,
+        ..Default::default()
     }
 }
 
@@ -155,11 +155,7 @@ async fn e2e_full_pipeline_20_mods_complex_order() {
     assert_eq!(shared_conflict.1.len(), 22);
 
     // Build farm - last mod wins for shared file
-    let farm = build_farm_from_resolved(
-        &resolved,
-        &all_mod_files,
-        tmp.path().join("staging"),
-    );
+    let farm = build_farm_from_resolved(&resolved, &all_mod_files, tmp.path().join("staging"));
 
     // 22 unique files + 1 shared file = 23 links
     assert_eq!(farm.links.len(), 23);
@@ -168,7 +164,9 @@ async fn e2e_full_pipeline_20_mods_complex_order() {
     let last_mod_id = resolved.order.last().unwrap();
     let shared_source = farm.links.get("textures/shared_texture.dds").unwrap();
     assert!(
-        shared_source.to_string_lossy().contains(last_mod_id.as_str()),
+        shared_source
+            .to_string_lossy()
+            .contains(last_mod_id.as_str()),
         "shared texture should be from {last_mod_id}, got {shared_source:?}"
     );
 
@@ -181,7 +179,11 @@ async fn e2e_full_pipeline_20_mods_complex_order() {
     for i in 0..22 {
         let deployed = game_dir.join(format!("unique_{i:02}.esp"));
         assert!(
-            deployed.symlink_metadata().unwrap().file_type().is_symlink(),
+            deployed
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink(),
             "unique_{i:02}.esp should be a symlink"
         );
     }
@@ -241,7 +243,11 @@ async fn e2e_wabbajack_source_resolve_deploy_verify() {
         .iter()
         .position(|m| m == "unofficial_patch")
         .unwrap();
-    let pos_enb = resolved.order.iter().position(|m| m == "enb_helper").unwrap();
+    let pos_enb = resolved
+        .order
+        .iter()
+        .position(|m| m == "enb_helper")
+        .unwrap();
     assert!(pos_skse < pos_up);
     assert!(pos_up < pos_enb);
 
@@ -275,19 +281,30 @@ async fn e2e_wabbajack_source_resolve_deploy_verify() {
     farm.deploy_to(&game_dir).await.unwrap();
 
     // Verify symlinks
-    assert!(game_dir.join("skse64_loader.exe").symlink_metadata().unwrap().file_type().is_symlink());
-    assert!(game_dir
-        .join("Unofficial Skyrim SE Patch.esp")
-        .symlink_metadata()
-        .unwrap()
-        .file_type()
-        .is_symlink());
-    assert!(game_dir
-        .join("Data/SKSE/Plugins/ENBHelperSE.dll")
-        .symlink_metadata()
-        .unwrap()
-        .file_type()
-        .is_symlink());
+    assert!(
+        game_dir
+            .join("skse64_loader.exe")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert!(
+        game_dir
+            .join("Unofficial Skyrim SE Patch.esp")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert!(
+        game_dir
+            .join("Data/SKSE/Plugins/ENBHelperSE.dll")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
 }
 
 // ── 3. NexusCollection source profile pipeline ──────────────────────
@@ -331,19 +348,11 @@ async fn e2e_nexus_collection_source_resolve_deploy_verify() {
     );
     mod_files.insert(
         ModId::from("body_mod"),
-        make_mod_files(
-            tmp.path(),
-            "body_mod",
-            &[("meshes/body.nif", "mesh_data")],
-        ),
+        make_mod_files(tmp.path(), "body_mod", &[("meshes/body.nif", "mesh_data")]),
     );
     mod_files.insert(
         ModId::from("weather_mod"),
-        make_mod_files(
-            tmp.path(),
-            "weather_mod",
-            &[("weather.esp", "plugin_data")],
-        ),
+        make_mod_files(tmp.path(), "weather_mod", &[("weather.esp", "plugin_data")]),
     );
 
     let farm = build_farm_from_resolved(&resolved, &mod_files, tmp.path().join("staging"));
@@ -385,11 +394,7 @@ async fn e2e_deploy_then_rollback_verify() {
         order: vec![ModId::from("mod_a")],
     };
 
-    let farm_v1 = build_farm_from_resolved(
-        &resolved,
-        &mod_files_v1,
-        tmp.path().join("staging_v1"),
-    );
+    let farm_v1 = build_farm_from_resolved(&resolved, &mod_files_v1, tmp.path().join("staging_v1"));
     let farm_v1 = farm_v1.materialize().await.unwrap();
 
     let game_dir = tmp.path().join("game");
@@ -406,11 +411,7 @@ async fn e2e_deploy_then_rollback_verify() {
         make_mod_files(tmp.path(), "mod_a_v2", &[("data.esp", "version_2")]),
     );
 
-    let farm_v2 = build_farm_from_resolved(
-        &resolved,
-        &mod_files_v2,
-        tmp.path().join("staging_v2"),
-    );
+    let farm_v2 = build_farm_from_resolved(&resolved, &mod_files_v2, tmp.path().join("staging_v2"));
     let farm_v2 = farm_v2.materialize().await.unwrap();
 
     farm_v2.deploy_to(&game_dir).await.unwrap();
@@ -507,20 +508,23 @@ fn e2e_disabled_mods_excluded_from_resolution() {
                 mod_id: "disabled_1".to_string(),
                 enabled: false,
                 version: Some("1.0".to_string()),
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
             simple_mod("also_on", true),
             EnabledMod {
                 mod_id: "disabled_2".to_string(),
                 enabled: false,
                 version: Some("2.0".to_string()),
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
             EnabledMod {
                 mod_id: "disabled_3".to_string(),
                 enabled: false,
                 version: None,
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
             simple_mod("last_enabled", true),
         ],
@@ -547,12 +551,18 @@ fn e2e_conflict_detection_three_plus_mods() {
 
     // 5 mods all providing the same texture
     for i in 0..5 {
-        cm.register("textures/body/skin.dds".to_string(), ModId::from(format!("mod_{i}").as_str()));
+        cm.register(
+            "textures/body/skin.dds".to_string(),
+            ModId::from(format!("mod_{i}").as_str()),
+        );
     }
 
     // 3 mods providing another shared file
     for i in 0..3 {
-        cm.register("meshes/body/body.nif".to_string(), ModId::from(format!("mod_{i}").as_str()));
+        cm.register(
+            "meshes/body/body.nif".to_string(),
+            ModId::from(format!("mod_{i}").as_str()),
+        );
     }
 
     // 1 mod with a unique file (no conflict)
@@ -673,15 +683,11 @@ fn e2e_profile_save_modify_save_load() {
     profile.id = Some(id);
 
     // Modify: add a mod and a rule
-    profile
-        .mods
-        .push(simple_mod("mod_c", true));
-    profile
-        .load_order_rules
-        .push(LoadOrderRule::LoadAfter {
-            mod_id: ModId::from("mod_c"),
-            after: ModId::from("mod_a"),
-        });
+    profile.mods.push(simple_mod("mod_c", true));
+    profile.load_order_rules.push(LoadOrderRule::LoadAfter {
+        mod_id: ModId::from("mod_c"),
+        after: ModId::from("mod_a"),
+    });
     pm.update(&profile).unwrap();
 
     // Modify again: disable mod_b
@@ -874,7 +880,10 @@ fn e2e_collection_manifest_with_mods_and_patches() {
     assert!(manifest.mods[1].patch.is_none());
     assert_eq!(manifest.mods[0].patch.as_ref().unwrap().hash, "abc123");
     assert_eq!(manifest.endorsements, 42);
-    assert_eq!(manifest.image_url, Some("https://example.com/image.png".to_string()));
+    assert_eq!(
+        manifest.image_url,
+        Some("https://example.com/image.png".to_string())
+    );
 }
 
 // ── Extra: Incompatible mods error ───────────────────────────────────
@@ -886,10 +895,7 @@ fn e2e_incompatible_mods_both_enabled() {
         name: "incompat".to_string(),
         game_id: GameId::from("skyrim-se"),
         source: ProfileSource::Manual,
-        mods: vec![
-            simple_mod("enb", true),
-            simple_mod("reshade", true),
-        ],
+        mods: vec![simple_mod("enb", true), simple_mod("reshade", true)],
         overrides: PathBuf::from("/tmp"),
         load_order_rules: smallvec![LoadOrderRule::Incompatible {
             mod_a: ModId::from("enb"),
@@ -915,7 +921,8 @@ fn e2e_incompatible_mods_one_disabled_is_ok() {
                 mod_id: "reshade".to_string(),
                 enabled: false,
                 version: None,
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
         ],
         overrides: PathBuf::from("/tmp"),

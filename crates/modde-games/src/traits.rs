@@ -64,7 +64,9 @@ pub struct ContentSummary {
 impl ContentSummary {
     /// Return counts sorted by display order, excluding zero counts.
     pub fn sorted_counts(&self) -> Vec<(ContentCategory, usize)> {
-        let mut entries: Vec<_> = self.counts.iter()
+        let mut entries: Vec<_> = self
+            .counts
+            .iter()
             .filter(|(_, count)| **count > 0)
             .map(|(cat, count)| (*cat, *count))
             .collect();
@@ -74,7 +76,9 @@ impl ContentSummary {
 
     /// Format as a human-readable string like "5 textures, 2 meshes, 1 plugin".
     pub fn display_string(&self) -> String {
-        let parts: Vec<String> = self.sorted_counts().iter()
+        let parts: Vec<String> = self
+            .sorted_counts()
+            .iter()
             .map(|(cat, count)| format!("{} {}", count, cat.label()))
             .collect();
         if parts.is_empty() {
@@ -177,17 +181,31 @@ pub trait GamePlugin: Send + Sync {
     }
 
     // ── DRY trait methods ─────────────────────────────────────────
-    fn ini_file_names(&self) -> &[&str] { &[] }
-    fn archive_extensions(&self) -> &[&str] { &[] }
-    fn has_plugin_system(&self) -> bool { false }
-    fn steam_app_id_u32(&self) -> Option<u32> { None }
-    fn plugins_txt_folder(&self) -> Option<&str> { None }
-    fn nexus_game_domain(&self) -> Option<&str> { None }
+    fn ini_file_names(&self) -> &[&str] {
+        &[]
+    }
+    fn archive_extensions(&self) -> &[&str] {
+        &[]
+    }
+    fn has_plugin_system(&self) -> bool {
+        false
+    }
+    fn steam_app_id_u32(&self) -> Option<u32> {
+        None
+    }
+    fn plugins_txt_folder(&self) -> Option<&str> {
+        None
+    }
+    fn nexus_game_domain(&self) -> Option<&str> {
+        None
+    }
 
     /// Numeric Nexus game ID. Required by the GraphQL v2 API for
     /// browse/search queries (which take `gameId: Int`, not a domain
     /// string). Games that only speak REST can leave this `None`.
-    fn nexus_game_id_u32(&self) -> Option<u32> { None }
+    fn nexus_game_id_u32(&self) -> Option<u32> {
+        None
+    }
 
     // ── Install-method detection (V8 installer pipeline) ────────
 
@@ -370,7 +388,9 @@ pub trait SaveTracker: Send + Sync {
             0 => "capture: no new saves".into(),
             1 => {
                 let s = &saves[0];
-                let name = s.label.as_deref()
+                let name = s
+                    .label
+                    .as_deref()
                     .unwrap_or_else(|| s.rel_path.to_str().unwrap_or("unknown"));
                 format!("capture: {} [{}]", name, s.category)
             }

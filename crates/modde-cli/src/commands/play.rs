@@ -71,9 +71,7 @@ pub async fn handle(
 
     // 4. Detect launcher and launch
     let detected = modde_games::find_detected_game(&game_id).ok_or_else(|| {
-        anyhow::anyhow!(
-            "could not detect launcher for '{game_id}'. Is the game installed?"
-        )
+        anyhow::anyhow!("could not detect launcher for '{game_id}'. Is the game installed?")
     })?;
 
     println!("Launching via {}...", detected.source);

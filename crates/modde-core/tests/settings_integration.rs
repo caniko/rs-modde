@@ -52,8 +52,14 @@ fn settings_round_trip_preserves_all_fields() {
     assert_eq!(loaded.selected_game.as_deref(), Some("cyberpunk2077"));
     assert_eq!(loaded.theme, "Nord");
     assert_eq!(loaded.download_dir, Some(PathBuf::from("/dl")));
-    assert_eq!(loaded.game_path("cyberpunk2077"), Some(&PathBuf::from("/games/cp2077")));
-    assert_eq!(loaded.game_path("skyrim-se"), Some(&PathBuf::from("/games/skyrim")));
+    assert_eq!(
+        loaded.game_path("cyberpunk2077"),
+        Some(&PathBuf::from("/games/cp2077"))
+    );
+    assert_eq!(
+        loaded.game_path("skyrim-se"),
+        Some(&PathBuf::from("/games/skyrim"))
+    );
     assert!(loaded.game_path("fallout4").is_none());
 }
 
@@ -104,7 +110,11 @@ fn set_game_path_updates_existing() {
     let mut s = AppSettings::default();
     s.set_game_path("cyberpunk2077", PathBuf::from("/old"));
     s.set_game_path("cyberpunk2077", PathBuf::from("/new"));
-    assert_eq!(s.game_paths.len(), 1, "should update in-place, not add duplicate");
+    assert_eq!(
+        s.game_paths.len(),
+        1,
+        "should update in-place, not add duplicate"
+    );
     assert_eq!(s.game_path("cyberpunk2077"), Some(&PathBuf::from("/new")));
 }
 
@@ -115,7 +125,10 @@ fn set_game_path_independent_games() {
     s.set_game_path("cyberpunk2077", PathBuf::from("/cp2077"));
     assert_eq!(s.game_paths.len(), 2);
     assert_eq!(s.game_path("skyrim-se"), Some(&PathBuf::from("/skyrim")));
-    assert_eq!(s.game_path("cyberpunk2077"), Some(&PathBuf::from("/cp2077")));
+    assert_eq!(
+        s.game_path("cyberpunk2077"),
+        Some(&PathBuf::from("/cp2077"))
+    );
 }
 
 // ---------------------------------------------------------------------------

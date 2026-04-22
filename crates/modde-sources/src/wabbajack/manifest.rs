@@ -20,8 +20,8 @@ pub fn parse_wabbajack_file(path: &Path) -> Result<WabbajackManifest> {
     let mut json = String::new();
     entry.read_to_string(&mut json)?;
 
-    let manifest: WabbajackManifest = serde_json::from_str(&json)
-        .with_context(|| "failed to parse wabbajack manifest JSON")?;
+    let manifest: WabbajackManifest =
+        serde_json::from_str(&json).with_context(|| "failed to parse wabbajack manifest JSON")?;
 
     Ok(manifest)
 }

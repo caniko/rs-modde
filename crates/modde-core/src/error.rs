@@ -33,7 +33,10 @@ pub enum CoreError {
     DependencyCycle(String),
 
     #[error("conflict: file '{path}' provided by multiple mods: {mods:?}")]
-    FileConflict { path: String, mods: Box<SmallVec<[String; 4]>> },
+    FileConflict {
+        path: String,
+        mods: Box<SmallVec<[String; 4]>>,
+    },
 
     #[error("profile '{0}' not found")]
     ProfileNotFound(String),
@@ -41,8 +44,13 @@ pub enum CoreError {
     #[error("profile '{0}' already exists")]
     ProfileAlreadyExists(String),
 
-    #[error("ambiguous profile name '{name}': found in games {games:?}. Use --game to disambiguate.")]
-    AmbiguousProfile { name: String, games: SmallVec<[GameId; 4]> },
+    #[error(
+        "ambiguous profile name '{name}': found in games {games:?}. Use --game to disambiguate."
+    )]
+    AmbiguousProfile {
+        name: String,
+        games: SmallVec<[GameId; 4]>,
+    },
 
     #[error("mod '{mod_id}' not found in profile '{profile}'. Available: {candidates:?}")]
     ModNotFound {

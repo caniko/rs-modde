@@ -33,7 +33,11 @@ pub struct SymlinkFarm<S = Materialized> {
 impl SymlinkFarm<Built> {
     /// Construct a `Built` farm directly from a staging directory and link map.
     pub fn from_links(staging_dir: PathBuf, links: HashMap<String, PathBuf>) -> Self {
-        Self { staging_dir, links, _state: PhantomData }
+        Self {
+            staging_dir,
+            links,
+            _state: PhantomData,
+        }
     }
 
     /// Build a symlink farm from a resolved load order and the content-addressed store.
@@ -74,7 +78,11 @@ impl SymlinkFarm<Built> {
             }
         }
 
-        Ok(Self { staging_dir, links, _state: PhantomData })
+        Ok(Self {
+            staging_dir,
+            links,
+            _state: PhantomData,
+        })
     }
 
     /// Materialize the symlink farm on disk, transitioning to `Materialized` state.
@@ -143,9 +151,9 @@ pub async fn rollback(profile_name: &str) -> Result<()> {
     let backup = profile_dir.join("staging.bak");
 
     if !backup.exists() {
-        return Err(CoreError::Other(format!(
-            "no backup staging found for profile '{profile_name}'"
-        ).into()));
+        return Err(CoreError::Other(
+            format!("no backup staging found for profile '{profile_name}'").into(),
+        ));
     }
 
     if staging.exists() {
@@ -162,12 +170,11 @@ pub async fn rollback(profile_name: &str) -> Result<()> {
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use crate::resolver::{ModId, ResolvedLoadOrder};
+    use std::collections::HashMap;
     use tempfile::TempDir;
 
     fn make_resolved(order: Vec<&str>) -> ResolvedLoadOrder {
@@ -262,8 +269,14 @@ mod tests {
         let source_b = PathBuf::from("/store/mod_b/file_b.txt");
 
         let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
-        mod_files.insert("mod_a".into(), vec![("file_a.txt".into(), source_a.clone())]);
-        mod_files.insert("mod_b".into(), vec![("file_b.txt".into(), source_b.clone())]);
+        mod_files.insert(
+            "mod_a".into(),
+            vec![("file_a.txt".into(), source_a.clone())],
+        );
+        mod_files.insert(
+            "mod_b".into(),
+            vec![("file_b.txt".into(), source_b.clone())],
+        );
 
         let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None, None).unwrap();
         assert_eq!(farm.links.len(), 2);
@@ -284,10 +297,7 @@ mod tests {
 
         let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None, None).unwrap();
         assert_eq!(farm.links.len(), 1);
-        assert_eq!(
-            farm.links.get("a/b/c/d/e/deep_file.esp").unwrap(),
-            &source
-        );
+        assert_eq!(farm.links.get("a/b/c/d/e/deep_file.esp").unwrap(), &source);
     }
 
     #[test]
@@ -314,7 +324,8 @@ mod tests {
         let mut hidden = HashSet::new();
         hidden.insert(("mod_b".to_string(), "textures/sky.dds".to_string()));
 
-        let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None, Some(&hidden)).unwrap();
+        let farm =
+            SymlinkFarm::build("test_profile", &resolved, &mod_files, None, Some(&hidden)).unwrap();
         assert_eq!(farm.links.len(), 2);
         // mod_a's sky.dds should win since mod_b's is hidden
         assert_eq!(farm.links.get("textures/sky.dds").unwrap(), &source_a1);
@@ -341,7 +352,13 @@ mod tests {
         let farm = farm.materialize().await.unwrap();
 
         let link_path = staging_dir.join("data/source.txt");
-        assert!(link_path.symlink_metadata().unwrap().file_type().is_symlink());
+        assert!(
+            link_path
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
         assert_eq!(std::fs::read_link(&link_path).unwrap(), source_file);
         assert_eq!(std::fs::read_to_string(&link_path).unwrap(), "hello");
     }
@@ -377,7 +394,13 @@ mod tests {
         farm.materialize().await.unwrap();
 
         let link_path = staging_dir.join("textures/landscape/snow/detail.dds");
-        assert!(link_path.symlink_metadata().unwrap().file_type().is_symlink());
+        assert!(
+            link_path
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
         assert_eq!(std::fs::read_to_string(&link_path).unwrap(), "texture data");
     }
 
@@ -402,7 +425,14 @@ mod tests {
         // Old file should be gone
         assert!(!staging_dir.join("old_file.txt").exists());
         // New symlink should exist
-        assert!(staging_dir.join("new_file.txt").symlink_metadata().unwrap().file_type().is_symlink());
+        assert!(
+            staging_dir
+                .join("new_file.txt")
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
     }
 
     // ========================================================================
@@ -448,7 +478,13 @@ mod tests {
         farm.deploy_to(&target_dir).await.unwrap();
 
         let deployed = target_dir.join("plugin.esp");
-        assert!(deployed.symlink_metadata().unwrap().file_type().is_symlink());
+        assert!(
+            deployed
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
         let link_target = std::fs::read_link(&deployed).unwrap();
         assert_eq!(link_target, staging_dir.join("plugin.esp"));
     }
@@ -474,7 +510,13 @@ mod tests {
         farm.deploy_to(&target_dir).await.unwrap();
 
         let deployed = target_dir.join("replaceme.txt");
-        assert!(deployed.symlink_metadata().unwrap().file_type().is_symlink());
+        assert!(
+            deployed
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
         assert_eq!(std::fs::read_to_string(&deployed).unwrap(), "new content");
     }
 
@@ -498,8 +540,22 @@ mod tests {
 
         farm.deploy_to(&target_dir).await.unwrap();
 
-        assert!(target_dir.join("textures/landscape/dirt.dds").symlink_metadata().unwrap().file_type().is_symlink());
-        assert!(target_dir.join("meshes/architecture/wall.nif").symlink_metadata().unwrap().file_type().is_symlink());
+        assert!(
+            target_dir
+                .join("textures/landscape/dirt.dds")
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert!(
+            target_dir
+                .join("meshes/architecture/wall.nif")
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
     }
 
     // ========================================================================
@@ -510,7 +566,9 @@ mod tests {
     async fn test_rollback_no_backup() {
         let tmp = TempDir::new().unwrap();
         // Point XDG_DATA_HOME to our temp dir so dirs_path() resolves there
-        unsafe { std::env::set_var("XDG_DATA_HOME", tmp.path()); }
+        unsafe {
+            std::env::set_var("XDG_DATA_HOME", tmp.path());
+        }
 
         let profile_dir = tmp.path().join("modde/profiles/rollback_test_no_bak");
         std::fs::create_dir_all(profile_dir.join("staging")).unwrap();
@@ -528,7 +586,9 @@ mod tests {
     #[ignore = "env var race: XDG_DATA_HOME set_var is not thread-safe across parallel tests"]
     async fn test_rollback_swaps_dirs() {
         let tmp = TempDir::new().unwrap();
-        unsafe { std::env::set_var("XDG_DATA_HOME", tmp.path()); }
+        unsafe {
+            std::env::set_var("XDG_DATA_HOME", tmp.path());
+        }
 
         let profile_dir = tmp.path().join("modde/profiles/rollback_test_swap");
         let staging = profile_dir.join("staging");

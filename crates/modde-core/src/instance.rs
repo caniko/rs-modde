@@ -183,18 +183,10 @@ mod tests {
         let registry_path = tmp.path().join("instances.toml");
 
         let mut reg = InstanceRegistry::default();
-        reg.create_with_path(
-            "first",
-            tmp.path().join("first"),
-            &registry_path,
-        )
-        .unwrap();
-        reg.create_with_path(
-            "second",
-            tmp.path().join("second"),
-            &registry_path,
-        )
-        .unwrap();
+        reg.create_with_path("first", tmp.path().join("first"), &registry_path)
+            .unwrap();
+        reg.create_with_path("second", tmp.path().join("second"), &registry_path)
+            .unwrap();
 
         assert_eq!(reg.active.as_deref(), Some("first"));
 
@@ -208,18 +200,10 @@ mod tests {
         let registry_path = tmp.path().join("instances.toml");
 
         let mut reg = InstanceRegistry::default();
-        reg.create_with_path(
-            "myinstance",
-            tmp.path().join("data1"),
-            &registry_path,
-        )
-        .unwrap();
+        reg.create_with_path("myinstance", tmp.path().join("data1"), &registry_path)
+            .unwrap();
 
-        let result = reg.create_with_path(
-            "myinstance",
-            tmp.path().join("data2"),
-            &registry_path,
-        );
+        let result = reg.create_with_path("myinstance", tmp.path().join("data2"), &registry_path);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(

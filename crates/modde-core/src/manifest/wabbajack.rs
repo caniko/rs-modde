@@ -24,7 +24,9 @@ fn deserialize_b64_hash<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u6
         serde_json::Value::Number(n) => n
             .as_u64()
             .ok_or_else(|| serde::de::Error::custom("hash number not a valid u64")),
-        _ => Err(serde::de::Error::custom("expected string or number for hash")),
+        _ => Err(serde::de::Error::custom(
+            "expected string or number for hash",
+        )),
     }
 }
 
@@ -45,7 +47,9 @@ fn deserialize_headers<'de, D: Deserializer<'de>>(
         }
         serde_json::Value::Array(_) => Ok(HashMap::new()),
         serde_json::Value::Null => Ok(HashMap::new()),
-        _ => Err(serde::de::Error::custom("expected object or array for Headers")),
+        _ => Err(serde::de::Error::custom(
+            "expected object or array for Headers",
+        )),
     }
 }
 
@@ -171,11 +175,7 @@ pub enum ArchiveState {
     HttpDownloader {
         #[serde(rename = "Url")]
         url: String,
-        #[serde(
-            default,
-            rename = "Headers",
-            deserialize_with = "deserialize_headers"
-        )]
+        #[serde(default, rename = "Headers", deserialize_with = "deserialize_headers")]
         headers: HashMap<String, String>,
     },
 }
@@ -287,12 +287,8 @@ impl DownloadDirective {
             Self::Nexus { mod_id, .. } => format!("nexus:{mod_id}").into(),
             Self::GitHub { repo, .. } => format!("github:{repo}").into(),
             Self::GoogleDrive { id, .. } => format!("gdrive:{id}").into(),
-            Self::Mega { url, .. } => {
-                format!("mega:{}", &url[..url.len().min(30)]).into()
-            }
-            Self::DirectURL { url, .. } => {
-                format!("http:{}", &url[..url.len().min(30)]).into()
-            }
+            Self::Mega { url, .. } => format!("mega:{}", &url[..url.len().min(30)]).into(),
+            Self::DirectURL { url, .. } => format!("http:{}", &url[..url.len().min(30)]).into(),
         }
     }
 }
@@ -338,12 +334,8 @@ pub struct BSAFileState {
 
 /// Parse a hash from a serde_json::Value — tries base64 string first, then numeric.
 fn parse_hash_value(val: Option<&serde_json::Value>) -> u64 {
-    val.and_then(|v| {
-        v.as_str()
-            .and_then(parse_b64_hash)
-            .or_else(|| v.as_u64())
-    })
-    .unwrap_or(0)
+    val.and_then(|v| v.as_str().and_then(parse_b64_hash).or_else(|| v.as_u64()))
+        .unwrap_or(0)
 }
 
 impl WabbajackManifest {
@@ -416,9 +408,7 @@ impl WabbajackManifest {
                     })
                 }
                 RawDirective::InlineFile {
-                    source_data_id,
-                    to,
-                    ..
+                    source_data_id, to, ..
                 } => Some(InstallDirective::InlineFile {
                     source_data_id: source_data_id.clone(),
                     to: to.clone(),

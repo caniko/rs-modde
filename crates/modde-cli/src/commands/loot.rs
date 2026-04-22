@@ -23,8 +23,8 @@ pub fn handle_sort(game_id: &str, _data_dir: Option<PathBuf>) -> Result<()> {
         return Ok(());
     }
 
-    let masterlist = LootMasterlist::from_file(&cache_path)
-        .context("failed to parse LOOT masterlist")?;
+    let masterlist =
+        LootMasterlist::from_file(&cache_path).context("failed to parse LOOT masterlist")?;
 
     println!(
         "Loaded LOOT masterlist: {} plugin entries",
@@ -62,12 +62,14 @@ pub fn handle_sort(game_id: &str, _data_dir: Option<PathBuf>) -> Result<()> {
 
 /// Validate plugins in the game's Data directory.
 pub fn handle_validate(game_id: &str) -> Result<()> {
-    let game_plugin = modde_games::resolve_game_plugin(game_id).ok_or_else(|| {
-        anyhow::anyhow!("unsupported game: '{game_id}'")
-    })?;
+    let game_plugin = modde_games::resolve_game_plugin(game_id)
+        .ok_or_else(|| anyhow::anyhow!("unsupported game: '{game_id}'"))?;
 
     let install_dir = game_plugin.detect_install().ok_or_else(|| {
-        anyhow::anyhow!("could not detect install directory for {}", game_plugin.display_name())
+        anyhow::anyhow!(
+            "could not detect install directory for {}",
+            game_plugin.display_name()
+        )
     })?;
 
     let data_dir = game_plugin.mod_directory(&install_dir);
@@ -91,7 +93,9 @@ pub fn handle_validate(game_id: &str) -> Result<()> {
         for w in &warnings {
             match w {
                 PluginWarning::Form43 { plugin, version } => {
-                    println!("  [FORM43] {plugin} (v{version:.2}) — Oldrim format, may cause CTDs in SSE");
+                    println!(
+                        "  [FORM43] {plugin} (v{version:.2}) — Oldrim format, may cause CTDs in SSE"
+                    );
                 }
                 PluginWarning::MissingMaster { plugin, master } => {
                     println!("  [MISSING] {plugin} requires '{master}' which is not loaded");

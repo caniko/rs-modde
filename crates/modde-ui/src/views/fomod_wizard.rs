@@ -118,11 +118,8 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
                 GroupType::SelectAny => "Select any",
             };
 
-            let mut group_col = column![
-                text(&group.name).size(16),
-                text(group_type_label).size(12),
-            ]
-            .spacing(5);
+            let mut group_col =
+                column![text(&group.name).size(16), text(group_type_label).size(12),].spacing(5);
 
             let current_sel = app
                 .fomod_selections
@@ -158,17 +155,14 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
 
                 let plugin_widget: Element<'_, Message> = if is_radio {
                     let chosen: Option<usize> = current_sel.first().copied();
-                    radio(
-                        &label,
-                        plugin_idx,
-                        chosen,
-                        move |picked| Message::FOMODChoice {
+                    radio(&label, plugin_idx, chosen, move |picked| {
+                        Message::FOMODChoice {
                             step: step_idx,
                             group: group_idx,
                             option: picked,
                             selected: true,
-                        },
-                    )
+                        }
+                    })
                     .into()
                 } else if group.group_type == GroupType::SelectAll {
                     checkbox(true).label(label.clone()).into()
@@ -227,11 +221,7 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
                 group_col = group_col.push(option_col);
             }
 
-            groups_col = groups_col.push(
-                container(group_col)
-                    .padding(10)
-                    .width(Length::Fill),
-            );
+            groups_col = groups_col.push(container(group_col).padding(10).width(Length::Fill));
         }
     }
 
@@ -251,24 +241,15 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
     // ── Navigation buttons ──
     let mut nav = row![].spacing(10);
 
-    nav = nav.push(
-        button(text("Cancel"))
-            .on_press(Message::FOMODCancel),
-    );
+    nav = nav.push(button(text("Cancel")).on_press(Message::FOMODCancel));
 
     // Undo button
     if app.fomod_can_undo {
-        nav = nav.push(
-            button(text("Undo"))
-                .on_press(Message::FOMODUndo),
-        );
+        nav = nav.push(button(text("Undo")).on_press(Message::FOMODUndo));
     }
 
     if app.fomod_wizard_pos > 0 {
-        nav = nav.push(
-            button(text("Back"))
-                .on_press(Message::FOMODBack),
-        );
+        nav = nav.push(button(text("Back")).on_press(Message::FOMODBack));
     }
 
     let is_last = app.fomod_is_last_step();
@@ -283,14 +264,10 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
     };
     nav = nav.push(next_btn);
 
-    let content = column![
-        header,
-        scrollable(groups_col).height(Length::Fill),
-        nav,
-    ]
-    .spacing(15)
-    .width(Length::Fill)
-    .height(Length::Fill);
+    let content = column![header, scrollable(groups_col).height(Length::Fill), nav,]
+        .spacing(15)
+        .width(Length::Fill)
+        .height(Length::Fill);
 
     container(content)
         .width(Length::Fill)

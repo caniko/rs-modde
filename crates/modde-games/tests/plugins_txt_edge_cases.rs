@@ -1,6 +1,8 @@
 use std::path::Path;
 
-use modde_games::bethesda::plugins_txt::{read_plugins_txt_from, write_plugins_txt_to, PluginEntry};
+use modde_games::bethesda::plugins_txt::{
+    PluginEntry, read_plugins_txt_from, write_plugins_txt_to,
+};
 use tempfile::TempDir;
 
 // ── Reading edge cases ──────────────────────────────────────────────
@@ -62,7 +64,11 @@ fn test_read_many_plugins() {
 fn test_read_comment_between_plugins() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("plugins.txt");
-    std::fs::write(&path, "*Skyrim.esm\n# Master files above, mods below\n*Mod.esp\n").unwrap();
+    std::fs::write(
+        &path,
+        "*Skyrim.esm\n# Master files above, mods below\n*Mod.esp\n",
+    )
+    .unwrap();
 
     let entries = read_plugins_txt_from(&path).unwrap();
     assert_eq!(entries.len(), 2);
@@ -126,15 +132,17 @@ fn test_write_overwrite_existing() {
     let path = dir.path().join("plugins.txt");
 
     // Write initial
-    let entries1 = vec![
-        PluginEntry { name: "Old.esp".to_string(), enabled: true },
-    ];
+    let entries1 = vec![PluginEntry {
+        name: "Old.esp".to_string(),
+        enabled: true,
+    }];
     write_plugins_txt_to(&path, &entries1).unwrap();
 
     // Overwrite
-    let entries2 = vec![
-        PluginEntry { name: "New.esp".to_string(), enabled: false },
-    ];
+    let entries2 = vec![PluginEntry {
+        name: "New.esp".to_string(),
+        enabled: false,
+    }];
     write_plugins_txt_to(&path, &entries2).unwrap();
 
     let read_back = read_plugins_txt_from(&path).unwrap();
@@ -148,9 +156,10 @@ fn test_write_header_not_read_as_plugin() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("plugins.txt");
 
-    let entries = vec![
-        PluginEntry { name: "Mod.esp".to_string(), enabled: true },
-    ];
+    let entries = vec![PluginEntry {
+        name: "Mod.esp".to_string(),
+        enabled: true,
+    }];
     write_plugins_txt_to(&path, &entries).unwrap();
 
     // Read back and verify header comment is not parsed as a plugin
@@ -161,7 +170,8 @@ fn test_write_header_not_read_as_plugin() {
 
 #[test]
 fn test_read_nonexistent_returns_error() {
-    let result = read_plugins_txt_from(Path::new("/tmp/nonexistent_modde_plugins_test/plugins.txt"));
+    let result =
+        read_plugins_txt_from(Path::new("/tmp/nonexistent_modde_plugins_test/plugins.txt"));
     assert!(result.is_err());
     let err = format!("{}", result.unwrap_err());
     assert!(err.contains("failed to read"));
@@ -175,14 +185,38 @@ fn test_roundtrip_preserves_order() {
     let path = dir.path().join("plugins.txt");
 
     let entries = vec![
-        PluginEntry { name: "Skyrim.esm".to_string(), enabled: true },
-        PluginEntry { name: "Update.esm".to_string(), enabled: true },
-        PluginEntry { name: "Dawnguard.esm".to_string(), enabled: true },
-        PluginEntry { name: "HearthFires.esm".to_string(), enabled: true },
-        PluginEntry { name: "Dragonborn.esm".to_string(), enabled: true },
-        PluginEntry { name: "Unofficial Skyrim.esp".to_string(), enabled: true },
-        PluginEntry { name: "SkyUI_SE.esp".to_string(), enabled: true },
-        PluginEntry { name: "DisabledMod.esp".to_string(), enabled: false },
+        PluginEntry {
+            name: "Skyrim.esm".to_string(),
+            enabled: true,
+        },
+        PluginEntry {
+            name: "Update.esm".to_string(),
+            enabled: true,
+        },
+        PluginEntry {
+            name: "Dawnguard.esm".to_string(),
+            enabled: true,
+        },
+        PluginEntry {
+            name: "HearthFires.esm".to_string(),
+            enabled: true,
+        },
+        PluginEntry {
+            name: "Dragonborn.esm".to_string(),
+            enabled: true,
+        },
+        PluginEntry {
+            name: "Unofficial Skyrim.esp".to_string(),
+            enabled: true,
+        },
+        PluginEntry {
+            name: "SkyUI_SE.esp".to_string(),
+            enabled: true,
+        },
+        PluginEntry {
+            name: "DisabledMod.esp".to_string(),
+            enabled: false,
+        },
     ];
 
     write_plugins_txt_to(&path, &entries).unwrap();

@@ -11,7 +11,7 @@ use modde_core::db::ModdeDb;
 use modde_core::profile::{
     EnabledMod, LoadOrderLock, LockReason, Profile, ProfileManager, ProfileSource,
 };
-use modde_core::resolver::{resolve, LoadOrderRule, ModId};
+use modde_core::resolver::{LoadOrderRule, ModId, resolve};
 
 // ── Profile lifecycle ──────────────────────────────────────────────
 
@@ -30,13 +30,15 @@ fn test_profile_create_load_modify_save_load() {
                 mod_id: "skyui".to_string(),
                 enabled: true,
                 version: Some("5.2".to_string()),
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
             EnabledMod {
                 mod_id: "ussep".to_string(),
                 enabled: true,
                 version: Some("4.2.8".to_string()),
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
         ],
         overrides: PathBuf::from("/tmp/overrides"),
@@ -62,7 +64,8 @@ fn test_profile_create_load_modify_save_load() {
         mod_id: "enb_helper".to_string(),
         enabled: true,
         version: Some("1.0".to_string()),
-        fomod_config: None, ..Default::default()
+        fomod_config: None,
+        ..Default::default()
     });
 
     // Save modified profile (delete + recreate)
@@ -155,31 +158,36 @@ fn test_resolve_complex_mod_dependency_chain() {
                 mod_id: "base".to_string(),
                 enabled: true,
                 version: Some("1.0".to_string()),
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
             EnabledMod {
                 mod_id: "framework".to_string(),
                 enabled: true,
                 version: None,
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
             EnabledMod {
                 mod_id: "visuals".to_string(),
                 enabled: true,
                 version: Some("2.0".to_string()),
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
             EnabledMod {
                 mod_id: "gameplay".to_string(),
                 enabled: true,
                 version: Some("3.0".to_string()),
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
             EnabledMod {
                 mod_id: "patch".to_string(),
                 enabled: true,
                 version: Some("1.1".to_string()),
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
         ],
         overrides: PathBuf::from("/tmp"),
@@ -235,13 +243,15 @@ fn test_resolve_with_disabled_dependency() {
                 mod_id: "base".to_string(),
                 enabled: false, // disabled
                 version: None,
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
             EnabledMod {
                 mod_id: "dependent".to_string(),
                 enabled: true,
                 version: None,
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
         ],
         overrides: PathBuf::from("/tmp"),
@@ -261,8 +271,8 @@ fn test_resolve_with_disabled_dependency() {
 
 #[tokio::test]
 async fn test_deploy_pipeline_end_to_end() {
-    use std::collections::HashMap;
     use modde_core::vfs::SymlinkFarm;
+    use std::collections::HashMap;
 
     let tmp = tempfile::TempDir::new().unwrap();
 
@@ -278,13 +288,15 @@ async fn test_deploy_pipeline_end_to_end() {
                 mod_id: "texture_mod".to_string(),
                 enabled: true,
                 version: Some("1.0".to_string()),
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
             EnabledMod {
                 mod_id: "mesh_mod".to_string(),
                 enabled: true,
                 version: Some("2.0".to_string()),
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
         ],
         overrides: PathBuf::from("/tmp"),
@@ -307,7 +319,11 @@ async fn test_deploy_pipeline_end_to_end() {
     std::fs::create_dir_all(store.join("mesh_mod/meshes")).unwrap();
     std::fs::write(store.join("mesh_mod/meshes/tree.nif"), "tree mesh").unwrap();
     // Both provide a shared file
-    std::fs::write(store.join("texture_mod/textures/shared.dds"), "from texture_mod").unwrap();
+    std::fs::write(
+        store.join("texture_mod/textures/shared.dds"),
+        "from texture_mod",
+    )
+    .unwrap();
     std::fs::create_dir_all(store.join("mesh_mod/textures")).unwrap();
     std::fs::write(store.join("mesh_mod/textures/shared.dds"), "from mesh_mod").unwrap();
 
@@ -410,10 +426,7 @@ fn test_core_error_display_messages() {
             CoreError::GameNotDetected("unknown".to_string()),
             "not detected",
         ),
-        (
-            CoreError::UnsupportedFs("btrfs".into()),
-            "unsupported",
-        ),
+        (CoreError::UnsupportedFs("btrfs".into()), "unsupported"),
         (CoreError::Other("custom error".into()), "custom error"),
     ];
 
@@ -444,22 +457,22 @@ fn test_profile_wabbajack_source_roundtrip() {
                 mod_id: "wj_mod_1".to_string(),
                 enabled: true,
                 version: Some("1.0".to_string()),
-                fomod_config: Some(r#"{"steps":[]}"#.to_string()), ..Default::default()
+                fomod_config: Some(r#"{"steps":[]}"#.to_string()),
+                ..Default::default()
             },
             EnabledMod {
                 mod_id: "wj_mod_2".to_string(),
                 enabled: false,
                 version: None,
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             },
         ],
         overrides: PathBuf::from("/tmp/overrides"),
-        load_order_rules: smallvec![
-            LoadOrderRule::LoadBefore {
-                mod_id: ModId::from("wj_mod_1"),
-                before: ModId::from("wj_mod_2"),
-            },
-        ],
+        load_order_rules: smallvec![LoadOrderRule::LoadBefore {
+            mod_id: ModId::from("wj_mod_1"),
+            before: ModId::from("wj_mod_2"),
+        },],
         load_order_lock: None,
     };
 
@@ -500,7 +513,8 @@ fn test_profile_nexus_collection_source_roundtrip() {
                 mod_id: format!("mod_{i}"),
                 enabled: i % 2 == 0,
                 version: Some(format!("{}.0", i)),
-                fomod_config: None, ..Default::default()
+                fomod_config: None,
+                ..Default::default()
             })
             .collect(),
         overrides: PathBuf::from("/tmp"),
@@ -579,22 +593,14 @@ fn test_profile_lock_mod_happy_path() {
     mgr.update(&p).unwrap();
 
     let reloaded = mgr.load("pin_test", None).unwrap();
-    let skyui = reloaded
-        .mods
-        .iter()
-        .find(|m| m.mod_id == "skyui")
-        .unwrap();
+    let skyui = reloaded.mods.iter().find(|m| m.mod_id == "skyui").unwrap();
     match &skyui.lock {
         Some(LockReason::Manual { note }) => {
             assert_eq!(note.as_deref(), Some("pinned"));
         }
         other => panic!("expected Manual lock with note, got {other:?}"),
     }
-    let ussep = reloaded
-        .mods
-        .iter()
-        .find(|m| m.mod_id == "ussep")
-        .unwrap();
+    let ussep = reloaded.mods.iter().find(|m| m.mod_id == "ussep").unwrap();
     assert!(ussep.lock.is_none(), "unrelated mod must remain unlocked");
 }
 

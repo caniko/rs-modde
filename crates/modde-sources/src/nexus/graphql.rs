@@ -21,8 +21,8 @@
 
 use anyhow::{Context, Result, bail};
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 const GRAPHQL_URL: &str = "https://api.nexusmods.com/v2/graphql";
@@ -73,8 +73,8 @@ pub async fn post<T: DeserializeOwned>(
         .get("data")
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("GraphQL response missing `data` field"))?;
-    let decoded: T = serde_json::from_value(data)
-        .context("failed to decode GraphQL `data` payload")?;
+    let decoded: T =
+        serde_json::from_value(data).context("failed to decode GraphQL `data` payload")?;
     Ok(decoded)
 }
 

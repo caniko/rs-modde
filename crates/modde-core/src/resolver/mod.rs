@@ -247,8 +247,7 @@ pub fn resolve(profile: &Profile) -> Result<ResolvedLoadOrder> {
     // Build adjacency + in-degree. `successors[u] = [v, ...]` means "u must
     // be emitted before v".
     let mut successors: HashMap<&str, Vec<&str>> = HashMap::new();
-    let mut in_degree: HashMap<&str, usize> =
-        enabled_mods.iter().map(|&m| (m, 0usize)).collect();
+    let mut in_degree: HashMap<&str, usize> = enabled_mods.iter().map(|&m| (m, 0usize)).collect();
 
     for rule in &profile.load_order_rules {
         let (from, to) = match rule {
@@ -310,7 +309,7 @@ pub fn resolve(profile: &Profile) -> Result<ResolvedLoadOrder> {
 mod tests {
     use super::*;
     use crate::profile::{EnabledMod, ProfileSource};
-    use smallvec::{smallvec, SmallVec};
+    use smallvec::{SmallVec, smallvec};
     use std::path::PathBuf;
 
     fn make_profile(mods: Vec<&str>, rules: SmallVec<[LoadOrderRule; 4]>) -> Profile {
@@ -325,7 +324,8 @@ mod tests {
                     mod_id: id.to_string(),
                     enabled: true,
                     version: None,
-                    fomod_config: None, ..Default::default()
+                    fomod_config: None,
+                    ..Default::default()
                 })
                 .collect(),
             overrides: PathBuf::from("/tmp/overrides"),
@@ -427,13 +427,15 @@ mod tests {
                     mod_id: "mod_a".to_string(),
                     enabled: true,
                     version: None,
-                    fomod_config: None, ..Default::default()
+                    fomod_config: None,
+                    ..Default::default()
                 },
                 EnabledMod {
                     mod_id: "mod_b".to_string(),
                     enabled: false,
                     version: None,
-                    fomod_config: None, ..Default::default()
+                    fomod_config: None,
+                    ..Default::default()
                 },
             ],
             overrides: PathBuf::from("/tmp"),
@@ -530,8 +532,8 @@ mod tests {
         // a largeish mod set to give HashMap iteration a chance to
         // scramble things.
         let mods: Vec<&str> = vec![
-            "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota",
-            "kappa", "lambda", "mu", "nu", "xi", "omicron",
+            "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota", "kappa",
+            "lambda", "mu", "nu", "xi", "omicron",
         ];
         let profile = make_profile(mods.clone(), smallvec![]);
         let a = resolve(&profile).unwrap();

@@ -90,7 +90,9 @@ impl InstallMethod {
             | InstallMethod::REDmod { .. }
             | InstallMethod::DllOverlay { .. } => true,
             InstallMethod::Fomod { config_toml, .. } => config_toml.is_some(),
-            InstallMethod::Bain { selected_subdirs, .. } => !selected_subdirs.is_empty(),
+            InstallMethod::Bain {
+                selected_subdirs, ..
+            } => !selected_subdirs.is_empty(),
             InstallMethod::ScriptMerge { base, .. } => base.is_ready(),
             InstallMethod::Unknown { .. } => false,
         }

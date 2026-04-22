@@ -70,7 +70,10 @@ impl GameTool for VkBasalt {
 
         if let Some(game_id) = config.get_str("_game_id") {
             let conf_path = tool_config_dir(game_id).join("vkBasalt.conf");
-            vars.push(("VKBASALT_CONFIG_FILE".into(), conf_path.to_string_lossy().into()));
+            vars.push((
+                "VKBASALT_CONFIG_FILE".into(),
+                conf_path.to_string_lossy().into(),
+            ));
         }
 
         vars
@@ -95,10 +98,7 @@ impl GameTool for VkBasalt {
 
         // Effects
         if let Some(effects) = config.settings.get("effects").and_then(|v| v.as_array()) {
-            let effect_names: Vec<&str> = effects
-                .iter()
-                .filter_map(|v| v.as_str())
-                .collect();
+            let effect_names: Vec<&str> = effects.iter().filter_map(|v| v.as_str()).collect();
             if !effect_names.is_empty() {
                 lines.push(format!("effects = {}", effect_names.join(":")));
             }

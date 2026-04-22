@@ -76,7 +76,10 @@ fn test_download_directives_all_types() {
                 size: 5000,
                 state: Some(ArchiveState::HttpDownloader {
                     url: "https://example.com/mod.zip".to_string(),
-                    headers: HashMap::from([("Authorization".to_string(), "Bearer xyz".to_string())]),
+                    headers: HashMap::from([(
+                        "Authorization".to_string(),
+                        "Bearer xyz".to_string(),
+                    )]),
                 }),
             },
         ],

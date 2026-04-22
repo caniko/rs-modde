@@ -6,8 +6,8 @@
 
 use modde_core::GameId;
 use modde_core::manifest::wabbajack::DownloadDirective;
-use modde_sources::gdrive::GoogleDriveSource;
 use modde_sources::DownloadSource;
+use modde_sources::gdrive::GoogleDriveSource;
 use reqwest::Client;
 use std::collections::HashMap;
 

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use modde_games::generic::GenericGame;
 use modde_games::GamePlugin;
+use modde_games::generic::GenericGame;
 
 // ── GenericGame::new with various parameters ────────────────────────
 
@@ -43,12 +43,7 @@ fn test_generic_game_new_string_types() {
 #[test]
 fn test_generic_game_detect_install_returns_existing_path() {
     let tmp = tempfile::tempdir().unwrap();
-    let game = GenericGame::new(
-        "game",
-        "Game",
-        Some(tmp.path().to_path_buf()),
-        "mods",
-    );
+    let game = GenericGame::new("game", "Game", Some(tmp.path().to_path_buf()), "mods");
     // tmp.path() exists, so detect_install should return it
     let detected = game.detect_install();
     assert!(detected.is_some());
@@ -106,7 +101,13 @@ fn test_generic_game_deploy_creates_symlinks() {
 
     let deployed = target.path().join("mod_file.txt");
     assert!(deployed.exists());
-    assert!(deployed.symlink_metadata().unwrap().file_type().is_symlink());
+    assert!(
+        deployed
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
 }
 
 #[test]
@@ -200,5 +201,6 @@ fn test_generic_game_post_deploy_succeeds() {
 fn test_generic_game_post_deploy_with_nonexistent_path() {
     let game = GenericGame::new("game", "Game", None, "mods");
     // Even with a non-existent path, post_deploy should succeed (it's a no-op)
-    game.post_deploy(std::path::Path::new("/nonexistent")).unwrap();
+    game.post_deploy(std::path::Path::new("/nonexistent"))
+        .unwrap();
 }

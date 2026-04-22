@@ -32,7 +32,11 @@ pub fn view<'a>(state: &'a OverwriteState) -> Element<'a, Message> {
     let file_list: Vec<Element<Message>> = state
         .files
         .iter()
-        .map(|f| row![text(f).size(12).width(Length::Fill),].padding(4).into())
+        .map(|f| {
+            row![text(f).size(12).width(Length::Fill),]
+                .padding(4)
+                .into()
+        })
         .collect();
 
     let actions = row![

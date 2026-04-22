@@ -64,11 +64,7 @@ fn test_patch_zero_length_insert_between_copies() {
     let cop1 = copy_op(0, 3);
     let cop2 = copy_op(3, 3);
     let ins = data_op(b"");
-    let patch = build_patch(&[
-        (OP_COPY, &cop1),
-        (OP_DATA, &ins),
-        (OP_COPY, &cop2),
-    ]);
+    let patch = build_patch(&[(OP_COPY, &cop1), (OP_DATA, &ins), (OP_COPY, &cop2)]);
     let result = apply_patch(source, &patch).unwrap();
     assert_eq!(&result, b"ABCDEF");
 }

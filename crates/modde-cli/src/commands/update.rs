@@ -36,7 +36,10 @@ pub async fn handle_check(
         .collect();
 
     if tracked.is_empty() {
-        println!("No mods with Nexus metadata found in profile '{}'.", profile.name);
+        println!(
+            "No mods with Nexus metadata found in profile '{}'.",
+            profile.name
+        );
         println!("Hint: Mods installed via 'modde install mod' or Nexus Collections");
         println!("      automatically track their Nexus source for update checking.");
         return Ok(());
@@ -58,10 +61,7 @@ pub async fn handle_check(
     } else {
         println!("\n{} mod(s) have updates available:\n", updates.len());
         for u in &updates {
-            let installed = u
-                .installed_version
-                .as_deref()
-                .unwrap_or("unknown");
+            let installed = u.installed_version.as_deref().unwrap_or("unknown");
             println!(
                 "  {} (installed: {}, updated: {})",
                 u.mod_id, installed, u.latest_file_update

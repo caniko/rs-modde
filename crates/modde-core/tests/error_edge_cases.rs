@@ -135,7 +135,10 @@ fn error_toml_ser_to_core_error_conversion() {
     // toml::ser::Error can be triggered by serializing types that toml does not support.
     // An enum variant (not a struct/map) at the top level triggers an error.
     let result = toml::to_string("bare string");
-    assert!(result.is_err(), "bare string should fail toml serialization");
+    assert!(
+        result.is_err(),
+        "bare string should fail toml serialization"
+    );
     let core_err: CoreError = result.unwrap_err().into();
     let msg = format!("{core_err}");
     assert!(msg.contains("TOML"));

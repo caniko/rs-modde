@@ -1,5 +1,5 @@
 use iced::widget::{button, column, container, row, scrollable, text};
-use iced::{color, Alignment, Element, Length};
+use iced::{Alignment, Element, Length, color};
 
 use crate::app::Message;
 
@@ -53,45 +53,41 @@ pub fn view(state: &DiagnosticsState) -> Element<'_, Message> {
     .align_y(Alignment::Center);
 
     let content: Element<Message> = match state {
-        DiagnosticsState::Idle | DiagnosticsState::Running => container(
-            text("Click 'Run Diagnostics' to scan for common modding issues.").size(14),
-        )
-        .padding(20)
-        .width(Length::Fill)
-        .center_x(Length::Fill)
-        .into(),
-
-        DiagnosticsState::Complete(entries) => {
-            if entries.is_empty() {
-                container(
-                    text("No issues found!")
-                        .size(14)
-                        .color(color!(0x88CC88)),
-                )
+        DiagnosticsState::Idle | DiagnosticsState::Running => {
+            container(text("Click 'Run Diagnostics' to scan for common modding issues.").size(14))
                 .padding(20)
                 .width(Length::Fill)
                 .center_x(Length::Fill)
                 .into()
+        }
+
+        DiagnosticsState::Complete(entries) => {
+            if entries.is_empty() {
+                container(text("No issues found!").size(14).color(color!(0x88CC88)))
+                    .padding(20)
+                    .width(Length::Fill)
+                    .center_x(Length::Fill)
+                    .into()
             } else {
-                let rows =
-                    entries
-                        .iter()
-                        .fold(column![].spacing(4), |col, entry| {
-                            let (icon, icon_color) = match entry.severity {
-                                DiagnosticSeverity::Info => ("INFO", color!(0x88AACC)),
-                                DiagnosticSeverity::Warning => ("WARN", color!(0xFFAA44)),
-                                DiagnosticSeverity::Error => ("ERR ", color!(0xFF4444)),
-                            };
+                let rows = entries.iter().fold(column![].spacing(4), |col, entry| {
+                    let (icon, icon_color) = match entry.severity {
+                        DiagnosticSeverity::Info => ("INFO", color!(0x88AACC)),
+                        DiagnosticSeverity::Warning => ("WARN", color!(0xFFAA44)),
+                        DiagnosticSeverity::Error => ("ERR ", color!(0xFF4444)),
+                    };
 
-                            let entry_row = row![
-                                text(icon).size(12).color(icon_color).width(Length::Fixed(40.0)),
-                                text(&entry.message).size(13).width(Length::Fill),
-                            ]
-                            .spacing(8)
-                            .padding([4, 8]);
+                    let entry_row = row![
+                        text(icon)
+                            .size(12)
+                            .color(icon_color)
+                            .width(Length::Fixed(40.0)),
+                        text(&entry.message).size(13).width(Length::Fill),
+                    ]
+                    .spacing(8)
+                    .padding([4, 8]);
 
-                            col.push(entry_row)
-                        });
+                    col.push(entry_row)
+                });
 
                 let summary = {
                     let errors = entries
@@ -113,12 +109,9 @@ pub fn view(state: &DiagnosticsState) -> Element<'_, Message> {
                     .size(12)
                 };
 
-                column![
-                    summary,
-                    scrollable(rows.padding(8)).height(Length::Fill),
-                ]
-                .spacing(8)
-                .into()
+                column![summary, scrollable(rows.padding(8)).height(Length::Fill),]
+                    .spacing(8)
+                    .into()
             }
         }
     };

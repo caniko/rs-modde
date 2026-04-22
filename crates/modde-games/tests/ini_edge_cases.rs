@@ -88,7 +88,10 @@ fn test_preserves_hash_comments() {
 fn test_does_not_modify_comment_with_key_name() {
     let content = "[General]\n; bLanguage=GERMAN\nbLanguage=ENGLISH\n";
     let result = patch_ini_content(content, "General", "bLanguage", "FRENCH");
-    assert!(result.contains("; bLanguage=GERMAN"), "commented-out key should be preserved");
+    assert!(
+        result.contains("; bLanguage=GERMAN"),
+        "commented-out key should be preserved"
+    );
     assert!(result.contains("bLanguage=FRENCH"));
     // Should NOT contain bLanguage=ENGLISH (it was replaced)
     assert!(!result.contains("\nbLanguage=ENGLISH"));
@@ -142,7 +145,10 @@ fn test_patch_value_with_special_chars() {
 fn test_patch_key_not_confused_by_partial_match() {
     let content = "[General]\nbLang=EN\nbLanguage=ENGLISH\n";
     let result = patch_ini_content(content, "General", "bLanguage", "FRENCH");
-    assert!(result.contains("bLang=EN"), "partial key match should be untouched");
+    assert!(
+        result.contains("bLang=EN"),
+        "partial key match should be untouched"
+    );
     assert!(result.contains("bLanguage=FRENCH"));
 }
 

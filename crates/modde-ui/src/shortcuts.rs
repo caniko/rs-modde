@@ -3,7 +3,7 @@
 //! Shortcuts are defined as static mappings. The app's subscription
 //! system calls `handle_key_event()` to convert key events into Messages.
 
-use iced::keyboard::{key::Named, Key, Modifiers};
+use iced::keyboard::{Key, Modifiers, key::Named};
 
 /// A keyboard shortcut definition.
 #[derive(Debug, Clone)]

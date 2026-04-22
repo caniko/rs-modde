@@ -122,7 +122,10 @@ mod tests {
         std::fs::create_dir(root.join("textures")).unwrap();
         std::fs::create_dir(root.join("meshes")).unwrap();
 
-        assert!(detect_bain(root).is_none(), "should not detect non-BAIN dirs");
+        assert!(
+            detect_bain(root).is_none(),
+            "should not detect non-BAIN dirs"
+        );
     }
 
     #[test]
@@ -146,7 +149,10 @@ mod tests {
         // Only install sub-package 0
         let count = install_bain(&pkg, &[0], dest).unwrap();
         assert_eq!(count, 1);
-        assert!(dest.join("plugin.esp").exists(), "core file should be copied");
+        assert!(
+            dest.join("plugin.esp").exists(),
+            "core file should be copied"
+        );
         assert!(
             !dest.join("texture.dds").exists(),
             "optional file should not be copied"

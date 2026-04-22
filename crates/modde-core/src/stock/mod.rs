@@ -36,12 +36,18 @@ struct TreeHashMeta {
 
 impl StockGameManager {
     pub fn new(store_dir: PathBuf) -> Self {
-        Self { store_dir, db: None }
+        Self {
+            store_dir,
+            db: None,
+        }
     }
 
     /// Create a manager backed by both filesystem and SQLite.
     pub fn with_db(store_dir: PathBuf, db: ModdeDb) -> Self {
-        Self { store_dir, db: Some(db) }
+        Self {
+            store_dir,
+            db: Some(db),
+        }
     }
 
     /// Default store directory: `~/.local/share/modde/stock/`.
@@ -74,7 +80,12 @@ impl StockGameManager {
         store_tree_hash(&snapshot_dir, &tree_hash).await?;
 
         if let Some(ref db) = self.db {
-            db.upsert_snapshot(game_id, &snapshot_dir, &tree_hash.tree_hash, tree_hash.file_count)?;
+            db.upsert_snapshot(
+                game_id,
+                &snapshot_dir,
+                &tree_hash.tree_hash,
+                tree_hash.file_count,
+            )?;
         }
 
         info!(game_id, path = %snapshot_dir.display(), hash = %tree_hash.tree_hash, "stock snapshot created");
@@ -90,9 +101,9 @@ impl StockGameManager {
     pub async fn verify(&self, game_id: &str) -> Result<bool> {
         let snapshot_dir = self.store_dir.join(game_id);
         if !snapshot_dir.exists() {
-            return Err(CoreError::Other(format!(
-                "no snapshot found for game '{game_id}'"
-            ).into()));
+            return Err(CoreError::Other(
+                format!("no snapshot found for game '{game_id}'").into(),
+            ));
         }
 
         let stored = load_tree_hash(&snapshot_dir).await?;
@@ -184,10 +195,7 @@ async fn store_tree_hash(snapshot_dir: &Path, meta: &TreeHashMeta) -> Result<()>
 async fn load_tree_hash(snapshot_dir: &Path) -> Result<TreeHashMeta> {
     let meta_path = snapshot_dir.join(TREE_HASH_FILENAME);
     let data = tokio::fs::read_to_string(&meta_path).await.map_err(|_| {
-        CoreError::Other(format!(
-            "tree hash metadata not found at {}",
-            meta_path.display()
-        ).into())
+        CoreError::Other(format!("tree hash metadata not found at {}", meta_path.display()).into())
     })?;
     let meta: TreeHashMeta = toml::from_str(&data)?;
     Ok(meta)

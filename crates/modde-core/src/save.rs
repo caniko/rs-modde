@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use git2::{Repository, Signature, IndexAddOption};
-use sha2::{Sha256, Digest};
+use git2::{IndexAddOption, Repository, Signature};
+use sha2::{Digest, Sha256};
 use tracing::info;
 
 use smallvec::SmallVec;
@@ -41,10 +41,7 @@ impl SaveFingerprint {
     /// This is intentionally a callback so the caller can resolve staging
     /// paths and call `GamePlugin::classify_mod` — keeping modde-core
     /// independent of modde-games.
-    pub fn compute(
-        mods: &[EnabledMod],
-        classify: impl Fn(&str) -> bool,
-    ) -> Self {
+    pub fn compute(mods: &[EnabledMod], classify: impl Fn(&str) -> bool) -> Self {
         let mut breaking_ids: Vec<&str> = mods
             .iter()
             .filter(|m| m.enabled && classify(&m.mod_id))
@@ -87,10 +84,7 @@ impl SaveFingerprint {
     fn to_trailers(&self) -> String {
         let mut s = format!("{FINGERPRINT_TRAILER}: {}", self.short_hash());
         if !self.mod_ids.is_empty() {
-            s.push_str(&format!(
-                "\n{MODS_TRAILER}: {}",
-                self.mod_ids.join(", ")
-            ));
+            s.push_str(&format!("\n{MODS_TRAILER}: {}", self.mod_ids.join(", ")));
         }
         s
     }
@@ -231,7 +225,12 @@ impl SaveSnapshot {
         // Extract character name and save label from "Lydia — Save 14"
         if let Some((char_part, save_part)) = body.split_once(" — ") {
             // Check if it's a multi-save summary like "3 saves — Lydia (slots 1, 2); ..."
-            if char_part.ends_with("saves") && char_part.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+            if char_part.ends_with("saves")
+                && char_part
+                    .chars()
+                    .next()
+                    .map_or(false, |c| c.is_ascii_digit())
+            {
                 // Multi-save: use the whole body as the label
                 self.save_label = Some(first_line.to_string());
             } else {
@@ -307,14 +306,19 @@ impl<'a> SaveManager<'a> {
         // Create an initial empty commit on `main` so we have a root
         {
             let sig = vault_signature();
-            let mut index = repo.index()
+            let mut index = repo
+                .index()
                 .map_err(|e| CoreError::SaveVaultError(format!("failed to get index: {e}")))?;
-            let tree_oid = index.write_tree()
+            let tree_oid = index
+                .write_tree()
                 .map_err(|e| CoreError::SaveVaultError(format!("failed to write tree: {e}")))?;
-            let tree = repo.find_tree(tree_oid)
+            let tree = repo
+                .find_tree(tree_oid)
                 .map_err(|e| CoreError::SaveVaultError(format!("failed to find tree: {e}")))?;
             repo.commit(Some("HEAD"), &sig, &sig, "init save vault", &tree, &[])
-                .map_err(|e| CoreError::SaveVaultError(format!("failed to create initial commit: {e}")))?;
+                .map_err(|e| {
+                    CoreError::SaveVaultError(format!("failed to create initial commit: {e}"))
+                })?;
         }
 
         info!(game_id, path = %vault_path.display(), "initialized save vault");
@@ -339,16 +343,22 @@ impl<'a> SaveManager<'a> {
         let repo = Self::vault_repo(game_id)?;
         let branch_name = sanitize_branch_name(profile_name);
 
-        if repo.find_branch(&branch_name, git2::BranchType::Local).is_ok() {
+        if repo
+            .find_branch(&branch_name, git2::BranchType::Local)
+            .is_ok()
+        {
             return Ok(());
         }
 
-        let head_commit = repo.head()
+        let head_commit = repo
+            .head()
             .and_then(|h| h.peel_to_commit())
             .map_err(|e| CoreError::SaveVaultError(format!("failed to get HEAD: {e}")))?;
 
         repo.branch(&branch_name, &head_commit, false)
-            .map_err(|e| CoreError::SaveVaultError(format!("failed to create branch '{branch_name}': {e}")))?;
+            .map_err(|e| {
+                CoreError::SaveVaultError(format!("failed to create branch '{branch_name}': {e}"))
+            })?;
 
         info!(game_id, branch = %branch_name, "created save branch");
         Ok(())
@@ -361,14 +371,20 @@ impl<'a> SaveManager<'a> {
 
         Self::ensure_branch(game_id, profile_name)?;
 
-        let branch = repo.find_branch(&branch_name, git2::BranchType::Local)
-            .map_err(|e| CoreError::SaveVaultError(format!("branch '{branch_name}' not found: {e}")))?;
+        let branch = repo
+            .find_branch(&branch_name, git2::BranchType::Local)
+            .map_err(|e| {
+                CoreError::SaveVaultError(format!("branch '{branch_name}' not found: {e}"))
+            })?;
 
-        let refname = branch.get().name()
+        let refname = branch
+            .get()
+            .name()
             .ok_or_else(|| CoreError::SaveVaultError("invalid branch ref name".into()))?
             .to_string();
 
-        let obj = repo.revparse_single(&refname)
+        let obj = repo
+            .revparse_single(&refname)
             .map_err(|e| CoreError::SaveVaultError(format!("failed to resolve branch: {e}")))?;
 
         repo.checkout_tree(&obj, Some(git2::build::CheckoutBuilder::new().force()))
@@ -411,10 +427,12 @@ impl<'a> SaveManager<'a> {
         }
 
         // Stage and commit
-        let mut index = repo.index()
+        let mut index = repo
+            .index()
             .map_err(|e| CoreError::SaveVaultError(format!("failed to get index: {e}")))?;
 
-        index.add_all(["*"].iter(), IndexAddOption::DEFAULT, None)
+        index
+            .add_all(["*"].iter(), IndexAddOption::DEFAULT, None)
             .map_err(|e| CoreError::SaveVaultError(format!("failed to stage files: {e}")))?;
 
         // Handle deletions — remove index entries for files no longer on disk
@@ -426,25 +444,34 @@ impl<'a> SaveManager<'a> {
             }
         }
         for path in &to_remove {
-            index.remove_path(Path::new(path))
-                .map_err(|e| CoreError::SaveVaultError(format!("failed to remove from index: {e}")))?;
+            index.remove_path(Path::new(path)).map_err(|e| {
+                CoreError::SaveVaultError(format!("failed to remove from index: {e}"))
+            })?;
         }
 
-        index.write()
+        index
+            .write()
             .map_err(|e| CoreError::SaveVaultError(format!("failed to write index: {e}")))?;
 
-        let tree_oid = index.write_tree()
+        let tree_oid = index
+            .write_tree()
             .map_err(|e| CoreError::SaveVaultError(format!("failed to write tree: {e}")))?;
-        let tree = repo.find_tree(tree_oid)
+        let tree = repo
+            .find_tree(tree_oid)
             .map_err(|e| CoreError::SaveVaultError(format!("failed to find tree: {e}")))?;
 
-        let head_commit = repo.head()
+        let head_commit = repo
+            .head()
             .and_then(|h| h.peel_to_commit())
             .map_err(|e| CoreError::SaveVaultError(format!("failed to get HEAD: {e}")))?;
 
         // Skip commit if tree is identical to HEAD (no actual changes)
         if tree_oid == head_commit.tree_id() {
-            info!(game_id, profile = profile_name, "saves unchanged, skipping commit");
+            info!(
+                game_id,
+                profile = profile_name,
+                "saves unchanged, skipping commit"
+            );
             return Ok(0);
         }
 
@@ -456,22 +483,20 @@ impl<'a> SaveManager<'a> {
             message.push_str(&fp.to_trailers());
         }
 
-        repo.commit(
-            Some("HEAD"),
-            &sig,
-            &sig,
-            &message,
-            &tree,
-            &[&head_commit],
-        )
-        .map_err(|e| CoreError::SaveVaultError(format!("failed to commit: {e}")))?;
+        repo.commit(Some("HEAD"), &sig, &sig, &message, &tree, &[&head_commit])
+            .map_err(|e| CoreError::SaveVaultError(format!("failed to commit: {e}")))?;
 
         info!(game_id, profile = profile_name, count, "captured saves");
         Ok(count)
     }
 
     /// Capture saves without a fingerprint (backwards-compatible convenience method).
-    pub fn capture(&self, game_id: &str, profile_name: &str, game_save_dir: &Path) -> Result<usize> {
+    pub fn capture(
+        &self,
+        game_id: &str,
+        profile_name: &str,
+        game_save_dir: &Path,
+    ) -> Result<usize> {
         self.capture_with_fingerprint(game_id, profile_name, game_save_dir, None)
     }
 
@@ -488,9 +513,7 @@ impl<'a> SaveManager<'a> {
         std::fs::create_dir_all(game_save_dir)?;
 
         // Copy from vault working tree to game dir (skip .git)
-        let count = copy_dir_contents_filtered(&vault_path, game_save_dir, |name| {
-            name != ".git"
-        })?;
+        let count = copy_dir_contents_filtered(&vault_path, game_save_dir, |name| name != ".git")?;
 
         info!(game_id, profile = profile_name, count, "deployed saves");
         Ok(count)
@@ -539,16 +562,24 @@ impl<'a> SaveManager<'a> {
 
         Self::ensure_branch(game_id, source_profile)?;
 
-        let branch = repo.find_branch(&source_branch, git2::BranchType::Local)
+        let branch = repo
+            .find_branch(&source_branch, git2::BranchType::Local)
             .map_err(|e| CoreError::SaveVaultError(format!("source branch not found: {e}")))?;
 
-        let commit = branch.get().peel_to_commit()
+        let commit = branch
+            .get()
+            .peel_to_commit()
             .map_err(|e| CoreError::SaveVaultError(format!("failed to get source commit: {e}")))?;
 
         repo.branch(&target_branch, &commit, false)
             .map_err(|e| CoreError::SaveVaultError(format!("failed to create fork branch: {e}")))?;
 
-        info!(game_id, source = source_profile, target = target_profile, "forked save branch");
+        info!(
+            game_id,
+            source = source_profile,
+            target = target_profile,
+            "forked save branch"
+        );
         Ok(())
     }
 
@@ -559,21 +590,29 @@ impl<'a> SaveManager<'a> {
         let repo = Self::vault_repo(game_id)?;
         let branch_name = sanitize_branch_name(profile_name);
 
-        let branch = repo.find_branch(&branch_name, git2::BranchType::Local)
-            .map_err(|e| CoreError::SaveVaultError(format!("branch '{branch_name}' not found: {e}")))?;
+        let branch = repo
+            .find_branch(&branch_name, git2::BranchType::Local)
+            .map_err(|e| {
+                CoreError::SaveVaultError(format!("branch '{branch_name}' not found: {e}"))
+            })?;
 
-        let commit_oid = branch.get().target()
+        let commit_oid = branch
+            .get()
+            .target()
             .ok_or_else(|| CoreError::SaveVaultError("branch has no target".into()))?;
 
-        let mut revwalk = repo.revwalk()
+        let mut revwalk = repo
+            .revwalk()
             .map_err(|e| CoreError::SaveVaultError(format!("revwalk failed: {e}")))?;
-        revwalk.push(commit_oid)
+        revwalk
+            .push(commit_oid)
             .map_err(|e| CoreError::SaveVaultError(format!("revwalk push failed: {e}")))?;
 
         let mut snapshots = Vec::new();
         for oid in revwalk.take(limit) {
             let oid = oid.map_err(|e| CoreError::SaveVaultError(format!("revwalk iter: {e}")))?;
-            let commit = repo.find_commit(oid)
+            let commit = repo
+                .find_commit(oid)
                 .map_err(|e| CoreError::SaveVaultError(format!("find commit: {e}")))?;
 
             let message = commit.message().unwrap_or("").to_string();
@@ -581,7 +620,8 @@ impl<'a> SaveManager<'a> {
             let secs = time.seconds();
 
             // Count files in tree
-            let tree = commit.tree()
+            let tree = commit
+                .tree()
                 .map_err(|e| CoreError::SaveVaultError(format!("commit tree: {e}")))?;
             let file_count = count_tree_entries(&repo, &tree);
 
@@ -616,9 +656,11 @@ impl<'a> SaveManager<'a> {
         current_fingerprint: &SaveFingerprint,
     ) -> Result<FingerprintCheck> {
         let repo = Self::vault_repo(game_id)?;
-        let obj = repo.revparse_single(commit_id)
-            .map_err(|e| CoreError::SaveVaultError(format!("could not find commit '{commit_id}': {e}")))?;
-        let commit = obj.peel_to_commit()
+        let obj = repo.revparse_single(commit_id).map_err(|e| {
+            CoreError::SaveVaultError(format!("could not find commit '{commit_id}': {e}"))
+        })?;
+        let commit = obj
+            .peel_to_commit()
             .map_err(|e| CoreError::SaveVaultError(format!("not a commit: {e}")))?;
 
         let message = commit.message().unwrap_or("").to_string();
@@ -644,14 +686,21 @@ impl<'a> SaveManager<'a> {
     }
 
     /// Restore saves from a specific commit to the game save directory.
-    pub fn restore(game_id: &str, profile_name: &str, commit_id: &str, game_save_dir: &Path) -> Result<usize> {
+    pub fn restore(
+        game_id: &str,
+        profile_name: &str,
+        commit_id: &str,
+        game_save_dir: &Path,
+    ) -> Result<usize> {
         let repo = Self::vault_repo(game_id)?;
         let vault_path = crate::paths::save_vault_dir(game_id);
 
         // Resolve commit
-        let obj = repo.revparse_single(commit_id)
-            .map_err(|e| CoreError::SaveVaultError(format!("could not find commit '{commit_id}': {e}")))?;
-        let commit = obj.peel_to_commit()
+        let obj = repo.revparse_single(commit_id).map_err(|e| {
+            CoreError::SaveVaultError(format!("could not find commit '{commit_id}': {e}"))
+        })?;
+        let commit = obj
+            .peel_to_commit()
             .map_err(|e| CoreError::SaveVaultError(format!("not a commit: {e}")))?;
 
         // Checkout that commit's tree into the vault working directory
@@ -666,8 +715,13 @@ impl<'a> SaveManager<'a> {
 
         // Reset the branch to point at this commit
         let refname = format!("refs/heads/{branch_name}");
-        repo.reference(&refname, commit.id(), true, &format!("restore to {commit_id}"))
-            .map_err(|e| CoreError::SaveVaultError(format!("failed to reset branch: {e}")))?;
+        repo.reference(
+            &refname,
+            commit.id(),
+            true,
+            &format!("restore to {commit_id}"),
+        )
+        .map_err(|e| CoreError::SaveVaultError(format!("failed to reset branch: {e}")))?;
         repo.set_head(&refname)
             .map_err(|e| CoreError::SaveVaultError(format!("failed to set HEAD: {e}")))?;
 
@@ -675,22 +729,29 @@ impl<'a> SaveManager<'a> {
         clear_dir(game_save_dir)?;
         std::fs::create_dir_all(game_save_dir)?;
 
-        let count = copy_dir_contents_filtered(&vault_path, game_save_dir, |name| {
-            name != ".git"
-        })?;
+        let count = copy_dir_contents_filtered(&vault_path, game_save_dir, |name| name != ".git")?;
 
-        info!(game_id, profile = profile_name, commit = commit_id, count, "restored saves from snapshot");
+        info!(
+            game_id,
+            profile = profile_name,
+            commit = commit_id,
+            count,
+            "restored saves from snapshot"
+        );
         Ok(count)
     }
 
     /// List file paths in a specific snapshot's git tree.
     pub fn snapshot_file_list(game_id: &str, commit_id: &str) -> Result<Vec<String>> {
         let repo = Self::vault_repo(game_id)?;
-        let obj = repo.revparse_single(commit_id)
-            .map_err(|e| CoreError::SaveVaultError(format!("could not find commit '{commit_id}': {e}")))?;
-        let commit = obj.peel_to_commit()
+        let obj = repo.revparse_single(commit_id).map_err(|e| {
+            CoreError::SaveVaultError(format!("could not find commit '{commit_id}': {e}"))
+        })?;
+        let commit = obj
+            .peel_to_commit()
             .map_err(|e| CoreError::SaveVaultError(format!("not a commit: {e}")))?;
-        let tree = commit.tree()
+        let tree = commit
+            .tree()
             .map_err(|e| CoreError::SaveVaultError(format!("commit tree: {e}")))?;
         Ok(collect_tree_paths(&repo, &tree, ""))
     }
@@ -712,11 +773,7 @@ impl<'a> SaveManager<'a> {
             .filter_map(|e| e.ok())
             .count();
 
-        if count > 0 {
-            Ok(Some(count))
-        } else {
-            Ok(None)
-        }
+        if count > 0 { Ok(Some(count)) } else { Ok(None) }
     }
 
     /// Adopt existing saves from the game's save directory into a profile's vault.
@@ -787,8 +844,11 @@ pub fn format_timestamp(secs: i64) -> String {
     use std::fmt::Write;
     let dt = time_to_parts(secs);
     let mut s = String::new();
-    let _ = write!(s, "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
-        dt.0, dt.1, dt.2, dt.3, dt.4, dt.5);
+    let _ = write!(
+        s,
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+        dt.0, dt.1, dt.2, dt.3, dt.4, dt.5
+    );
     s
 }
 
@@ -796,9 +856,18 @@ pub fn format_timestamp(secs: i64) -> String {
 pub fn format_timestamp_short(secs: i64) -> String {
     let (y, m, d, hour, minute, _) = time_to_parts(secs);
     let month = match m {
-        1 => "Jan", 2 => "Feb", 3 => "Mar", 4 => "Apr",
-        5 => "May", 6 => "Jun", 7 => "Jul", 8 => "Aug",
-        9 => "Sep", 10 => "Oct", 11 => "Nov", 12 => "Dec",
+        1 => "Jan",
+        2 => "Feb",
+        3 => "Mar",
+        4 => "Apr",
+        5 => "May",
+        6 => "Jun",
+        7 => "Jul",
+        8 => "Aug",
+        9 => "Sep",
+        10 => "Oct",
+        11 => "Nov",
+        12 => "Dec",
         _ => "???",
     };
 
@@ -807,7 +876,8 @@ pub fn format_timestamp_short(secs: i64) -> String {
         let now_days = (std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
-            .as_secs() / 86400) as i32;
+            .as_secs()
+            / 86400) as i32;
         let z = now_days + 719468;
         let era = if z >= 0 { z } else { z - 146096 } / 146097;
         let doe = (z - era * 146097) as u32;

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail};
 use reqwest::Client;
 use serde::Deserialize;
-use tracing::{info, debug, warn};
+use tracing::{debug, info, warn};
 
 const VALIDATE_URL: &str = "https://api.nexusmods.com/v1/users/validate.json";
 const KEYRING_SERVICE: &str = "modde";

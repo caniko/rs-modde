@@ -255,13 +255,13 @@ fn read_ba2(file: &mut (impl Read + Seek)) -> Result<Vec<ArchiveFileEntry>> {
         "GNRL" => {
             for _ in 0..file_count {
                 let _name_hash = read_u32_le(file)?;
-                let _ext = read_u32_le(file)?;      // 4-byte extension
+                let _ext = read_u32_le(file)?; // 4-byte extension
                 let _dir_hash = read_u32_le(file)?;
-                let _unknown = read_u32_le(file)?;   // flags / unknown
+                let _unknown = read_u32_le(file)?; // flags / unknown
                 let _offset = read_u64_le(file)?;
                 let _packed_size = read_u32_le(file)?;
                 let unpacked_size = read_u32_le(file)?;
-                let _sentinel = read_u32_le(file)?;  // 0xBAADF00D
+                let _sentinel = read_u32_le(file)?; // 0xBAADF00D
                 sizes.push(unpacked_size as u64);
             }
         }
@@ -314,7 +314,9 @@ fn read_ba2(file: &mut (impl Read + Seek)) -> Result<Vec<ArchiveFileEntry>> {
 /// Normalize a file path: lowercase, forward slashes, strip leading slash/dot.
 fn normalize_path(raw: &str) -> String {
     let s = raw.replace('\\', "/").to_lowercase();
-    s.trim_start_matches('/').trim_start_matches("./").to_string()
+    s.trim_start_matches('/')
+        .trim_start_matches("./")
+        .to_string()
 }
 
 #[cfg(test)]
@@ -425,7 +427,7 @@ mod tests {
             buf.extend_from_slice(&0u32.to_le_bytes()); // unknown/flags
             buf.extend_from_slice(&0u64.to_le_bytes()); // offset
             buf.extend_from_slice(&0u32.to_le_bytes()); // packed_size
-            buf.extend_from_slice(&size.to_le_bytes());  // unpacked_size
+            buf.extend_from_slice(&size.to_le_bytes()); // unpacked_size
             buf.extend_from_slice(&0xBAADF00Du32.to_le_bytes()); // sentinel
         }
 
@@ -462,10 +464,7 @@ mod tests {
 
     #[test]
     fn parse_synthetic_ba2_gnrl() {
-        let data = build_test_ba2(&[
-            ("textures\\sky.dds", 1024),
-            ("meshes\\tree.nif", 512),
-        ]);
+        let data = build_test_ba2(&[("textures\\sky.dds", 1024), ("meshes\\tree.nif", 512)]);
 
         let mut cursor = Cursor::new(&data);
         cursor.set_position(4);

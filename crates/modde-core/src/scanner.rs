@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::manifest::wabbajack::{
-    compute_manifest_hash, ArchiveEntry, ArchiveState, InstallDirective, WabbajackManifest,
+    ArchiveEntry, ArchiveState, InstallDirective, WabbajackManifest, compute_manifest_hash,
 };
 use crate::profile::{EnabledMod, LoadOrderLock, LockReason, Profile};
 
@@ -97,11 +97,8 @@ pub fn match_wabbajack_manifest(
     }
 
     // Build archive hash → ArchiveEntry lookup for metadata.
-    let archive_map: HashMap<u64, &crate::manifest::wabbajack::ArchiveEntry> = manifest
-        .archives
-        .iter()
-        .map(|a| (a.hash, a))
-        .collect();
+    let archive_map: HashMap<u64, &crate::manifest::wabbajack::ArchiveEntry> =
+        manifest.archives.iter().map(|a| (a.hash, a)).collect();
 
     let mut results = Vec::new();
 

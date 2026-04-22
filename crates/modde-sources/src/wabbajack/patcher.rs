@@ -58,7 +58,9 @@ pub fn apply_patch(source: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
 
     // Read separator ">>>"
     let mut sep = [0u8; 3];
-    cursor.read_exact(&mut sep).context("failed to read separator")?;
+    cursor
+        .read_exact(&mut sep)
+        .context("failed to read separator")?;
     if &sep != b">>>" {
         bail!("expected '>>>' separator, got {:?}", sep);
     }
@@ -76,10 +78,10 @@ pub fn apply_patch(source: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
 
         match op_buf[0] {
             OP_COPY => {
-                let offset = read_u64_le(&mut cursor)
-                    .context("failed to read copy offset")? as usize;
-                let length = read_u64_le(&mut cursor)
-                    .context("failed to read copy length")? as usize;
+                let offset =
+                    read_u64_le(&mut cursor).context("failed to read copy offset")? as usize;
+                let length =
+                    read_u64_le(&mut cursor).context("failed to read copy length")? as usize;
 
                 if offset + length > source.len() {
                     bail!(
@@ -96,8 +98,8 @@ pub fn apply_patch(source: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
                 output.extend_from_slice(&source[offset..offset + length]);
             }
             OP_DATA => {
-                let length = read_u64_le(&mut cursor)
-                    .context("failed to read data length")? as usize;
+                let length =
+                    read_u64_le(&mut cursor).context("failed to read data length")? as usize;
                 if output.len().saturating_add(length) > MAX_PATCH_OUTPUT {
                     bail!(
                         "patch output exceeds maximum size of {} bytes",

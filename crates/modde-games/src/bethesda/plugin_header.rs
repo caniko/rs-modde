@@ -55,14 +55,12 @@ impl PluginHeader {
 
     /// Whether this plugin is flagged as a master (ESM).
     pub fn is_esm(&self) -> bool {
-        self.record_flags & flags::ESM != 0
-            || self.filename.to_lowercase().ends_with(".esm")
+        self.record_flags & flags::ESM != 0 || self.filename.to_lowercase().ends_with(".esm")
     }
 
     /// Whether this plugin is flagged as a light plugin (ESL).
     pub fn is_esl(&self) -> bool {
-        self.record_flags & flags::ESL != 0
-            || self.filename.to_lowercase().ends_with(".esl")
+        self.record_flags & flags::ESL != 0 || self.filename.to_lowercase().ends_with(".esl")
     }
 }
 
@@ -70,15 +68,9 @@ impl PluginHeader {
 #[derive(Debug, Clone)]
 pub enum PluginWarning {
     /// Plugin uses Form 43 format (Skyrim LE) in a Form 44 game (SSE).
-    Form43 {
-        plugin: String,
-        version: f32,
-    },
+    Form43 { plugin: String, version: f32 },
     /// Plugin depends on a master that is not in the active load order.
-    MissingMaster {
-        plugin: String,
-        master: String,
-    },
+    MissingMaster { plugin: String, master: String },
 }
 
 impl std::fmt::Display for PluginWarning {
@@ -174,7 +166,11 @@ pub fn parse_plugin_header(path: &Path) -> Result<PluginHeader> {
     Ok(PluginHeader {
         filename,
         record_flags: record_flags,
-        version: if version >= 1 { plugin_version } else { plugin_version },
+        version: if version >= 1 {
+            plugin_version
+        } else {
+            plugin_version
+        },
         num_records,
         masters,
     })
@@ -190,10 +186,8 @@ pub fn validate_plugins(
     active_plugins: &[&str],
     check_form_43: bool,
 ) -> Vec<PluginWarning> {
-    let active_lower: std::collections::HashSet<String> = active_plugins
-        .iter()
-        .map(|p| p.to_lowercase())
-        .collect();
+    let active_lower: std::collections::HashSet<String> =
+        active_plugins.iter().map(|p| p.to_lowercase()).collect();
 
     let mut warnings = Vec::new();
 
@@ -354,7 +348,9 @@ mod tests {
         let warnings = validate_plugins(tmp.path(), &active, true);
 
         assert_eq!(warnings.len(), 1);
-        assert!(matches!(&warnings[0], PluginWarning::MissingMaster { master, .. } if master == "MissingMod.esp"));
+        assert!(
+            matches!(&warnings[0], PluginWarning::MissingMaster { master, .. } if master == "MissingMod.esp")
+        );
     }
 
     #[test]
@@ -370,7 +366,11 @@ mod tests {
         let active = vec!["Skyrim.esm", "OldMod.esp"];
         let warnings = validate_plugins(tmp.path(), &active, true);
 
-        assert!(warnings.iter().any(|w| matches!(w, PluginWarning::Form43 { plugin, .. } if plugin == "OldMod.esp")));
+        assert!(
+            warnings.iter().any(
+                |w| matches!(w, PluginWarning::Form43 { plugin, .. } if plugin == "OldMod.esp")
+            )
+        );
     }
 
     #[test]

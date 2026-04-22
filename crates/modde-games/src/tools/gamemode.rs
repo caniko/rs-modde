@@ -5,9 +5,7 @@
 
 use smallvec::SmallVec;
 
-use super::{
-    GameTool, ToolAvailability, ToolCategory, ToolConfig, WrapperEntry, which,
-};
+use super::{GameTool, ToolAvailability, ToolCategory, ToolConfig, WrapperEntry, which};
 
 pub static GAMEMODE: GameMode = GameMode;
 

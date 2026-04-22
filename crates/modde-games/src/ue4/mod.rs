@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use smallvec::SmallVec;
 
 use crate::traits::{
-    classify_mod_by_content, ContentCategory, GamePlugin, ModClassifyConfig, ModSafety,
+    ContentCategory, GamePlugin, ModClassifyConfig, ModSafety, classify_mod_by_content,
 };
 
 /// Data-driven UE4 game plugin.
@@ -48,10 +48,7 @@ impl Ue4Game {
 
     /// `<install>/<ProjectName>/Content/Paks`
     pub fn paks_root(&self, install: &Path) -> PathBuf {
-        install
-            .join(self.project_name)
-            .join("Content")
-            .join("Paks")
+        install.join(self.project_name).join("Content").join("Paks")
     }
 
     pub fn project_name(&self) -> &'static str {

@@ -83,12 +83,27 @@ impl LootMasterlist {
             let key = plugin.name.to_lowercase();
 
             let entry = LootPluginEntry {
-                after: plugin.after.iter().map(|r| r.name().to_lowercase()).collect(),
-                requires: plugin.requires.iter().map(|r| r.name().to_lowercase()).collect(),
-                incompatible: plugin.incompatible.iter().map(|r| r.name().to_lowercase()).collect(),
+                after: plugin
+                    .after
+                    .iter()
+                    .map(|r| r.name().to_lowercase())
+                    .collect(),
+                requires: plugin
+                    .requires
+                    .iter()
+                    .map(|r| r.name().to_lowercase())
+                    .collect(),
+                incompatible: plugin
+                    .incompatible
+                    .iter()
+                    .map(|r| r.name().to_lowercase())
+                    .collect(),
             };
 
-            if !entry.after.is_empty() || !entry.requires.is_empty() || !entry.incompatible.is_empty() {
+            if !entry.after.is_empty()
+                || !entry.requires.is_empty()
+                || !entry.incompatible.is_empty()
+            {
                 plugins.insert(key, entry);
             }
         }
@@ -158,7 +173,10 @@ impl LootMasterlist {
             }
         }
 
-        debug!(rule_count = rules.len(), "generated load order rules from LOOT masterlist");
+        debug!(
+            rule_count = rules.len(),
+            "generated load order rules from LOOT masterlist"
+        );
         rules
     }
 }
@@ -166,18 +184,18 @@ impl LootMasterlist {
 /// Well-known LOOT masterlist repository URLs.
 pub fn masterlist_url(game_id: &str) -> Option<&'static str> {
     match game_id {
-        "skyrim-se" | "skyrim-ae" => Some(
-            "https://raw.githubusercontent.com/loot/skyrimse/master/masterlist.yaml",
-        ),
-        "fallout4" => Some(
-            "https://raw.githubusercontent.com/loot/fallout4/master/masterlist.yaml",
-        ),
-        "fallout76" => Some(
-            "https://raw.githubusercontent.com/loot/fallout76/master/masterlist.yaml",
-        ),
-        "starfield" => Some(
-            "https://raw.githubusercontent.com/loot/starfield/master/masterlist.yaml",
-        ),
+        "skyrim-se" | "skyrim-ae" => {
+            Some("https://raw.githubusercontent.com/loot/skyrimse/master/masterlist.yaml")
+        }
+        "fallout4" => {
+            Some("https://raw.githubusercontent.com/loot/fallout4/master/masterlist.yaml")
+        }
+        "fallout76" => {
+            Some("https://raw.githubusercontent.com/loot/fallout76/master/masterlist.yaml")
+        }
+        "starfield" => {
+            Some("https://raw.githubusercontent.com/loot/starfield/master/masterlist.yaml")
+        }
         _ => {
             warn!(game_id, "no LOOT masterlist URL known for game");
             None
@@ -187,7 +205,9 @@ pub fn masterlist_url(game_id: &str) -> Option<&'static str> {
 
 /// Cached masterlist path within the modde data directory.
 pub fn masterlist_cache_path(game_id: &str) -> std::path::PathBuf {
-    modde_core::paths::data_dir().join("loot").join(format!("{game_id}.yaml"))
+    modde_core::paths::data_dir()
+        .join("loot")
+        .join(format!("{game_id}.yaml"))
 }
 
 #[cfg(test)]
@@ -223,7 +243,10 @@ plugins:
 
         let skyui = &ml.plugins["skyui_se.esp"];
         assert_eq!(skyui.after.len(), 1);
-        assert_eq!(skyui.after[0], "unofficial skyrim special edition patch.esp");
+        assert_eq!(
+            skyui.after[0],
+            "unofficial skyrim special edition patch.esp"
+        );
     }
 
     #[test]
@@ -243,7 +266,10 @@ plugins:
         // USSEP should have LoadAfter for Skyrim.esm, Update.esm, Dawnguard.esm (from after)
         // + LoadAfter for Skyrim.esm (from requires) = 4 LoadAfter rules
         // SkyUI should have 1 LoadAfter for USSEP
-        let load_after_count = rules.iter().filter(|r| matches!(r, LoadOrderRule::LoadAfter { .. })).count();
+        let load_after_count = rules
+            .iter()
+            .filter(|r| matches!(r, LoadOrderRule::LoadAfter { .. }))
+            .count();
         assert_eq!(load_after_count, 5);
     }
 
@@ -254,7 +280,10 @@ plugins:
         let active = vec!["BadMod.esp", "ConflictMod.esp"];
         let rules = ml.rules_for_plugins(&active);
 
-        let incompat_count = rules.iter().filter(|r| matches!(r, LoadOrderRule::Incompatible { .. })).count();
+        let incompat_count = rules
+            .iter()
+            .filter(|r| matches!(r, LoadOrderRule::Incompatible { .. }))
+            .count();
         assert_eq!(incompat_count, 1);
     }
 

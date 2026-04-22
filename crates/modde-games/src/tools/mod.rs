@@ -201,7 +201,9 @@ pub fn resolve_tool(tool_id: &str) -> Option<&'static dyn GameTool> {
 
 /// Directory where modde stores per-game tool configs.
 pub fn tool_config_dir(game_id: &str) -> PathBuf {
-    modde_core::paths::modde_data_dir().join("tools").join(game_id)
+    modde_core::paths::modde_data_dir()
+        .join("tools")
+        .join(game_id)
 }
 
 /// Check if a binary is on `$PATH`.

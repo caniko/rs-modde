@@ -197,7 +197,9 @@ fn looks_like_dll_overlay(dir: &Path) -> bool {
     };
     let mut has_dll = false;
     let mut has_asset_dir = false;
-    let asset_dirs = ["data", "meshes", "textures", "scripts", "r6", "archive", "mods"];
+    let asset_dirs = [
+        "data", "meshes", "textures", "scripts", "r6", "archive", "mods",
+    ];
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {

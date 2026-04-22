@@ -202,7 +202,15 @@ impl CsvColumn {
     }
 
     pub fn all() -> &'static [CsvColumn] {
-        &[Self::ModId, Self::Enabled, Self::Version, Self::Category, Self::Notes, Self::Tags, Self::NexusModId]
+        &[
+            Self::ModId,
+            Self::Enabled,
+            Self::Version,
+            Self::Category,
+            Self::Notes,
+            Self::Tags,
+            Self::NexusModId,
+        ]
     }
 }
 
@@ -216,14 +224,17 @@ pub fn export_csv<W: std::io::Write>(
     writeln!(writer, "{}", headers.join(","))?;
 
     for m in mods {
-        let values: Vec<String> = columns.iter().map(|c| {
-            let v = c.value(m);
-            if v.contains(',') || v.contains('"') || v.contains('\n') {
-                format!("\"{}\"", v.replace('"', "\"\""))
-            } else {
-                v
-            }
-        }).collect();
+        let values: Vec<String> = columns
+            .iter()
+            .map(|c| {
+                let v = c.value(m);
+                if v.contains(',') || v.contains('"') || v.contains('\n') {
+                    format!("\"{}\"", v.replace('"', "\"\""))
+                } else {
+                    v
+                }
+            })
+            .collect();
         writeln!(writer, "{}", values.join(","))?;
     }
     Ok(())
@@ -257,7 +268,11 @@ mod tests {
 
     #[test]
     fn enabled_include() {
-        let mods = vec![test_mod("A", true), test_mod("B", false), test_mod("C", true)];
+        let mods = vec![
+            test_mod("A", true),
+            test_mod("B", false),
+            test_mod("C", true),
+        ];
         let criteria = vec![FilterCriterion {
             kind: FilterKind::Enabled,
             state: TriState::Include,
@@ -291,8 +306,14 @@ mod tests {
         m.notes = Some("hello".to_string());
         let mods = vec![m, test_mod("B", false), test_mod("C", true)];
         let criteria = vec![
-            FilterCriterion { kind: FilterKind::HasNotes, state: TriState::Include },
-            FilterCriterion { kind: FilterKind::Enabled, state: TriState::Exclude },
+            FilterCriterion {
+                kind: FilterKind::HasNotes,
+                state: TriState::Include,
+            },
+            FilterCriterion {
+                kind: FilterKind::Enabled,
+                state: TriState::Exclude,
+            },
         ];
         // OR: has notes OR is not enabled
         let result = apply_filters(&mods, "", &criteria, FilterMode::Or);

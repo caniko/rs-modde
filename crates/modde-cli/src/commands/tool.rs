@@ -56,10 +56,7 @@ pub async fn handle_run(
 
     // Step 3: Diff to find new files
     let after = snapshot_dir(&mod_dir)?;
-    let new_files: Vec<String> = after
-        .difference(&before)
-        .cloned()
-        .collect();
+    let new_files: Vec<String> = after.difference(&before).cloned().collect();
 
     if new_files.is_empty() {
         println!("Tool completed. No new files written to mod directory.");
@@ -94,11 +91,10 @@ pub async fn handle_run(
         println!("  {rel_path}");
     }
 
+    println!("\nOverwrite mod: {}", overwrite_dir.display());
     println!(
-        "\nOverwrite mod: {}",
-        overwrite_dir.display()
+        "Add '__overwrite__' to your profile mod list to include these files in future deploys."
     );
-    println!("Add '__overwrite__' to your profile mod list to include these files in future deploys.");
 
     Ok(())
 }
@@ -109,7 +105,10 @@ pub fn handle_list(game_id: &str) -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("unsupported game: '{game_id}'"))?;
 
     let install_dir = game_plugin.detect_install().ok_or_else(|| {
-        anyhow::anyhow!("could not detect install directory for {}", game_plugin.display_name())
+        anyhow::anyhow!(
+            "could not detect install directory for {}",
+            game_plugin.display_name()
+        )
     })?;
 
     println!("Game: {} ({})", game_plugin.display_name(), game_id);
@@ -155,18 +154,19 @@ pub fn handle_status(game_id: &str) -> Result<()> {
     let stored = db.load_tool_configs(game_id)?;
 
     println!("Game: {game_id}\n");
-    println!("{:<14} {:<14} {:<10} {}", "Tool", "Category", "Status", "Available");
+    println!(
+        "{:<14} {:<14} {:<10} {}",
+        "Tool", "Category", "Status", "Available"
+    );
     println!("{}", "-".repeat(60));
 
     for tool in modde_games::tools::all_tools() {
         let avail = tool.detect_available();
         let avail_str = match &avail {
-            modde_games::tools::ToolAvailability::Available { version } => {
-                match version {
-                    Some(v) => format!("yes ({v})"),
-                    None => "yes".into(),
-                }
-            }
+            modde_games::tools::ToolAvailability::Available { version } => match version {
+                Some(v) => format!("yes ({v})"),
+                None => "yes".into(),
+            },
             modde_games::tools::ToolAvailability::NotInstalled { .. } => "not installed".into(),
         };
 
@@ -203,15 +203,16 @@ pub fn handle_status(game_id: &str) -> Result<()> {
 
 /// Enable a tool for a game.
 pub fn handle_enable(tool_id: &str, game_id: &str) -> Result<()> {
-    let tool = modde_games::tools::resolve_tool(tool_id)
-        .ok_or_else(|| anyhow::anyhow!(
+    let tool = modde_games::tools::resolve_tool(tool_id).ok_or_else(|| {
+        anyhow::anyhow!(
             "unknown tool: '{tool_id}'\nAvailable: {}",
             modde_games::tools::all_tools()
                 .iter()
                 .map(|t| t.tool_id())
                 .collect::<Vec<_>>()
                 .join(", ")
-        ))?;
+        )
+    })?;
 
     let db = ModdeDb::open().context("failed to open database")?;
 
@@ -288,9 +289,9 @@ pub fn handle_configure(tool_id: &str, game_id: &str, settings: &[String]) -> Re
 
     // Parse key=value pairs
     for setting in settings {
-        let (key, value) = setting
-            .split_once('=')
-            .ok_or_else(|| anyhow::anyhow!("invalid setting format: '{setting}' (expected key=value)"))?;
+        let (key, value) = setting.split_once('=').ok_or_else(|| {
+            anyhow::anyhow!("invalid setting format: '{setting}' (expected key=value)")
+        })?;
 
         // Try to parse as bool, number, or fallback to string
         let json_value = if value == "true" {
@@ -333,9 +334,12 @@ pub fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
     let game_plugin = modde_games::resolve_game_plugin(game_id)
         .ok_or_else(|| anyhow::anyhow!("unsupported game: '{game_id}'"))?;
 
-    let install_dir = game_plugin
-        .detect_install()
-        .ok_or_else(|| anyhow::anyhow!("could not detect install dir for {}", game_plugin.display_name()))?;
+    let install_dir = game_plugin.detect_install().ok_or_else(|| {
+        anyhow::anyhow!(
+            "could not detect install dir for {}",
+            game_plugin.display_name()
+        )
+    })?;
 
     let db = ModdeDb::open().context("failed to open database")?;
 
@@ -385,9 +389,12 @@ pub fn handle_revert(tool_id: &str, game_id: &str) -> Result<()> {
     let game_plugin = modde_games::resolve_game_plugin(game_id)
         .ok_or_else(|| anyhow::anyhow!("unsupported game: '{game_id}'"))?;
 
-    let install_dir = game_plugin
-        .detect_install()
-        .ok_or_else(|| anyhow::anyhow!("could not detect install dir for {}", game_plugin.display_name()))?;
+    let install_dir = game_plugin.detect_install().ok_or_else(|| {
+        anyhow::anyhow!(
+            "could not detect install dir for {}",
+            game_plugin.display_name()
+        )
+    })?;
 
     let db = ModdeDb::open().context("failed to open database")?;
 

@@ -279,23 +279,37 @@ impl ModdeDb {
 
         if version < 2 {
             self.conn.execute_batch(SCHEMA_V2)?;
-            info!(from = version.max(1), to = 2, "database schema migrated to V2");
+            info!(
+                from = version.max(1),
+                to = 2,
+                "database schema migrated to V2"
+            );
         }
 
         if version < 3 {
             self.conn.execute_batch(SCHEMA_V3)?;
-            info!(from = version.max(2), to = 3, "database schema migrated to V3");
+            info!(
+                from = version.max(2),
+                to = 3,
+                "database schema migrated to V3"
+            );
         }
 
         if version < 6 {
             // Add display_name column if it doesn't already exist.
-            let has_display_name = self.conn
+            let has_display_name = self
+                .conn
                 .prepare("SELECT display_name FROM profile_mods LIMIT 0")
                 .is_ok();
             if !has_display_name {
-                self.conn.execute_batch("ALTER TABLE profile_mods ADD COLUMN display_name TEXT;")?;
+                self.conn
+                    .execute_batch("ALTER TABLE profile_mods ADD COLUMN display_name TEXT;")?;
             }
-            info!(from = version.max(5), to = 6, "database schema migrated to V6");
+            info!(
+                from = version.max(5),
+                to = 6,
+                "database schema migrated to V6"
+            );
         }
 
         if version < 7 {
@@ -303,19 +317,27 @@ impl ModdeDb {
             // `crates/modde-core/src/profile/mod.rs` for `LoadOrderLock` /
             // `LockReason`. Columns are TOML-encoded to match the existing
             // `source_data` convention.
-            let has_load_order_lock = self.conn
+            let has_load_order_lock = self
+                .conn
                 .prepare("SELECT load_order_lock FROM profiles LIMIT 0")
                 .is_ok();
             if !has_load_order_lock {
-                self.conn.execute_batch("ALTER TABLE profiles ADD COLUMN load_order_lock TEXT;")?;
+                self.conn
+                    .execute_batch("ALTER TABLE profiles ADD COLUMN load_order_lock TEXT;")?;
             }
-            let has_lock_reason = self.conn
+            let has_lock_reason = self
+                .conn
                 .prepare("SELECT lock_reason FROM profile_mods LIMIT 0")
                 .is_ok();
             if !has_lock_reason {
-                self.conn.execute_batch("ALTER TABLE profile_mods ADD COLUMN lock_reason TEXT;")?;
+                self.conn
+                    .execute_batch("ALTER TABLE profile_mods ADD COLUMN lock_reason TEXT;")?;
             }
-            info!(from = version.max(6), to = 7, "database schema migrated to V7");
+            info!(
+                from = version.max(6),
+                to = 7,
+                "database schema migrated to V7"
+            );
         }
 
         if version < 8 {
@@ -327,9 +349,8 @@ impl ModdeDb {
                 .prepare("SELECT install_method FROM profile_mods LIMIT 0")
                 .is_ok();
             if !has_install_method {
-                self.conn.execute_batch(
-                    "ALTER TABLE profile_mods ADD COLUMN install_method TEXT;",
-                )?;
+                self.conn
+                    .execute_batch("ALTER TABLE profile_mods ADD COLUMN install_method TEXT;")?;
             }
             let has_source_archive_hash = self
                 .conn
@@ -345,12 +366,15 @@ impl ModdeDb {
                 .prepare("SELECT install_status FROM profile_mods LIMIT 0")
                 .is_ok();
             if !has_install_status {
-                self.conn.execute_batch(
-                    "ALTER TABLE profile_mods ADD COLUMN install_status TEXT;",
-                )?;
+                self.conn
+                    .execute_batch("ALTER TABLE profile_mods ADD COLUMN install_status TEXT;")?;
             }
             self.conn.execute_batch(SCHEMA_V8)?;
-            info!(from = version.max(7), to = 8, "database schema migrated to V8");
+            info!(
+                from = version.max(7),
+                to = 8,
+                "database schema migrated to V8"
+            );
         }
 
         if version < CURRENT_SCHEMA_VERSION {
@@ -359,7 +383,8 @@ impl ModdeDb {
         }
 
         // Ensure WAL and FK are always on (they reset per-connection).
-        self.conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;")?;
+        self.conn
+            .execute_batch("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;")?;
 
         Ok(())
     }
@@ -525,9 +550,10 @@ impl ModdeDb {
                 |row| row.get(0),
             )
             .map_err(|e| match e {
-                rusqlite::Error::QueryReturnedNoRows => {
-                    CoreError::ProfileNotFound(format!("{} (game: {})", profile.name, profile.game_id))
-                }
+                rusqlite::Error::QueryReturnedNoRows => CoreError::ProfileNotFound(format!(
+                    "{} (game: {})",
+                    profile.name, profile.game_id
+                )),
                 other => CoreError::Database(other),
             })?;
 
@@ -545,10 +571,14 @@ impl ModdeDb {
         )?;
 
         // Replace mods and rules
-        self.conn
-            .execute("DELETE FROM profile_mods WHERE profile_id = ?1", params![profile_id])?;
-        self.conn
-            .execute("DELETE FROM load_order_rules WHERE profile_id = ?1", params![profile_id])?;
+        self.conn.execute(
+            "DELETE FROM profile_mods WHERE profile_id = ?1",
+            params![profile_id],
+        )?;
+        self.conn.execute(
+            "DELETE FROM load_order_rules WHERE profile_id = ?1",
+            params![profile_id],
+        )?;
 
         self.insert_mods(profile_id, &profile.mods)?;
         self.insert_rules(profile_id, &profile.load_order_rules)?;
@@ -563,7 +593,9 @@ impl ModdeDb {
             params![name, game_id],
         )?;
         if changes == 0 {
-            return Err(CoreError::ProfileNotFound(format!("{name} (game: {game_id})")));
+            return Err(CoreError::ProfileNotFound(format!(
+                "{name} (game: {game_id})"
+            )));
         }
         Ok(())
     }
@@ -650,8 +682,10 @@ impl ModdeDb {
     /// Remove a save assignment.
     pub fn unassign_save(&self, path: &Path) -> Result<()> {
         let path_str = path.to_string_lossy();
-        self.conn
-            .execute("DELETE FROM saves WHERE path = ?1", params![path_str.as_ref()])?;
+        self.conn.execute(
+            "DELETE FROM saves WHERE path = ?1",
+            params![path_str.as_ref()],
+        )?;
         Ok(())
     }
 
@@ -750,10 +784,8 @@ impl ModdeDb {
 
         match result {
             Ok((id, profile_id)) => {
-                self.conn.execute(
-                    "DELETE FROM experiment_stack WHERE id = ?1",
-                    params![id],
-                )?;
+                self.conn
+                    .execute("DELETE FROM experiment_stack WHERE id = ?1", params![id])?;
                 Ok(Some(profile_id))
             }
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
@@ -855,9 +887,9 @@ impl ModdeDb {
 
     /// List all hidden files for a profile.
     pub fn list_hidden_files(&self, profile_id: i64) -> Result<Vec<HiddenFile>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT mod_id, rel_path FROM hidden_files WHERE profile_id = ?1",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT mod_id, rel_path FROM hidden_files WHERE profile_id = ?1")?;
         let files = stmt
             .query_map(params![profile_id], |row| {
                 Ok(HiddenFile {
@@ -871,9 +903,9 @@ impl ModdeDb {
 
     /// List hidden files for a specific mod in a profile.
     pub fn list_hidden_files_for_mod(&self, profile_id: i64, mod_id: &str) -> Result<Vec<String>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT rel_path FROM hidden_files WHERE profile_id = ?1 AND mod_id = ?2",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT rel_path FROM hidden_files WHERE profile_id = ?1 AND mod_id = ?2")?;
         let paths = stmt
             .query_map(params![profile_id, mod_id], |row| row.get(0))?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -937,13 +969,24 @@ impl ModdeDb {
         self.conn.execute(
             "INSERT INTO mod_categories (profile_id, name, color, sort_index)
              VALUES (?1, ?2, ?3, ?4)",
-            params![profile_id, category.name, category.color, category.sort_index],
+            params![
+                profile_id,
+                category.name,
+                category.color,
+                category.sort_index
+            ],
         )?;
         Ok(self.conn.last_insert_rowid())
     }
 
     /// Update a category.
-    pub fn update_category(&self, category_id: i64, name: &str, color: Option<&str>, sort_index: i64) -> Result<()> {
+    pub fn update_category(
+        &self,
+        category_id: i64,
+        name: &str,
+        color: Option<&str>,
+        sort_index: i64,
+    ) -> Result<()> {
         self.conn.execute(
             "UPDATE mod_categories SET name = ?1, color = ?2, sort_index = ?3 WHERE id = ?4",
             params![name, color, sort_index, category_id],
@@ -984,7 +1027,12 @@ impl ModdeDb {
     }
 
     /// Assign a mod to a category.
-    pub fn set_mod_category(&self, profile_id: i64, mod_id: &str, category_id: Option<i64>) -> Result<()> {
+    pub fn set_mod_category(
+        &self,
+        profile_id: i64,
+        mod_id: &str,
+        category_id: Option<i64>,
+    ) -> Result<()> {
         self.conn.execute(
             "UPDATE profile_mods SET category_id = ?1 WHERE profile_id = ?2 AND mod_id = ?3",
             params![category_id, profile_id, mod_id],
@@ -1024,7 +1072,14 @@ impl ModdeDb {
             "UPDATE profile_mods SET nexus_mod_id = ?1, nexus_file_id = ?2,
                     nexus_game_domain = ?3, installed_timestamp = ?4
              WHERE profile_id = ?5 AND mod_id = ?6",
-            params![nexus_mod_id, nexus_file_id, nexus_game_domain, installed_timestamp, profile_id, mod_id],
+            params![
+                nexus_mod_id,
+                nexus_file_id,
+                nexus_game_domain,
+                installed_timestamp,
+                profile_id,
+                mod_id
+            ],
         )?;
         Ok(())
     }
@@ -1230,13 +1285,11 @@ impl ModdeDb {
             }
 
             // Skip if already in DB
-            let exists: bool = self
-                .conn
-                .query_row(
-                    "SELECT COUNT(*) > 0 FROM profiles WHERE name = ?1 AND game_id = ?2",
-                    params![profile.name, profile.game_id],
-                    |row| row.get(0),
-                )?;
+            let exists: bool = self.conn.query_row(
+                "SELECT COUNT(*) > 0 FROM profiles WHERE name = ?1 AND game_id = ?2",
+                params![profile.name, profile.game_id],
+                |row| row.get(0),
+            )?;
 
             if exists {
                 tracing::debug!(name = %profile.name, game = %profile.game_id, "profile already in DB, skipping");
@@ -1297,9 +1350,15 @@ impl ModdeDb {
 
         for rule in rules {
             let (rule_type, mod_a, mod_b) = match rule {
-                LoadOrderRule::LoadAfter { mod_id, after } => ("load_after", mod_id.as_str(), after.as_str()),
-                LoadOrderRule::LoadBefore { mod_id, before } => ("load_before", mod_id.as_str(), before.as_str()),
-                LoadOrderRule::Incompatible { mod_a, mod_b } => ("incompatible", mod_a.as_str(), mod_b.as_str()),
+                LoadOrderRule::LoadAfter { mod_id, after } => {
+                    ("load_after", mod_id.as_str(), after.as_str())
+                }
+                LoadOrderRule::LoadBefore { mod_id, before } => {
+                    ("load_before", mod_id.as_str(), before.as_str())
+                }
+                LoadOrderRule::Incompatible { mod_a, mod_b } => {
+                    ("incompatible", mod_a.as_str(), mod_b.as_str())
+                }
             };
             stmt.execute(params![profile_id, rule_type, mod_a, mod_b])?;
         }
@@ -1434,7 +1493,9 @@ fn decode_source(source_type: &str, source_data: Option<&str>) -> Result<Profile
         "nexus_collection" => {
             let data = source_data.unwrap_or_default();
             let table: toml::Table = toml::from_str(data).map_err(|e| {
-                CoreError::Other(format!("failed to parse nexus_collection source data: {e}").into())
+                CoreError::Other(
+                    format!("failed to parse nexus_collection source data: {e}").into(),
+                )
             })?;
             let slug = table
                 .get("slug")
@@ -1460,9 +1521,9 @@ fn decode_source(source_type: &str, source_data: Option<&str>) -> Result<Profile
                 .to_string();
             Ok(ProfileSource::Wabbajack { manifest_hash })
         }
-        other => Err(CoreError::Other(format!(
-            "unknown profile source type: {other}"
-        ).into())),
+        other => Err(CoreError::Other(
+            format!("unknown profile source type: {other}").into(),
+        )),
     }
 }
 
@@ -1568,9 +1629,9 @@ impl ModdeDb {
 
     /// Load all tool configurations for a game.
     pub fn load_tool_configs(&self, game_id: &str) -> Result<Vec<ToolConfigRow>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT tool_id, enabled, settings FROM game_tools WHERE game_id = ?1",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT tool_id, enabled, settings FROM game_tools WHERE game_id = ?1")?;
 
         let rows = stmt
             .query_map(params![game_id], |row| {
@@ -1586,11 +1647,7 @@ impl ModdeDb {
     }
 
     /// Load a single tool configuration for a game.
-    pub fn load_tool_config(
-        &self,
-        game_id: &str,
-        tool_id: &str,
-    ) -> Result<Option<ToolConfigRow>> {
+    pub fn load_tool_config(&self, game_id: &str, tool_id: &str) -> Result<Option<ToolConfigRow>> {
         let result = self.conn.query_row(
             "SELECT tool_id, enabled, settings FROM game_tools
              WHERE game_id = ?1 AND tool_id = ?2",
@@ -1631,11 +1688,7 @@ impl ModdeDb {
     }
 
     /// Load files previously applied by a tool.
-    pub fn load_applied_files(
-        &self,
-        game_id: &str,
-        tool_id: &str,
-    ) -> Result<Vec<String>> {
+    pub fn load_applied_files(&self, game_id: &str, tool_id: &str) -> Result<Vec<String>> {
         let mut stmt = self.conn.prepare(
             "SELECT rel_path FROM tool_applied_files
              WHERE game_id = ?1 AND tool_id = ?2",
@@ -1677,13 +1730,15 @@ mod tests {
                     mod_id: "mod_a".to_string(),
                     enabled: true,
                     version: Some("1.0".to_string()),
-                    fomod_config: None, ..Default::default()
+                    fomod_config: None,
+                    ..Default::default()
                 },
                 EnabledMod {
                     mod_id: "mod_b".to_string(),
                     enabled: false,
                     version: None,
-                    fomod_config: None, ..Default::default()
+                    fomod_config: None,
+                    ..Default::default()
                 },
             ],
             overrides: PathBuf::from("/tmp/overrides"),
@@ -1727,8 +1782,10 @@ mod tests {
     #[test]
     fn load_by_name_ambiguous() {
         let db = test_db();
-        db.create_profile(&sample_profile("default", "skyrim-se")).unwrap();
-        db.create_profile(&sample_profile("default", "fallout4")).unwrap();
+        db.create_profile(&sample_profile("default", "skyrim-se"))
+            .unwrap();
+        db.create_profile(&sample_profile("default", "fallout4"))
+            .unwrap();
 
         let err = db.load_profile_by_name("default").unwrap_err();
         match err {
@@ -1744,9 +1801,12 @@ mod tests {
     #[test]
     fn multi_profile_per_game() {
         let db = test_db();
-        db.create_profile(&sample_profile("vanilla", "skyrim-se")).unwrap();
-        db.create_profile(&sample_profile("modded", "skyrim-se")).unwrap();
-        db.create_profile(&sample_profile("hardcore", "skyrim-se")).unwrap();
+        db.create_profile(&sample_profile("vanilla", "skyrim-se"))
+            .unwrap();
+        db.create_profile(&sample_profile("modded", "skyrim-se"))
+            .unwrap();
+        db.create_profile(&sample_profile("hardcore", "skyrim-se"))
+            .unwrap();
 
         let profiles = db.list_profiles(Some("skyrim-se")).unwrap();
         assert_eq!(profiles.len(), 3);
@@ -1762,7 +1822,8 @@ mod tests {
             mod_id: "mod_c".to_string(),
             enabled: true,
             version: None,
-            fomod_config: None, ..Default::default()
+            fomod_config: None,
+            ..Default::default()
         });
 
         db.update_profile(&profile).unwrap();
@@ -1774,7 +1835,8 @@ mod tests {
     #[test]
     fn delete_profile() {
         let db = test_db();
-        db.create_profile(&sample_profile("test", "skyrim-se")).unwrap();
+        db.create_profile(&sample_profile("test", "skyrim-se"))
+            .unwrap();
         db.delete_profile("test", "skyrim-se").unwrap();
 
         let err = db.load_profile("test", "skyrim-se").unwrap_err();
@@ -1784,8 +1846,11 @@ mod tests {
     #[test]
     fn delete_cascades_to_mods_and_saves() {
         let db = test_db();
-        let id = db.create_profile(&sample_profile("test", "skyrim-se")).unwrap();
-        db.assign_save(id, Path::new("/saves/save1.ess"), Some("my save")).unwrap();
+        let id = db
+            .create_profile(&sample_profile("test", "skyrim-se"))
+            .unwrap();
+        db.assign_save(id, Path::new("/saves/save1.ess"), Some("my save"))
+            .unwrap();
 
         let saves = db.list_saves(id).unwrap();
         assert_eq!(saves.len(), 1);
@@ -1800,10 +1865,14 @@ mod tests {
     #[test]
     fn save_assignment() {
         let db = test_db();
-        let id = db.create_profile(&sample_profile("test", "skyrim-se")).unwrap();
+        let id = db
+            .create_profile(&sample_profile("test", "skyrim-se"))
+            .unwrap();
 
-        db.assign_save(id, Path::new("/saves/save1.ess"), Some("Level 50")).unwrap();
-        db.assign_save(id, Path::new("/saves/save2.ess"), None).unwrap();
+        db.assign_save(id, Path::new("/saves/save1.ess"), Some("Level 50"))
+            .unwrap();
+        db.assign_save(id, Path::new("/saves/save2.ess"), None)
+            .unwrap();
 
         let saves = db.list_saves(id).unwrap();
         assert_eq!(saves.len(), 2);
@@ -1818,12 +1887,19 @@ mod tests {
     #[test]
     fn save_already_assigned_to_different_profile() {
         let db = test_db();
-        let id1 = db.create_profile(&sample_profile("profile1", "skyrim-se")).unwrap();
-        let id2 = db.create_profile(&sample_profile("profile2", "skyrim-se")).unwrap();
+        let id1 = db
+            .create_profile(&sample_profile("profile1", "skyrim-se"))
+            .unwrap();
+        let id2 = db
+            .create_profile(&sample_profile("profile2", "skyrim-se"))
+            .unwrap();
 
-        db.assign_save(id1, Path::new("/saves/save1.ess"), None).unwrap();
+        db.assign_save(id1, Path::new("/saves/save1.ess"), None)
+            .unwrap();
 
-        let err = db.assign_save(id2, Path::new("/saves/save1.ess"), None).unwrap_err();
+        let err = db
+            .assign_save(id2, Path::new("/saves/save1.ess"), None)
+            .unwrap_err();
         assert!(matches!(err, CoreError::SaveAlreadyAssigned { .. }));
     }
 
@@ -1831,13 +1907,15 @@ mod tests {
     fn snapshot_upsert_and_get() {
         let db = test_db();
 
-        db.upsert_snapshot("skyrim-se", Path::new("/stock/skyrim-se"), "abc123", 5000).unwrap();
+        db.upsert_snapshot("skyrim-se", Path::new("/stock/skyrim-se"), "abc123", 5000)
+            .unwrap();
         let meta = db.get_snapshot("skyrim-se").unwrap().unwrap();
         assert_eq!(meta.tree_hash, "abc123");
         assert_eq!(meta.file_count, 5000);
 
         // Upsert updates
-        db.upsert_snapshot("skyrim-se", Path::new("/stock/skyrim-se"), "def456", 5001).unwrap();
+        db.upsert_snapshot("skyrim-se", Path::new("/stock/skyrim-se"), "def456", 5001)
+            .unwrap();
         let meta = db.get_snapshot("skyrim-se").unwrap().unwrap();
         assert_eq!(meta.tree_hash, "def456");
         assert_eq!(meta.file_count, 5001);
@@ -1852,9 +1930,12 @@ mod tests {
     #[test]
     fn list_profiles_all_and_by_game() {
         let db = test_db();
-        db.create_profile(&sample_profile("vanilla", "skyrim-se")).unwrap();
-        db.create_profile(&sample_profile("modded", "skyrim-se")).unwrap();
-        db.create_profile(&sample_profile("default", "fallout4")).unwrap();
+        db.create_profile(&sample_profile("vanilla", "skyrim-se"))
+            .unwrap();
+        db.create_profile(&sample_profile("modded", "skyrim-se"))
+            .unwrap();
+        db.create_profile(&sample_profile("default", "fallout4"))
+            .unwrap();
 
         let all = db.list_profiles(None).unwrap();
         assert_eq!(all.len(), 3);
@@ -1916,9 +1997,12 @@ mod tests {
     #[test]
     fn duplicate_profile_errors() {
         let db = test_db();
-        db.create_profile(&sample_profile("test", "skyrim-se")).unwrap();
+        db.create_profile(&sample_profile("test", "skyrim-se"))
+            .unwrap();
 
-        let err = db.create_profile(&sample_profile("test", "skyrim-se")).unwrap_err();
+        let err = db
+            .create_profile(&sample_profile("test", "skyrim-se"))
+            .unwrap_err();
         assert!(matches!(err, CoreError::Database(_)));
     }
 }

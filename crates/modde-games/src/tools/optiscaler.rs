@@ -13,9 +13,7 @@ use anyhow::{Context, Result};
 use smallvec::{SmallVec, smallvec};
 use tracing::info;
 
-use super::{
-    AppliedFiles, GameTool, ToolAvailability, ToolCategory, ToolConfig,
-};
+use super::{AppliedFiles, GameTool, ToolAvailability, ToolCategory, ToolConfig};
 
 pub static OPTISCALER: OptiScaler = OptiScaler;
 
@@ -96,9 +94,7 @@ impl GameTool for OptiScaler {
                 let fgmod = dirs::home_dir()?.join(".local/share/goverlay/fgmod");
                 fgmod.is_dir().then_some(fgmod)
             })
-            .context(
-                "optiscaler: 'source_dir' setting is required, or install fgmod/goverlay",
-            )?;
+            .context("optiscaler: 'source_dir' setting is required, or install fgmod/goverlay")?;
 
         let dll_name = config.get_str("dll_name").unwrap_or("dxgi.dll");
         let exe_subdir = config.get_str("exe_subdir").unwrap_or("");
@@ -164,10 +160,7 @@ impl GameTool for OptiScaler {
 ///
 /// Scans the staging mods directory for DLLs that fgmod will delete at launch,
 /// and returns `(source, destination)` pairs for the wrapper to restore them.
-pub fn fgmod_restore_commands(
-    game_dir: &Path,
-    staging_dir: &Path,
-) -> Vec<(String, String)> {
+pub fn fgmod_restore_commands(game_dir: &Path, staging_dir: &Path) -> Vec<(String, String)> {
     let exe_dir = game_dir.join("bin/x64");
     let mut restore = Vec::new();
 

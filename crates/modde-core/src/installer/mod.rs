@@ -13,7 +13,7 @@ pub mod probe;
 pub mod types;
 
 pub use analyze::analyze;
-pub use dossier::{dossier_path, dossiers_dir, dump as dump_dossier, DossierContext, ProbeTrace};
+pub use dossier::{DossierContext, ProbeTrace, dossier_path, dossiers_dir, dump as dump_dossier};
 pub use execute::execute;
 pub use fs::{extract_archive, find_fomod_config, xxh64_file_hex};
 pub use probe::InstallProbe;

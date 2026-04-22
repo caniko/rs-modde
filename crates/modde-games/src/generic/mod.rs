@@ -42,5 +42,4 @@ impl GamePlugin for GenericGame {
     fn mod_directory(&self, install: &Path) -> PathBuf {
         install.join(&self.mod_dir)
     }
-
 }

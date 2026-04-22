@@ -52,11 +52,7 @@ pub fn parse_plugins_txt(content: &str) -> Vec<PluginEntry> {
 }
 
 /// Write plugins.txt with the `*` prefix format.
-pub fn write_plugins_txt(
-    app_id: u32,
-    game_name: &str,
-    entries: &[PluginEntry],
-) -> Result<()> {
+pub fn write_plugins_txt(app_id: u32, game_name: &str, entries: &[PluginEntry]) -> Result<()> {
     let path = plugins_txt_path(app_id, game_name)
         .ok_or_else(|| anyhow::anyhow!("could not determine plugins.txt path"))?;
     write_plugins_txt_to(&path, entries)
@@ -226,17 +222,13 @@ disabled.esp
     #[test]
     fn test_write_creates_parent_dirs() {
         let dir = std::env::temp_dir().join("modde_test_plugins_txt_nested/a/b/c");
-        let _ = std::fs::remove_dir_all(
-            std::env::temp_dir().join("modde_test_plugins_txt_nested"),
-        );
+        let _ = std::fs::remove_dir_all(std::env::temp_dir().join("modde_test_plugins_txt_nested"));
         let path = dir.join("plugins.txt");
 
         write_plugins_txt_to(&path, &[]).unwrap();
         assert!(path.exists());
 
-        let _ = std::fs::remove_dir_all(
-            std::env::temp_dir().join("modde_test_plugins_txt_nested"),
-        );
+        let _ = std::fs::remove_dir_all(std::env::temp_dir().join("modde_test_plugins_txt_nested"));
     }
 
     #[test]

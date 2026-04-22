@@ -2,8 +2,8 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::traits::{DiscoveredFile, DiscoveredMod, ModScanner, ModSource, ScanContext};
 use super::plugins_txt;
+use crate::traits::{DiscoveredFile, DiscoveredMod, ModScanner, ModSource, ScanContext};
 
 /// Data-driven Bethesda mod scanner.
 pub struct BethesdaScanner {
@@ -168,5 +168,8 @@ fn make_data_file(install_root: &Path, file_path: &Path) -> DiscoveredFile {
         .to_string_lossy()
         .replace('\\', "/");
     let size = file_path.metadata().map(|m| m.len()).unwrap_or(0);
-    DiscoveredFile { rel_path: rel, size }
+    DiscoveredFile {
+        rel_path: rel,
+        size,
+    }
 }

@@ -5,22 +5,22 @@ use anyhow::{Context, Result, bail};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
+use modde_core::ModdeDb;
 use modde_core::installer::{
     self as installer, DossierContext, InstallMethod, InstallStatus, InstallerError,
 };
 use modde_core::manifest::collection::CollectionManifest;
-use modde_core::manifest::wabbajack::{compute_manifest_hash, WabbajackManifest};
+use modde_core::manifest::wabbajack::{WabbajackManifest, compute_manifest_hash};
 use modde_core::paths;
 use modde_core::profile::{
     EnabledMod, LoadOrderLock, LockReason, Profile, ProfileManager, ProfileSource,
 };
-use modde_core::ModdeDb;
+use modde_sources::direct::DirectSource;
+use modde_sources::nexus::NexusSource;
 use modde_sources::nexus::api::NexusApi;
 use modde_sources::nexus::auth::load_api_key;
 use modde_sources::nexus::cdn::generate_download_link;
-use modde_sources::nexus::NexusSource;
-use modde_sources::direct::DirectSource;
-use modde_sources::wabbajack::installer::{WabbajackInstaller, InstallProgress};
+use modde_sources::wabbajack::installer::{InstallProgress, WabbajackInstaller};
 
 use crate::InstallSource;
 
@@ -77,8 +77,7 @@ async fn fetch_collection(
 ) -> Result<CollectionManifest> {
     let api = NexusApi::new(client.clone(), api_key.to_string());
 
-    let parsed_version = version
-        .and_then(|v| v.parse::<u64>().ok());
+    let parsed_version = version.and_then(|v| v.parse::<u64>().ok());
 
     api.get_collection_by_slug(slug, parsed_version)
         .await
@@ -143,10 +142,14 @@ pub fn find_fomod_config(mod_dir: &Path) -> Option<std::path::PathBuf> {
         return Some(config_path);
     }
     // Case-insensitive fallback
-    let Ok(entries) = std::fs::read_dir(mod_dir) else { return None };
+    let Ok(entries) = std::fs::read_dir(mod_dir) else {
+        return None;
+    };
     for entry in entries.flatten() {
         if entry.file_name().to_ascii_lowercase() == "fomod" && entry.path().is_dir() {
-            let Ok(inner) = std::fs::read_dir(entry.path()) else { continue };
+            let Ok(inner) = std::fs::read_dir(entry.path()) else {
+                continue;
+            };
             for inner_entry in inner.flatten() {
                 if inner_entry.file_name().to_ascii_lowercase() == "moduleconfig.xml" {
                     return Some(inner_entry.path());
@@ -259,11 +262,10 @@ async fn handle_nexus_collection(
 
         if !mod_store_dir.exists() {
             // Generate download link and download
-            let download_url = generate_download_link(
-                &client, &api_key, &game_domain, mod_id, file_id,
-            )
-            .await
-            .with_context(|| format!("failed to get download link for {mod_name}"))?;
+            let download_url =
+                generate_download_link(&client, &api_key, &game_domain, mod_id, file_id)
+                    .await
+                    .with_context(|| format!("failed to get download link for {mod_name}"))?;
 
             let archive_path = store.join(format!("{mod_id}_{file_id}.zip"));
             download_file(&client, &download_url, &archive_path)
@@ -293,7 +295,8 @@ async fn handle_nexus_collection(
             display_name: Some(collection_mod.name.clone()),
             enabled: !collection_mod.optional,
             version: Some(collection_mod.version.clone()),
-            fomod_config: None, ..Default::default()
+            fomod_config: None,
+            ..Default::default()
         });
     }
 
@@ -410,8 +413,8 @@ async fn handle_wabbajack(
     installer.add_source(modde_sources::AnySource::Direct(DirectSource::new(client)));
 
     // Preflight: skip the install pipeline if staging already has all expected files.
-    let skip_install = !force
-        && modde_sources::wabbajack::validator::preflight_staging(&manifest, &staging).await;
+    let skip_install =
+        !force && modde_sources::wabbajack::validator::preflight_staging(&manifest, &staging).await;
 
     if skip_install {
         println!("  Staging already complete, skipping install pipeline (use --force to redo)");
@@ -515,9 +518,7 @@ async fn handle_wabbajack(
     // content-addressed cache so a later `modde profile lock-info` can point
     // at it even if the original source path moves. Log-and-continue — a
     // cache miss shouldn't fail an otherwise successful install.
-    if let Err(e) =
-        modde_core::manifest::wabbajack::cache_wabbajack_file(&path, &manifest_hash)
-    {
+    if let Err(e) = modde_core::manifest::wabbajack::cache_wabbajack_file(&path, &manifest_hash) {
         warn!("failed to cache wabbajack source file: {e:#}");
     }
 
@@ -553,7 +554,11 @@ pub fn configure_wine_overrides(game_id: &str, game_dir: &Path, staging: &Path) 
 
     println!(
         "  Detected proxy DLLs needing Wine overrides: {}",
-        overrides.iter().map(|d| format!("{d}.dll")).collect::<Vec<_>>().join(", ")
+        overrides
+            .iter()
+            .map(|d| format!("{d}.dll"))
+            .collect::<Vec<_>>()
+            .join(", ")
     );
 
     let launcher = modde_games::launcher::detect_launcher(game_dir);
@@ -570,7 +575,9 @@ pub fn configure_wine_overrides(game_id: &str, game_dir: &Path, staging: &Path) 
     };
 
     // Generate a launch wrapper that restores mod DLLs deleted by fgmod + exports tool env vars
-    if let Some(wrapper_path) = modde_games::launcher::generate_launch_wrapper(game_dir, staging, game_id, &tool_env_vars)? {
+    if let Some(wrapper_path) =
+        modde_games::launcher::generate_launch_wrapper(game_dir, staging, game_id, &tool_env_vars)?
+    {
         modde_games::launcher::register_heroic_wrapper(&launcher, &wrapper_path)?;
     }
 
@@ -614,15 +621,10 @@ pub async fn deploy_mo2_to_game(staging: &Path, game_dir: &Path, force: bool) ->
                 }
 
                 // Get the relative path within the mod (game-relative)
-                let rel_path = entry_path
-                    .strip_prefix(&mod_path)
-                    .unwrap_or(&entry_path);
+                let rel_path = entry_path.strip_prefix(&mod_path).unwrap_or(&entry_path);
 
                 // Skip MO2 metadata files
-                let filename = rel_path
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy();
+                let filename = rel_path.file_name().unwrap_or_default().to_string_lossy();
                 if filename == "meta.ini" || filename == "meta.json" {
                     skipped += 1;
                     continue;
@@ -637,9 +639,7 @@ pub async fn deploy_mo2_to_game(staging: &Path, game_dir: &Path, force: bool) ->
                         tokio::fs::metadata(&dest).await,
                     ) {
                         use std::os::unix::fs::MetadataExt;
-                        if src_meta.ino() == dst_meta.ino()
-                            && src_meta.dev() == dst_meta.dev()
-                        {
+                        if src_meta.ino() == dst_meta.ino() && src_meta.dev() == dst_meta.dev() {
                             skipped += 1;
                             continue;
                         }
@@ -723,10 +723,8 @@ mod tests {
 
     #[test]
     fn parse_nexus_url_file_id_only_query_param() {
-        let (game, mod_id, file_id) = parse_nexus_url(
-            "https://www.nexusmods.com/fallout4/mods/999?file_id=42",
-        )
-        .unwrap();
+        let (game, mod_id, file_id) =
+            parse_nexus_url("https://www.nexusmods.com/fallout4/mods/999?file_id=42").unwrap();
         assert_eq!(game, "fallout4");
         assert_eq!(mod_id, 999);
         assert_eq!(file_id, Some(42));
@@ -735,8 +733,7 @@ mod tests {
     #[test]
     fn parse_nexus_url_trailing_slash() {
         // Trailing slash means the 4th segment is empty, but segments[0..3] still work.
-        let result =
-            parse_nexus_url("https://www.nexusmods.com/skyrimspecialedition/mods/12345/");
+        let result = parse_nexus_url("https://www.nexusmods.com/skyrimspecialedition/mods/12345/");
         assert!(result.is_ok());
         let (game, mod_id, _) = result.unwrap();
         assert_eq!(game, "skyrimspecialedition");
@@ -757,15 +754,13 @@ mod tests {
 
     #[test]
     fn parse_nexus_url_invalid_missing_mods_segment() {
-        let result =
-            parse_nexus_url("https://www.nexusmods.com/skyrimspecialedition/files/12345");
+        let result = parse_nexus_url("https://www.nexusmods.com/skyrimspecialedition/files/12345");
         assert!(result.is_err());
     }
 
     #[test]
     fn parse_nexus_url_invalid_non_numeric_mod_id() {
-        let result =
-            parse_nexus_url("https://www.nexusmods.com/skyrimspecialedition/mods/abc");
+        let result = parse_nexus_url("https://www.nexusmods.com/skyrimspecialedition/mods/abc");
         assert!(result.is_err());
     }
 
@@ -942,8 +937,8 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
     info!(%url, ?profile_name, "installing mod from Nexus");
 
     // Parse the Nexus URL
-    let (game_domain, mod_id, file_id_opt) = parse_nexus_url(&url)
-        .context("failed to parse mod URL")?;
+    let (game_domain, mod_id, file_id_opt) =
+        parse_nexus_url(&url).context("failed to parse mod URL")?;
 
     let api_key = load_api_key().context("failed to load Nexus API key")?;
     let client = build_http_client()?;
@@ -982,10 +977,15 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
 
     // Fetch mod metadata from Nexus for the display name.
     let api = NexusApi::new(client.clone(), api_key.clone());
-    let mod_info = api.get_mod(&game_domain, mod_id).await
+    let mod_info = api
+        .get_mod(&game_domain, mod_id)
+        .await
         .context("failed to fetch mod info from Nexus")?;
 
-    println!("Installing mod: {} ({game_domain}/mods/{mod_id}, file {file_id})", mod_info.name);
+    println!(
+        "Installing mod: {} ({game_domain}/mods/{mod_id}, file {file_id})",
+        mod_info.name
+    );
 
     let store = paths::store_dir();
     let mod_store_dir = store.join(format!("{game_domain}_{mod_id}_{file_id}"));
@@ -996,18 +996,15 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
     // archive is kept until execution is committed so we can compute
     // its source hash and also dump the dossier from it if needed.
     let archive_path = store.join(format!("{mod_id}_{file_id}.zip"));
-    let staging_root = paths::staging_dir().join(format!(
-        "install_{game_domain}_{mod_id}_{file_id}"
-    ));
+    let staging_root =
+        paths::staging_dir().join(format!("install_{game_domain}_{mod_id}_{file_id}"));
 
     let mut install_outcome = InstallOutcome::AlreadyStaged;
     if !mod_store_dir.exists() {
         // Fresh install: download + extract + analyze + execute.
-        let download_url = generate_download_link(
-            &client, &api_key, &game_domain, mod_id, file_id,
-        )
-        .await
-        .context("failed to get download link")?;
+        let download_url = generate_download_link(&client, &api_key, &game_domain, mod_id, file_id)
+            .await
+            .context("failed to get download link")?;
         download_file(&client, &download_url, &archive_path)
             .await
             .context("failed to download mod")?;
@@ -1047,7 +1044,9 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
                     &plan.method,
                     &plan.source_archive_hash,
                 )?;
-                InstallOutcome::Unknown { dossier_path: dossier }
+                InstallOutcome::Unknown {
+                    dossier_path: dossier,
+                }
             }
             _ if !plan.method.is_ready() => {
                 // FOMOD / BAIN with no config yet — copy the raw
@@ -1082,7 +1081,9 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
                             &plan.method,
                             &plan.source_archive_hash,
                         )?;
-                        InstallOutcome::Unknown { dossier_path: dossier }
+                        InstallOutcome::Unknown {
+                            dossier_path: dossier,
+                        }
                     }
                     Err(InstallerError::RequiresUserInput { method }) => {
                         InstallOutcome::PendingUserInput {
@@ -1152,7 +1153,8 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
             nexus_file_id: Some(file_id as i64),
             nexus_game_domain: Some(game_domain.clone()),
             install_status: Some(status.as_str().to_string()),
-            fomod_config: None, ..Default::default()
+            fomod_config: None,
+            ..Default::default()
         });
     }
 
@@ -1182,9 +1184,7 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
             );
         }
         InstallOutcome::Unknown { dossier_path } => {
-            println!(
-                "Mod '{mod_id_str}' has an unknown install layout. Dossier written to:"
-            );
+            println!("Mod '{mod_id_str}' has an unknown install layout. Dossier written to:");
             println!("  {}", dossier_path.display());
             println!(
                 "Run `/modde-installer {mod_id_str}` inside Claude Code to extend modde \

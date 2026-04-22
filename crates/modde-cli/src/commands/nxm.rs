@@ -20,9 +20,9 @@ pub struct NxmUri {
 impl NxmUri {
     /// Parse an nxm:// URI string.
     pub fn parse(uri: &str) -> Result<Self> {
-        let uri = uri.strip_prefix("nxm://").ok_or_else(|| {
-            anyhow::anyhow!("not an nxm:// URI: {uri}")
-        })?;
+        let uri = uri
+            .strip_prefix("nxm://")
+            .ok_or_else(|| anyhow::anyhow!("not an nxm:// URI: {uri}"))?;
 
         // Split off query string
         let (path, query) = uri.split_once('?').unwrap_or((uri, ""));
@@ -99,7 +99,9 @@ pub async fn handle(uri: String, _profile: Option<String>) -> Result<()> {
     let downloads_dir = modde_core::paths::downloads_dir();
     std::fs::create_dir_all(&downloads_dir)?;
 
-    let file_info = api.get_mod_files(&parsed.game_domain, parsed.mod_id).await?;
+    let file_info = api
+        .get_mod_files(&parsed.game_domain, parsed.mod_id)
+        .await?;
     let file_name = file_info
         .files
         .iter()
@@ -153,7 +155,11 @@ Categories=Game;
     println!("\nRegistering with xdg-mime...");
 
     let status = std::process::Command::new("xdg-mime")
-        .args(["default", "modde-nxm-handler.desktop", "x-scheme-handler/nxm"])
+        .args([
+            "default",
+            "modde-nxm-handler.desktop",
+            "x-scheme-handler/nxm",
+        ])
         .status();
 
     match status {
@@ -234,8 +240,8 @@ fn install_handler_platform() -> Result<PathBuf> {
 
 #[cfg(target_os = "windows")]
 fn install_handler_platform() -> Result<PathBuf> {
-    use winreg::enums::*;
     use winreg::RegKey;
+    use winreg::enums::*;
 
     let exe_path = std::env::current_exe().context("failed to determine modde binary path")?;
 
@@ -252,10 +258,7 @@ fn install_handler_platform() -> Result<PathBuf> {
     let (cmd_key, _) = hkcu
         .create_subkey(r"Software\Classes\nxm\shell\open\command")
         .context("failed to create nxm command registry key")?;
-    cmd_key.set_value(
-        "",
-        &format!("\"{}\" nxm handle \"%1\"", exe_path.display()),
-    )?;
+    cmd_key.set_value("", &format!("\"{}\" nxm handle \"%1\"", exe_path.display()))?;
 
     println!("Registered nxm:// protocol handler in Windows registry.");
     println!("You can now click 'Download with Mod Manager' on Nexus Mods.");

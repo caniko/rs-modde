@@ -24,11 +24,11 @@ pub fn handle(action: FomodAction) -> Result<()> {
 
 /// Read the FOMOD XML and info from a mod path, returning (xml, config, rev).
 fn load_fomod(mod_path: &Path) -> Result<(String, ModuleConfig, String)> {
-    let config_path = super::install::find_fomod_config(mod_path)
-        .ok_or_else(|| anyhow::anyhow!("no fomod/ModuleConfig.xml found in {}", mod_path.display()))?;
+    let config_path = super::install::find_fomod_config(mod_path).ok_or_else(|| {
+        anyhow::anyhow!("no fomod/ModuleConfig.xml found in {}", mod_path.display())
+    })?;
 
-    let xml = std::fs::read_to_string(&config_path)
-        .context("failed to read ModuleConfig.xml")?;
+    let xml = std::fs::read_to_string(&config_path).context("failed to read ModuleConfig.xml")?;
     let config = ModuleConfig::parse(&xml).context("failed to parse ModuleConfig.xml")?;
 
     let fomod_dir = config_path.parent().unwrap();
@@ -58,11 +58,8 @@ fn handle_generate(mod_path: &str, all: bool, format: &str) -> Result<()> {
     };
 
     let output = match format {
-        "toml" => toml::to_string_pretty(&decl)
-            .context("failed to serialize to TOML")?,
-        "json" => decl
-            .to_json()
-            .context("failed to serialize to JSON")?,
+        "toml" => toml::to_string_pretty(&decl).context("failed to serialize to TOML")?,
+        "json" => decl.to_json().context("failed to serialize to JSON")?,
         "nix" => {
             anyhow::bail!("nix output format requires the 'nix' feature on fomod-oxide");
         }
@@ -126,15 +123,8 @@ fn handle_inspect(mod_path: &str) -> Result<()> {
 
                     for (pi, plugin) in group.plugins.plugins.iter().enumerate() {
                         let ptype = plugin.plugin_type();
-                        let file_count = plugin
-                            .files
-                            .as_ref()
-                            .map(|f| f.items.len())
-                            .unwrap_or(0);
-                        println!(
-                            "    [{pi}] {} ({ptype:?}, {file_count} files)",
-                            plugin.name
-                        );
+                        let file_count = plugin.files.as_ref().map(|f| f.items.len()).unwrap_or(0);
+                        println!("    [{pi}] {} ({ptype:?}, {file_count} files)", plugin.name);
                         if let Some(ref desc) = plugin.description {
                             let desc = desc.trim();
                             if !desc.is_empty() {

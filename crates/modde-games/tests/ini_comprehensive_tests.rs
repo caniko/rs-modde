@@ -76,7 +76,10 @@ fn test_patch_multiple_sections_targets_correct_one() {
     let lines: Vec<&str> = result.lines().collect();
     let s2_idx = lines.iter().position(|l| *l == "[Section2]").unwrap();
     // Next non-empty line after [Section2] should have the updated value
-    let next_key_line = lines[s2_idx + 1..].iter().find(|l| l.starts_with("key=")).unwrap();
+    let next_key_line = lines[s2_idx + 1..]
+        .iter()
+        .find(|l| l.starts_with("key="))
+        .unwrap();
     assert_eq!(*next_key_line, "key=updated");
 }
 
@@ -87,7 +90,10 @@ fn test_patch_same_key_different_sections() {
     // SectionA's resolution should be unchanged
     let lines: Vec<&str> = result.lines().collect();
     let sa_idx = lines.iter().position(|l| *l == "[SectionA]").unwrap();
-    let sa_key = lines[sa_idx + 1..].iter().find(|l| l.starts_with("resolution=")).unwrap();
+    let sa_key = lines[sa_idx + 1..]
+        .iter()
+        .find(|l| l.starts_with("resolution="))
+        .unwrap();
     assert_eq!(*sa_key, "resolution=1080");
 }
 

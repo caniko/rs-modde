@@ -9,10 +9,10 @@
 use anyhow::{Context, Result, bail};
 use tracing::{info, warn};
 
-use modde_core::installer::dossiers_dir;
-use modde_core::profile::ProfileManager;
 use modde_core::ModdeDb;
+use modde_core::installer::dossiers_dir;
 use modde_core::paths;
+use modde_core::profile::ProfileManager;
 
 /// Remove `mod_id` from `profile_name`. If `profile_name` is `None`,
 /// the unambiguous default profile is used.
@@ -63,7 +63,8 @@ pub async fn handle(mod_id: String, profile_name: Option<String>) -> Result<()> 
     // `pm.update()` below rewrites the mods table from the in-memory
     // list so we need to drop it there too.
     profile.mods.retain(|m| m.mod_id != mod_id);
-    pm.update(&profile).context("failed to persist profile after remove")?;
+    pm.update(&profile)
+        .context("failed to persist profile after remove")?;
 
     info!(%mod_id, files = staged_files.len(), "mod removed");
     println!(

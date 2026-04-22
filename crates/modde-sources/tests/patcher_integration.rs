@@ -43,10 +43,10 @@ fn test_patch_reconstruct_file_from_fragments() {
     let source = b"The quick brown fox jumps over the lazy dog";
     let target = b"The lazy dog jumps over the quick brown fox";
 
-    let cop1 = copy_op(0, 4);    // "The "
-    let cop2 = copy_op(35, 8);   // "lazy dog"
-    let cop3 = copy_op(19, 16);  // " jumps over the "
-    let cop4 = copy_op(4, 15);   // "quick brown fox"
+    let cop1 = copy_op(0, 4); // "The "
+    let cop2 = copy_op(35, 8); // "lazy dog"
+    let cop3 = copy_op(19, 16); // " jumps over the "
+    let cop4 = copy_op(4, 15); // "quick brown fox"
 
     let patch = build_patch(&[
         (OP_COPY, &cop1),
@@ -65,11 +65,7 @@ fn test_patch_insert_between_copies() {
     let cop1 = copy_op(0, 3);
     let ins = data_op(b"XYZ");
     let cop2 = copy_op(7, 3);
-    let patch = build_patch(&[
-        (OP_COPY, &cop1),
-        (OP_DATA, &ins),
-        (OP_COPY, &cop2),
-    ]);
+    let patch = build_patch(&[(OP_COPY, &cop1), (OP_DATA, &ins), (OP_COPY, &cop2)]);
 
     let result = apply_patch(source, &patch).unwrap();
     assert_eq!(&result, b"ABCXYZHIJ");
@@ -156,11 +152,7 @@ fn test_patch_all_operation_types_in_sequence() {
     let cop1 = copy_op(0, 3);
     let ins = data_op(b"NEW");
     let cop2 = copy_op(3, 3);
-    let patch = build_patch(&[
-        (OP_COPY, &cop1),
-        (OP_DATA, &ins),
-        (OP_COPY, &cop2),
-    ]);
+    let patch = build_patch(&[(OP_COPY, &cop1), (OP_DATA, &ins), (OP_COPY, &cop2)]);
 
     let result = apply_patch(source, &patch).unwrap();
     assert_eq!(&result, b"SOUNEWRCE");

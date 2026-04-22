@@ -37,21 +37,9 @@ pub fn view<'a>(
         Some(m) => {
             let info = column![
                 text(&m.name).size(18),
-                row![
-                    text("Author: ").size(13),
-                    text(&m.author).size(13),
-                ]
-                .spacing(0),
-                row![
-                    text("Game: ").size(13),
-                    text(&m.game).size(13),
-                ]
-                .spacing(0),
-                row![
-                    text("Version: ").size(13),
-                    text(&m.version).size(13),
-                ]
-                .spacing(0),
+                row![text("Author: ").size(13), text(&m.author).size(13),].spacing(0),
+                row![text("Game: ").size(13), text(&m.game).size(13),].spacing(0),
+                row![text("Version: ").size(13), text(&m.version).size(13),].spacing(0),
                 text(&m.description).size(13),
                 text(format!(
                     "{} archive(s), {} directive(s)",
@@ -68,12 +56,10 @@ pub fn view<'a>(
                 .style(container::rounded_box)
                 .into()
         }
-        None => container(
-            text("Select a .wabbajack file to view modlist details.").size(14),
-        )
-        .padding(12)
-        .width(Length::Fill)
-        .into(),
+        None => container(text("Select a .wabbajack file to view modlist details.").size(14))
+            .padding(12)
+            .width(Length::Fill)
+            .into(),
     };
 
     let progress_section = {
@@ -99,9 +85,12 @@ pub fn view<'a>(
         let log_content = if state.log_lines.is_empty() {
             column![text("Waiting for installation to begin...").size(12)]
         } else {
-            state.log_lines.iter().fold(column![].spacing(1), |col, line| {
-                col.push(text(line).size(11))
-            })
+            state
+                .log_lines
+                .iter()
+                .fold(column![].spacing(1), |col, line| {
+                    col.push(text(line).size(11))
+                })
         };
 
         container(scrollable(log_content.width(Length::Fill)).height(Length::Fill))

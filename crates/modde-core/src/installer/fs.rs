@@ -18,15 +18,9 @@ use super::types::{InstallerError, InstallerResult};
 /// escape `dest` (e.g. `../../etc/passwd`) — zip's `enclosed_name` guard.
 pub fn extract_archive(archive_path: &Path, dest: &Path) -> InstallerResult<()> {
     let file = fs::File::open(archive_path)
-        .map_err(|e| InstallerError::Extract(format!(
-            "open {}: {e}",
-            archive_path.display()
-        )))?;
+        .map_err(|e| InstallerError::Extract(format!("open {}: {e}", archive_path.display())))?;
     let mut archive = zip::ZipArchive::new(file)
-        .map_err(|e| InstallerError::Extract(format!(
-            "read {}: {e}",
-            archive_path.display()
-        )))?;
+        .map_err(|e| InstallerError::Extract(format!("read {}: {e}", archive_path.display())))?;
 
     for i in 0..archive.len() {
         let mut entry = archive
