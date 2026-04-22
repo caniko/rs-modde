@@ -147,20 +147,21 @@
           inherit modde docs website site;
           default = modde;
 
-          flatpak-manifest = (rs-harbor.lib.mkFlatpakManifest {
-            inherit pkgs;
-            appId = "org.codeberg.caniko.modde";
-            pname = "modde-ui";
-            desktopFile = builtins.readFile ./dist/modde-ui.desktop;
-            finishArgs = [
-              "--share=ipc"
-              "--share=network"
-              "--socket=x11"
-              "--socket=wayland"
-              "--device=dri"
-              "--socket=pulseaudio"
-            ];
-          }).manifestPath;
+          flatpak-manifest =
+            (rs-harbor.lib.mkFlatpakManifest {
+              inherit pkgs;
+              appId = "org.codeberg.caniko.modde";
+              pname = "modde-ui";
+              desktopFile = builtins.readFile ./dist/modde-ui.desktop;
+              finishArgs = [
+                "--share=ipc"
+                "--share=network"
+                "--socket=x11"
+                "--socket=wayland"
+                "--device=dri"
+                "--socket=pulseaudio"
+              ];
+            }).manifestPath;
         }
         // lib.optionalAttrs pkgs.stdenv.isLinux {
           appimage-cli = rs-harbor.lib.mkAppImage {
