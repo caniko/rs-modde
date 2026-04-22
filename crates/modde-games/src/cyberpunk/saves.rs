@@ -97,26 +97,21 @@ impl SaveTracker for CyberpunkSaveTracker {
 
 /// Try to extract a human-readable label from save metadata.
 ///
-/// Cyberpunk saves with NamedSaves may have a metadata.9.json containing
+/// Cyberpunk saves with `NamedSaves` may have a metadata.9.json containing
 /// a custom name. Falls back to the directory name.
 fn extract_label(save_path: &Path, dir_name: &str) -> Option<String> {
     // Try NamedSaves metadata (metadata.9.json)
     let meta_path = save_path.join("metadata.9.json");
-    if meta_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&meta_path) {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(name) = json
+    if meta_path.exists()
+        && let Ok(content) = std::fs::read_to_string(&meta_path)
+            && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+                && let Some(name) = json
                     .get("customName")
                     .or_else(|| json.get("name"))
                     .and_then(|v| v.as_str())
-                {
-                    if !name.is_empty() {
+                    && !name.is_empty() {
                         return Some(name.to_string());
                     }
-                }
-            }
-        }
-    }
 
     // Fall back to directory name (strip prefix and numeric suffix for readability)
     Some(dir_name.to_string())

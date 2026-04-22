@@ -1,4 +1,4 @@
-//! MangoHud — performance overlay (FPS, CPU/GPU stats, frame timing).
+//! `MangoHud` — performance overlay (FPS, CPU/GPU stats, frame timing).
 //!
 //! Enabled via `MANGOHUD=1` env var. Per-game config written to
 //! `~/.local/share/modde/tools/{game_id}/MangoHud.conf` and pointed to
@@ -49,12 +49,11 @@ impl GameTool for MangoHud {
         let mut vars = smallvec![("MANGOHUD".into(), "1".into())];
 
         // Point to per-game config if we generated one
-        if config.settings.as_object().map_or(false, |m| !m.is_empty()) {
-            if let Some(game_id) = config.get_str("_game_id") {
+        if config.settings.as_object().is_some_and(|m| !m.is_empty())
+            && let Some(game_id) = config.get_str("_game_id") {
                 let conf_path = tool_config_dir(game_id).join("MangoHud.conf");
                 vars.push(("MANGOHUD_CONFIG".into(), conf_path.to_string_lossy().into()));
             }
-        }
 
         vars
     }

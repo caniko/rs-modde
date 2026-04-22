@@ -86,6 +86,7 @@ fn decode_mega_key(key_b64: &str) -> Result<([u8; 16], [u8; 16])> {
 }
 
 impl MegaSource {
+    #[must_use]
     pub fn new(client: Client) -> Self {
         Self { client }
     }

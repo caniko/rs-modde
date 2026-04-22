@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use modde_core::manifest::wabbajack::WabbajackManifest;
 use modde_sources::wabbajack::installer::WabbajackInstaller;
 
-/// Helper to build a minimal WabbajackManifest for testing.
+/// Helper to build a minimal `WabbajackManifest` for testing.
 fn minimal_manifest() -> WabbajackManifest {
     WabbajackManifest {
         name: "test-modlist".into(),

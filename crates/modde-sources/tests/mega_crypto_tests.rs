@@ -1,4 +1,4 @@
-//! Integration tests for MegaSource.
+//! Integration tests for `MegaSource`.
 //!
 //! The core crypto functions (`parse_mega_url`, `decode_mega_key`) are private
 //! and are thoroughly tested via inline `#[cfg(test)] mod tests` in

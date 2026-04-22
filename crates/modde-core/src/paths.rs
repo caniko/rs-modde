@@ -15,6 +15,7 @@ pub fn set_data_dir(path: PathBuf) {
 /// - Linux: `$XDG_DATA_HOME` or `~/.local/share`
 /// - macOS: `~/Library/Application Support`
 /// - Windows: `%APPDATA%` (e.g. `C:\Users\X\AppData\Roaming`)
+#[must_use]
 pub fn data_dir() -> PathBuf {
     // Honor XDG override on Linux/BSD
     #[cfg(target_os = "linux")]
@@ -30,6 +31,7 @@ pub fn data_dir() -> PathBuf {
 /// - Linux: `$XDG_CONFIG_HOME` or `~/.config`
 /// - macOS: `~/Library/Application Support`
 /// - Windows: `%APPDATA%`
+#[must_use]
 pub fn config_dir() -> PathBuf {
     #[cfg(target_os = "linux")]
     if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
@@ -58,47 +60,56 @@ fn active_instance_data_dir() -> Option<PathBuf> {
 }
 
 /// Mod file store: `<modde_data>/store/`.
+#[must_use]
 pub fn store_dir() -> PathBuf {
     modde_data_dir().join("store")
 }
 
 /// Staging scratch space: `<modde_data>/staging/`.
+#[must_use]
 pub fn staging_dir() -> PathBuf {
     modde_data_dir().join("staging")
 }
 
 /// Profiles root: `<modde_data>/profiles/`.
+#[must_use]
 pub fn profiles_dir() -> PathBuf {
     modde_data_dir().join("profiles")
 }
 
 /// Downloads directory: `<modde_data>/downloads/`.
+#[must_use]
 pub fn downloads_dir() -> PathBuf {
     modde_data_dir().join("downloads")
 }
 
 /// Stock game snapshots: `<modde_data>/stock/`.
+#[must_use]
 pub fn stock_dir() -> PathBuf {
     modde_data_dir().join("stock")
 }
 
 /// Root of all save vaults: `<modde_data>/saves/`.
+#[must_use]
 pub fn save_vaults_dir() -> PathBuf {
     modde_data_dir().join("saves")
 }
 
 /// Content-addressed cache of `.wabbajack` manifest source files.
 /// See [`crate::manifest::wabbajack::cache_wabbajack_file`].
+#[must_use]
 pub fn wabbajack_cache_dir() -> PathBuf {
     modde_data_dir().join("wabbajack_cache")
 }
 
 /// Path to a cached `.wabbajack` file keyed by its `manifest_hash`.
+#[must_use]
 pub fn wabbajack_cache_path(manifest_hash: &str) -> PathBuf {
     wabbajack_cache_dir().join(format!("{manifest_hash}.wabbajack"))
 }
 
 /// Save vault (git repo) for a specific game: `<modde_data>/saves/<game_id>/`.
+#[must_use]
 pub fn save_vault_dir(game_id: &str) -> PathBuf {
     save_vaults_dir().join(game_id)
 }
@@ -135,6 +146,7 @@ fn steam_install_dir_windows() -> PathBuf {
 }
 
 /// Default Steam common library path.
+#[must_use]
 pub fn steam_common() -> PathBuf {
     steam_install_dir().join("steamapps/common")
 }
@@ -144,6 +156,7 @@ pub fn steam_common() -> PathBuf {
 /// Steam supports multiple library folders (e.g. separate drives).
 /// Each entry has a `"path"` key pointing to the Steam library root;
 /// game installs live under `<path>/steamapps/common/<game>/`.
+#[must_use]
 pub fn steam_library_folders() -> Vec<PathBuf> {
     let vdf_path = steam_install_dir().join("steamapps/libraryfolders.vdf");
     parse_library_folders_vdf(&vdf_path)
@@ -151,7 +164,7 @@ pub fn steam_library_folders() -> Vec<PathBuf> {
 
 /// Parse a VDF-format `libraryfolders.vdf` file.
 ///
-/// The format is Valve's KeyValues (not JSON). We do a lightweight parse
+/// The format is Valve's `KeyValues` (not JSON). We do a lightweight parse
 /// that extracts `"path"` values from numbered entries.
 fn parse_library_folders_vdf(path: &Path) -> Vec<PathBuf> {
     let content = match std::fs::read_to_string(path) {
@@ -197,6 +210,7 @@ fn extract_vdf_string(s: &str) -> Option<&str> {
 /// - Linux: `~/.config/heroic`
 /// - macOS: `~/Library/Application Support/heroic`
 /// - Windows: `%APPDATA%\heroic`
+#[must_use]
 pub fn heroic_config_dir() -> Option<PathBuf> {
     let dir = config_dir().join("heroic");
     dir.is_dir().then_some(dir)
@@ -210,16 +224,19 @@ pub fn heroic_exe_path() -> Option<PathBuf> {
     exe.exists().then_some(exe)
 }
 
-/// SQLite database path: `<modde_data>/modde.db`.
+/// `SQLite` database path: `<modde_data>/modde.db`.
+#[must_use]
 pub fn db_path() -> PathBuf {
     modde_data_dir().join("modde.db")
 }
 
 /// Modde config directory: `<config_dir>/modde/`.
+#[must_use]
 pub fn modde_config_dir() -> PathBuf {
     config_dir().join("modde")
 }
 
+#[must_use]
 pub fn home_dir() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| {
         #[cfg(unix)]
@@ -278,7 +295,7 @@ mod tests {
         );
         let vdf_path = write_vdf(tmp.path(), &vdf);
         let paths = parse_library_folders_vdf(&vdf_path);
-        assert!(paths.contains(&lib), "expected {:?} in {:?}", lib, paths);
+        assert!(paths.contains(&lib), "expected {lib:?} in {paths:?}");
     }
 
     #[test]
@@ -297,8 +314,8 @@ mod tests {
         );
         let vdf_path = write_vdf(tmp.path(), &vdf);
         let paths = parse_library_folders_vdf(&vdf_path);
-        assert!(paths.contains(&lib1), "expected {:?} in {:?}", lib1, paths);
-        assert!(paths.contains(&lib2), "expected {:?} in {:?}", lib2, paths);
+        assert!(paths.contains(&lib1), "expected {lib1:?} in {paths:?}");
+        assert!(paths.contains(&lib2), "expected {lib2:?} in {paths:?}");
     }
 
     #[test]

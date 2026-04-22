@@ -35,6 +35,7 @@ struct TreeHashMeta {
 }
 
 impl StockGameManager {
+    #[must_use]
     pub fn new(store_dir: PathBuf) -> Self {
         Self {
             store_dir,
@@ -42,7 +43,7 @@ impl StockGameManager {
         }
     }
 
-    /// Create a manager backed by both filesystem and SQLite.
+    /// Create a manager backed by both filesystem and `SQLite`.
     pub fn with_db(store_dir: PathBuf, db: ModdeDb) -> Self {
         Self {
             store_dir,
@@ -51,6 +52,7 @@ impl StockGameManager {
     }
 
     /// Default store directory: `~/.local/share/modde/stock/`.
+    #[must_use]
     pub fn default_dir() -> PathBuf {
         crate::paths::stock_dir()
     }

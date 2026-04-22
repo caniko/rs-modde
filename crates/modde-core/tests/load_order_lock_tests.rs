@@ -57,7 +57,7 @@ fn isolated_data_dir() {
 // Fixtures
 // ---------------------------------------------------------------------------
 
-/// Parse the existing wabbajack_manifest.json fixture. It contains:
+/// Parse the existing `wabbajack_manifest.json` fixture. It contains:
 /// - One Nexus archive (hash `12345678901234`) referenced by two directives
 ///   (`FromArchive` and `PatchedFromArchive`) — so directive-order dedup is
 ///   exercised naturally.
@@ -932,14 +932,10 @@ fn cp_footprint(mod_id: &str) -> Option<ModFootprint> {
             "bin/x64/plugins/cyber_engine_tweaks/mods/{}/",
             name.to_lowercase()
         )))
-    } else if let Some(stem) = mod_id.strip_prefix("archive/") {
-        Some(ModFootprint::File(format!(
+    } else { mod_id.strip_prefix("archive/").map(|stem| ModFootprint::File(format!(
             "archive/pc/mod/{}.archive",
             stem.to_lowercase()
-        )))
-    } else {
-        None
-    }
+        ))) }
 }
 
 /// Helper: footprint mapping for the Skyrim-style paths in the sample
@@ -952,11 +948,7 @@ fn skyrim_test_footprint(mod_id: &str) -> Option<ModFootprint> {
             "data/{}/",
             rest.to_lowercase()
         )))
-    } else if let Some(rest) = mod_id.strip_prefix("file/") {
-        Some(ModFootprint::File(rest.to_lowercase()))
-    } else {
-        None
-    }
+    } else { mod_id.strip_prefix("file/").map(|rest| ModFootprint::File(rest.to_lowercase())) }
 }
 
 #[test]

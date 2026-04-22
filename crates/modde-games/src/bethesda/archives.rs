@@ -9,19 +9,20 @@ use std::path::{Path, PathBuf};
 pub const BSA_EXTENSIONS: &[&str] = &[".bsa", ".ba2"];
 
 /// Check if a file path is a BSA/BA2 archive.
+#[must_use]
 pub fn is_archive(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
-        .map(|e| {
+        .is_some_and(|e| {
             let ext = format!(".{}", e.to_lowercase());
             BSA_EXTENSIONS.contains(&ext.as_str())
         })
-        .unwrap_or(false)
 }
 
 /// Determine the expected staging location for a BSA/BA2 archive.
 ///
 /// Archives go directly into the Data directory.
+#[must_use]
 pub fn staging_path(staging_root: &Path, archive_name: &str) -> PathBuf {
     staging_root.join(archive_name)
 }

@@ -24,9 +24,7 @@ pub fn view<'a>(
         text(
             state
                 .file_path
-                .as_ref()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|| "No file selected".to_string())
+                .as_ref().map_or_else(|| "No file selected".to_string(), |p| p.display().to_string())
         )
         .size(13),
     ]
@@ -66,7 +64,7 @@ pub fn view<'a>(
         let pct = state.progress * 100.0;
         column![
             progress_bar(0.0..=100.0, pct).girth(12),
-            text(format!("{:.1}%", pct)).size(12),
+            text(format!("{pct:.1}%")).size(12),
         ]
         .spacing(4)
     };

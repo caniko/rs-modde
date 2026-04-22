@@ -86,7 +86,7 @@ pub async fn handle_run(
                 std::fs::copy(&src, &dst)?;
                 std::fs::remove_file(&src)
             })
-            .with_context(|| format!("failed to move {} to overwrite", rel_path))?;
+            .with_context(|| format!("failed to move {rel_path} to overwrite"))?;
 
         println!("  {rel_path}");
     }
@@ -155,8 +155,8 @@ pub fn handle_status(game_id: &str) -> Result<()> {
 
     println!("Game: {game_id}\n");
     println!(
-        "{:<14} {:<14} {:<10} {}",
-        "Tool", "Category", "Status", "Available"
+        "{:<14} {:<14} {:<10} Available",
+        "Tool", "Category", "Status"
     );
     println!("{}", "-".repeat(60));
 
@@ -173,15 +173,14 @@ pub fn handle_status(game_id: &str) -> Result<()> {
         let enabled = stored
             .iter()
             .find(|r| r.tool_id == tool.tool_id())
-            .map_or(false, |r| r.enabled);
+            .is_some_and(|r| r.enabled);
 
         let status = if enabled { "enabled" } else { "disabled" };
 
         // Check if files are applied
         let applied_count = db
             .load_applied_files(game_id, tool.tool_id())
-            .map(|f| f.len())
-            .unwrap_or(0);
+            .map_or(0, |f| f.len());
 
         let status_str = if applied_count > 0 {
             format!("{status} ({applied_count} files)")
@@ -217,17 +216,14 @@ pub fn handle_enable(tool_id: &str, game_id: &str) -> Result<()> {
     let db = ModdeDb::open().context("failed to open database")?;
 
     // Load existing or use defaults
-    let mut config = match db.load_tool_config(game_id, tool_id)? {
-        Some(row) => modde_games::tools::ToolConfig {
-            tool_id: row.tool_id,
-            enabled: true,
-            settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
-        },
-        None => {
-            let mut cfg = tool.default_config();
-            cfg.enabled = true;
-            cfg
-        }
+    let mut config = if let Some(row) = db.load_tool_config(game_id, tool_id)? { modde_games::tools::ToolConfig {
+        tool_id: row.tool_id,
+        enabled: true,
+        settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+    } } else {
+        let mut cfg = tool.default_config();
+        cfg.enabled = true;
+        cfg
     };
 
     config.enabled = true;
@@ -259,9 +255,7 @@ pub fn handle_disable(tool_id: &str, game_id: &str) -> Result<()> {
 
     // Load existing config to preserve settings
     let settings_json = db
-        .load_tool_config(game_id, tool_id)?
-        .map(|r| r.settings_json)
-        .unwrap_or_else(|| "{}".into());
+        .load_tool_config(game_id, tool_id)?.map_or_else(|| "{}".into(), |r| r.settings_json);
 
     db.save_tool_config(game_id, tool_id, false, &settings_json)?;
 

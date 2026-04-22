@@ -37,7 +37,7 @@ const MODS_TRAILER: &str = "Save-Breaking-Mods";
 impl SaveFingerprint {
     /// Compute a fingerprint from a list of mods and a classification function.
     ///
-    /// `classify` takes a mod_id and returns whether it's save-breaking.
+    /// `classify` takes a `mod_id` and returns whether it's save-breaking.
     /// This is intentionally a callback so the caller can resolve staging
     /// paths and call `GamePlugin::classify_mod` — keeping modde-core
     /// independent of modde-games.
@@ -64,11 +64,13 @@ impl SaveFingerprint {
     }
 
     /// Short hash for display (first 12 hex chars).
+    #[must_use]
     pub fn short_hash(&self) -> &str {
         &self.hash[..self.hash.len().min(12)]
     }
 
     /// Empty fingerprint (no save-breaking mods).
+    #[must_use]
     pub fn empty() -> Self {
         Self {
             hash: "0".repeat(64),
@@ -76,6 +78,7 @@ impl SaveFingerprint {
         }
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.mod_ids.is_empty()
     }
@@ -128,6 +131,7 @@ pub enum FingerprintCheck {
 }
 
 impl FingerprintCheck {
+    #[must_use]
     pub fn is_compatible(&self) -> bool {
         matches!(self, Self::Compatible | Self::NoFingerprint)
     }
@@ -159,11 +163,13 @@ pub struct SaveSnapshot {
 impl SaveSnapshot {
     /// First 8 characters of the commit hash — computed on demand
     /// instead of storing a redundant heap allocation.
+    #[must_use]
     pub fn short_id(&self) -> &str {
         &self.id[..self.id.len().min(8)]
     }
 
     /// Human-readable title for display: character + save label, or first message line.
+    #[must_use]
     pub fn display_title(&self) -> String {
         if let (Some(char_name), Some(label)) = (&self.character_name, &self.save_label) {
             format!("{char_name} — {label}")
@@ -229,7 +235,7 @@ impl SaveSnapshot {
                 && char_part
                     .chars()
                     .next()
-                    .map_or(false, |c| c.is_ascii_digit())
+                    .is_some_and(|c| c.is_ascii_digit())
             {
                 // Multi-save: use the whole body as the label
                 self.save_label = Some(first_line.to_string());
@@ -244,6 +250,7 @@ impl SaveSnapshot {
     }
 
     /// Check whether this snapshot's fingerprint is compatible with the given fingerprint.
+    #[must_use]
     pub fn check_compatibility(&self, current: &SaveFingerprint) -> FingerprintCheck {
         let stored = match &self.fingerprint {
             Some(fp) => fp,
@@ -255,17 +262,17 @@ impl SaveSnapshot {
         }
 
         let stored_set: std::collections::HashSet<&str> =
-            stored.mod_ids.iter().map(|s| s.as_str()).collect();
+            stored.mod_ids.iter().map(std::string::String::as_str).collect();
         let current_set: std::collections::HashSet<&str> =
-            current.mod_ids.iter().map(|s| s.as_str()).collect();
+            current.mod_ids.iter().map(std::string::String::as_str).collect();
 
         let removed: SmallVec<[String; 4]> = stored_set
             .difference(&current_set)
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .collect();
         let added: SmallVec<[String; 4]> = current_set
             .difference(&stored_set)
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .collect();
 
         FingerprintCheck::Mismatch { removed, added }
@@ -770,7 +777,7 @@ impl<'a> SaveManager<'a> {
         }
 
         let count = std::fs::read_dir(game_save_dir)?
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .count();
 
         if count > 0 { Ok(Some(count)) } else { Ok(None) }
@@ -840,6 +847,7 @@ fn sanitize_branch_name(name: &str) -> String {
 /// Format a Unix timestamp as `"YYYY-MM-DD HH:MM:SS"` (UTC).
 ///
 /// Uses a pure-arithmetic Euclidean civil-date algorithm — no chrono dependency.
+#[must_use]
 pub fn format_timestamp(secs: i64) -> String {
     use std::fmt::Write;
     let dt = time_to_parts(secs);
@@ -853,6 +861,7 @@ pub fn format_timestamp(secs: i64) -> String {
 }
 
 /// Format a Unix timestamp as a short date: `"Apr 12 14:30"`.
+#[must_use]
 pub fn format_timestamp_short(secs: i64) -> String {
     let (y, m, d, hour, minute, _) = time_to_parts(secs);
     let month = match m {
@@ -885,14 +894,15 @@ pub fn format_timestamp_short(secs: i64) -> String {
         yoe as i32 + era * 400
     };
 
-    if y != current_year {
-        format!("{month} {d} '{:02} {hour:02}:{minute:02}", y % 100)
-    } else {
+    if y == current_year {
         format!("{month} {d} {hour:02}:{minute:02}")
+    } else {
+        format!("{month} {d} '{:02} {hour:02}:{minute:02}", y % 100)
     }
 }
 
 /// Break a Unix timestamp into `(year, month, day, hour, minute, second)`.
+#[must_use]
 pub fn time_to_parts(secs: i64) -> (i32, u32, u32, u32, u32, u32) {
     let days = (secs / 86400) as i32;
     let time_of_day = (secs % 86400) as u32;
@@ -918,7 +928,7 @@ pub fn time_to_parts(secs: i64) -> (i32, u32, u32, u32, u32, u32) {
 /// Recursively count blob entries in a git tree.
 fn count_tree_entries(repo: &Repository, tree: &git2::Tree) -> usize {
     let mut count = 0;
-    for entry in tree.iter() {
+    for entry in tree {
         match entry.kind() {
             Some(git2::ObjectType::Blob) => count += 1,
             Some(git2::ObjectType::Tree) => {
@@ -935,7 +945,7 @@ fn count_tree_entries(repo: &Repository, tree: &git2::Tree) -> usize {
 /// Recursively collect file paths in a git tree.
 fn collect_tree_paths(repo: &Repository, tree: &git2::Tree, prefix: &str) -> Vec<String> {
     let mut paths = Vec::new();
-    for entry in tree.iter() {
+    for entry in tree {
         let name = entry.name().unwrap_or("");
         let full = if prefix.is_empty() {
             name.to_string()

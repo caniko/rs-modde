@@ -113,6 +113,7 @@ pub struct NexusUpdatedMod {
 }
 
 impl NexusApi {
+    #[must_use]
     pub fn new(client: Client, api_key: String) -> Self {
         Self { client, api_key }
     }
@@ -126,13 +127,11 @@ impl NexusApi {
             .await?;
 
         // Check rate limit headers
-        if let Some(remaining) = resp.headers().get("x-rl-hourly-remaining") {
-            if let Ok(val) = remaining.to_str().unwrap_or("").parse::<u32>() {
-                if val < 10 {
+        if let Some(remaining) = resp.headers().get("x-rl-hourly-remaining")
+            && let Ok(val) = remaining.to_str().unwrap_or("").parse::<u32>()
+                && val < 10 {
                     warn!(remaining = val, "Nexus API hourly rate limit running low");
                 }
-            }
-        }
 
         if resp.status() == 429 {
             bail!("Nexus API rate limit exceeded. Please wait before retrying.");
@@ -279,19 +278,19 @@ impl NexusApi {
     }
 
     /// Fetch the full image gallery for a mod via the unofficial v2 GraphQL
-    /// endpoint. Returns a list of image URLs (the main picture_url will
+    /// endpoint. Returns a list of image URLs (the main `picture_url` will
     /// typically be the first entry, but this is not guaranteed — the caller
-    /// should merge with picture_url as a fallback).
+    /// should merge with `picture_url` as a fallback).
     ///
     /// The GraphQL schema is undocumented and may change; on any error this
     /// function returns an `Err` and the caller should fall back to the
     /// single `picture_url` from the v1 `get_mod` response.
     pub async fn get_mod_media(&self, game_domain: &str, mod_id: u64) -> Result<Vec<String>> {
-        let query = r#"query ModMedia($modId: Int!, $gameDomain: String!) {
+        let query = r"query ModMedia($modId: Int!, $gameDomain: String!) {
   mod(modId: $modId, gameDomain: $gameDomain) {
     modImages { url }
   }
-}"#;
+}";
         let body = serde_json::json!({
             "query": query,
             "variables": {
@@ -326,7 +325,7 @@ impl NexusApi {
             .filter_map(|img| {
                 img.get("url")
                     .and_then(|u| u.as_str())
-                    .map(|s| s.to_string())
+                    .map(std::string::ToString::to_string)
             })
             .collect();
         Ok(urls)
@@ -346,7 +345,7 @@ impl NexusApi {
         page: u32,
     ) -> Result<NexusSearchResults> {
         let url =
-            format!("{BASE_URL}/games/{game_domain}/mods/search.json?search={query}&page={page}",);
+            format!("{BASE_URL}/games/{game_domain}/mods/search.json?search={query}&page={page}");
         self.get(&url).await
     }
 
@@ -372,7 +371,7 @@ impl NexusApi {
         game_domain: &str,
         query: &str,
     ) -> Result<Vec<CollectionManifest>> {
-        let url = format!("{BASE_URL}/games/{game_domain}/collections.json?search={query}",);
+        let url = format!("{BASE_URL}/games/{game_domain}/collections.json?search={query}");
         self.get(&url).await
     }
 
@@ -486,22 +485,19 @@ impl NexusApi {
         slug: &str,
         version: Option<u64>,
     ) -> Result<CollectionManifest> {
-        let (game_domain, revision) = match version {
-            Some(rev) => {
-                // Still need the game domain; do step-1 but skip revision lookup
-                let meta = self.get_collection_meta(slug).await?;
-                (meta.game.domain_name, rev)
-            }
-            None => {
-                let meta = self.get_collection_meta(slug).await?;
-                let rev = meta
-                    .latest_published_revision
-                    .map(|r| r.revision_number)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("collection '{slug}' has no published revisions")
-                    })?;
-                (meta.game.domain_name, rev)
-            }
+        let (game_domain, revision) = if let Some(rev) = version {
+            // Still need the game domain; do step-1 but skip revision lookup
+            let meta = self.get_collection_meta(slug).await?;
+            (meta.game.domain_name, rev)
+        } else {
+            let meta = self.get_collection_meta(slug).await?;
+            let rev = meta
+                .latest_published_revision
+                .map(|r| r.revision_number)
+                .ok_or_else(|| {
+                    anyhow::anyhow!("collection '{slug}' has no published revisions")
+                })?;
+            (meta.game.domain_name, rev)
         };
 
         self.get_collection_revision(&game_domain, slug, revision)

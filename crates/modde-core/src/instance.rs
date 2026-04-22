@@ -22,6 +22,7 @@ pub struct InstanceRegistry {
 
 impl InstanceRegistry {
     /// Load the registry from the default config location.
+    #[must_use]
     pub fn load() -> Self {
         let path = registry_path();
         if !path.exists() {
@@ -77,6 +78,7 @@ impl InstanceRegistry {
     }
 
     /// Get the active instance's data directory.
+    #[must_use]
     pub fn active_data_dir(&self) -> Option<&Path> {
         let name = self.active.as_ref()?;
         self.instances
@@ -86,11 +88,13 @@ impl InstanceRegistry {
     }
 
     /// List all instances.
+    #[must_use]
     pub fn list(&self) -> &[Instance] {
         &self.instances
     }
 
     /// Load the registry from a specific file path (for testing).
+    #[must_use]
     pub fn load_from(path: &Path) -> Self {
         if !path.exists() {
             return Self::default();

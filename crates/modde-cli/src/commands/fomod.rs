@@ -123,7 +123,7 @@ fn handle_inspect(mod_path: &str) -> Result<()> {
 
                     for (pi, plugin) in group.plugins.plugins.iter().enumerate() {
                         let ptype = plugin.plugin_type();
-                        let file_count = plugin.files.as_ref().map(|f| f.items.len()).unwrap_or(0);
+                        let file_count = plugin.files.as_ref().map_or(0, |f| f.items.len());
                         println!("    [{pi}] {} ({ptype:?}, {file_count} files)", plugin.name);
                         if let Some(ref desc) = plugin.description {
                             let desc = desc.trim();

@@ -18,6 +18,7 @@ pub struct BainSubPackage {
 }
 
 /// Detect if a directory contains a BAIN package structure.
+#[must_use]
 pub fn detect_bain(dir: &Path) -> Option<BainPackage> {
     if !dir.is_dir() {
         return None;
@@ -32,15 +33,14 @@ pub fn detect_bain(dir: &Path) -> Option<BainPackage> {
 
         let name = entry.file_name().to_string_lossy().to_string();
         // BAIN subdirs start with digits: "00 Core", "01 Optional", etc.
-        if let Some(idx_str) = name.split_whitespace().next() {
-            if let Ok(idx) = idx_str.parse::<u32>() {
+        if let Some(idx_str) = name.split_whitespace().next()
+            && let Ok(idx) = idx_str.parse::<u32>() {
                 subs.push(BainSubPackage {
                     index: idx,
                     name: name.clone(),
                     path: entry.path().to_string_lossy().to_string(),
                 });
             }
-        }
     }
 
     if subs.is_empty() {

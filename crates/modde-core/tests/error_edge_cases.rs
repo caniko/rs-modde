@@ -1,4 +1,4 @@
-//! Edge case tests for CoreError variants and error handling.
+//! Edge case tests for `CoreError` variants and error handling.
 
 use std::path::PathBuf;
 
@@ -157,7 +157,7 @@ fn error_send_sync() {
 #[test]
 fn error_debug_output_reasonable() {
     let errors: Vec<CoreError> = vec![
-        CoreError::Io(std::io::Error::new(std::io::ErrorKind::Other, "test")),
+        CoreError::Io(std::io::Error::other("test")),
         CoreError::HashMismatch {
             path: PathBuf::from("/test"),
             expected: "aaa".into(),

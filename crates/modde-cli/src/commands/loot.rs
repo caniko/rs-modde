@@ -38,7 +38,7 @@ pub fn handle_sort(game_id: &str, _data_dir: Option<PathBuf>) -> Result<()> {
         return Ok(());
     }
 
-    let plugin_names: Vec<&str> = plugins.iter().map(|s| s.as_str()).collect();
+    let plugin_names: Vec<&str> = plugins.iter().map(std::string::String::as_str).collect();
     let rules = masterlist.rules_for_plugins(&plugin_names);
 
     println!("Generated {} load order rules from masterlist", rules.len());
@@ -81,7 +81,7 @@ pub fn handle_validate(game_id: &str) -> Result<()> {
         return Ok(());
     }
 
-    let plugin_names: Vec<&str> = plugins.iter().map(|s| s.as_str()).collect();
+    let plugin_names: Vec<&str> = plugins.iter().map(std::string::String::as_str).collect();
     let check_form_43 = matches!(game_id, "skyrim-se" | "skyrim-ae");
 
     let warnings = plugin_header::validate_plugins(&data_dir, &plugin_names, check_form_43);

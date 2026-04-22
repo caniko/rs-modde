@@ -15,6 +15,7 @@ const FALLOUT4_INIS: &[&str] = &["Fallout4.ini", "Fallout4Prefs.ini", "Fallout4C
 const FALLOUT76_INIS: &[&str] = &["Fallout76.ini", "Fallout76Prefs.ini", "Fallout76Custom.ini"];
 
 /// Get the list of INI filenames to manage for a given game.
+#[must_use]
 pub fn tracked_inis(game_id: &str) -> &'static [&'static str] {
     match game_id {
         "skyrim-se" | "skyrim-ae" => SKYRIM_INIS,
@@ -25,6 +26,7 @@ pub fn tracked_inis(game_id: &str) -> &'static [&'static str] {
 }
 
 /// Get the profile-specific INI storage directory.
+#[must_use]
 pub fn profile_ini_dir(profile_name: &str) -> PathBuf {
     modde_core::paths::profiles_dir()
         .join(profile_name)
@@ -35,6 +37,7 @@ pub fn profile_ini_dir(profile_name: &str) -> PathBuf {
 ///
 /// For Bethesda games this is the "My Games/<game>" directory
 /// (e.g., `~/.local/share/Steam/steamapps/compatdata/<app_id>/pfx/drive_c/Users/steamuser/Documents/My Games/Skyrim Special Edition/`).
+#[must_use]
 pub fn game_ini_dir(steam_app_id: &str, my_games_dir: &str) -> Option<PathBuf> {
     let home = std::env::var("HOME").ok()?;
     let path = PathBuf::from(home)

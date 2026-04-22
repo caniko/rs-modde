@@ -1,6 +1,6 @@
 //! Unit tests for download source implementations.
 //!
-//! Tests can_handle() dispatch, resolve() output, and DownloadHandle construction
+//! Tests `can_handle()` dispatch, `resolve()` output, and `DownloadHandle` construction
 //! without requiring network access.
 
 use modde_core::GameId;
@@ -365,8 +365,7 @@ fn test_exactly_one_source_handles_each_directive_type() {
         assert_eq!(
             handlers.len(),
             1,
-            "exactly one source should handle {:?}",
-            directive
+            "exactly one source should handle {directive:?}"
         );
     }
 }

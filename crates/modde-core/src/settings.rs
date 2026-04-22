@@ -35,6 +35,7 @@ impl AppSettings {
         crate::paths::modde_config_dir().join("settings.toml")
     }
 
+    #[must_use]
     pub fn load() -> Self {
         let path = Self::config_path();
         std::fs::read_to_string(&path)
@@ -45,19 +46,18 @@ impl AppSettings {
 
     pub fn save(&self) {
         let path = Self::config_path();
-        if let Some(parent) = path.parent() {
-            if let Err(e) = std::fs::create_dir_all(parent) {
+        if let Some(parent) = path.parent()
+            && let Err(e) = std::fs::create_dir_all(parent) {
                 tracing::warn!(error = %e, "failed to create config directory");
             }
-        }
-        if let Ok(s) = toml::to_string_pretty(self) {
-            if let Err(e) = std::fs::write(&path, s) {
+        if let Ok(s) = toml::to_string_pretty(self)
+            && let Err(e) = std::fs::write(&path, s) {
                 tracing::warn!(error = %e, "failed to write settings file");
             }
-        }
     }
 
     /// Get the install path for a game, if configured.
+    #[must_use]
     pub fn game_path(&self, game_id: &str) -> Option<&PathBuf> {
         self.game_paths
             .iter()
@@ -78,6 +78,7 @@ impl AppSettings {
     }
 
     /// Load settings from a specific file path.
+    #[must_use]
     pub fn load_from(path: &std::path::Path) -> Self {
         std::fs::read_to_string(path)
             .ok()
@@ -87,16 +88,14 @@ impl AppSettings {
 
     /// Save settings to a specific file path.
     pub fn save_to(&self, path: &std::path::Path) {
-        if let Some(parent) = path.parent() {
-            if let Err(e) = std::fs::create_dir_all(parent) {
+        if let Some(parent) = path.parent()
+            && let Err(e) = std::fs::create_dir_all(parent) {
                 tracing::warn!(error = %e, "failed to create config directory");
             }
-        }
-        if let Ok(s) = toml::to_string_pretty(self) {
-            if let Err(e) = std::fs::write(path, s) {
+        if let Ok(s) = toml::to_string_pretty(self)
+            && let Err(e) = std::fs::write(path, s) {
                 tracing::warn!(error = %e, "failed to write settings file");
             }
-        }
     }
 }
 

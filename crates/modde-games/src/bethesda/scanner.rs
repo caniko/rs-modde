@@ -167,7 +167,7 @@ fn make_data_file(install_root: &Path, file_path: &Path) -> DiscoveredFile {
         .unwrap_or(file_path)
         .to_string_lossy()
         .replace('\\', "/");
-    let size = file_path.metadata().map(|m| m.len()).unwrap_or(0);
+    let size = file_path.metadata().map_or(0, |m| m.len());
     DiscoveredFile {
         rel_path: rel,
         size,

@@ -14,6 +14,7 @@ pub struct CollectionDownload {
 }
 
 impl CollectionDownload {
+    #[must_use]
     pub fn progress_fraction(&self) -> f32 {
         if self.bytes_total == 0 {
             0.0

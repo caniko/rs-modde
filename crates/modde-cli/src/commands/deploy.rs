@@ -117,11 +117,10 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
         let files = walk_files_relative(&mod_dir_path)
             .with_context(|| format!("failed to walk files for mod {mod_id}"))?;
         for (rel_path, _) in &files {
-            if let Some(providers) = conflict_map.files.get(rel_path) {
-                if providers.len() > 1 {
+            if let Some(providers) = conflict_map.files.get(rel_path)
+                && providers.len() > 1 {
                     conflict_count += 1;
                 }
-            }
         }
         mod_files.insert(mod_id.clone(), files);
     }

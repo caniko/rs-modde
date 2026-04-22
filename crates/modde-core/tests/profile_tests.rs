@@ -36,7 +36,7 @@ fn simple_mod(id: &str, enabled: bool) -> EnabledMod {
 }
 
 /// Assert two profiles have identical content by comparing every field.
-/// The types intentionally do not derive PartialEq, so we compare field-by-field
+/// The types intentionally do not derive `PartialEq`, so we compare field-by-field
 /// via their TOML serialization which is deterministic.
 fn assert_profiles_eq(a: &Profile, b: &Profile) {
     let a_toml = toml::to_string_pretty(a).expect("serialize a");

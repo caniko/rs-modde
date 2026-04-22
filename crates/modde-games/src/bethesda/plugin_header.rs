@@ -49,16 +49,19 @@ pub struct PluginHeader {
 
 impl PluginHeader {
     /// Whether this plugin uses the outdated Form 43 format (Skyrim LE).
+    #[must_use]
     pub fn is_form_43(&self) -> bool {
         self.version < FORM_44_VERSION - 0.01
     }
 
     /// Whether this plugin is flagged as a master (ESM).
+    #[must_use]
     pub fn is_esm(&self) -> bool {
         self.record_flags & flags::ESM != 0 || self.filename.to_lowercase().ends_with(".esm")
     }
 
     /// Whether this plugin is flagged as a light plugin (ESL).
+    #[must_use]
     pub fn is_esl(&self) -> bool {
         self.record_flags & flags::ESL != 0 || self.filename.to_lowercase().ends_with(".esl")
     }
@@ -109,7 +112,7 @@ pub fn parse_plugin_header(path: &Path) -> Result<PluginHeader> {
     let mut sig = [0u8; 4];
     file.read_exact(&mut sig)?;
     if &sig != TES4_SIGNATURE {
-        bail!("not a valid Bethesda plugin: expected TES4, got {:?}", sig);
+        bail!("not a valid Bethesda plugin: expected TES4, got {sig:?}");
     }
 
     let data_size = read_u32_le(&mut file)?;
@@ -126,14 +129,14 @@ pub fn parse_plugin_header(path: &Path) -> Result<PluginHeader> {
 
     // Read TES4 sub-records up to data_size bytes
     let data_start = file.stream_position()?;
-    let data_end = data_start + data_size as u64;
+    let data_end = data_start + u64::from(data_size);
 
     while file.stream_position()? < data_end {
         let mut sub_sig = [0u8; 4];
         if file.read_exact(&mut sub_sig).is_err() {
             break;
         }
-        let sub_size = read_u16_le(&mut file)? as u64;
+        let sub_size = u64::from(read_u16_le(&mut file)?);
         let sub_start = file.stream_position()?;
 
         match &sub_sig {
@@ -165,7 +168,7 @@ pub fn parse_plugin_header(path: &Path) -> Result<PluginHeader> {
 
     Ok(PluginHeader {
         filename,
-        record_flags: record_flags,
+        record_flags,
         version: if version >= 1 {
             plugin_version
         } else {

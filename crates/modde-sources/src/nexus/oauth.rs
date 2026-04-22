@@ -1,14 +1,14 @@
 use anyhow::Result;
 use tracing::info;
 
-/// Nexus OAuth2 application credentials.
-/// These would be registered at https://www.nexusmods.com/oauth/applications
+/// Nexus `OAuth2` application credentials.
+/// These would be registered at <https://www.nexusmods.com/oauth/applications>
 const CLIENT_ID: &str = "modde";
 const AUTH_URL: &str = "https://users.nexusmods.com/oauth/authorize";
 const TOKEN_URL: &str = "https://users.nexusmods.com/oauth/token";
 const REDIRECT_URI: &str = "http://localhost:8024/callback";
 
-/// OAuth2 token pair.
+/// `OAuth2` token pair.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OAuthToken {
     pub access_token: String,
@@ -19,8 +19,9 @@ pub struct OAuthToken {
 
 impl OAuthToken {
     /// Check if the token has expired (with 60-second buffer).
+    #[must_use]
     pub fn is_expired(&self) -> bool {
-        self.expires_at.map_or(false, |exp| {
+        self.expires_at.is_some_and(|exp| {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -31,6 +32,7 @@ impl OAuthToken {
 }
 
 /// Generate a PKCE code verifier and challenge.
+#[must_use]
 pub fn generate_pkce() -> (String, String) {
     use base64::Engine;
     use sha2::{Digest, Sha256};
@@ -64,6 +66,7 @@ fn rand_byte() -> u8 {
 }
 
 /// Build the authorization URL that the user opens in their browser.
+#[must_use]
 pub fn authorization_url(challenge: &str, state: &str) -> String {
     format!(
         "{AUTH_URL}?client_id={CLIENT_ID}&redirect_uri={}&response_type=code&scope=public&code_challenge={challenge}&code_challenge_method=S256&state={state}",
@@ -122,6 +125,7 @@ pub fn store_token(token: &OAuthToken) -> Result<()> {
 }
 
 /// Load OAuth token from keyring.
+#[must_use]
 pub fn load_token() -> Option<OAuthToken> {
     let entry = keyring::Entry::new("modde", "nexus-oauth-token").ok()?;
     let json = entry.get_password().ok()?;

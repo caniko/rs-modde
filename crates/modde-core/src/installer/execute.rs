@@ -121,7 +121,7 @@ pub fn execute(
                         fs::copy(&src_path, &dest)?;
                         let _ = fs::remove_file(&src_path);
                     }
-                    let size = fs::metadata(&dest).map(|m| m.len()).unwrap_or(0);
+                    let size = fs::metadata(&dest).map_or(0, |m| m.len());
                     out.push(StagedFile {
                         rel_path: dest_rel(store_mod_dir, &dest),
                         origin_rel_path: op.source.clone(),
@@ -199,7 +199,7 @@ fn stage_tree(
             fs::copy(&abs, &dest_path)?;
             let _ = fs::remove_file(&abs);
         }
-        let size = fs::metadata(&dest_path).map(|m| m.len()).unwrap_or(0);
+        let size = fs::metadata(&dest_path).map_or(0, |m| m.len());
         let origin_rel_path = match &origin_prefix {
             Some(p) => p.join(&rel).to_string_lossy().to_string(),
             None => rel.to_string_lossy().to_string(),
@@ -216,9 +216,7 @@ fn stage_tree(
 
 fn dest_rel(dest_root: &Path, dest_path: &Path) -> String {
     dest_path
-        .strip_prefix(dest_root)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| dest_path.to_string_lossy().to_string())
+        .strip_prefix(dest_root).map_or_else(|_| dest_path.to_string_lossy().to_string(), |p| p.to_string_lossy().to_string())
 }
 
 #[cfg(test)]

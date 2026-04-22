@@ -124,7 +124,7 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             let save_dir = resolve_save_dir(&game);
             let fp = compute_fingerprint(&pm, &name, &game);
             pm.try_profile_with_fingerprint(&name, &game, save_dir.as_deref(), fp.as_ref())?;
-            let depth = pm.active(&game)?.map(|a| a.experiment_depth).unwrap_or(0);
+            let depth = pm.active(&game)?.map_or(0, |a| a.experiment_depth);
             println!("Experimenting with profile: {name} (stack depth: {depth})");
             println!(
                 "Use `modde profile rollback --game {game}` to undo, or `modde profile commit --game {game}` to accept."
@@ -169,14 +169,14 @@ pub fn handle(action: ProfileAction) -> Result<()> {
                     if let Some(fp) =
                         compute_fingerprint(&pm, &info.profile.name, info.profile.game_id.as_str())
                     {
-                        if !fp.is_empty() {
+                        if fp.is_empty() {
+                            println!("  Save fingerprint: none (no save-breaking mods)");
+                        } else {
                             println!(
                                 "  Save fingerprint: {} ({} save-breaking mod(s))",
                                 fp.short_hash(),
                                 fp.mod_ids.len()
                             );
-                        } else {
-                            println!("  Save fingerprint: none (no save-breaking mods)");
                         }
                     }
                 }
@@ -456,7 +456,7 @@ fn dedup(
     // `update_profile` does DELETE + re-INSERT of all profile_mods, so
     // sort_index is automatically contiguous after the prune.
     let leaked_set: std::collections::HashSet<&str> =
-        report.leaked.iter().map(|s| s.as_str()).collect();
+        report.leaked.iter().map(std::string::String::as_str).collect();
     let before = profile.mods.len();
     profile
         .mods

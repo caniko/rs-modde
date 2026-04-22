@@ -89,7 +89,7 @@ fn test_empty_mod_rule() {
     );
 }
 
-/// Build a minimal TES4 record for testing (same pattern as plugin_header.rs tests).
+/// Build a minimal TES4 record for testing (same pattern as `plugin_header.rs` tests).
 fn build_test_plugin(version: f32, masters: &[&str], record_flags: u32) -> Vec<u8> {
     let mut data = Vec::new();
     let mut sub_records = Vec::new();

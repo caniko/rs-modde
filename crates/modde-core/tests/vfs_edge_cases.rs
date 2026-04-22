@@ -40,7 +40,7 @@ fn test_build_many_mods_many_files() {
     // Last mod wins for each file path, so 10 unique files
     assert_eq!(farm.links.len(), 10);
     // All links should point to mod_49 (last in order)
-    for (_, source) in &farm.links {
+    for source in farm.links.values() {
         assert!(source.to_string_lossy().contains("mod_49"));
     }
 }

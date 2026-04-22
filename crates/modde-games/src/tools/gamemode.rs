@@ -1,4 +1,4 @@
-//! GameMode — Feral Interactive's performance optimization daemon.
+//! `GameMode` — Feral Interactive's performance optimization daemon.
 //!
 //! Uses `gamemoderun` as a wrapper command before the game executable.
 //! No config files or env vars needed.

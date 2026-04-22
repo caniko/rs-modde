@@ -31,17 +31,14 @@ pub fn handle(
         None => CsvColumn::all().to_vec(),
     };
 
-    match output {
-        Some(path) => {
-            let mut file = std::fs::File::create(&path)?;
-            export_csv(&profile.mods, &cols, &mut file)?;
-            println!("Exported {} mods to {path}", profile.mods.len());
-        }
-        None => {
-            let stdout = std::io::stdout();
-            let mut handle = stdout.lock();
-            export_csv(&profile.mods, &cols, &mut handle)?;
-        }
+    if let Some(path) = output {
+        let mut file = std::fs::File::create(&path)?;
+        export_csv(&profile.mods, &cols, &mut file)?;
+        println!("Exported {} mods to {path}", profile.mods.len());
+    } else {
+        let stdout = std::io::stdout();
+        let mut handle = stdout.lock();
+        export_csv(&profile.mods, &cols, &mut handle)?;
     }
 
     Ok(())

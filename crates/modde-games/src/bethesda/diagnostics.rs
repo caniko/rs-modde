@@ -10,7 +10,7 @@ use super::plugin_header::{self, PluginWarning};
 pub struct MissingMasterRule;
 
 impl DiagnosticRule for MissingMasterRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "missing-masters"
     }
 
@@ -51,7 +51,7 @@ impl DiagnosticRule for MissingMasterRule {
 pub struct Form43Rule;
 
 impl DiagnosticRule for Form43Rule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "form-43"
     }
 
@@ -97,7 +97,7 @@ impl DiagnosticRule for Form43Rule {
 pub struct EmptyModRule;
 
 impl DiagnosticRule for EmptyModRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "empty-mod"
     }
 
@@ -148,7 +148,7 @@ impl DiagnosticRule for EmptyModRule {
 pub struct OrphanedOverridesRule;
 
 impl DiagnosticRule for OrphanedOverridesRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "orphaned-overrides"
     }
 
@@ -184,6 +184,7 @@ impl DiagnosticRule for OrphanedOverridesRule {
 }
 
 /// Create a pre-configured diagnostics engine with all Bethesda rules.
+#[must_use]
 pub fn bethesda_diagnostics() -> DiagnosticEngine {
     let mut engine = DiagnosticEngine::new();
     engine.add_rule(Box::new(MissingMasterRule));

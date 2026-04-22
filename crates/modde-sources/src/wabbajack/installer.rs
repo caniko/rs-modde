@@ -56,7 +56,7 @@ pub enum InstallProgress {
 /// Orchestrate a full Wabbajack install pipeline.
 pub struct WabbajackInstaller {
     manifest: WabbajackManifest,
-    /// Path to the `.wabbajack` zip file (needed for InlineFile and PatchedFromArchive data).
+    /// Path to the `.wabbajack` zip file (needed for `InlineFile` and `PatchedFromArchive` data).
     wabbajack_path: PathBuf,
     store_dir: PathBuf,
     staging_dir: PathBuf,
@@ -67,6 +67,7 @@ pub struct WabbajackInstaller {
 }
 
 impl WabbajackInstaller {
+    #[must_use]
     pub fn new(
         manifest: WabbajackManifest,
         wabbajack_path: PathBuf,
@@ -248,7 +249,7 @@ impl WabbajackInstaller {
             .await;
 
         // Collect any errors
-        let errors: Vec<_> = results.into_iter().filter_map(|r| r.err()).collect();
+        let errors: Vec<_> = results.into_iter().filter_map(std::result::Result::err).collect();
 
         if !errors.is_empty() {
             let msg = errors
@@ -310,8 +311,7 @@ impl WabbajackInstaller {
             .await
             .with_context(|| {
                 format!(
-                    "failed to extract '{}' from archive {:016x}",
-                    from, archive_hash
+                    "failed to extract '{from}' from archive {archive_hash:016x}"
                 )
             })?;
 
@@ -339,7 +339,7 @@ impl WabbajackInstaller {
                 .with_context(|| format!("failed to open wabbajack file: {}", wj_path.display()))?;
             let mut archive = zip::ZipArchive::new(file)?;
             let mut entry = archive.by_name(&sid).with_context(|| {
-                format!("inline data entry '{}' not found in wabbajack zip", sid)
+                format!("inline data entry '{sid}' not found in wabbajack zip")
             })?;
             validate_zip_entry(&entry)?;
             let mut data = Vec::with_capacity(entry.size() as usize);
@@ -374,8 +374,7 @@ impl WabbajackInstaller {
             .await
             .with_context(|| {
                 format!(
-                    "failed to extract '{}' from archive {:016x} for patching",
-                    from, archive_hash
+                    "failed to extract '{from}' from archive {archive_hash:016x} for patching"
                 )
             })?;
 
@@ -390,7 +389,7 @@ impl WabbajackInstaller {
             let mut archive = zip::ZipArchive::new(file)?;
             let mut entry = archive
                 .by_name(&pid)
-                .with_context(|| format!("patch data '{}' not found in wabbajack zip", pid))?;
+                .with_context(|| format!("patch data '{pid}' not found in wabbajack zip"))?;
             validate_zip_entry(&entry)?;
             let mut data = Vec::with_capacity(entry.size() as usize);
             std::io::Read::read_to_end(&mut entry, &mut data)?;
@@ -441,13 +440,13 @@ fn validate_archive_entry(name: &str) -> Result<()> {
     // Reject entries with ".." path components (path traversal / zip-slip)
     for component in normalized.split('/') {
         if component == ".." {
-            bail!("archive entry contains path traversal: {}", name);
+            bail!("archive entry contains path traversal: {name}");
         }
     }
 
     // Reject absolute paths
     if normalized.starts_with('/') {
-        bail!("archive entry contains absolute path: {}", name);
+        bail!("archive entry contains absolute path: {name}");
     }
 
     Ok(())
@@ -461,8 +460,7 @@ fn validate_zip_entry<R: std::io::Read + ?Sized>(entry: &zip::read::ZipFile<'_, 
     // Reject symlink entries from zip archives
     if entry.is_symlink() {
         bail!(
-            "archive entry is a symlink (rejected for security): {}",
-            name
+            "archive entry is a symlink (rejected for security): {name}"
         );
     }
 
@@ -544,8 +542,7 @@ async fn extract_from_archive_cached(
             // Reject symlinks extracted by external tools (7z, unrar)
             if file_path.symlink_metadata()?.file_type().is_symlink() {
                 anyhow::bail!(
-                    "extracted file is a symlink (rejected for security): {}",
-                    inner_path
+                    "extracted file is a symlink (rejected for security): {inner_path}"
                 );
             }
             return Ok(std::fs::read(&file_path)?);
@@ -583,8 +580,7 @@ fn find_file_case_insensitive(base: &Path, relative_path: &str) -> Result<Vec<u8
                 // Reject symlinks in intermediate path components
                 if current.symlink_metadata()?.file_type().is_symlink() {
                     anyhow::bail!(
-                        "path component is a symlink (rejected for security): {}",
-                        part
+                        "path component is a symlink (rejected for security): {part}"
                     );
                 }
                 found = true;
@@ -604,8 +600,7 @@ fn find_file_case_insensitive(base: &Path, relative_path: &str) -> Result<Vec<u8
     // Final resolved file must not be a symlink either
     if current.symlink_metadata()?.file_type().is_symlink() {
         anyhow::bail!(
-            "resolved file is a symlink (rejected for security): {}",
-            relative_path
+            "resolved file is a symlink (rejected for security): {relative_path}"
         );
     }
 
@@ -752,7 +747,7 @@ mod tests {
         writer.finish().unwrap();
     }
 
-    /// Helper: open a zip for find_entry_in_archive tests.
+    /// Helper: open a zip for `find_entry_in_archive` tests.
     fn open_zip(path: &std::path::Path) -> zip::ZipArchive<std::fs::File> {
         let file = std::fs::File::open(path).unwrap();
         zip::ZipArchive::new(file).unwrap()

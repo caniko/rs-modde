@@ -20,7 +20,7 @@ pub struct ModDetailsState {
     pub mod_page_url: String,
 
     /// Loaded metadata. Until the initial fetch returns, these carry
-    /// whatever we knew locally from `EnabledMod` (display_name, version).
+    /// whatever we knew locally from `EnabledMod` (`display_name`, version).
     pub name: String,
     pub author: String,
     pub version: String,
@@ -59,6 +59,7 @@ pub struct ModDetailsState {
 impl ModDetailsState {
     /// Construct the initial "loading" state as soon as a Nexus-tracked mod
     /// is selected, before any HTTP requests complete.
+    #[must_use]
     pub fn loading(nexus_mod_id: i64, game_domain: String, name: String, version: String) -> Self {
         let mod_page_url = format!("https://www.nexusmods.com/{game_domain}/mods/{nexus_mod_id}");
         Self {
@@ -83,6 +84,6 @@ impl ModDetailsState {
 
     /// The URL of the image currently displayed in the thumbnail slot, if any.
     pub fn current_image_url(&self) -> Option<&str> {
-        self.gallery.get(self.gallery_index).map(|s| s.as_str())
+        self.gallery.get(self.gallery_index).map(std::string::String::as_str)
     }
 }

@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 /// Check if an I/O error is a cross-device link error (EXDEV on Unix,
 /// `ERROR_NOT_SAME_DEVICE` on Windows). Used to fall back from `rename`
 /// to copy+delete when source and destination are on different filesystems.
+#[must_use]
 pub fn is_cross_device_error(e: &std::io::Error) -> bool {
     #[cfg(unix)]
     {

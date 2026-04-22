@@ -50,7 +50,9 @@ pub async fn validate_install(
         let data = tokio::fs::read(&full_path).await?;
         let actual_hash = xxh3_64(&data);
 
-        if actual_hash != *expected_hash {
+        if actual_hash == *expected_hash {
+            verified += 1;
+        } else {
             warn!(
                 path = %rel_path,
                 expected = format!("{expected_hash:016x}"),
@@ -62,8 +64,6 @@ pub async fn validate_install(
                 expected_hash: *expected_hash,
                 actual_hash,
             });
-        } else {
-            verified += 1;
         }
     }
 
@@ -100,7 +100,7 @@ pub async fn preflight_staging(manifest: &WabbajackManifest, staging_dir: &Path)
     true
 }
 
-/// Collect expected (relative_path, hash) pairs from the manifest.
+/// Collect expected (`relative_path`, hash) pairs from the manifest.
 ///
 /// Uses archive entries as the source of truth for expected hashes. Install
 /// directives reference archives by hash, so we build a lookup from archive
@@ -127,7 +127,7 @@ pub(crate) fn collect_expected_files(manifest: &WabbajackManifest) -> Vec<(Strin
                     .first()
                     .and_then(|v| v.as_str())
                     .and_then(modde_core::manifest::wabbajack::parse_b64_hash)
-                    .or_else(|| archive_hash_path.first().and_then(|v| v.as_u64()))
+                    .or_else(|| archive_hash_path.first().and_then(serde_json::Value::as_u64))
                     .unwrap_or(0);
 
                 // Use the archive's hash as a proxy for the expected output hash

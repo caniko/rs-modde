@@ -17,6 +17,7 @@ pub struct DirectSource {
 }
 
 impl DirectSource {
+    #[must_use]
     pub fn new(client: Client) -> Self {
         Self { client }
     }
@@ -70,8 +71,7 @@ async fn download_with_resume(
 ) -> Result<()> {
     let existing_len = tokio::fs::metadata(dest)
         .await
-        .map(|m| m.len())
-        .unwrap_or(0);
+        .map_or(0, |m| m.len());
 
     let mut req = client.get(&handle.url);
     for (k, v) in &handle.headers {

@@ -105,9 +105,7 @@ pub async fn handle(uri: String, _profile: Option<String>) -> Result<()> {
     let file_name = file_info
         .files
         .iter()
-        .find(|f| f.file_id == parsed.file_id)
-        .map(|f| f.file_name.clone())
-        .unwrap_or_else(|| format!("{}_{}.zip", parsed.mod_id, parsed.file_id));
+        .find(|f| f.file_id == parsed.file_id).map_or_else(|| format!("{}_{}.zip", parsed.mod_id, parsed.file_id), |f| f.file_name.clone());
 
     let dest = downloads_dir.join(&file_name);
     println!("  Downloading to: {}", dest.display());
@@ -133,7 +131,7 @@ pub fn install_handler() -> Result<PathBuf> {
 
 #[cfg(target_os = "linux")]
 fn install_handler_platform() -> Result<PathBuf> {
-    let desktop_entry = r#"[Desktop Entry]
+    let desktop_entry = r"[Desktop Entry]
 Type=Application
 Name=modde NXM Handler
 Comment=Handle nxm:// download links from Nexus Mods
@@ -142,7 +140,7 @@ Terminal=false
 NoDisplay=true
 MimeType=x-scheme-handler/nxm;
 Categories=Game;
-"#;
+";
 
     let home = modde_core::paths::home_dir();
     let desktop_dir = home.join(".local/share/applications");

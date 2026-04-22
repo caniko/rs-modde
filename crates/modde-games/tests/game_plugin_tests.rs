@@ -119,7 +119,7 @@ fn test_all_game_ids_unique() {
 
     let ids: Vec<&str> = games.iter().map(|g| g.game_id()).collect();
     let mut deduped = ids.clone();
-    deduped.sort();
+    deduped.sort_unstable();
     deduped.dedup();
     assert_eq!(ids.len(), deduped.len(), "game IDs should be unique");
 }

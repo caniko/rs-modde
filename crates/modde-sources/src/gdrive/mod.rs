@@ -18,6 +18,7 @@ pub struct GoogleDriveSource {
 }
 
 impl GoogleDriveSource {
+    #[must_use]
     pub fn new(client: Client) -> Self {
         Self { client }
     }
@@ -123,7 +124,7 @@ fn extract_confirm_token(html: &str) -> Option<String> {
         let rest = &html[pos..];
         if let Some(href_pos) = rest.find("confirm=") {
             let val_rest = &rest[href_pos + 8..];
-            let end = val_rest.find(|c: char| c == '&' || c == '"' || c == '\'')?;
+            let end = val_rest.find(['&', '"', '\''])?;
             let token = &val_rest[..end];
             if !token.is_empty() {
                 return Some(token.to_string());
@@ -149,7 +150,7 @@ mod tests {
 
     #[test]
     fn confirm_token_pattern1_long_token() {
-        let html = r#"something confirm=AbCdEfGh1234&rest"#;
+        let html = r"something confirm=AbCdEfGh1234&rest";
         assert_eq!(
             extract_confirm_token(html),
             Some("AbCdEfGh1234".to_string())
@@ -164,7 +165,7 @@ mod tests {
 
     #[test]
     fn confirm_token_pattern1_single_quote_delimited() {
-        let html = r#"href='https://example.com?confirm=tok123'"#;
+        let html = r"href='https://example.com?confirm=tok123'";
         assert_eq!(extract_confirm_token(html), Some("tok123".to_string()));
     }
 

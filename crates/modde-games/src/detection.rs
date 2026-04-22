@@ -16,7 +16,7 @@ use modde_core::paths;
 /// A game installation detected by scanning launcher libraries.
 #[derive(Debug, Clone)]
 pub struct DetectedGame {
-    /// The modde game_id (e.g. "skyrim-se", "cyberpunk2077").
+    /// The modde `game_id` (e.g. "skyrim-se", "cyberpunk2077").
     pub game_id: &'static str,
     /// Human-readable display name.
     pub display_name: &'static str,
@@ -186,8 +186,7 @@ fn heroic_command() -> Option<(String, Vec<String>)> {
             .stderr(Stdio::null())
             .status()
             .ok()
-            .map(|s| s.success())
-            .unwrap_or(false)
+            .is_some_and(|s| s.success())
         {
             return Some((
                 "flatpak".to_string(),
@@ -227,10 +226,11 @@ fn heroic_command() -> Option<(String, Vec<String>)> {
     }
 }
 
-/// Find a detected game by its modde game_id.
+/// Find a detected game by its modde `game_id`.
 ///
 /// Convenience wrapper around [`scan_installed_games`] that returns the first
 /// match. Used by both CLI and UI to resolve the launcher for a game.
+#[must_use]
 pub fn find_detected_game(game_id: &str) -> Option<DetectedGame> {
     scan_installed_games()
         .into_iter()
@@ -241,6 +241,7 @@ pub fn find_detected_game(game_id: &str) -> Option<DetectedGame> {
 ///
 /// Returns every detected game with its install path and launcher source.
 /// A game may appear multiple times if installed via different launchers.
+#[must_use]
 pub fn scan_installed_games() -> Vec<DetectedGame> {
     let mut detected = Vec::new();
 
@@ -391,7 +392,7 @@ fn scan_heroic_store_file(
     }
 }
 
-/// Scan Heroic sideloaded apps — match by directory name against known steam_dir names.
+/// Scan Heroic sideloaded apps — match by directory name against known `steam_dir` names.
 fn scan_heroic_sideload(path: &Path, detected: &mut Vec<DetectedGame>) {
     let data = match std::fs::read_to_string(path) {
         Ok(d) => d,
@@ -436,8 +437,7 @@ fn scan_heroic_sideload(path: &Path, detected: &mut Vec<DetectedGame>) {
         for game in KNOWN_GAMES {
             let matches = game
                 .steam_dir
-                .map(|sd| sd.eq_ignore_ascii_case(dir_name))
-                .unwrap_or(false);
+                .is_some_and(|sd| sd.eq_ignore_ascii_case(dir_name));
 
             if matches {
                 debug!(
@@ -464,14 +464,14 @@ fn scan_heroic_sideload(path: &Path, detected: &mut Vec<DetectedGame>) {
 ///
 /// This is used by `GamePlugin::detect_install()` implementations to check
 /// all available sources instead of just hardcoded paths.
+#[must_use]
 pub fn find_game_install(game_id: &str) -> Option<PathBuf> {
     // Check settings override first
     let settings = modde_core::settings::AppSettings::load();
-    if let Some(path) = settings.game_path(game_id) {
-        if path.is_dir() {
+    if let Some(path) = settings.game_path(game_id)
+        && path.is_dir() {
             return Some(path.clone());
         }
-    }
 
     // Scan all launchers
     scan_installed_games()

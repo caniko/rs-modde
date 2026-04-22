@@ -40,8 +40,7 @@ pub fn scan_mod_ini_tweaks(mod_id: &str, mod_dir: &Path) -> Result<Vec<IniTweak>
             if trimmed.starts_with('[') && trimmed.ends_with(']') {
                 current_section = trimmed[1..trimmed.len() - 1].to_string();
             } else if !trimmed.is_empty() && !trimmed.starts_with(';') && !trimmed.starts_with('#')
-            {
-                if let Some((key, value)) = trimmed.split_once('=') {
+                && let Some((key, value)) = trimmed.split_once('=') {
                     tweaks.push(IniTweak {
                         mod_id: mod_id.to_string(),
                         ini_file: ini_file.clone(),
@@ -50,7 +49,6 @@ pub fn scan_mod_ini_tweaks(mod_id: &str, mod_dir: &Path) -> Result<Vec<IniTweak>
                         value: value.trim().to_string(),
                     });
                 }
-            }
         }
     }
     Ok(tweaks)

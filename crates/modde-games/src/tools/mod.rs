@@ -1,6 +1,6 @@
 //! Per-game tool/overlay management.
 //!
-//! Each tool (MangoHud, vkBasalt, GameMode, ReShade, OptiScaler) implements the
+//! Each tool (`MangoHud`, vkBasalt, `GameMode`, `ReShade`, `OptiScaler`) implements the
 //! [`GameTool`] trait. Tools are registered via [`all_tools`] and resolved by ID
 //! via [`resolve_tool`], following the same pattern as [`crate::resolve_game_plugin`].
 
@@ -22,13 +22,13 @@ use smallvec::SmallVec;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolCategory {
-    /// Performance HUD overlay (MangoHud).
+    /// Performance HUD overlay (`MangoHud`).
     Overlay,
-    /// Post-processing / shader injection (vkBasalt, ReShade).
+    /// Post-processing / shader injection (vkBasalt, `ReShade`).
     PostProcess,
-    /// System performance tuning (GameMode).
+    /// System performance tuning (`GameMode`).
     Performance,
-    /// Upscaling / frame generation (OptiScaler).
+    /// Upscaling / frame generation (`OptiScaler`).
     Upscaler,
 }
 
@@ -51,6 +51,7 @@ pub enum ToolAvailability {
 }
 
 impl ToolAvailability {
+    #[must_use]
     pub fn is_available(&self) -> bool {
         matches!(self, Self::Available { .. })
     }
@@ -97,21 +98,24 @@ impl ToolConfig {
     }
 
     /// Get a string setting.
+    #[must_use]
     pub fn get_str(&self, key: &str) -> Option<&str> {
         self.settings.get(key).and_then(|v| v.as_str())
     }
 
     /// Get a bool setting, defaulting to `false`.
+    #[must_use]
     pub fn get_bool(&self, key: &str) -> bool {
         self.settings
             .get(key)
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false)
     }
 
     /// Get an integer setting.
+    #[must_use]
     pub fn get_i64(&self, key: &str) -> Option<i64> {
-        self.settings.get(key).and_then(|v| v.as_i64())
+        self.settings.get(key).and_then(serde_json::Value::as_i64)
     }
 
     /// Set a setting value.
@@ -188,11 +192,13 @@ static ALL_TOOLS: [&dyn GameTool; 5] = [
     &optiscaler::OPTISCALER,
 ];
 
+#[must_use]
 pub fn all_tools() -> &'static [&'static dyn GameTool] {
     &ALL_TOOLS
 }
 
 /// Resolve a tool by its ID string.
+#[must_use]
 pub fn resolve_tool(tool_id: &str) -> Option<&'static dyn GameTool> {
     all_tools().iter().find(|t| t.tool_id() == tool_id).copied()
 }
@@ -200,6 +206,7 @@ pub fn resolve_tool(tool_id: &str) -> Option<&'static dyn GameTool> {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /// Directory where modde stores per-game tool configs.
+#[must_use]
 pub fn tool_config_dir(game_id: &str) -> PathBuf {
     modde_core::paths::modde_data_dir()
         .join("tools")

@@ -11,7 +11,7 @@
 //!    directory and no files, recurse into that subdir and record the
 //!    `strip_prefix` on the resulting plan.
 //! 2. **Game plugin**: `probe.analyze(dir)` — plugin-specific rules (e.g.
-//!    REDmod for Cyberpunk).
+//!    `REDmod` for Cyberpunk).
 //! 3. **FOMOD**: presence of `fomod/ModuleConfig.xml`.
 //! 4. **BAIN**: numbered option subdirs (`00 Core`, `01 Option`, ...).
 //! 5. **DLL overlay**: top-level `.dll` with no nested asset dirs.
@@ -207,11 +207,10 @@ fn looks_like_dll_overlay(dir: &Path) -> bool {
             if asset_dirs.iter().any(|d| *d == name) {
                 has_asset_dir = true;
             }
-        } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            if ext.eq_ignore_ascii_case("dll") {
+        } else if let Some(ext) = path.extension().and_then(|e| e.to_str())
+            && ext.eq_ignore_ascii_case("dll") {
                 has_dll = true;
             }
-        }
     }
     has_dll && !has_asset_dir
 }

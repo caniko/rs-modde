@@ -115,7 +115,7 @@ pub fn run_profile_diagnostics(
 pub struct ShadowedModRule;
 
 impl DiagnosticRule for ShadowedModRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "shadowed-mod"
     }
 
@@ -127,7 +127,7 @@ impl DiagnosticRule for ShadowedModRule {
             .shadowed_mods
             .iter()
             .map(|sm| {
-                let by: Vec<&str> = sm.shadowed_by.iter().map(|m| m.as_str()).collect();
+                let by: Vec<&str> = sm.shadowed_by.iter().map(super::resolver::ModId::as_str).collect();
                 Diagnostic {
                     severity: Severity::Warning,
                     title: format!("Mod \"{}\" is completely shadowed", sm.mod_id),
@@ -152,7 +152,7 @@ impl DiagnosticRule for ShadowedModRule {
 pub struct DangerousCollisionRule;
 
 impl DiagnosticRule for DangerousCollisionRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "dangerous-collision"
     }
 
@@ -206,6 +206,7 @@ pub struct DiagnosticEngine {
 }
 
 impl DiagnosticEngine {
+    #[must_use]
     pub fn new() -> Self {
         Self { rules: Vec::new() }
     }
@@ -214,6 +215,7 @@ impl DiagnosticEngine {
         self.rules.push(rule);
     }
 
+    #[must_use]
     pub fn run_all(&self, ctx: &DiagContext) -> Vec<Diagnostic> {
         let mut results: Vec<Diagnostic> = self.rules.iter().flat_map(|r| r.check(ctx)).collect();
         results.sort_by_key(|d| d.severity);

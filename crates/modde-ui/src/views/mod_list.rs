@@ -39,7 +39,7 @@ pub fn view_filtered<'a>(
             .style(button::primary)
             .padding([6, 14]),
         button(text("Remove").size(14))
-            .on_press_maybe(selected_index.map(|i| Message::RemoveMod(i)))
+            .on_press_maybe(selected_index.map(Message::RemoveMod))
             .style(button::secondary)
             .padding([6, 14]),
         iced::widget::space::horizontal(),
@@ -189,8 +189,7 @@ fn find_filter_state(criteria: &[FilterCriterion], kind: FilterKind) -> TriState
     criteria
         .iter()
         .find(|c| c.kind == kind)
-        .map(|c| c.state)
-        .unwrap_or(TriState::Ignore)
+        .map_or(TriState::Ignore, |c| c.state)
 }
 
 /// Build a tri-state toggle button.
@@ -309,14 +308,14 @@ fn build_categorized_rows<'a>(
 /// containing profile has a `Profile::load_order_lock`. `entry.lock`
 /// disables only this one row (per-mod pin), independent of the profile
 /// lock.
-fn mod_row<'a>(
+fn mod_row(
     idx: usize,
-    entry: &'a EnabledMod,
+    entry: &EnabledMod,
     selected_index: Option<usize>,
     total: usize,
     compact: bool,
     profile_locked: bool,
-) -> Element<'a, Message> {
+) -> Element<'_, Message> {
     let is_selected = selected_index == Some(idx);
     let font_size: f32 = if compact { 12.0 } else { 14.0 };
     let row_pad: u16 = if compact { 2 } else { 4 };

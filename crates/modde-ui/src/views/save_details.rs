@@ -32,6 +32,7 @@ pub struct SaveDetailsState {
 
 impl SaveDetailsState {
     /// Construct from a `SaveSnapshot` and an optional compatibility check result.
+    #[must_use]
     pub fn from_snapshot(snap: &SaveSnapshot, compat: Option<FingerprintCheck>) -> Self {
         Self {
             commit_id: snap.id.clone(),
@@ -49,11 +50,13 @@ impl SaveDetailsState {
     }
 
     /// Formatted date string for display.
+    #[must_use]
     pub fn formatted_date(&self) -> String {
         modde_core::save::format_timestamp(self.timestamp)
     }
 
     /// Human-readable title: character + save label, or fallback.
+    #[must_use]
     pub fn display_title(&self) -> String {
         if let (Some(char_name), Some(label)) = (&self.character_name, &self.save_label) {
             format!("{char_name} — {label}")

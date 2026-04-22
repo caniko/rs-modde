@@ -512,7 +512,7 @@ fn test_profile_nexus_collection_source_roundtrip() {
             .map(|i| EnabledMod {
                 mod_id: format!("mod_{i}"),
                 enabled: i % 2 == 0,
-                version: Some(format!("{}.0", i)),
+                version: Some(format!("{i}.0")),
                 fomod_config: None,
                 ..Default::default()
             })

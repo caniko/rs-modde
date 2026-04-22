@@ -32,6 +32,7 @@ pub struct SymlinkFarm<S = Materialized> {
 
 impl SymlinkFarm<Built> {
     /// Construct a `Built` farm directly from a staging directory and link map.
+    #[must_use]
     pub fn from_links(staging_dir: PathBuf, links: HashMap<String, PathBuf>) -> Self {
         Self {
             staging_dir,
@@ -61,11 +62,10 @@ impl SymlinkFarm<Built> {
             if let Some(files) = mod_files.get(mod_id) {
                 for (rel_path, source) in files {
                     // Skip hidden files
-                    if let Some(hidden) = hidden {
-                        if hidden.contains(&(mod_id.0.clone(), rel_path.clone())) {
+                    if let Some(hidden) = hidden
+                        && hidden.contains(&(mod_id.0.clone(), rel_path.clone())) {
                             continue;
                         }
-                    }
                     links.insert(rel_path.clone(), source.clone());
                 }
             }

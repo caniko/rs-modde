@@ -4,7 +4,7 @@ use iced::{Alignment, Element, Length, color};
 use crate::app::{Message, ToolState, ToolUiEntry};
 
 /// Render the gaming tools/overlays management view.
-pub fn view<'a>(state: &'a ToolState) -> Element<'a, Message> {
+pub fn view(state: &ToolState) -> Element<'_, Message> {
     let title_bar = row![
         text("Gaming Tools").size(20),
         iced::widget::space::horizontal(),

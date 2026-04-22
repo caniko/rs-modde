@@ -150,13 +150,13 @@ pub async fn handle(action: SaveAction) -> Result<()> {
                 if let Some(msg) = message {
                     amend_last_commit(&game, &msg)?;
                 }
-                if !fp.is_empty() {
+                if fp.is_empty() {
+                    println!("Captured {count} save file(s) for profile '{profile}'.");
+                } else {
                     println!(
                         "Captured {count} save file(s) for profile '{profile}' [fingerprint: {}].",
                         fp.short_hash()
                     );
-                } else {
-                    println!("Captured {count} save file(s) for profile '{profile}'.");
                 }
             } else {
                 println!("No saves to capture for game '{game}'.");

@@ -153,7 +153,7 @@ impl BackupManager {
 
         let prefix = format!("{profile}_");
         let mut candidates: Vec<_> = fs::read_dir(&dir)?
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|e| e.file_name().to_string_lossy().starts_with(&prefix))
             .collect();
 

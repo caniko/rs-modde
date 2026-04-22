@@ -126,6 +126,7 @@ impl ConflictMap {
     }
 
     /// Return all file paths that have more than one provider.
+    #[must_use]
     pub fn conflicts(&self) -> Vec<(&str, &HashSet<ModId>)> {
         self.files
             .iter()
@@ -139,6 +140,7 @@ impl ConflictMap {
     /// `priority_order` lists mods from lowest to highest priority.
     /// The last mod in the list that provides the file wins.
     /// Hidden `(mod_id, rel_path)` pairs are excluded.
+    #[must_use]
     pub fn winner_for(
         &self,
         file_path: &str,
@@ -159,6 +161,7 @@ impl ConflictMap {
     /// Return all conflicts with their resolved winners.
     ///
     /// Returns `(file_path, all_providers, winner)` tuples.
+    #[must_use]
     pub fn resolved_conflicts(
         &self,
         priority_order: &[ModId],
@@ -192,7 +195,7 @@ pub struct ResolvedLoadOrder {
 /// 2. **Round-trip via swap.** Swapping two adjacent mods in `profile.mods`
 ///    produces a resolved order with those two mods swapped, as long as no
 ///    rule spans the swap. This is what makes `Message::ReorderMod` visible
-///    in the load_order view — without stability, reordering could
+///    in the `load_order` view — without stability, reordering could
 ///    silently vanish.
 /// 3. **Minimal change under rules.** When a rule *does* force movement,
 ///    only the rule-involved pair shifts; unrelated neighbors stay put.
@@ -234,14 +237,13 @@ pub fn resolve(profile: &Profile) -> Result<ResolvedLoadOrder> {
 
     // Check for incompatible mods — must fail before we try to resolve.
     for rule in &profile.load_order_rules {
-        if let LoadOrderRule::Incompatible { mod_a, mod_b } = rule {
-            if enabled_set.contains(mod_a.as_str()) && enabled_set.contains(mod_b.as_str()) {
+        if let LoadOrderRule::Incompatible { mod_a, mod_b } = rule
+            && enabled_set.contains(mod_a.as_str()) && enabled_set.contains(mod_b.as_str()) {
                 return Err(CoreError::FileConflict {
                     path: String::new(),
                     mods: Box::new(smallvec::smallvec![mod_a.0.clone(), mod_b.0.clone()]),
                 });
             }
-        }
     }
 
     // Build adjacency + in-degree. `successors[u] = [v, ...]` means "u must
@@ -456,7 +458,7 @@ mod tests {
     // didn't necessarily shift anything in `resolved_order`.
 
     fn ids(order: &[ModId]) -> Vec<&str> {
-        order.iter().map(|m| m.as_str()).collect()
+        order.iter().map(super::ModId::as_str).collect()
     }
 
     #[test]

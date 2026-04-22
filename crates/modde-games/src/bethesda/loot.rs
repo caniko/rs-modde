@@ -204,6 +204,7 @@ pub fn masterlist_url(game_id: &str) -> Option<&'static str> {
 }
 
 /// Cached masterlist path within the modde data directory.
+#[must_use]
 pub fn masterlist_cache_path(game_id: &str) -> std::path::PathBuf {
     modde_core::paths::data_dir()
         .join("loot")

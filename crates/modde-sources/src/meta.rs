@@ -55,6 +55,7 @@ impl DownloadMeta {
 /// Derive the `.meta` sidecar path for a given download path.
 ///
 /// E.g. `/downloads/mod.zip` → `/downloads/mod.zip.meta`
+#[must_use]
 pub fn meta_path(download_path: &Path) -> PathBuf {
     let mut p = download_path.as_os_str().to_owned();
     p.push(".meta");

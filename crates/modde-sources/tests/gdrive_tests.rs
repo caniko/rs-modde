@@ -1,4 +1,4 @@
-//! Integration tests for GoogleDriveSource.
+//! Integration tests for `GoogleDriveSource`.
 //!
 //! The `extract_confirm_token` function is private and is thoroughly tested
 //! via inline `#[cfg(test)] mod tests` in `src/gdrive/mod.rs`.

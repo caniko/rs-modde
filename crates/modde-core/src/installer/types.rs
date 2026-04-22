@@ -20,9 +20,9 @@ use serde::{Deserialize, Serialize};
 /// How a mod's files should be laid out in the store.
 ///
 /// Variants are ordered by detection specificity — game-specific layouts
-/// (REDmod) take precedence over generic ones (BareExtract) so that e.g.
+/// (`REDmod`) take precedence over generic ones (`BareExtract`) so that e.g.
 /// a Cyberpunk mod containing both `info.json` and a `Data/` folder is
-/// identified as REDmod rather than a Bethesda bare-extract.
+/// identified as `REDmod` rather than a Bethesda bare-extract.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum InstallMethod {
@@ -39,8 +39,8 @@ pub enum InstallMethod {
         config_toml: Option<String>,
     },
 
-    /// REDmod package (Cyberpunk 2077). `manifest` is the archive-relative
-    /// `info.json` that REDmod ships with.
+    /// `REDmod` package (Cyberpunk 2077). `manifest` is the archive-relative
+    /// `info.json` that `REDmod` ships with.
     REDmod { manifest: PathBuf },
 
     /// BAIN (Wrye Bash) layout: numbered option subdirs like `00 Core`,
@@ -71,6 +71,7 @@ pub enum InstallMethod {
 
 impl InstallMethod {
     /// Short label used in logs and the UI.
+    #[must_use]
     pub fn label(&self) -> &'static str {
         match self {
             InstallMethod::BareExtract => "bare",
@@ -84,6 +85,7 @@ impl InstallMethod {
     }
 
     /// `true` if `execute` can proceed without any further user input.
+    #[must_use]
     pub fn is_ready(&self) -> bool {
         match self {
             InstallMethod::BareExtract
@@ -165,6 +167,7 @@ pub enum InstallStatus {
 }
 
 impl InstallStatus {
+    #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             InstallStatus::Installed => "installed",
@@ -174,6 +177,7 @@ impl InstallStatus {
         }
     }
 
+    #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "installed" => Some(Self::Installed),

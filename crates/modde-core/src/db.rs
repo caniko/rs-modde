@@ -417,7 +417,7 @@ impl ModdeDb {
         Ok(profile_id)
     }
 
-    /// Load a profile by name and game_id.
+    /// Load a profile by name and `game_id`.
     pub fn load_profile(&self, name: &str, game_id: &str) -> Result<Profile> {
         let (id, source_type, source_data, overrides, load_order_lock) = self
             .conn
@@ -537,7 +537,7 @@ impl ModdeDb {
         }
     }
 
-    /// Update an existing profile (identified by name + game_id).
+    /// Update an existing profile (identified by name + `game_id`).
     pub fn update_profile(&self, profile: &Profile) -> Result<()> {
         let (source_type, source_data) = encode_source(&profile.source);
         let load_order_lock = encode_lock(profile.load_order_lock.as_ref());
@@ -586,7 +586,7 @@ impl ModdeDb {
         Ok(())
     }
 
-    /// Delete a profile by name and game_id.
+    /// Delete a profile by name and `game_id`.
     pub fn delete_profile(&self, name: &str, game_id: &str) -> Result<()> {
         let changes = self.conn.execute(
             "DELETE FROM profiles WHERE name = ?1 AND game_id = ?2",
@@ -734,7 +734,7 @@ impl ModdeDb {
         Ok(())
     }
 
-    /// Get the active profile for a game, returning (profile_id, profile_name).
+    /// Get the active profile for a game, returning (`profile_id`, `profile_name`).
     pub fn get_active_profile(&self, game_id: &str) -> Result<Option<(i64, String)>> {
         let result = self.conn.query_row(
             "SELECT a.profile_id, p.name FROM active_profiles a
@@ -773,7 +773,7 @@ impl ModdeDb {
         Ok(())
     }
 
-    /// Pop the top entry from the experiment stack, returning the profile_id.
+    /// Pop the top entry from the experiment stack, returning the `profile_id`.
     pub fn pop_experiment(&self, game_id: &str) -> Result<Option<i64>> {
         let result = self.conn.query_row(
             "SELECT id, profile_id FROM experiment_stack
@@ -994,7 +994,7 @@ impl ModdeDb {
         Ok(())
     }
 
-    /// Delete a category (nullifies category_id on affected mods).
+    /// Delete a category (nullifies `category_id` on affected mods).
     pub fn delete_category(&self, category_id: i64) -> Result<()> {
         self.conn.execute(
             "UPDATE profile_mods SET category_id = NULL WHERE category_id = ?1",
@@ -1096,7 +1096,7 @@ impl ModdeDb {
     ///    (so retries don't leave orphans in the manifest).
     /// 3. Insert one row per `plan.staged_files`.
     ///
-    /// Callers are expected to have already written the EnabledMod into
+    /// Callers are expected to have already written the `EnabledMod` into
     /// the profile (via `update_profile` / `create_profile`); this method
     /// just enriches the existing row with install metadata and files.
     pub fn record_install(
@@ -1622,7 +1622,7 @@ impl ModdeDb {
                  enabled = excluded.enabled,
                  settings = excluded.settings,
                  updated_at = excluded.updated_at",
-            params![game_id, tool_id, enabled as i32, settings_json],
+            params![game_id, tool_id, i32::from(enabled), settings_json],
         )?;
         Ok(())
     }

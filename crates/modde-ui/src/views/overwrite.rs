@@ -12,7 +12,7 @@ pub struct OverwriteState {
     pub overrides_dir: PathBuf,
 }
 
-pub fn view<'a>(state: &'a OverwriteState) -> Element<'a, Message> {
+pub fn view(state: &OverwriteState) -> Element<'_, Message> {
     let title = text("Overwrite / Profile Overrides").size(20);
 
     let count_text = text(format!("{} file(s) in overrides", state.files.len())).size(14);

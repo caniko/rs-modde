@@ -103,8 +103,7 @@ pub fn view(state: &DiagnosticsState) -> Element<'_, Message> {
                         .filter(|e| matches!(e.severity, DiagnosticSeverity::Info))
                         .count();
                     text(format!(
-                        "{} error(s), {} warning(s), {} info(s)",
-                        errors, warnings, infos
+                        "{errors} error(s), {warnings} warning(s), {infos} info(s)"
                     ))
                     .size(12)
                 };

@@ -9,7 +9,7 @@ mod commands;
 #[derive(Parser)]
 #[command(name = "modde", version, about = "NixOS-native game mod manager")]
 struct Cli {
-    /// Override data directory (default: ~/.local/share/modde or $MODDE_DATA_DIR)
+    /// Override data directory (default: ~/.local/share/modde or $`MODDE_DATA_DIR`)
     #[arg(long, global = true, env = "MODDE_DATA_DIR")]
     data_dir: Option<PathBuf>,
 
@@ -540,7 +540,7 @@ enum ToolAction {
         #[arg(last = true)]
         settings: Vec<String>,
     },
-    /// Apply tool patches to the game directory (ReShade DLLs, OptiScaler, etc.)
+    /// Apply tool patches to the game directory (`ReShade` DLLs, `OptiScaler`, etc.)
     Apply {
         /// Tool ID
         tool_id: String,
@@ -793,15 +793,15 @@ fn main() -> Result<()> {
                 suggest_hides,
             } => commands::collisions::handle(profile, game, all, suggest_hides).await?,
             Commands::Rollback { profile, game } => {
-                commands::rollback::handle(profile, game).await?
+                commands::rollback::handle(profile, game).await?;
             }
             Commands::Install { source } => commands::install::handle(source).await?,
             Commands::Mod { action } => match action {
                 ModAction::Remove { mod_id, profile } => {
-                    commands::uninstall::handle(mod_id, profile).await?
+                    commands::uninstall::handle(mod_id, profile).await?;
                 }
                 ModAction::Diagnose { mod_id } => {
-                    commands::uninstall::handle_diagnose(mod_id).await?
+                    commands::uninstall::handle_diagnose(mod_id).await?;
                 }
             },
             Commands::Verify { profile, game } => commands::verify::handle(profile, game).await?,

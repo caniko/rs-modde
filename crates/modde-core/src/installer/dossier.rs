@@ -51,6 +51,7 @@ pub struct DossierContext {
 }
 
 /// A slug identifying the dossier dir. Stable across retries.
+#[must_use]
 pub fn dossier_slug(ctx: &DossierContext) -> String {
     match (
         ctx.game_domain.as_deref(),
@@ -70,11 +71,13 @@ pub fn dossier_slug(ctx: &DossierContext) -> String {
 }
 
 /// Root directory holding all unknown-installer dossiers.
+#[must_use]
 pub fn dossiers_dir() -> PathBuf {
     modde_data_dir().join("unknown-installers")
 }
 
 /// Path to the dossier for a specific unknown mod.
+#[must_use]
 pub fn dossier_path(ctx: &DossierContext) -> PathBuf {
     dossiers_dir().join(dossier_slug(ctx))
 }
@@ -188,7 +191,7 @@ fn copy_text_samples(extracted_dir: &Path, out: &Path) -> InstallerResult<()> {
         };
         // Flatten the rel path into a single filename so the samples
         // directory stays shallow.
-        let flat = rel.to_string_lossy().replace('/', "__").replace('\\', "__");
+        let flat = rel.to_string_lossy().replace(['/', '\\'], "__");
         let sample_path = out.join(flat);
         fs::write(&sample_path, body)?;
         written += 1;
@@ -201,14 +204,14 @@ fn write_prompt(dir: &Path, ctx: &DossierContext, method: &InstallMethod) -> Ins
     prompt.push_str("# modde unknown installer dossier\n\n");
     prompt.push_str(&format!("Mod: **{}**\n", ctx.mod_name));
     if let Some(author) = &ctx.mod_author {
-        prompt.push_str(&format!("Author: {}\n", author));
+        prompt.push_str(&format!("Author: {author}\n"));
     }
     if let Some(version) = &ctx.mod_version {
-        prompt.push_str(&format!("Version: {}\n", version));
+        prompt.push_str(&format!("Version: {version}\n"));
     }
     prompt.push_str(&format!("Game: {}\n", ctx.game_id));
     if let Some(url) = &ctx.nexus_url {
-        prompt.push_str(&format!("Nexus URL: {}\n", url));
+        prompt.push_str(&format!("Nexus URL: {url}\n"));
     }
     prompt.push_str(&format!(
         "Detection verdict: `{}` (reason: {})\n\n",
@@ -268,5 +271,5 @@ fn write_prompt(dir: &Path, ctx: &DossierContext, method: &InstallMethod) -> Ins
 }
 
 fn io_err(e: serde_json::Error) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
+    std::io::Error::other(e.to_string())
 }

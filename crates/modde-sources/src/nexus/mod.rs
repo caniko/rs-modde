@@ -20,7 +20,7 @@ use modde_core::manifest::wabbajack::DownloadDirective;
 use crate::common::simple_download;
 use crate::traits::{DownloadHandle, DownloadSource, ProgressCallback, VerifiedFile};
 
-/// NexusMods download source.
+/// `NexusMods` download source.
 ///
 /// Requires a Nexus Premium account and API key.
 pub struct NexusSource {
@@ -29,13 +29,14 @@ pub struct NexusSource {
 }
 
 impl NexusSource {
-    /// Create a new NexusSource, loading the API key from environment or keyring.
+    /// Create a new `NexusSource`, loading the API key from environment or keyring.
     pub fn new(client: Client) -> Result<Self> {
         let api_key = auth::load_api_key()?;
         Ok(Self { client, api_key })
     }
 
-    /// Create a new NexusSource with an explicit API key.
+    /// Create a new `NexusSource` with an explicit API key.
+    #[must_use]
     pub fn with_api_key(client: Client, api_key: String) -> Self {
         Self { client, api_key }
     }

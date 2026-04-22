@@ -32,6 +32,7 @@ pub fn load_manifest(path: &Path) -> crate::error::Result<PluginManifest> {
 }
 
 /// Scan the plugins directory for plugin manifests.
+#[must_use]
 pub fn scan_plugins() -> Vec<(PathBuf, PluginManifest)> {
     let plugin_dir = crate::paths::data_dir().join("plugins");
     if !plugin_dir.exists() {
@@ -42,17 +43,17 @@ pub fn scan_plugins() -> Vec<(PathBuf, PluginManifest)> {
     if let Ok(entries) = std::fs::read_dir(&plugin_dir) {
         for entry in entries.flatten() {
             let manifest_path = entry.path().join("plugin.toml");
-            if manifest_path.exists() {
-                if let Ok(manifest) = load_manifest(&manifest_path) {
+            if manifest_path.exists()
+                && let Ok(manifest) = load_manifest(&manifest_path) {
                     plugins.push((entry.path(), manifest));
                 }
-            }
         }
     }
     plugins
 }
 
 /// List all registered plugin capabilities.
+#[must_use]
 pub fn list_capabilities() -> Vec<(String, PluginCapability)> {
     scan_plugins()
         .into_iter()

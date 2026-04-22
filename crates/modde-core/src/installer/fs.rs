@@ -51,6 +51,7 @@ pub fn extract_archive(archive_path: &Path, dest: &Path) -> InstallerResult<()> 
 /// archives built on case-sensitive filesystems.
 ///
 /// Returns the absolute path, or `None` if this mod is not FOMOD-packaged.
+#[must_use]
 pub fn find_fomod_config(mod_dir: &Path) -> Option<PathBuf> {
     let canonical = mod_dir.join("fomod").join("ModuleConfig.xml");
     if canonical.exists() {
@@ -62,12 +63,12 @@ pub fn find_fomod_config(mod_dir: &Path) -> Option<PathBuf> {
         if !entry.path().is_dir() {
             continue;
         }
-        if entry.file_name().to_ascii_lowercase() != "fomod" {
+        if !entry.file_name().eq_ignore_ascii_case("fomod") {
             continue;
         }
         let inner_entries = fs::read_dir(entry.path()).ok()?;
         for inner in inner_entries.flatten() {
-            if inner.file_name().to_ascii_lowercase() == "moduleconfig.xml" {
+            if inner.file_name().eq_ignore_ascii_case("moduleconfig.xml") {
                 return Some(inner.path());
             }
         }
@@ -96,11 +97,10 @@ fn walk_files_into(
         let path = entry.path();
         if path.is_dir() {
             walk_files_into(base, &path, out)?;
-        } else if path.is_file() {
-            if let Ok(rel) = path.strip_prefix(base) {
+        } else if path.is_file()
+            && let Ok(rel) = path.strip_prefix(base) {
                 out.push((path.clone(), rel.to_path_buf()));
             }
-        }
     }
     Ok(())
 }

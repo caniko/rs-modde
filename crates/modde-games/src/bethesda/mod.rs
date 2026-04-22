@@ -40,6 +40,7 @@ pub struct BethesdaGame {
 }
 
 impl BethesdaGame {
+    #[must_use]
     pub const fn new(
         game_id: &'static str,
         display_name: &'static str,
@@ -232,14 +233,13 @@ impl GamePlugin for BethesdaGame {
                 if asset_dirs.iter().any(|d| *d == name) {
                     return true;
                 }
-            } else if path.is_file() {
-                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            } else if path.is_file()
+                && let Some(ext) = path.extension().and_then(|e| e.to_str()) {
                     let ext_lc = ext.to_lowercase();
                     if matches!(ext_lc.as_str(), "esp" | "esm" | "esl" | "bsa" | "ba2") {
                         return true;
                     }
                 }
-            }
         }
         false
     }

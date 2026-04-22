@@ -29,8 +29,8 @@ pub fn view<'a>(
     });
 
     // Show current fingerprint
-    if let Some(fp) = current_fingerprint {
-        if !fp.is_empty() {
+    if let Some(fp) = current_fingerprint
+        && !fp.is_empty() {
             profile_info = profile_info.push(
                 text(format!(
                     "Save-breaking mods: {} [{}]",
@@ -41,7 +41,6 @@ pub fn view<'a>(
                 .color(color!(0x888888)),
             );
         }
-    }
 
     let header = row![
         text("Date").size(12).width(Length::Fixed(110.0)),

@@ -13,7 +13,7 @@ use crate::save::{SaveFingerprint, SaveManager};
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EnabledMod {
     pub mod_id: String,
-    /// Human-readable display name shown in UI (falls back to mod_id if None).
+    /// Human-readable display name shown in UI (falls back to `mod_id` if None).
     #[serde(default)]
     pub display_name: Option<String>,
     pub enabled: bool,
@@ -128,6 +128,7 @@ pub struct LoadOrderLock {
 
 impl LoadOrderLock {
     /// Construct a new lock with `locked_at` set to the current UTC time.
+    #[must_use]
     pub fn now(reason: LockReason) -> Self {
         Self {
             reason,
@@ -144,8 +145,7 @@ fn current_utc_timestamp() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_secs() as i64);
 
     // Break into (date, time-of-day).
     let days = secs.div_euclid(86_400);
@@ -158,7 +158,7 @@ fn current_utc_timestamp() -> String {
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
     let doe = (z - era * 146_097) as u32;
     let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let y_off = era * 400 + yoe as i64;
+    let y_off = era * 400 + i64::from(yoe);
     let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
     let mp = (5 * doy + 2) / 153;
     let d = doy - (153 * mp + 2) / 5 + 1;
@@ -213,7 +213,7 @@ pub enum ReorderError {
     ProfileLocked { reason: LockReason },
     /// The target mod itself carries a per-mod pin.
     ModPinned { mod_id: String, reason: LockReason },
-    /// The mod_id does not exist in `profile.mods`.
+    /// The `mod_id` does not exist in `profile.mods`.
     ModNotFound { mod_id: String },
     /// The swap partner (one step up/down) is pinned — moving would
     /// shift it, violating its per-mod pin contract.
@@ -373,13 +373,10 @@ impl ProfileManager {
 
     /// Delete a profile. If `game_id` is None, the name must be unambiguous.
     pub fn delete(&self, name: &str, game_id: Option<&str>) -> Result<()> {
-        match game_id {
-            Some(gid) => self.db.delete_profile(name, gid),
-            None => {
-                // Resolve the game_id first
-                let profile = self.db.load_profile_by_name(name)?;
-                self.db.delete_profile(name, profile.game_id.as_str())
-            }
+        if let Some(gid) = game_id { self.db.delete_profile(name, gid) } else {
+            // Resolve the game_id first
+            let profile = self.db.load_profile_by_name(name)?;
+            self.db.delete_profile(name, profile.game_id.as_str())
         }
     }
 
@@ -389,11 +386,13 @@ impl ProfileManager {
     }
 
     /// Staging directory for a profile (still on-disk).
+    #[must_use]
     pub fn staging_dir(name: &str) -> PathBuf {
         crate::paths::profiles_dir().join(name).join("staging")
     }
 
     /// Default overrides directory for a profile.
+    #[must_use]
     pub fn default_overrides(name: &str) -> PathBuf {
         crate::paths::profiles_dir().join(name).join("overrides")
     }

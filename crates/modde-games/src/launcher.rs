@@ -26,6 +26,7 @@ pub enum Launcher {
 }
 
 /// Detect which launcher manages a game at the given install path.
+#[must_use]
 pub fn detect_launcher(game_dir: &Path) -> Launcher {
     // Check for Heroic: game paths typically contain "heroic" or match a Heroic library
     if let Some(launcher) = detect_heroic(game_dir) {
@@ -40,7 +41,7 @@ pub fn detect_launcher(game_dir: &Path) -> Launcher {
     Launcher::Unknown
 }
 
-/// Try to detect Heroic launcher by scanning its GamesConfig directory.
+/// Try to detect Heroic launcher by scanning its `GamesConfig` directory.
 fn detect_heroic(game_dir: &Path) -> Option<Launcher> {
     let config_dir = modde_core::paths::heroic_config_dir()?;
     let games_config = config_dir.join("GamesConfig");
@@ -98,8 +99,8 @@ fn heroic_game_matches(config_dir: &Path, game_id: &str, game_dir: &Path) -> boo
         };
         if let Some(games) = val.get("installed").and_then(|v| v.as_array()) {
             for game in games {
-                if game.get("appName").and_then(|v| v.as_str()) == Some(game_id) {
-                    if let Some(install_path) = game.get("install_path").and_then(|v| v.as_str()) {
+                if game.get("appName").and_then(|v| v.as_str()) == Some(game_id)
+                    && let Some(install_path) = game.get("install_path").and_then(|v| v.as_str()) {
                         let canonical_game = game_dir
                             .canonicalize()
                             .unwrap_or_else(|_| game_dir.to_path_buf());
@@ -108,7 +109,6 @@ fn heroic_game_matches(config_dir: &Path, game_id: &str, game_dir: &Path) -> boo
                             .unwrap_or_else(|_| PathBuf::from(install_path));
                         return canonical_game == canonical_install;
                     }
-                }
             }
         }
     }
@@ -131,17 +131,15 @@ fn detect_steam(game_dir: &Path) -> Option<String> {
             for entry in manifests.flatten() {
                 let name = entry.file_name();
                 let name_str = name.to_string_lossy();
-                if name_str.starts_with("appmanifest_") && name_str.ends_with(".acf") {
-                    if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                        if content.contains(&*game_name) {
+                if name_str.starts_with("appmanifest_") && name_str.ends_with(".acf")
+                    && let Ok(content) = std::fs::read_to_string(entry.path())
+                        && content.contains(&*game_name) {
                             let app_id = name_str
                                 .strip_prefix("appmanifest_")?
                                 .strip_suffix(".acf")?
                                 .to_string();
                             return Some(app_id);
                         }
-                    }
-                }
             }
         }
     }
@@ -239,11 +237,11 @@ fn generate_wrapper_windows(
 /// Generate a modde launch wrapper script that restores mod DLLs deleted by fgmod
 /// and exports tool environment variables.
 ///
-/// fgmod cleans up certain DLLs (winmm.dll, dxgi.dll, etc.) before installing OptiScaler.
-/// If mods deploy those same DLLs (e.g. RED4ext uses winmm.dll), we need to restore them
+/// fgmod cleans up certain DLLs (winmm.dll, dxgi.dll, etc.) before installing `OptiScaler`.
+/// If mods deploy those same DLLs (e.g. `RED4ext` uses winmm.dll), we need to restore them
 /// after fgmod runs but before the game starts.
 ///
-/// Additionally, the wrapper exports env vars for any enabled tools (MangoHud, vkBasalt, etc.)
+/// Additionally, the wrapper exports env vars for any enabled tools (`MangoHud`, vkBasalt, etc.)
 /// so they take effect even when launched via Steam (where we can't modify the launcher config).
 pub fn generate_launch_wrapper(
     game_dir: &Path,
@@ -262,9 +260,7 @@ pub fn generate_launch_wrapper(
     let wrapper_dir = modde_core::paths::modde_data_dir().join("bin");
     std::fs::create_dir_all(&wrapper_dir).context("failed to create modde bin directory")?;
 
-    let modde_bin = std::env::current_exe()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| "modde".to_string());
+    let modde_bin = std::env::current_exe().map_or_else(|_| "modde".to_string(), |p| p.to_string_lossy().to_string());
 
     #[cfg(unix)]
     let (wrapper_path, script) = generate_wrapper_unix(
@@ -370,7 +366,7 @@ pub fn apply_wine_overrides(launcher: &Launcher, overrides: &[String]) -> Result
     }
 }
 
-/// Update Heroic's GamesConfig JSON to include WINEDLLOVERRIDES.
+/// Update Heroic's `GamesConfig` JSON to include WINEDLLOVERRIDES.
 #[cfg(target_os = "linux")]
 fn apply_heroic_overrides(config_path: &Path, game_id: &str, overrides: &[String]) -> Result<bool> {
     let data = std::fs::read_to_string(config_path)
@@ -426,7 +422,7 @@ fn apply_heroic_overrides(config_path: &Path, game_id: &str, overrides: &[String
         let mut all_overrides: Vec<String> = existing_value
             .split(';')
             .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .collect();
 
         for new_ov in &new_overrides {
@@ -529,8 +525,7 @@ pub fn register_heroic_wrapper(launcher: &Launcher, wrapper_path: &Path) -> Resu
     let fgmod_idx = wrappers.iter().position(|w| {
         w.get("exe")
             .and_then(|e| e.as_str())
-            .map(|e| e.contains("fgmod"))
-            .unwrap_or(false)
+            .is_some_and(|e| e.contains("fgmod"))
     });
 
     let insert_idx = match fgmod_idx {
@@ -616,7 +611,7 @@ pub fn collect_tool_dll_overrides(
             settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
         };
 
-        overrides.extend(tool.wine_dll_overrides(&config).into_iter());
+        overrides.extend(tool.wine_dll_overrides(&config));
     }
 
     Ok(overrides)

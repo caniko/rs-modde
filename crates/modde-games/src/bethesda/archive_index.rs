@@ -172,7 +172,7 @@ fn read_bsa(file: &mut (impl Read + Seek)) -> Result<Vec<ArchiveFileEntry>> {
             read_u64_le(file)?
         } else {
             // v104: 4-byte offset
-            read_u32_le(file)? as u64
+            u64::from(read_u32_le(file)?)
         };
         folder_records.push(BsaFolderRecord {
             _name_hash: name_hash,
@@ -222,10 +222,10 @@ fn read_bsa(file: &mut (impl Read + Seek)) -> Result<Vec<ArchiveFileEntry>> {
             let file_name = &file_names[name_idx];
             name_idx += 1;
 
-            let path = normalize_path(&format!("{}/{}", folder, file_name));
+            let path = normalize_path(&format!("{folder}/{file_name}"));
             entries.push(ArchiveFileEntry {
                 path,
-                size: rec.size as u64,
+                size: u64::from(rec.size),
             });
         }
     }
@@ -262,7 +262,7 @@ fn read_ba2(file: &mut (impl Read + Seek)) -> Result<Vec<ArchiveFileEntry>> {
                 let _packed_size = read_u32_le(file)?;
                 let unpacked_size = read_u32_le(file)?;
                 let _sentinel = read_u32_le(file)?; // 0xBAADF00D
-                sizes.push(unpacked_size as u64);
+                sizes.push(u64::from(unpacked_size));
             }
         }
         "DX10" => {
@@ -414,7 +414,7 @@ mod tests {
         // We need to know the name table offset. Header is 4+4+4+4+8 = 24 bytes.
         // Each GNRL record is 36 bytes.
         let header_size: u64 = 24;
-        let records_size: u64 = file_count as u64 * 36;
+        let records_size: u64 = u64::from(file_count) * 36;
         let name_table_offset = header_size + records_size;
 
         buf.extend_from_slice(&name_table_offset.to_le_bytes());

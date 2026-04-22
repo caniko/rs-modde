@@ -48,17 +48,15 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
     let mut header = column![].spacing(5);
 
     // Module header image
-    if let Some(img_path) = installer.module_image_path() {
-        if let Some(ref source_dir) = app.fomod_source_dir {
-            if let Some(resolved) = installer.resolve_image(source_dir, img_path) {
+    if let Some(img_path) = installer.module_image_path()
+        && let Some(ref source_dir) = app.fomod_source_dir
+            && let Some(resolved) = installer.resolve_image(source_dir, img_path) {
                 header = header.push(
                     image(image::Handle::from_path(resolved))
                         .width(Length::Fill)
                         .height(Length::Fixed(120.0)),
                 );
             }
-        }
-    }
 
     header = header.push(text(module_name).size(24));
     header = header.push(
@@ -185,26 +183,21 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
 
                 // Plugin image
                 if let Some(img_path) = installer.plugin_image_path(step_idx, group_idx, plugin_idx)
-                {
-                    if let Some(ref source_dir) = app.fomod_source_dir {
-                        if let Some(resolved) = installer.resolve_image(source_dir, img_path) {
-                            if is_selected {
+                    && let Some(ref source_dir) = app.fomod_source_dir
+                        && let Some(resolved) = installer.resolve_image(source_dir, img_path)
+                            && is_selected {
                                 option_col = option_col.push(
                                     image(image::Handle::from_path(resolved))
                                         .width(Length::Fixed(200.0))
                                         .height(Length::Fixed(120.0)),
                                 );
                             }
-                        }
-                    }
-                }
 
                 // Description
-                if let Some(ref desc) = plugin.description {
-                    if !desc.is_empty() {
+                if let Some(ref desc) = plugin.description
+                    && !desc.is_empty() {
                         option_col = option_col.push(text(desc).size(11));
                     }
-                }
 
                 // File preview count for selected plugins
                 if is_selected {

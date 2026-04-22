@@ -49,11 +49,11 @@ const KNOWN_PROXY_DLLS: &[&str] = &[
 ];
 
 impl GamePlugin for Cyberpunk2077 {
-    fn game_id(&self) -> &str {
+    fn game_id(&self) -> &'static str {
         "cyberpunk2077"
     }
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Cyberpunk 2077"
     }
 
@@ -134,7 +134,7 @@ impl GamePlugin for Cyberpunk2077 {
         }
 
         for entry in std::fs::read_dir(&mods_dir).into_iter().flatten().flatten() {
-            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            if !entry.file_type().is_ok_and(|t| t.is_dir()) {
                 continue;
             }
 
@@ -149,11 +149,10 @@ impl GamePlugin for Cyberpunk2077 {
                 .flatten()
             {
                 let name = dll_entry.file_name().to_string_lossy().to_lowercase();
-                if let Some(stem) = name.strip_suffix(".dll") {
-                    if KNOWN_PROXY_DLLS.contains(&stem) && !overrides.contains(&stem.to_string()) {
+                if let Some(stem) = name.strip_suffix(".dll")
+                    && KNOWN_PROXY_DLLS.contains(&stem) && !overrides.contains(&stem.to_string()) {
                         overrides.push(stem.to_string());
                     }
-                }
             }
         }
 

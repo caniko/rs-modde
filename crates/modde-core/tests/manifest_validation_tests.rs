@@ -1,6 +1,6 @@
 //! Manifest validation and parsing edge case tests.
 //!
-//! Tests WabbajackManifest and CollectionManifest serialization,
+//! Tests `WabbajackManifest` and `CollectionManifest` serialization,
 //! directive extraction, and edge cases in JSON parsing.
 
 use std::collections::HashMap;

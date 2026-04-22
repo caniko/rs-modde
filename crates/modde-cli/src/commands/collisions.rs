@@ -135,7 +135,7 @@ pub async fn handle(
         if suggest_hides {
             println!("Suggested hide commands:");
             for (mod_id, file_path) in &report.redundant_files {
-                println!("  modde profile hide \"{}\" \"{}\"", mod_id, file_path);
+                println!("  modde profile hide \"{mod_id}\" \"{file_path}\"");
             }
         } else {
             println!("  Run with --suggest-hides to get hide commands");

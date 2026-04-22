@@ -47,15 +47,14 @@ pub async fn handle(mod_id: String, profile_name: Option<String>) -> Result<()> 
     // We stored each file under `store/<mod_id>/<rel_path>`, so the
     // top-level store dir is `store/<mod_id>`.
     let store_mod_dir = paths::store_dir().join(&mod_id);
-    if store_mod_dir.exists() {
-        if let Err(e) = std::fs::remove_dir_all(&store_mod_dir) {
+    if store_mod_dir.exists()
+        && let Err(e) = std::fs::remove_dir_all(&store_mod_dir) {
             warn!(
                 path = %store_mod_dir.display(),
                 error = %e,
                 "failed to delete store dir; leaving orphaned files behind"
             );
         }
-    }
 
     // Finally, strip the mod row from the in-memory profile and persist
     // the slimmer version. `remove_installed_mod` already dropped the

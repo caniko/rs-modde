@@ -47,7 +47,8 @@ pub const SUPPORTED_GAME_IDS: &[&str] = &[
     "stellar-blade",
 ];
 
-/// (game_id, display_name) for every supported game, derived from the plugin registry.
+/// (`game_id`, `display_name`) for every supported game, derived from the plugin registry.
+#[must_use]
 pub fn supported_games() -> SmallVec<[(&'static str, &'static str); 8]> {
     SUPPORTED_GAME_IDS
         .iter()
@@ -56,9 +57,10 @@ pub fn supported_games() -> SmallVec<[(&'static str, &'static str); 8]> {
 }
 
 /// Map a Wabbajack manifest `game` field (e.g. `"Cyberpunk2077"`, `"SkyrimSpecialEdition"`)
-/// to the internal game_id (e.g. `"cyberpunk2077"`, `"skyrim-se"`).
+/// to the internal `game_id` (e.g. `"cyberpunk2077"`, `"skyrim-se"`).
 ///
 /// Returns `None` if the name is not recognized.
+#[must_use]
 pub fn normalize_wabbajack_game(wj_game: &str) -> Option<&'static str> {
     match wj_game {
         "Cyberpunk2077" => Some("cyberpunk2077"),
@@ -70,7 +72,8 @@ pub fn normalize_wabbajack_game(wj_game: &str) -> Option<&'static str> {
     }
 }
 
-/// Resolve a game_id string to the corresponding `GamePlugin` implementation.
+/// Resolve a `game_id` string to the corresponding `GamePlugin` implementation.
+#[must_use]
 pub fn resolve_game_plugin(game_id: &str) -> Option<&'static dyn GamePlugin> {
     match game_id {
         "skyrim-se" => Some(&bethesda::SKYRIM_SE),
@@ -84,7 +87,8 @@ pub fn resolve_game_plugin(game_id: &str) -> Option<&'static dyn GamePlugin> {
     }
 }
 
-/// Resolve a game_id to its `ModScanner` implementation, if one exists.
+/// Resolve a `game_id` to its `ModScanner` implementation, if one exists.
+#[must_use]
 pub fn resolve_mod_scanner(game_id: &str) -> Option<&'static dyn ModScanner> {
     match game_id {
         "cyberpunk2077" => Some(&cyberpunk::scanner::CYBERPUNK_SCANNER),
@@ -96,7 +100,8 @@ pub fn resolve_mod_scanner(game_id: &str) -> Option<&'static dyn ModScanner> {
     }
 }
 
-/// Resolve a game_id to its `CollisionClassifier` implementation, if one exists.
+/// Resolve a `game_id` to its `CollisionClassifier` implementation, if one exists.
+#[must_use]
 pub fn resolve_collision_classifier(
     game_id: &str,
 ) -> Option<Box<dyn modde_core::collision::CollisionClassifier>> {
@@ -109,7 +114,8 @@ pub fn resolve_collision_classifier(
     }
 }
 
-/// Resolve a game_id to its `SaveTracker` implementation, if one exists.
+/// Resolve a `game_id` to its `SaveTracker` implementation, if one exists.
+#[must_use]
 pub fn resolve_save_tracker(game_id: &str) -> Option<&'static dyn SaveTracker> {
     match game_id {
         "skyrim-se" | "skyrim-ae" => Some(&bethesda::saves::SKYRIM_SAVE_TRACKER),

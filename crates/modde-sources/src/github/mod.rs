@@ -30,6 +30,7 @@ struct ReleaseAsset {
 }
 
 impl GitHubSource {
+    #[must_use]
     pub fn new(client: Client) -> Self {
         let token = std::env::var("GITHUB_TOKEN").ok();
         Self { client, token }

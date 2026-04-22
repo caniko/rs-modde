@@ -29,7 +29,7 @@ const BA2_VERSION: u32 = 1;
 /// BA2 archive type for general files.
 const BA2_TYPE_GENERAL: &[u8; 4] = b"GNRL";
 
-/// Reconstruct a BSA/BA2 archive from CreateBSA directive file states.
+/// Reconstruct a BSA/BA2 archive from `CreateBSA` directive file states.
 ///
 /// Detects the target format from the output file extension:
 /// - `.bsa` -> BSA format (Skyrim)
@@ -55,7 +55,7 @@ pub async fn create_bsa(
 ///
 /// BSA layout:
 /// 1. Header (36 bytes)
-/// 2. Folder records (folder_count * 16 bytes each)
+/// 2. Folder records (`folder_count` * 16 bytes each)
 /// 3. File record blocks (per folder: folder name, then file records)
 /// 4. File name block
 /// 5. File data blocks
@@ -162,7 +162,7 @@ async fn create_bsa_inner(
     // --- Folder records (16 bytes each) ---
     // We need to calculate offsets for the file record blocks.
     // File record blocks start after: header(36) + folder_records(folder_count * 16)
-    let folder_records_end = 36 + folder_count as u64 * 16;
+    let folder_records_end = 36 + u64::from(folder_count) * 16;
 
     // Each file record block: folder_name_len(1) + folder_name + null(1) + file_records(16 * count)
     let mut block_offset = folder_records_end;
@@ -180,13 +180,13 @@ async fn create_bsa_inner(
         } else {
             folder_name.len()
         };
-        block_offset += 1 + name_len as u64 + 1 + file_count_in_folder as u64 * 16;
+        block_offset += 1 + name_len as u64 + 1 + u64::from(file_count_in_folder) * 16;
     }
 
     // --- File record blocks ---
     // Calculate where file data starts: after all file record blocks + file name block
     let file_name_block_offset = block_offset;
-    let file_data_start = file_name_block_offset + total_file_name_length as u64;
+    let file_data_start = file_name_block_offset + u64::from(total_file_name_length);
     let mut data_offset = file_data_start;
 
     let mut file_index = 0usize;
@@ -214,7 +214,7 @@ async fn create_bsa_inner(
             write_u32_le(&mut buf, data_size)?;
             write_u32_le(&mut buf, data_offset as u32)?;
 
-            data_offset += data_size as u64;
+            data_offset += u64::from(data_size);
             file_index += 1;
         }
     }
@@ -251,8 +251,8 @@ async fn create_bsa_inner(
 /// Create a BA2 archive (Fallout 4 format, uncompressed general).
 ///
 /// BA2 layout:
-/// 1. Header (24 bytes): magic(4) + version(4) + type(4) + file_count(4) + name_table_offset(8)
-/// 2. File records (36 bytes each): name_hash(4) + ext(4) + dir_hash(4) + flags(4) + offset(8) + packed_size(4) + unpacked_size(4)
+/// 1. Header (24 bytes): magic(4) + version(4) + type(4) + `file_count(4)` + `name_table_offset(8)`
+/// 2. File records (36 bytes each): `name_hash(4)` + ext(4) + `dir_hash(4)` + flags(4) + offset(8) + `packed_size(4)` + `unpacked_size(4)`
 /// 3. File data blocks
 /// 4. Name table
 async fn create_ba2(file_states: &[BSAFileState], staging_dir: &Path, output: &Path) -> Result<()> {
@@ -280,7 +280,7 @@ async fn create_ba2(file_states: &[BSAFileState], staging_dir: &Path, output: &P
     // Header size: 24 bytes
     // File records: 36 bytes each
     let header_size = 24u64;
-    let records_size = file_count as u64 * 36;
+    let records_size = u64::from(file_count) * 36;
     let data_start = header_size + records_size;
 
     // Calculate data offsets
@@ -392,17 +392,17 @@ fn bsa_hash_path(path: &str) -> u64 {
     let mut hash1: u32 = 0;
 
     // Last character
-    hash1 = hash1.wrapping_add(bytes[len - 1] as u32);
+    hash1 = hash1.wrapping_add(u32::from(bytes[len - 1]));
     // Include length
-    hash1 |= (if len >= 2 { bytes[len - 2] as u32 } else { 0 }) << 8;
+    hash1 |= (if len >= 2 { u32::from(bytes[len - 2]) } else { 0 }) << 8;
     hash1 |= (len as u32) << 16;
-    hash1 |= (bytes[0] as u32) << 24;
+    hash1 |= u32::from(bytes[0]) << 24;
 
     let mut hash2: u32 = 0;
     // Accumulate middle characters
     if len > 2 {
         for &b in &bytes[1..len - 2] {
-            hash2 = hash2.wrapping_mul(0x1003f).wrapping_add(b as u32);
+            hash2 = hash2.wrapping_mul(0x1003f).wrapping_add(u32::from(b));
         }
     }
 
@@ -433,7 +433,7 @@ fn bsa_hash_path(path: &str) -> u64 {
         _ => {}
     }
 
-    ((hash2 as u64) << 32) | (hash1 as u64)
+    (u64::from(hash2) << 32) | u64::from(hash1)
 }
 
 /// Simple CRC32 hash for BA2 name/directory hashing.
@@ -442,7 +442,7 @@ fn ba2_crc32(data: &[u8]) -> u32 {
     for &b in data {
         hash = hash
             .wrapping_mul(31)
-            .wrapping_add(b.to_ascii_lowercase() as u32);
+            .wrapping_add(u32::from(b.to_ascii_lowercase()));
     }
     hash
 }
@@ -856,7 +856,7 @@ mod tests {
     #[test]
     fn test_ba2_crc32_single_byte() {
         let h = ba2_crc32(b"a");
-        assert_eq!(h, b'a' as u32); // 0 * 31 + 'a' = 'a'
+        assert_eq!(h, u32::from(b'a')); // 0 * 31 + 'a' = 'a'
     }
 
     #[test]
@@ -882,7 +882,7 @@ mod tests {
         let hash = bsa_hash_path("a");
         assert_ne!(hash, 0);
         // For single char: hash1 = a + (0 << 8) | (1 << 16) | (a << 24)
-        let expected_lo = (b'a' as u32) | (1u32 << 16) | ((b'a' as u32) << 24);
+        let expected_lo = u32::from(b'a') | (1u32 << 16) | (u32::from(b'a') << 24);
         assert_eq!(hash as u32, expected_lo);
     }
 
@@ -892,7 +892,7 @@ mod tests {
         assert_ne!(hash, 0);
         // len=2: hash1 = b + (a << 8) | (2 << 16) | (a << 24), hash2 = 0 (no middle chars)
         let expected_lo =
-            (b'b' as u32) | ((b'a' as u32) << 8) | (2u32 << 16) | ((b'a' as u32) << 24);
+            u32::from(b'b') | (u32::from(b'a') << 8) | (2u32 << 16) | (u32::from(b'a') << 24);
         assert_eq!(hash as u32, expected_lo);
         assert_eq!(hash >> 32, 0); // no middle chars so hash2 = 0
     }

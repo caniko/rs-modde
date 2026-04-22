@@ -23,6 +23,7 @@ pub enum ContentCategory {
 
 impl ContentCategory {
     /// Human-readable label for display.
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             ContentCategory::Plugin => "plugins",
@@ -39,6 +40,7 @@ impl ContentCategory {
     }
 
     /// Display order (lower = shown first).
+    #[must_use]
     pub fn order(self) -> u8 {
         match self {
             ContentCategory::Plugin => 0,
@@ -63,6 +65,7 @@ pub struct ContentSummary {
 
 impl ContentSummary {
     /// Return counts sorted by display order, excluding zero counts.
+    #[must_use]
     pub fn sorted_counts(&self) -> Vec<(ContentCategory, usize)> {
         let mut entries: Vec<_> = self
             .counts
@@ -75,6 +78,7 @@ impl ContentSummary {
     }
 
     /// Format as a human-readable string like "5 textures, 2 meshes, 1 plugin".
+    #[must_use]
     pub fn display_string(&self) -> String {
         let parts: Vec<String> = self
             .sorted_counts()
@@ -97,7 +101,7 @@ impl ContentSummary {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ModSafety {
     /// Alters game logic — removing this mod will break saves that depend on it.
-    /// Examples: REDscript mods, CET lua scripts, .tweak overrides, ESP/ESM plugins.
+    /// Examples: `REDscript` mods, CET lua scripts, .tweak overrides, ESP/ESM plugins.
     SaveBreaking,
     /// Cosmetic only — safe to add/remove without affecting saves.
     /// Examples: texture replacers, mesh swaps, UI reskins.
@@ -109,6 +113,7 @@ pub enum ModSafety {
 
 impl ModSafety {
     /// Returns `true` if this mod should be included in save fingerprints.
+    #[must_use]
     pub fn affects_saves(self) -> bool {
         matches!(self, ModSafety::SaveBreaking | ModSafety::Unknown)
     }
@@ -137,7 +142,7 @@ pub trait GamePlugin: Send + Sync {
         modde_core::fs::deploy_symlinks(staging, target)
     }
 
-    /// Run any post-deployment steps (e.g. REDmod deploy).
+    /// Run any post-deployment steps (e.g. `REDmod` deploy).
     fn post_deploy(&self, _install: &Path) -> Result<()> {
         Ok(())
     }
@@ -214,7 +219,7 @@ pub trait GamePlugin: Send + Sync {
     /// Runs **before** the generic probes (FOMOD, BAIN, DLL overlay) in
     /// [`modde_core::installer::analyze`], so a game can authoritatively
     /// identify layouts it knows about — e.g. Cyberpunk recognizing a
-    /// REDmod by `info.json` + `archives/` presence, or ENB for Bethesda.
+    /// `REDmod` by `info.json` + `archives/` presence, or ENB for Bethesda.
     ///
     /// Return `None` to fall through to the generic probes.
     fn analyze_mod_archive(
@@ -287,7 +292,7 @@ pub struct DetectedSave {
     /// Uses `Cow<'static, str>` because categories are almost always
     /// static string literals, avoiding heap allocation in the common case.
     pub category: Cow<'static, str>,
-    /// Human-readable label (e.g. custom name from NamedSaves).
+    /// Human-readable label (e.g. custom name from `NamedSaves`).
     pub label: Option<String>,
     /// Last modification time.
     pub modified: SystemTime,
@@ -310,6 +315,7 @@ pub struct ModClassifyConfig {
 
 /// Classify a mod by walking its directory and checking file extensions / directory paths
 /// against the provided configuration. Returns early on the first save-breaking indicator.
+#[must_use]
 pub fn classify_mod_by_content(mod_dir: &std::path::Path, config: &ModClassifyConfig) -> ModSafety {
     if !mod_dir.exists() {
         return ModSafety::Unknown;
@@ -394,7 +400,7 @@ pub trait SaveTracker: Send + Sync {
                     .unwrap_or_else(|| s.rel_path.to_str().unwrap_or("unknown"));
                 format!("capture: {} [{}]", name, s.category)
             }
-            n => format!("capture: {} saves", n),
+            n => format!("capture: {n} saves"),
         }
     }
 }
@@ -431,8 +437,8 @@ pub trait ModScanner: Send + Sync {
     fn scan_directories(&self) -> &[&str];
     fn scan_filesystem(&self, ctx: &ScanContext<'_>) -> anyhow::Result<Vec<DiscoveredMod>>;
 
-    /// Inverse of [`ModScanner::scan_filesystem`]'s mod_id scheme: given
-    /// a mod_id this scanner would produce, return the filesystem footprint
+    /// Inverse of [`ModScanner::scan_filesystem`]'s `mod_id` scheme: given
+    /// a `mod_id` this scanner would produce, return the filesystem footprint
     /// that mod owns (directory subtree or single file).
     ///
     /// Used by `modde_core::scanner::detect_stale_duplicates` to correlate
@@ -445,6 +451,7 @@ pub trait ModScanner: Send + Sync {
     }
 }
 
+#[must_use]
 pub fn walk_files_relative(base: &Path, dir: &Path) -> Vec<DiscoveredFile> {
     let mut result = Vec::new();
     if let Ok(entries) = std::fs::read_dir(dir) {
@@ -452,19 +459,19 @@ pub fn walk_files_relative(base: &Path, dir: &Path) -> Vec<DiscoveredFile> {
             let path = entry.path();
             if path.is_dir() {
                 result.extend(walk_files_relative(base, &path));
-            } else if let Ok(meta) = path.metadata() {
-                if let Ok(rel) = path.strip_prefix(base) {
+            } else if let Ok(meta) = path.metadata()
+                && let Ok(rel) = path.strip_prefix(base) {
                     result.push(DiscoveredFile {
                         rel_path: rel.to_string_lossy().to_string(),
                         size: meta.len(),
                     });
                 }
-            }
         }
     }
     result
 }
 
+#[must_use]
 pub fn slug(s: &str) -> String {
     s.to_lowercase()
         .chars()

@@ -21,6 +21,7 @@ pub enum BrowseTab {
 }
 
 impl BrowseTab {
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             BrowseTab::Top => "Top",
@@ -144,7 +145,7 @@ fn render_tab_bar(active: BrowseTab) -> Element<'static, Message> {
     bar.align_y(Alignment::Center).into()
 }
 
-fn mods_grid<'a>(mods: &'a [GqlModTile], game_domain: Option<String>) -> Element<'a, Message> {
+fn mods_grid(mods: &[GqlModTile], game_domain: Option<String>) -> Element<'_, Message> {
     if mods.is_empty() {
         return container(text("No mods in this feed yet.").size(13))
             .padding(16)
@@ -157,7 +158,7 @@ fn mods_grid<'a>(mods: &'a [GqlModTile], game_domain: Option<String>) -> Element
     scrollable(col).height(Length::Fill).into()
 }
 
-fn mod_card<'a>(tile: &'a GqlModTile, game_domain: Option<String>) -> Element<'a, Message> {
+fn mod_card(tile: &GqlModTile, game_domain: Option<String>) -> Element<'_, Message> {
     let header = row![
         text(&tile.name).size(16),
         iced::widget::space::horizontal(),
@@ -211,10 +212,10 @@ fn mod_card<'a>(tile: &'a GqlModTile, game_domain: Option<String>) -> Element<'a
     .into()
 }
 
-fn collections_grid<'a>(
-    collections: &'a [GqlCollectionTile],
+fn collections_grid(
+    collections: &[GqlCollectionTile],
     game_domain: Option<String>,
-) -> Element<'a, Message> {
+) -> Element<'_, Message> {
     if collections.is_empty() {
         return container(text("No collections in this feed yet.").size(13))
             .padding(16)
@@ -227,10 +228,10 @@ fn collections_grid<'a>(
     scrollable(col).height(Length::Fill).into()
 }
 
-fn collection_card<'a>(
-    tile: &'a GqlCollectionTile,
+fn collection_card(
+    tile: &GqlCollectionTile,
     _game_domain: Option<String>,
-) -> Element<'a, Message> {
+) -> Element<'_, Message> {
     let header = row![
         text(&tile.name).size(16),
         iced::widget::space::horizontal(),

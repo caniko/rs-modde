@@ -9,7 +9,7 @@ use super::api::NexusApi;
 /// Information about a mod that has an available update on Nexus.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModUpdate {
-    /// The mod_id string used in the profile (local identifier).
+    /// The `mod_id` string used in the profile (local identifier).
     pub mod_id: String,
     /// Nexus mod ID.
     pub nexus_mod_id: u64,

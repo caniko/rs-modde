@@ -1,10 +1,10 @@
-//! Integration tests for AppSettings + ProfileManager interaction.
+//! Integration tests for `AppSettings` + `ProfileManager` interaction.
 //!
 //! These mirror the exact initialization flow used by the UI's `Modde::new()`:
 //! 1. Load settings from disk
 //! 2. List profiles from the database
-//! 3. Auto-detect selected_game from profile if unset
-//! 4. Auto-detect game_path if missing
+//! 3. Auto-detect `selected_game` from profile if unset
+//! 4. Auto-detect `game_path` if missing
 //! 5. Persist settings
 
 use std::path::PathBuf;
@@ -135,7 +135,7 @@ fn set_game_path_independent_games() {
 // UI init flow: profile listing -> auto-detect game
 // ---------------------------------------------------------------------------
 
-/// Simulates the exact logic in Modde::new() for selecting a game from profiles.
+/// Simulates the exact logic in `Modde::new()` for selecting a game from profiles.
 fn simulate_ui_init(
     pm: &ProfileManager,
     settings: &mut AppSettings,
@@ -144,12 +144,11 @@ fn simulate_ui_init(
     let mut selected_game = settings.selected_game.clone();
 
     // Auto-detect: if no game selected but profiles exist, pick first profile's game
-    if selected_game.is_none() {
-        if let Some(first) = profiles.first() {
+    if selected_game.is_none()
+        && let Some(first) = profiles.first() {
             selected_game = Some(first.game_id.to_string());
             settings.selected_game = Some(first.game_id.to_string());
         }
-    }
 
     (profiles, selected_game)
 }
