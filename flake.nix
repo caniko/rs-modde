@@ -2,12 +2,17 @@
   description = "modde — cross-platform game mod manager";
 
   inputs = {
-    rs-harbor.url = "github:caniko/rs-harbor";
+    rs-harbor.url = "git+https://codeberg.org/caniko/rs-harbor.git";
 
     nixpkgs.follows = "rs-harbor/nixpkgs";
     rust-overlay.follows = "rs-harbor/rust-overlay";
     crane.follows = "rs-harbor/crane";
     flake-utils.follows = "rs-harbor/flake-utils";
+
+    nix-appimage = {
+      url = "github:ralismark/nix-appimage";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     home-manager = {
       url = "github:nix-community/home-manager";
@@ -25,6 +30,7 @@
     rs-harbor,
     rust-overlay,
     flake-utils,
+    nix-appimage,
     adidoks,
     ...
   }:
@@ -44,7 +50,6 @@
 
       toolchain = rs-harbor.lib.mkToolchain {inherit pkgs;};
       cross = rs-harbor.lib.mkCross {inherit pkgs system;};
-      cargoConfig = rs-harbor.lib.mkCargoConfig {inherit pkgs;};
 
       # Linux-specific dependencies for the native build
       linuxBuildInputs = lib.optionals pkgs.stdenv.isLinux (with pkgs; [
@@ -137,39 +142,67 @@
         };
       };
     in {
-      packages = {
-        inherit modde docs website site;
-        default = modde;
-      };
+      packages =
+        {
+          inherit modde docs website site;
+          default = modde;
 
-      devShells =
-        rs-harbor.lib.mkDevShells {
-          inherit pkgs cross cargoConfig;
-          inherit (toolchain) craneLib;
-
-          packages = with pkgs;
-            [
-              pkg-config
-              openssl
-              just
-              _7zz
-              unrar
-              zola
-            ]
-            ++ linuxBuildInputs;
-
-          extraEnv = lib.optionalAttrs pkgs.stdenv.isLinux {
-            LD_LIBRARY_PATH = linuxLdPath;
+          flatpak-manifest = (rs-harbor.lib.mkFlatpakManifest {
+            inherit pkgs;
+            appId = "org.codeberg.caniko.modde";
+            pname = "modde-ui";
+            desktopFile = builtins.readFile ./dist/modde-ui.desktop;
+            finishArgs = [
+              "--share=ipc"
+              "--share=network"
+              "--socket=x11"
+              "--socket=wayland"
+              "--device=dri"
+              "--socket=pulseaudio"
+            ];
+          }).manifestPath;
+        }
+        // lib.optionalAttrs pkgs.stdenv.isLinux {
+          appimage-cli = rs-harbor.lib.mkAppImage {
+            inherit system nix-appimage;
+            program = "${modde}/bin/modde";
+            pname = "modde";
           };
-
-          extraShellHook = ''
-            # Set up adidoks theme symlink for local docs development
-            if [ -d docs/site ]; then
-              mkdir -p docs/site/themes
-              ln -sfn "${adidoks}" "docs/site/themes/${themeName}"
-            fi
-          '';
+          appimage-ui = rs-harbor.lib.mkAppImage {
+            inherit system nix-appimage;
+            program = "${modde}/bin/modde-ui";
+            pname = "modde-ui";
+          };
         };
+
+      devShells = rs-harbor.lib.mkDevShells {
+        inherit pkgs cross;
+        inherit (toolchain) craneLib;
+
+        packages = with pkgs;
+          [
+            pkg-config
+            openssl
+            just
+            _7zz
+            unrar
+            zola
+            just
+          ]
+          ++ linuxBuildInputs;
+
+        extraEnv = lib.optionalAttrs pkgs.stdenv.isLinux {
+          LD_LIBRARY_PATH = linuxLdPath;
+        };
+
+        extraShellHook = ''
+          # Set up adidoks theme symlink for local docs development
+          if [ -d docs/site ]; then
+            mkdir -p docs/site/themes
+            ln -sfn "${adidoks}" "docs/site/themes/${themeName}"
+          fi
+        '';
+      };
 
       apps.deploy-pages = {
         type = "app";

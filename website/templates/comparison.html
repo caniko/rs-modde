@@ -61,47 +61,38 @@
   </div>
 
   <div class="comparison-section">
-    <h2>Feature coverage</h2>
-    <p class="section-subtitle">modde covers 63% of MO2's 143 tracked features, with strong coverage in profiles, saves, and deployment.</p>
+    <h2>Shipped today</h2>
+    <p class="section-subtitle">This page no longer publishes a hand-maintained percentage. These are the areas that are actually trustworthy today.</p>
     <table class="coverage-table">
       <thead>
         <tr>
-          <th>Category</th>
-          <th>Coverage</th>
-          <th>Done</th>
-          <th>Total</th>
+          <th>Area</th>
+          <th>Status</th>
+          <th>Notes</th>
         </tr>
       </thead>
       <tbody>
-        <tr><td>Save Management</td><td><span class="badge high">94%</span></td><td>7</td><td>8</td></tr>
-        <tr><td>Profile System</td><td><span class="badge high">88%</span></td><td>7</td><td>8</td></tr>
-        <tr><td>Diagnostics</td><td><span class="badge high">80%</span></td><td>4</td><td>5</td></tr>
-        <tr><td>Game Support</td><td><span class="badge mid">75%</span></td><td>6</td><td>8</td></tr>
-        <tr><td>Tool Integration</td><td><span class="badge mid">71%</span></td><td>5</td><td>7</td></tr>
-        <tr><td>Platform</td><td><span class="badge mid">71%</span></td><td>5</td><td>7</td></tr>
-        <tr><td>Core VFS & Deployment</td><td><span class="badge mid">67%</span></td><td>8</td><td>12</td></tr>
-        <tr><td>Mod Backup</td><td><span class="badge mid">67%</span></td><td>2</td><td>3</td></tr>
-        <tr><td>Conflict Resolution</td><td><span class="badge mid">63%</span></td><td>5</td><td>8</td></tr>
-        <tr><td>Installer Support</td><td><span class="badge mid">58%</span></td><td>4</td><td>6</td></tr>
-        <tr><td>Nexus Integration</td><td><span class="badge mid">55%</span></td><td>12</td><td>22</td></tr>
-        <tr><td>Mod Info Dialog</td><td><span class="badge mid">55%</span></td><td>6</td><td>11</td></tr>
-        <tr><td>Plugin Load Order</td><td><span class="badge low">54%</span></td><td>7</td><td>12</td></tr>
-        <tr><td>Organization & UI</td><td><span class="badge low">43%</span></td><td>9</td><td>21</td></tr>
-        <tr><td>Extensibility</td><td><span class="badge low">40%</span></td><td>2</td><td>5</td></tr>
+        <tr><td>Profiles + save vaults</td><td><span class="badge high">Done</span></td><td>Profile switching, experiments, git-backed save history, and fingerprints are shipped.</td></tr>
+        <tr><td>VFS deployment</td><td><span class="badge high">Done</span></td><td>Symlink-farm deployment, rollback, and conflict resolution are strong differentiators on Linux.</td></tr>
+        <tr><td>Bethesda plugin pipeline</td><td><span class="badge high">Done</span></td><td>LOOT parsing, plugin validation, real plugin-order backup/restore, and archive-aware conflict analysis are shipped.</td></tr>
+        <tr><td>Nexus / Wabbajack / Collections</td><td><span class="badge high">Done</span></td><td>These are the first-class install flows today.</td></tr>
+        <tr><td>Data Files / Diagnostics / Tools / Downloads views</td><td><span class="badge mid">Partial</span></td><td>All are now reachable and data-backed, but they are not yet MO2-complete.</td></tr>
+        <tr><td>BAIN and non-Nexus source breadth</td><td><span class="badge mid">Partial</span></td><td>Core plumbing exists, but the UX and positioning are still incomplete.</td></tr>
+        <tr><td>Starfield + generic game story</td><td><span class="badge low">Not shipped</span></td><td>Starfield save tracking is intentionally unavailable until it has a real tracker, and `GenericGame` is internal-only.</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="comparison-section">
     <h2>Where MO2 is ahead</h2>
-    <p class="section-subtitle">Areas where MO2's maturity shows. These are on the roadmap.</p>
+    <p class="section-subtitle">These are the gaps that still matter most for any serious “replace MO2/Vortex” claim.</p>
     <ul class="gap-list">
-      <li><strong>Mod Information Dialog</strong> — MO2's 9-tab double-click experience (filetree, conflicts, images, text editor) is the biggest UI gap</li>
-      <li><strong>Download queue</strong> — MO2 has pause/resume, speed tracking, and 10 download states</li>
-      <li><strong>BSA/BA2 archive conflicts</strong> — MO2 indexes files inside archives for conflict checking</li>
-      <li><strong>50+ games</strong> — MO2 supports many more titles via its plugin system</li>
-      <li><strong>Rich UI features</strong> — Collapsible separators, 12 status flag icons, content type detection, keyboard shortcuts</li>
-      <li><strong>Plugin system</strong> — MO2's Python plugin architecture enables community extensions</li>
+      <li><strong>Executables management</strong> — named executables, args, working dir, per-executable output mods, shortcut creation, and DLL injection semantics</li>
+      <li><strong>Mod Information Dialog</strong> — file tree, conflict tabs, image preview, text/INI editing, and optional plugin management</li>
+      <li><strong>Durable download pipeline</strong> — transport-level pause/resume/cancel, ETA, concurrency, and update-all workflows</li>
+      <li><strong>Merged VFS browser</strong> — a true Data tab with archive visibility, overwrite workflows, and conflict navigation</li>
+      <li><strong>Sharper load-order UX</strong> — richer LOOT reports, plugin pinning, and clearer load-order governance</li>
+      <li><strong>Broader title depth</strong> — not by chasing every game first, but by being unquestionably solid for the supported Linux-first workflows</li>
     </ul>
   </div>
 </section>

@@ -44,7 +44,17 @@ pub fn modde_data_dir() -> PathBuf {
     if let Some(dir) = DATA_DIR_OVERRIDE.get() {
         return dir.clone();
     }
+    active_instance_data_dir().unwrap_or_else(default_modde_data_dir)
+}
+
+fn default_modde_data_dir() -> PathBuf {
     data_dir().join("modde")
+}
+
+fn active_instance_data_dir() -> Option<PathBuf> {
+    crate::instance::InstanceRegistry::load()
+        .active_data_dir()
+        .map(Path::to_path_buf)
 }
 
 /// Mod file store: `<modde_data>/store/`.
@@ -112,8 +122,8 @@ fn steam_install_dir() -> PathBuf {
 /// Read Steam install path from Windows registry, with fallback.
 #[cfg(target_os = "windows")]
 fn steam_install_dir_windows() -> PathBuf {
-    use winreg::enums::HKEY_CURRENT_USER;
     use winreg::RegKey;
+    use winreg::enums::HKEY_CURRENT_USER;
 
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     if let Ok(key) = hkcu.open_subkey(r"Software\Valve\Steam") {
@@ -218,9 +228,7 @@ pub fn home_dir() -> PathBuf {
         }
         #[cfg(windows)]
         {
-            PathBuf::from(
-                std::env::var("USERPROFILE").unwrap_or_else(|_| r"C:\Temp".to_string()),
-            )
+            PathBuf::from(std::env::var("USERPROFILE").unwrap_or_else(|_| r"C:\Temp".to_string()))
         }
     })
 }
@@ -228,7 +236,23 @@ pub fn home_dir() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write as _;
+
+    #[test]
+    fn instance_registry_can_override_default_data_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let instance_dir = tmp.path().join("instance-data");
+
+        let mut registry = crate::instance::InstanceRegistry::default();
+        registry.instances.push(crate::instance::Instance {
+            name: "portable".to_string(),
+            data_dir: instance_dir.clone(),
+            is_default: true,
+        });
+        registry.active = Some("portable".to_string());
+
+        let resolved = registry.active_data_dir().map(Path::to_path_buf);
+        assert_eq!(resolved, Some(instance_dir));
+    }
 
     fn write_vdf(dir: &std::path::Path, content: &str) -> PathBuf {
         let path = dir.join("libraryfolders.vdf");
@@ -288,12 +312,17 @@ mod tests {
         let vdf_path = write_vdf(tmp.path(), vdf);
         let paths = parse_library_folders_vdf(&vdf_path);
         // Nonexistent paths should not appear
-        assert!(!paths.iter().any(|p| p.to_string_lossy().contains("nonexistent")));
+        assert!(
+            !paths
+                .iter()
+                .any(|p| p.to_string_lossy().contains("nonexistent"))
+        );
     }
 
     #[test]
     fn vdf_missing_file_returns_empty() {
-        let paths = parse_library_folders_vdf(std::path::Path::new("/nonexistent/libraryfolders.vdf"));
+        let paths =
+            parse_library_folders_vdf(std::path::Path::new("/nonexistent/libraryfolders.vdf"));
         // Should return empty vec, not panic
         assert!(paths.is_empty());
     }
@@ -333,8 +362,14 @@ mod tests {
     #[test]
     fn extract_vdf_string_basic() {
         assert_eq!(extract_vdf_string(r#""hello""#), Some("hello"));
-        assert_eq!(extract_vdf_string(r#"  "with spaces"  "#), Some("with spaces"));
-        assert_eq!(extract_vdf_string(r#""/path/to/dir""#), Some("/path/to/dir"));
+        assert_eq!(
+            extract_vdf_string(r#"  "with spaces"  "#),
+            Some("with spaces")
+        );
+        assert_eq!(
+            extract_vdf_string(r#""/path/to/dir""#),
+            Some("/path/to/dir")
+        );
     }
 
     #[test]

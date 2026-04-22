@@ -2,7 +2,7 @@
 
 ## Overview
 
-modde has deep Bethesda-specific support: plugin load order management, LOOT masterlist integration for automatic sorting, binary plugin header parsing for validation, BSA/BA2 archive awareness, and per-profile INI management. Compared to MO2, the core plugin pipeline is strong, but archive conflict detection, the "Archives" tab, plugin lock, and load order backup/restore are missing.
+modde has deep Bethesda-specific support: plugin load order management, LOOT masterlist integration, binary plugin header parsing, archive-aware conflict analysis, and per-profile INI management. The truth after the audit is better than the older docs suggested: plugin backup/restore is now real, diagnostics now use real plugin/conflict inputs, and archive contents are included in collision analysis. The big remaining gaps are richer reports, pinning, Archives-tab UX, and mod-info tooling.
 
 ## Architecture
 
@@ -106,6 +106,7 @@ Extension-based classification for Bethesda games:
 | `skyrim-ae` | 489830 | Skyrim Special Edition |
 | `fallout4` | 377160 | Fallout4 |
 | `fallout76` | 1151340 | Fallout 76 |
+| `starfield` | 1716740 | Starfield |
 
 ## MO2 Feature Comparison
 
@@ -120,14 +121,14 @@ Extension-based classification for Bethesda games:
 | ESM/ESL flag detection | **Done** | Record flags parsing |
 | BSA/BA2 archive deploy | **Done** | Archives placed as-is into Data/ |
 | Plugin list columns (priority, mod index, form version, author) | -- | MO2 has 8 columns in plugin list |
-| BSA/BA2 conflict detection (files inside archives) | -- | Only loose file conflicts tracked |
+| BSA/BA2 conflict detection (files inside archives) | **Done** | Archive contents are indexed into the collision map |
 | BSA/BA2 content preview/browser | -- | MO2 can list files inside archives |
 | BSA/BA2 packing tool | -- | MO2 has archive packer |
 | Archives tab (BSA load order management) | -- | MO2 has a dedicated Archives right-pane tab |
 | Archive invalidation (auto-generate) | -- | MO2 generates invalidation files per-profile |
 | BSA back-dating (force loose wins) | -- | MO2 changes archive timestamps |
 | "Lock load order" for plugins | -- | MO2 can pin plugins to resist LOOT re-sorting |
-| Plugin load order backup/restore | -- | MO2 can snapshot and restore plugin order |
+| Plugin load order backup/restore | **Done** | Backups now round-trip real plugin order and enabled state |
 | Optional ESPs (move to optional/ subfolder) | -- | MO2's mod info dialog has Optional ESPs tab |
 | Per-mod INI tweaks (INI Files tab in mod info) | -- | MO2 edits .ini files bundled inside mods |
-| Problems/diagnostics system | -- | MO2 has plugin-based diagnostic with guided auto-fixes |
+| Problems/diagnostics system | Partial | Shared CLI/UI diagnostics exist, but not a full MO2-style problems framework |

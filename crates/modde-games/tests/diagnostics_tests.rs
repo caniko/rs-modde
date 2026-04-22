@@ -23,7 +23,8 @@ fn enabled_mod(id: &str) -> EnabledMod {
         mod_id: id.to_string(),
         enabled: true,
         version: None,
-        fomod_config: None, ..Default::default()
+        fomod_config: None,
+        ..Default::default()
     }
 }
 
@@ -58,6 +59,7 @@ fn test_empty_mod_rule() {
     let ctx = DiagContext {
         game_id: "skyrim-se",
         profile: &profile,
+        active_plugins: &[],
         conflict_map: &conflict_map,
         collision_report: None,
         store_dir: store.path(),
@@ -68,10 +70,23 @@ fn test_empty_mod_rule() {
     let diagnostics = rule.check(&ctx);
 
     // mod-empty and mod-missing should produce diagnostics
-    assert_eq!(diagnostics.len(), 2, "expected 2 empty mod diagnostics, got {}", diagnostics.len());
+    assert_eq!(
+        diagnostics.len(),
+        2,
+        "expected 2 empty mod diagnostics, got {}",
+        diagnostics.len()
+    );
     assert!(diagnostics.iter().all(|d| d.severity == Severity::Warning));
-    assert!(diagnostics.iter().any(|d| d.affected_mod.as_deref() == Some("mod-empty")));
-    assert!(diagnostics.iter().any(|d| d.affected_mod.as_deref() == Some("mod-missing")));
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.affected_mod.as_deref() == Some("mod-empty"))
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.affected_mod.as_deref() == Some("mod-missing"))
+    );
 }
 
 /// Build a minimal TES4 record for testing (same pattern as plugin_header.rs tests).
@@ -132,17 +147,16 @@ fn test_form43_and_missing_master() {
     // Profile with plugins as mod IDs (the collect_active_plugins helper filters by extension)
     let profile = make_profile(
         "skyrim-se",
-        vec![
-            enabled_mod("Skyrim.esm"),
-            enabled_mod("OldMod.esp"),
-        ],
+        vec![enabled_mod("Skyrim.esm"), enabled_mod("OldMod.esp")],
         overrides.path().to_path_buf(),
     );
     let conflict_map = ConflictMap::default();
+    let active_plugins = vec!["Skyrim.esm".to_string(), "OldMod.esp".to_string()];
 
     let ctx = DiagContext {
         game_id: "skyrim-se",
         profile: &profile,
+        active_plugins: &active_plugins,
         conflict_map: &conflict_map,
         collision_report: None,
         store_dir: store.path(),
@@ -152,14 +166,24 @@ fn test_form43_and_missing_master() {
     // Test Form43Rule
     let form43_rule = Form43Rule;
     let form43_diags = form43_rule.check(&ctx);
-    assert_eq!(form43_diags.len(), 1, "expected 1 Form 43 diagnostic, got {}", form43_diags.len());
+    assert_eq!(
+        form43_diags.len(),
+        1,
+        "expected 1 Form 43 diagnostic, got {}",
+        form43_diags.len()
+    );
     assert_eq!(form43_diags[0].severity, Severity::Warning);
     assert!(form43_diags[0].title.contains("OldMod.esp"));
 
     // Test MissingMasterRule
     let master_rule = MissingMasterRule;
     let master_diags = master_rule.check(&ctx);
-    assert_eq!(master_diags.len(), 1, "expected 1 missing master diagnostic, got {}", master_diags.len());
+    assert_eq!(
+        master_diags.len(),
+        1,
+        "expected 1 missing master diagnostic, got {}",
+        master_diags.len()
+    );
     assert_eq!(master_diags[0].severity, Severity::Error);
     assert!(master_diags[0].title.contains("MissingMod.esp"));
 }
@@ -181,10 +205,12 @@ fn test_form43_rule_skips_non_skyrim() {
         overrides.path().to_path_buf(),
     );
     let conflict_map = ConflictMap::default();
+    let active_plugins = vec!["SomeMod.esp".to_string()];
 
     let ctx = DiagContext {
         game_id: "fallout4",
         profile: &profile,
+        active_plugins: &active_plugins,
         conflict_map: &conflict_map,
         collision_report: None,
         store_dir: store.path(),
@@ -193,7 +219,10 @@ fn test_form43_rule_skips_non_skyrim() {
 
     let rule = Form43Rule;
     let diags = rule.check(&ctx);
-    assert!(diags.is_empty(), "Form43Rule should not produce diagnostics for non-Skyrim games");
+    assert!(
+        diags.is_empty(),
+        "Form43Rule should not produce diagnostics for non-Skyrim games"
+    );
 }
 
 #[test]
@@ -207,16 +236,13 @@ fn test_orphaned_overrides_rule() {
     // Put a file in overrides
     std::fs::write(overrides.path().join("test.ini"), b"override content").unwrap();
 
-    let profile = make_profile(
-        "skyrim-se",
-        vec![],
-        overrides.path().to_path_buf(),
-    );
+    let profile = make_profile("skyrim-se", vec![], overrides.path().to_path_buf());
     let conflict_map = ConflictMap::default();
 
     let ctx = DiagContext {
         game_id: "skyrim-se",
         profile: &profile,
+        active_plugins: &[],
         conflict_map: &conflict_map,
         collision_report: None,
         store_dir: store.path(),
@@ -247,6 +273,7 @@ fn test_bethesda_diagnostics_engine() {
     let ctx = DiagContext {
         game_id: "skyrim-se",
         profile: &profile,
+        active_plugins: &[],
         conflict_map: &conflict_map,
         collision_report: None,
         store_dir: store.path(),
@@ -257,5 +284,9 @@ fn test_bethesda_diagnostics_engine() {
     let results = engine.run_all(&ctx);
 
     // At minimum, the empty mod rule should fire
-    assert!(results.iter().any(|d| d.affected_mod.as_deref() == Some("empty-mod")));
+    assert!(
+        results
+            .iter()
+            .any(|d| d.affected_mod.as_deref() == Some("empty-mod"))
+    );
 }

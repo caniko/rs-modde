@@ -1,0 +1,42 @@
+when:
+  - event: tag
+    ref: "refs/tags/v*"
+
+steps:
+  - name: build-release
+    image: nixos/nix:latest
+    commands:
+      - echo 'experimental-features = flakes nix-command' >> /etc/nix/nix.conf
+      - nix build .#modde --out-link result
+      - mkdir -p release
+      - cp result/bin/modde release/
+      - cp result/bin/modde-ui release/ || true
+      - export VERSION="${CI_COMMIT_TAG#v}"
+      - tar czf "release/modde-${VERSION}-x86_64-linux.tar.gz" -C release modde modde-ui 2>/dev/null || tar czf "release/modde-${VERSION}-x86_64-linux.tar.gz" -C release modde
+      - cp release/modde "release/modde-${VERSION}-x86_64-linux"
+      - cp release/modde-ui "release/modde-ui-${VERSION}-x86_64-linux" 2>/dev/null || true
+      # AppImage builds
+      - nix build .#appimage-ui --out-link appimage-ui-result
+      - cp appimage-ui-result "release/modde-ui-${VERSION}-x86_64.AppImage"
+      - nix build .#appimage-cli --out-link appimage-cli-result
+      - cp appimage-cli-result "release/modde-${VERSION}-x86_64.AppImage"
+      # Flatpak manifest
+      - nix build .#flatpak-manifest --out-link flatpak-result
+      - cp flatpak-result release/org.codeberg.caniko.modde.json
+      - cd release && sha256sum *.tar.gz *.AppImage *.json modde-*-x86_64-linux > SHA256SUMS.txt 2>/dev/null; true
+
+  - name: publish-release
+    image: woodpeckerci/plugin-release
+    settings:
+      api_key:
+        from_secret: codeberg_token
+      files:
+        - "release/*.tar.gz"
+        - "release/modde-*-x86_64-linux"
+        - "release/modde-ui-*-x86_64-linux"
+        - "release/*.AppImage"
+        - "release/org.codeberg.caniko.modde.json"
+        - "release/SHA256SUMS.txt"
+      title: "${CI_COMMIT_TAG}"
+      note: "CHANGELOG.md"
+      prerelease: false

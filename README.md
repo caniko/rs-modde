@@ -4,29 +4,31 @@ A NixOS-native game mod manager written in Rust. Provides declarative, reproduci
 
 ## Supported games
 
-| Game | Features |
-|------|----------|
-| Skyrim SE/AE | Plugins, VFS, LOOT sorting, save tracking |
-| Fallout 4 | Plugins, VFS, LOOT sorting, save tracking |
-| Fallout 76 | Plugins, VFS |
-| Starfield | Plugins, VFS, save tracking |
-| Cyberpunk 2077 | REDmod, CET, TweakXL, scripts, conflict detection |
-| Stellar Blade | UE4 framework (experimental) |
+| Game | Current status |
+|------|----------------|
+| Skyrim SE/AE | `Done`: plugins, VFS, LOOT sorting, diagnostics, save tracking |
+| Fallout 4 | `Done`: plugins, VFS, LOOT sorting, diagnostics, save tracking |
+| Fallout 76 | `Partial`: plugins and VFS; saves are effectively server-side |
+| Starfield | `Partial`: plugins and VFS; save tracking is not shipped yet |
+| Cyberpunk 2077 | `Done`: REDmod, CET, TweakXL, scripts, conflict detection |
+| Stellar Blade | `Partial`: UE4/UE5-style deployment and scanning |
 
 Games are auto-detected via Steam (Proton) and Heroic (GOG, Epic) launchers.
+The canonical status baseline for these claims lives in `docs/capability-matrix.toml`.
 
 ## Features
 
 - **Virtual filesystem deployment**: Symlink farm keeps the game directory clean and unmodified; atomic rollback to previous deployments
 - **Wabbajack on Linux**: Native parsing of `.wabbajack` modlist archives without a Windows VM
 - **Profile management**: Create, fork, switch, and delete profiles; stackable experiments with rollback (like git branches); load order locking
-- **Save management**: Git-backed save vaults with SHA-256 fingerprinting, compatibility warnings, auto-capture on game exit
+- **Save management**: Git-backed save vaults with SHA-256 fingerprinting, compatibility warnings, and auto-capture for games with real save tracker support
 - **Conflict detection**: Graph-based collision analysis with classification (dangerous vs cosmetic) and resolution suggestions
-- **Mod sources**: Nexus Mods API (with `nxm://` protocol handler), Wabbajack modlists, Nexus Collections, GitHub releases, direct URLs, Google Drive, MEGA
-- **Installers**: FOMOD (parse, generate declarative configs, apply non-interactively) and BAIN
-- **Gaming tools**: MangoHud, vkBasalt, GameMode, ReShade, OptiScaler integration
-- **Import/Export**: TOML profile import, CSV export with configurable columns
-- **Diagnostics**: Form 43 errors, missing masters, shadowed mods, dangerous collisions
+- **Nexus-first installs**: Nexus Mods API, `nxm://`, Browse Nexus, Wabbajack modlists, and Nexus Collections are the primary shipped install flows
+- **Additional download backends**: GitHub, Direct, Google Drive, and MEGA backends exist today mainly for Wabbajack/directive installs
+- **Installers**: FOMOD is shipped end to end; BAIN detection/execution exists but still requires missing user-input flow
+- **Gaming tools**: MangoHud, vkBasalt, GameMode, ReShade, and OptiScaler configs/patching are wired into the UI, but MO2-style executable management is still missing
+- **Diagnostics**: CLI and UI diagnostics now use real plugin order plus resolved conflicts instead of placeholder inputs
+- **Reachable advanced views**: Downloads, Data Files, Diagnostics, and Tools are now connected in the UI; some remain `Partial` rather than MO2-complete
 
 ## Architecture
 
@@ -34,9 +36,9 @@ Games are auto-detected via Steam (Proton) and Heroic (GOG, Epic) launchers.
 |-------|---------|
 | `modde-core` | SQLite database, VFS/symlink farm, profiles, collision detection, save management, load order resolver |
 | `modde-games` | Game plugins (Bethesda, Cyberpunk, Stellar Blade), trait system, launcher detection, overlay tools |
-| `modde-sources` | Download backends (Nexus, Wabbajack, GitHub, MEGA, etc.), archive extraction, FOMOD and BAIN installers |
+| `modde-sources` | Download backends (Nexus, Wabbajack, GitHub, MEGA, etc.), archive extraction, FOMOD, and partial BAIN support |
 | `modde-cli` | 24 top-level commands with 60+ subcommands covering the full modding workflow |
-| `modde-ui` | GUI built with Iced |
+| `modde-ui` | Iced GUI with reachable Downloads, Data Files, Diagnostics, and Tools views |
 
 ## Usage
 
@@ -98,9 +100,11 @@ Requires a Rust 2024 edition toolchain, SQLite development headers, and system l
 ```bash
 git clone https://codeberg.org/caniko/rs-modde.git
 cd rs-modde
-cargo build --release
+nix develop . -c cargo build --release
 # Binary at target/release/modde
 ```
+
+Use `nix develop . -c cargo test --workspace` for authoritative validation. A plain `cargo test --workspace` outside the Nix shell is not a reliable signal because `openssl-sys` will fail to locate OpenSSL on an unprepared host.
 
 ## Home-Manager Module
 

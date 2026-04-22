@@ -1,5 +1,5 @@
 use modde_games::bethesda;
-use modde_games::{resolve_game_plugin, GamePlugin, SUPPORTED_GAME_IDS};
+use modde_games::{GamePlugin, SUPPORTED_GAME_IDS, resolve_game_plugin, resolve_save_tracker};
 
 #[test]
 fn starfield_constant_has_correct_game_id() {
@@ -19,5 +19,13 @@ fn starfield_in_supported_game_ids() {
     assert!(
         SUPPORTED_GAME_IDS.contains(&"starfield"),
         "SUPPORTED_GAME_IDS should contain starfield"
+    );
+}
+
+#[test]
+fn starfield_save_tracker_is_not_exposed_until_implemented() {
+    assert!(
+        resolve_save_tracker("starfield").is_none(),
+        "Starfield save tracking should stay explicitly unsupported until it has a real tracker"
     );
 }

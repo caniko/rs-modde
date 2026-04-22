@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
-use modde_core::diagnostics::{DiagContext, Severity};
+use std::collections::HashSet;
+
+use modde_core::diagnostics::Severity;
 use modde_core::paths;
 use modde_core::profile::ProfileManager;
-use modde_core::resolver::ConflictMap;
 
 pub fn handle(game_id: &str, profile_name: Option<String>) -> Result<()> {
     let pm = ProfileManager::open().context("failed to open profile database")?;
@@ -19,20 +20,24 @@ pub fn handle(game_id: &str, profile_name: Option<String>) -> Result<()> {
         }
     };
 
-    // Build conflict map (simplified for now)
-    let conflict_map = ConflictMap::default();
-
-    // Build context
     let store = paths::store_dir();
-    let staging = paths::staging_dir().join(&profile.name);
-    let ctx = DiagContext {
-        game_id,
-        profile: &profile,
-        conflict_map: &conflict_map,
-        collision_report: None,
-        store_dir: &store,
-        staging_dir: &staging,
-    };
+    let staging = modde_core::profile::ProfileManager::staging_dir(&profile.name);
+    let hidden: HashSet<(String, String)> = profile
+        .id
+        .map(|profile_id| {
+            pm.db().list_hidden_files(profile_id).map(|rows| {
+                rows.into_iter()
+                    .map(|row| (row.mod_id, row.rel_path))
+                    .collect()
+            })
+        })
+        .transpose()?
+        .unwrap_or_default();
+    let active_plugins = super::load_plugin_order(&pm, &profile)?
+        .into_iter()
+        .filter(|plugin| plugin.enabled)
+        .map(|plugin| plugin.plugin_name)
+        .collect::<Vec<_>>();
 
     // Get appropriate engine for the game
     let engine = match game_id {
@@ -42,7 +47,17 @@ pub fn handle(game_id: &str, profile_name: Option<String>) -> Result<()> {
         _ => modde_core::diagnostics::DiagnosticEngine::new(),
     };
 
-    let diagnostics = engine.run_all(&ctx);
+    let classifier = modde_games::resolve_collision_classifier(game_id);
+    let (diagnostics, _) = modde_core::diagnostics::run_profile_diagnostics(
+        game_id,
+        &profile,
+        &active_plugins,
+        &store,
+        &staging,
+        &hidden,
+        classifier.as_deref(),
+        &engine,
+    )?;
 
     if diagnostics.is_empty() {
         println!(

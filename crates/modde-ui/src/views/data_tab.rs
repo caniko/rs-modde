@@ -1,4 +1,4 @@
-use iced::widget::{button, checkbox, column, container, row, scrollable, text, text_input};
+use iced::widget::{checkbox, column, container, row, scrollable, text, text_input};
 use iced::{Alignment, Element, Length};
 
 use crate::app::Message;
@@ -26,8 +26,7 @@ pub fn view<'a>(
             .on_input(Message::DataTabFilterChanged)
             .padding(6)
             .width(Length::Fill),
-        checkbox(state.show_conflicts_only)
-            .on_toggle(Message::DataTabToggleConflicts),
+        checkbox(state.show_conflicts_only).on_toggle(Message::DataTabToggleConflicts),
         text("Conflicts only").size(13),
     ]
     .spacing(8)
@@ -50,13 +49,11 @@ pub fn view<'a>(
     let file_count = filtered.len();
 
     let file_rows: Element<Message> = if filtered.is_empty() {
-        container(
-            text("No data files to display.").size(14),
-        )
-        .padding(20)
-        .width(Length::Fill)
-        .center_x(Length::Fill)
-        .into()
+        container(text("No data files to display.").size(14))
+            .padding(20)
+            .width(Length::Fill)
+            .center_x(Length::Fill)
+            .into()
     } else {
         let rows = filtered
             .into_iter()

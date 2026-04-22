@@ -197,18 +197,5 @@ pub fn bethesda_diagnostics() -> DiagnosticEngine {
 ///
 /// Looks for `.esp`, `.esm`, and `.esl` files in each enabled mod's store directory.
 fn collect_active_plugins<'a>(ctx: &'a DiagContext<'a>) -> Vec<&'a str> {
-    // For plugin validation, we need the actual plugin filenames.
-    // The mod_id entries in the profile that end with plugin extensions are the plugins.
-    // In practice, plugin names come from the staging/data dir, but we approximate
-    // by filtering mod IDs that look like plugin filenames.
-    ctx.profile
-        .mods
-        .iter()
-        .filter(|m| m.enabled)
-        .map(|m| m.mod_id.as_str())
-        .filter(|id| {
-            let lower = id.to_lowercase();
-            lower.ends_with(".esp") || lower.ends_with(".esm") || lower.ends_with(".esl")
-        })
-        .collect()
+    ctx.active_plugins.iter().map(String::as_str).collect()
 }

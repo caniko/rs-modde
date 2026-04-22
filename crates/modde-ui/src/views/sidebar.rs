@@ -1,5 +1,7 @@
-use iced::widget::{button, column, container, image, mouse_area, pick_list, row, text, text_input};
-use iced::{color, Element, Length};
+use iced::widget::{
+    button, column, container, image, mouse_area, pick_list, row, text, text_input,
+};
+use iced::{Element, Length, color};
 
 use crate::app::{Message, View};
 use crate::views::mod_details::ModDetailsState;
@@ -41,6 +43,9 @@ pub fn view<'a>(
             active_view,
         ),
         nav_button("Downloads", View::Downloads, active_view),
+        nav_button("Data Files", View::DataTab, active_view),
+        nav_button("Diagnostics", View::Diagnostics, active_view),
+        nav_button("Tools", View::Tools, active_view),
         nav_button("Verify", View::Verify, active_view),
         nav_button("Settings", View::Settings, active_view),
     ]
@@ -91,16 +96,14 @@ pub fn view<'a>(
             .size(13)
             .width(Length::Fill),
         button(text("Create").size(12))
-            .on_press_maybe(
-                if new_profile_name.is_empty() || selected_game.is_none() {
-                    None
-                } else {
-                    Some(Message::CreateProfile {
-                        name: new_profile_name.to_string(),
-                        game_id: selected_game.clone().unwrap(),
-                    })
-                },
-            )
+            .on_press_maybe(if new_profile_name.is_empty() || selected_game.is_none() {
+                None
+            } else {
+                Some(Message::CreateProfile {
+                    name: new_profile_name.to_string(),
+                    game_id: selected_game.clone().unwrap(),
+                })
+            },)
             .style(button::success)
             .padding([4, 12])
             .width(Length::Fill),
@@ -365,11 +368,7 @@ fn render_save_details(state: &SaveDetailsState) -> Element<'_, Message> {
 
     // Category badge
     if let Some(ref cat) = state.category {
-        col = col.push(
-            text(format!("[{cat}]"))
-                .size(11)
-                .color(color!(0x888888)),
-        );
+        col = col.push(text(format!("[{cat}]")).size(11).color(color!(0x888888)));
     }
 
     // Profile name
@@ -382,10 +381,7 @@ fn render_save_details(state: &SaveDetailsState) -> Element<'_, Message> {
     }
 
     // File count
-    col = col.push(
-        text(format!("{} file(s)", state.file_count))
-            .size(11),
-    );
+    col = col.push(text(format!("{} file(s)", state.file_count)).size(11));
 
     // File list
     match &state.file_paths {
@@ -398,18 +394,11 @@ fn render_save_details(state: &SaveDetailsState) -> Element<'_, Message> {
                     .unwrap_or(path);
                 col.push(text(display).size(10).color(color!(0x888888)))
             });
-            col = col.push(
-                scrollable(file_list)
-                    .height(Length::Fixed(80.0)),
-            );
+            col = col.push(scrollable(file_list).height(Length::Fixed(80.0)));
         }
         Some(_) => {} // empty list, skip
         None => {
-            col = col.push(
-                text("Loading files...")
-                    .size(10)
-                    .color(color!(0x888888)),
-            );
+            col = col.push(text("Loading files...").size(10).color(color!(0x888888)));
         }
     }
 
@@ -422,18 +411,20 @@ fn render_save_details(state: &SaveDetailsState) -> Element<'_, Message> {
                     .color(color!(0x44AA44))
                     .into()
             }
-            Some(FingerprintCheck::Mismatch { removed, added }) => {
-                column![
-                    text(format!("Mods: {} [mismatch]", fp.short_hash()))
-                        .size(11)
-                        .color(color!(0xFF6644)),
-                    text(format!("-{} removed, +{} added", removed.len(), added.len()))
-                        .size(10)
-                        .color(color!(0xFF6644)),
-                ]
-                .spacing(1)
-                .into()
-            }
+            Some(FingerprintCheck::Mismatch { removed, added }) => column![
+                text(format!("Mods: {} [mismatch]", fp.short_hash()))
+                    .size(11)
+                    .color(color!(0xFF6644)),
+                text(format!(
+                    "-{} removed, +{} added",
+                    removed.len(),
+                    added.len()
+                ))
+                .size(10)
+                .color(color!(0xFF6644)),
+            ]
+            .spacing(1)
+            .into(),
             Some(FingerprintCheck::NoFingerprint) | None => {
                 text(format!("Mods: {}", fp.short_hash()))
                     .size(11)
@@ -454,11 +445,7 @@ fn render_save_details(state: &SaveDetailsState) -> Element<'_, Message> {
     );
 
     // Commit ID (subtle)
-    col = col.push(
-        text(&state.short_id)
-            .size(10)
-            .color(color!(0x666666)),
-    );
+    col = col.push(text(&state.short_id).size(10).color(color!(0x666666)));
 
     col.into()
 }

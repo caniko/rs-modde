@@ -3,8 +3,10 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use serde::{Deserialize, Serialize};
 use tracing::info;
 
+use crate::PluginEntry;
 use crate::error::{CoreError, Result};
 use crate::paths;
 
@@ -23,10 +25,23 @@ pub struct BackupEntry {
     pub created: SystemTime,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+enum PluginBackupPayload {
+    Entries(Vec<PluginEntryBackup>),
+    Legacy(Vec<String>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PluginEntryBackup {
+    plugin_name: String,
+    enabled: bool,
+}
+
 impl BackupManager {
     /// Create a new backup manager rooted at the default backup directory.
     pub fn new() -> Result<Self> {
-        let backup_dir = paths::data_dir().join("backups");
+        let backup_dir = paths::modde_data_dir().join("backups");
         fs::create_dir_all(&backup_dir)?;
         Ok(Self { backup_dir })
     }
@@ -102,7 +117,7 @@ impl BackupManager {
         &self,
         profile: &str,
         game: &str,
-        plugins: &[String],
+        plugins: &[PluginEntry],
     ) -> Result<PathBuf> {
         let dir = self.backup_dir.join("plugins").join(game);
         fs::create_dir_all(&dir)?;
@@ -111,7 +126,16 @@ impl BackupManager {
         let name = format!("{profile}_{timestamp}.json");
         let path = dir.join(&name);
 
-        let json = serde_json::to_string_pretty(plugins)?;
+        let payload = PluginBackupPayload::Entries(
+            plugins
+                .iter()
+                .map(|plugin| PluginEntryBackup {
+                    plugin_name: plugin.plugin_name.clone(),
+                    enabled: plugin.enabled,
+                })
+                .collect(),
+        );
+        let json = serde_json::to_string_pretty(&payload)?;
         fs::write(&path, json)?;
 
         info!(%profile, %game, path = %path.display(), "plugin order backed up");
@@ -119,7 +143,7 @@ impl BackupManager {
     }
 
     /// Restore the most recent plugin load order backup for a profile+game.
-    pub fn restore_plugin_order(&self, profile: &str, game: &str) -> Result<Vec<String>> {
+    pub fn restore_plugin_order(&self, profile: &str, game: &str) -> Result<Vec<PluginEntry>> {
         let dir = self.backup_dir.join("plugins").join(game);
         if !dir.exists() {
             return Err(CoreError::Other(
@@ -146,9 +170,28 @@ impl BackupManager {
         })?;
 
         let data = fs::read_to_string(latest.path())?;
-        let plugins: Vec<String> = serde_json::from_str(&data)?;
+        let payload: PluginBackupPayload = serde_json::from_str(&data)?;
 
-        Ok(plugins)
+        Ok(match payload {
+            PluginBackupPayload::Entries(entries) => entries
+                .into_iter()
+                .enumerate()
+                .map(|(sort_index, entry)| PluginEntry {
+                    plugin_name: entry.plugin_name,
+                    sort_index: sort_index as i64,
+                    enabled: entry.enabled,
+                })
+                .collect(),
+            PluginBackupPayload::Legacy(entries) => entries
+                .into_iter()
+                .enumerate()
+                .map(|(sort_index, plugin_name)| PluginEntry {
+                    plugin_name,
+                    sort_index: sort_index as i64,
+                    enabled: true,
+                })
+                .collect(),
+        })
     }
 }
 
@@ -189,7 +232,8 @@ fn create_zip_from_dir(src: &Path, dest: &Path) -> Result<()> {
         }
     }
 
-    zip.finish().map_err(|e| CoreError::Other(e.to_string().into()))?;
+    zip.finish()
+        .map_err(|e| CoreError::Other(e.to_string().into()))?;
     Ok(())
 }
 
@@ -237,4 +281,64 @@ fn walk_recursive(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn manager_in(dir: &Path) -> BackupManager {
+        BackupManager {
+            backup_dir: dir.to_path_buf(),
+        }
+    }
+
+    #[test]
+    fn plugin_backup_round_trips_enabled_state() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mgr = manager_in(tmp.path());
+
+        let plugins = vec![
+            PluginEntry {
+                plugin_name: "Skyrim.esm".to_string(),
+                sort_index: 0,
+                enabled: true,
+            },
+            PluginEntry {
+                plugin_name: "Optional.esp".to_string(),
+                sort_index: 1,
+                enabled: false,
+            },
+        ];
+
+        mgr.backup_plugin_order("default", "skyrim-se", &plugins)
+            .unwrap();
+
+        let restored = mgr.restore_plugin_order("default", "skyrim-se").unwrap();
+        assert_eq!(restored.len(), 2);
+        assert_eq!(restored[0].plugin_name, "Skyrim.esm");
+        assert!(restored[0].enabled);
+        assert_eq!(restored[1].plugin_name, "Optional.esp");
+        assert!(!restored[1].enabled);
+    }
+
+    #[test]
+    fn restore_plugin_order_accepts_legacy_backups() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mgr = manager_in(tmp.path());
+        let dir = tmp.path().join("plugins").join("skyrim-se");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("default_1.json"),
+            serde_json::to_string(&vec!["One.esm", "Two.esp"]).unwrap(),
+        )
+        .unwrap();
+
+        let restored = mgr.restore_plugin_order("default", "skyrim-se").unwrap();
+        assert_eq!(restored.len(), 2);
+        assert_eq!(restored[0].plugin_name, "One.esm");
+        assert!(restored[0].enabled);
+        assert_eq!(restored[1].plugin_name, "Two.esp");
+        assert!(restored[1].enabled);
+    }
 }

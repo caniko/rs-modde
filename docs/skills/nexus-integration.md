@@ -2,7 +2,7 @@
 
 ## Overview
 
-modde has comprehensive Nexus Mods integration: API v1 client, CDN downloads, mod update checking, collection support, and nxm:// browser protocol handling. Compared to MO2, the core download and update pipeline is implemented, but endorsement/tracking, download queue management, .meta sidecar files, and the rich version-color-coding UI are missing.
+modde has comprehensive Nexus Mods integration: API v1 client, CDN downloads, mod update checking, collection support, and `nxm://` browser protocol handling. The truth today is that Nexus, Wabbajack, and Collections are the real install surfaces; the Downloads UI now renders actual queue state, but transport-level pause/resume and durable metadata sidecars are still incomplete.
 
 ## Architecture
 
@@ -67,7 +67,7 @@ The `DownloadSource` trait with `AnySource` enum dispatch supports:
 - **Mega** — Mega.nz downloads
 - **Direct** — Generic HTTP URLs with optional headers
 
-All sources support progress callbacks and xxh3-64 hash verification.
+All sources support progress callbacks and xxh3-64 hash verification. In normal user-facing flows, Nexus is first-class today; the other backends are used primarily by Wabbajack/directive installs.
 
 ### Wabbajack Integration
 
@@ -100,10 +100,10 @@ CLI: `modde install nexus-collection <slug> [--version V]`
 | Nexus Collections | **Done** | Full collection install flow |
 | Wabbajack modlist support | **Done** | Full manifest + download + install |
 | Nexus OAuth2 | -- | Currently API key only |
-| Download queue with pause/resume | -- | Sequential downloads, no pause/resume |
-| Download states (pausing, fetching info, etc.) | -- | MO2 has ~10 distinct download states |
+| Download queue with pause/resume | Partial | UI queue state exists, but pause/resume is not yet wired to the network layer |
+| Download states (pausing, fetching info, etc.) | Partial | Basic queued/active/paused/failed/complete state exists; MO2 is still richer |
 | Speed tracking / ETA | -- | Progress callbacks exist but no speed calc |
-| .meta sidecar files per download | -- | MO2 stores gameName, modID, fileID, version, etc. per archive |
+| .meta sidecar files per download | -- | Data model exists in code, but it is not yet a shipped end-to-end workflow |
 | Query Info via MD5 hash lookup | -- | MO2 can identify unknown archives by hashing against Nexus |
 | Drag-and-drop download to mod list | -- | MO2 lets you drop a download at a specific priority |
 | Endorsement integration | -- | MO2: endorse, un-endorse, won't endorse, with flag icons |

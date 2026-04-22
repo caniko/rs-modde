@@ -1,0 +1,20 @@
+steps:
+  - name: build-site
+    image: nixos/nix:latest
+    commands:
+      - echo 'experimental-features = flakes nix-command' >> /etc/nix/nix.conf
+      - nix build .#site --out-link site
+      - cp -rL site/ dist/
+    when:
+      - event: push
+        branch: [trunk]
+
+  - name: deploy
+    image: codeberg.org/sugar700/plugin-codeberg-pages-deploy:1
+    settings:
+      folder: dist
+      ssh_key:
+        from_secret: ssh_key
+    when:
+      - event: push
+        branch: [trunk]

@@ -49,10 +49,7 @@ If the game doesn't fit an existing engine family and isn't worth extracting one
 
 4. **Add detection entry** — `crates/modde-games/src/detection.rs`, append to `KNOWN_GAMES` array with steam_app_id, steam_dir, gog_app_id, epic_app_id.
 
-5. **Wire the UI** — `crates/modde-ui/src/app.rs` line ~949: append a tuple to the `available_games` `SmallVec` (bump the capacity hint if needed):
-   ```rust
-   ("<game-id>".to_string(), "<Display Name>".to_string()),
-   ```
+5. **UI reachability** — the game picker is now derived from `modde_games::supported_games()`, so you usually do **not** need to hand-edit `available_games`. What you do need is to verify the new game appears in the picker and that any game-specific UI assumptions still hold.
 
 6. **Add Wabbajack mapping** (if applicable) — `crates/modde-games/src/lib.rs`, `normalize_wabbajack_game()` match.
 
@@ -64,9 +61,9 @@ If the game doesn't fit an existing engine family and isn't worth extracting one
 
 8. **Compile and test:**
    ```
-   cargo check -p modde-games
-   cargo test -p modde-games
-   cargo check --workspace
+   nix develop . -c cargo check -p modde-games
+   nix develop . -c cargo test -p modde-games
+   nix develop . -c cargo check --workspace
    ```
 
 ## Gap checklist
@@ -74,6 +71,7 @@ If the game doesn't fit an existing engine family and isn't worth extracting one
 After implementation, review and note any of these gaps in your summary:
 
 - [ ] **SaveTracker** — is save tracking not implemented? Note the save dir location for future work.
+- [ ] **Truth status** — if save tracking or conflict detection is not fully wired, report it as `Partial` or `Not shipped`. Do not reuse another game's tracker as a placeholder.
 - [ ] **CollisionClassifier** — if the game's archive format is opaque, note it.
 - [ ] **Nexus domain** — is the game not on Nexus? Note if `nexus_game_domain` returns `None`.
 - [ ] **Wabbajack** — is the game not on Wabbajack? Note if no normalization entry.
@@ -86,6 +84,5 @@ After implementation, review and note any of these gaps in your summary:
 - [crates/modde-games/src/lib.rs](crates/modde-games/src/lib.rs) — resolvers + `SUPPORTED_GAME_IDS`
 - [crates/modde-games/src/traits.rs](crates/modde-games/src/traits.rs) — `GamePlugin`, `ModScanner`, `SaveTracker` trait defs
 - [crates/modde-games/src/detection.rs](crates/modde-games/src/detection.rs) — `KNOWN_GAMES` launcher detection
-- [crates/modde-ui/src/app.rs](crates/modde-ui/src/app.rs) — `available_games` UI list (line ~949)
 - [crates/modde-games/src/bethesda/mod.rs](crates/modde-games/src/bethesda/mod.rs) — data-driven reference (engine family)
 - [crates/modde-games/src/cyberpunk/mod.rs](crates/modde-games/src/cyberpunk/mod.rs) — bespoke reference (unit struct)

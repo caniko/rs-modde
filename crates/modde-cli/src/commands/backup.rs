@@ -9,25 +9,25 @@ pub fn handle(action: BackupAction) -> Result<()> {
 
     match action {
         BackupAction::Create { mod_id } => {
-            let staging = modde_core::paths::data_dir().join("staging").join(&mod_id);
-            if !staging.exists() {
+            let store_mod = modde_core::paths::store_dir().join(&mod_id);
+            if !store_mod.exists() {
                 anyhow::bail!(
                     "mod directory not found at '{}'. Is the mod installed?",
-                    staging.display()
+                    store_mod.display()
                 );
             }
 
             let entry = mgr
-                .create_mod_backup(&mod_id, &staging)
+                .create_mod_backup(&mod_id, &store_mod)
                 .context("failed to create backup")?;
 
             println!("Backup created: {}", entry.name);
             println!("  Path: {}", entry.path.display());
         }
         BackupAction::Restore { mod_id } => {
-            let staging = modde_core::paths::data_dir().join("staging").join(&mod_id);
+            let store_mod = modde_core::paths::store_dir().join(&mod_id);
             let entry = mgr
-                .restore_mod_backup(&mod_id, &staging)
+                .restore_mod_backup(&mod_id, &store_mod)
                 .context("failed to restore backup")?;
 
             println!("Restored mod '{}' from backup: {}", mod_id, entry.name);
@@ -47,15 +47,12 @@ pub fn handle(action: BackupAction) -> Result<()> {
             }
         }
         BackupAction::Plugins { profile, game } => {
-            // Read the mod list from the profile and store it as the plugin order
             let pm = modde_core::profile::ProfileManager::open()?;
             let prof = super::load_profile_or_default(&pm, Some(&profile), Some(&game))?;
-            let plugins: Vec<String> = prof
-                .mods
-                .iter()
-                .filter(|m| m.enabled)
-                .map(|m| m.mod_id.clone())
-                .collect();
+            let plugins = super::load_plugin_order(&pm, &prof)?;
+            if plugins.is_empty() {
+                anyhow::bail!("no real plugin order found in the database or plugins.txt");
+            }
 
             let path = mgr
                 .backup_plugin_order(&profile, &game, &plugins)
@@ -69,9 +66,19 @@ pub fn handle(action: BackupAction) -> Result<()> {
                 .restore_plugin_order(&profile, &game)
                 .context("failed to restore plugin order")?;
 
+            let pm = modde_core::profile::ProfileManager::open()?;
+            let prof = super::load_profile_or_default(&pm, Some(&profile), Some(&game))?;
+            super::persist_plugin_order(&pm, &prof, &plugins)
+                .context("failed to apply restored plugin order")?;
+
             println!("Restored plugin order ({} plugins):", plugins.len());
-            for (i, p) in plugins.iter().enumerate() {
-                println!("  {}: {p}", i + 1);
+            for (i, plugin) in plugins.iter().enumerate() {
+                let enabled = if plugin.enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                };
+                println!("  {}: {} ({enabled})", i + 1, plugin.plugin_name);
             }
         }
     }

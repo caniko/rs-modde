@@ -6,7 +6,7 @@ user_invocable: true
 
 # modde-installer — extend the installer for an unknown mod layout
 
-When modde's install pipeline cannot classify a mod's archive structure, it writes a dossier to `$XDG_DATA_HOME/modde/unknown-installers/<slug>/` and surfaces a "Send to Claude" button in the UI. This skill consumes those dossiers and lands the missing detection code.
+When modde's install pipeline cannot classify a mod's archive structure, it writes a dossier to the active modde data dir under `unknown-installers/<slug>/` (default: `$XDG_DATA_HOME/modde/unknown-installers/<slug>/`). This skill consumes those dossiers and lands the missing detection code. If the current UI build does not expose a dossier button yet, use the CLI path directly.
 
 The argument (optional) is the dossier slug — usually `<game_domain>_<mod_id>_<file_id>`. Without an argument, list the pending dossiers and ask the user which one to work on.
 
@@ -42,12 +42,12 @@ The argument (optional) is the dossier slug — usually `<game_domain>_<mod_id>_
 
 6. **Compile and test:**
    ```
-   cargo test -p modde-core installer::
-   cargo check -p modde-games
+   nix develop . -c cargo test -p modde-core installer::
+   nix develop . -c cargo check -p modde-games
    ```
    Both must pass.
 
-7. **Mark the dossier as resolved** so the UI surfaces a **Retry Install** button:
+7. **Mark the dossier as resolved** so future tooling can distinguish it from unresolved dossiers:
    ```
    mv "$XDG_DATA_HOME/modde/unknown-installers/<slug>" "$XDG_DATA_HOME/modde/unknown-installers/<slug>.resolved"
    ```
@@ -57,7 +57,7 @@ The argument (optional) is the dossier slug — usually `<game_domain>_<mod_id>_
    - which variant / branch you added
    - which test you wrote
    - the cargo test output
-   - "retry via `modde mod install` or the **Retry Install** button"
+   - "retry via `modde install mod ...` or the UI retry affordance if your current build exposes it"
 
 ## Critical files
 

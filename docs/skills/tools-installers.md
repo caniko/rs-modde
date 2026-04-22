@@ -2,7 +2,7 @@
 
 ## Overview
 
-modde supports multiple mod installation formats (FOMOD, Wabbajack, Nexus Collections, manual) and can run external tools (xEdit, FNIS, BodySlide) with automatic output capture. Compared to MO2, the installer and tool pipeline is functional, but MO2 has richer executable management (per-tool output mods, forced DLL injection, Steam overlay settings), more installer formats (BAIN, OMOD, NCC), and a mod information dialog with per-mod file browsing, text editing, and image preview.
+modde supports multiple mod installation formats (FOMOD, Wabbajack, Nexus Collections, manual) and can run external tools with overwrite capture. The truthful status today is mixed: FOMOD and the Nexus/Wabbajack install paths are real, the tools view is now DB-backed and can apply/revert tracked patches, but BAIN is still partial and MO2-style executable management does not exist yet.
 
 ## Installer Formats
 
@@ -31,6 +31,8 @@ Features:
 Full Wabbajack modlist installer:
 - Manifest parsing (`WabbajackManifest`, `ArchiveEntry`, `Directives`)
 - Download directives: Nexus, GitHub, Google Drive, Mega, Direct
+- First-class user install flow today: Nexus, Wabbajack, Nexus Collections
+- Backend-only for most users today: GitHub, Google Drive, Mega, Direct outside Wabbajack/directive installs
 - Install directives: `FromArchive`, `CreateDirectory`, `InlineFile`, `PatchedFromArchive`, `CreateBSA`
 - BSA repacking for Bethesda games
 - Binary patching support
@@ -123,7 +125,7 @@ Vanilla game preservation:
 | MO2 Feature | modde | Notes |
 |-------------|-------|-------|
 | FOMOD installer | **Done** | Interactive + declarative configs |
-| BAIN installer | -- | Wizard-based Bethesda installer format |
+| BAIN installer | Partial | Detection/execution exists, but the required user-selection flow is not finished |
 | OMOD installer | -- | Legacy Oblivion format |
 | NCC installer | -- | Legacy NMM format |
 | Bundle installer | -- | MO2-specific multi-archive |
@@ -143,9 +145,9 @@ Vanilla game preservation:
 | In-mod text/INI file editor | -- | MO2 edits .txt/.ini files inside mods in-place |
 | In-mod image browser | -- | MO2 shows thumbnails + preview for images inside mods |
 | File preview system (DDS, images, text) | -- | MO2 has plugin-based file preview |
-| 50+ supported games | -- | 5 games vs MO2's 50+ |
-| Generic game support | **Done** | `GenericGame` struct for unlisted games |
-| Instance management (portable/global) | -- | MO2 has portable and global instance modes |
+| 50+ supported games | -- | modde is intentionally narrower today |
+| Generic game support | Not shipped | `GenericGame` exists as an internal helper, not as a polished user-facing feature |
+| Instance management (portable/global) | Partial | Active data-root switching is real now, but the portable/global UX is still far from MO2 |
 | Offline mode | -- | MO2 can disable all network access |
 | Tutorial/first-run guidance | -- | MO2 has overlay hints on first use |
 | Theming | **Done** | 6 themes: Dark, Light, Dracula, Nord, Gruvbox, Catppuccin |

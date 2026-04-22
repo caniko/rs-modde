@@ -34,5 +34,5 @@ content = "Virtual filesystem deployment keeps your game directory clean. Mods a
 
 [[extra.list]]
 title = "Multi-game support"
-content = "Supports Skyrim SE/AE, Fallout 4, Fallout 76, Starfield, Cyberpunk 2077, and Stellar Blade — with an extensible plugin system."
+content = "Supports Skyrim SE/AE, Fallout 4, Fallout 76, Starfield, Cyberpunk 2077, and Stellar Blade. Support depth varies by game; Starfield save tracking is not shipped yet."
 +++

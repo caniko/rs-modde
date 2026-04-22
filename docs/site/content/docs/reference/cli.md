@@ -586,7 +586,7 @@ Manage mod and plugin order backups.
 
 ### `backup create`
 
-Create a backup of a mod's staged files.
+Create a backup of an installed mod's content-store directory.
 
 ```bash
 modde backup create <mod_id>
@@ -610,7 +610,7 @@ modde backup list <mod_id>
 
 ### `backup plugins`
 
-Backup the current plugin load order.
+Backup the real plugin order for a profile. modde reads the DB-backed order first and falls back to native `plugins.txt` when needed.
 
 ```bash
 modde backup plugins --profile <name> --game <id>
@@ -618,7 +618,7 @@ modde backup plugins --profile <name> --game <id>
 
 ### `backup restore-plugins`
 
-Restore plugin load order from a backup.
+Restore plugin load order from a backup, writing back to both the profile DB state and native `plugins.txt` when the game uses one.
 
 ```bash
 modde backup restore-plugins --profile <name> --game <id>
@@ -670,7 +670,7 @@ modde detect
 
 ## `modde instance`
 
-Manage modde instances (multiple data directories).
+Manage modde instances (multiple data directories). `instance switch` now changes the active modde data root used by the database, store, downloads, and backups unless `--data-dir` overrides it for a single command.
 
 ### `instance create`
 

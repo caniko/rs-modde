@@ -48,7 +48,7 @@ This skill uses the existing `Ue4Game` data-driven struct. If `crates/modde-game
 
 4. **Detection** — append `KnownGame` to `KNOWN_GAMES` in `crates/modde-games/src/detection.rs`.
 
-5. **UI** — append tuple to `available_games` in `crates/modde-ui/src/app.rs` (line ~949).
+5. **UI** — the game picker is derived from `modde_games::supported_games()`, so you usually do not need to patch a hard-coded UI list anymore. Verify the new game appears in the picker after registration.
 
 6. **Tests** — add cases to `crates/modde-games/tests/ue4_tests.rs` (preferred) or a new test file:
    - `test_<game>_game_id`, `test_<game>_display_name`, `test_<game>_mod_directory`
@@ -57,7 +57,9 @@ This skill uses the existing `Ue4Game` data-driven struct. If `crates/modde-game
 
 7. **Build + test:**
    ```
-   cargo check -p modde-games && cargo test -p modde-games && cargo check --workspace
+   nix develop . -c cargo check -p modde-games
+   nix develop . -c cargo test -p modde-games
+   nix develop . -c cargo check --workspace
    ```
 
 ## UE4 conventions to know
@@ -84,5 +86,4 @@ This skill uses the existing `Ue4Game` data-driven struct. If `crates/modde-game
 - [crates/modde-games/src/ue4/scanner.rs](crates/modde-games/src/ue4/scanner.rs) — `Ue4Scanner` struct, scanner instances
 - [crates/modde-games/src/lib.rs](crates/modde-games/src/lib.rs) — resolvers + `SUPPORTED_GAME_IDS`
 - [crates/modde-games/src/detection.rs](crates/modde-games/src/detection.rs) — `KNOWN_GAMES`
-- [crates/modde-ui/src/app.rs](crates/modde-ui/src/app.rs) — `available_games` (line ~949)
 - [crates/modde-games/tests/ue4_tests.rs](crates/modde-games/tests/ue4_tests.rs) — existing UE4 test suite

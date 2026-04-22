@@ -153,6 +153,11 @@ impl DownloadQueue {
         self.tasks.iter_mut().find(|t| t.id == id)
     }
 
+    /// View all tracked tasks in insertion order.
+    pub fn all(&self) -> &[DownloadTask] {
+        &self.tasks
+    }
+
     /// Total number of tasks in the queue (all states).
     pub fn len(&self) -> usize {
         self.tasks.len()

@@ -28,7 +28,7 @@ description = "Virtual filesystem keeps your game directory clean. Mods overlay 
 
 [[extra.features]]
 title = "Multi-game"
-description = "Skyrim SE/AE, Fallout 4/76, Starfield, Cyberpunk 2077, Stellar Blade — and growing."
+description = "Skyrim SE/AE, Fallout 4/76, Starfield, Cyberpunk 2077, and Stellar Blade. Support depth varies by game; Starfield save tracking is not shipped yet."
 
 [[extra.features]]
 title = "Save vaults"
@@ -40,5 +40,5 @@ description = "Try mod changes non-destructively with a stackable experiment sys
 
 [[extra.features]]
 title = "Tools & overlays"
-description = "Manage MangoHud, vkBasalt, ReShade, OptiScaler, and GameMode. Apply and revert tool patches with tracked file changes."
+description = "Manage MangoHud, vkBasalt, ReShade, OptiScaler, and GameMode. The UI now loads real tool state and tracked patch files, but executable-management parity with MO2 is still ahead."
 +++

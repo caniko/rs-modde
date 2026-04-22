@@ -1,8 +1,10 @@
 use std::path::{Path, PathBuf};
 
+use anyhow::Result;
+
 use crate::collision::CollisionReport;
 use crate::profile::Profile;
-use crate::resolver::ConflictMap;
+use crate::resolver::{ConflictMap, ModId};
 
 /// Severity level for diagnostics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -34,10 +36,77 @@ pub struct Diagnostic {
 pub struct DiagContext<'a> {
     pub game_id: &'a str,
     pub profile: &'a Profile,
+    pub active_plugins: &'a [String],
     pub conflict_map: &'a ConflictMap,
     pub collision_report: Option<&'a CollisionReport>,
     pub store_dir: &'a Path,
     pub staging_dir: &'a Path,
+}
+
+/// Shared analysis result used by the CLI, UI, and tests.
+pub struct ProfileAnalysis {
+    pub resolved_order: Vec<ModId>,
+    pub conflict_map: ConflictMap,
+    pub collision_report: Option<CollisionReport>,
+}
+
+/// Build real conflict and collision state for a profile.
+pub fn analyze_profile_state(
+    profile: &Profile,
+    store_dir: &Path,
+    hidden: &std::collections::HashSet<(String, String)>,
+    classifier: Option<&dyn crate::collision::CollisionClassifier>,
+) -> Result<ProfileAnalysis> {
+    let resolved_order = crate::resolver::resolve(profile)?.order;
+
+    let Some(classifier) = classifier else {
+        return Ok(ProfileAnalysis {
+            resolved_order,
+            conflict_map: ConflictMap::default(),
+            collision_report: None,
+        });
+    };
+
+    let (conflict_map, origins) =
+        crate::collision::build_full_conflict_map(store_dir, &resolved_order, classifier)?;
+    let collision_report = crate::collision::analyze_collisions(
+        &conflict_map,
+        &resolved_order,
+        hidden,
+        &origins,
+        classifier,
+    );
+
+    Ok(ProfileAnalysis {
+        resolved_order,
+        conflict_map,
+        collision_report: Some(collision_report),
+    })
+}
+
+/// Run a diagnostic engine against a fully analyzed profile.
+pub fn run_profile_diagnostics(
+    game_id: &str,
+    profile: &Profile,
+    active_plugins: &[String],
+    store_dir: &Path,
+    staging_dir: &Path,
+    hidden: &std::collections::HashSet<(String, String)>,
+    classifier: Option<&dyn crate::collision::CollisionClassifier>,
+    engine: &DiagnosticEngine,
+) -> Result<(Vec<Diagnostic>, ProfileAnalysis)> {
+    let analysis = analyze_profile_state(profile, store_dir, hidden, classifier)?;
+    let ctx = DiagContext {
+        game_id,
+        profile,
+        active_plugins,
+        conflict_map: &analysis.conflict_map,
+        collision_report: analysis.collision_report.as_ref(),
+        store_dir,
+        staging_dir,
+    };
+
+    Ok((engine.run_all(&ctx), analysis))
 }
 
 // ── Collision-aware diagnostic rules ────────────────────────────────
@@ -71,10 +140,7 @@ impl DiagnosticRule for ShadowedModRule {
                     affected_file: None,
                     fix: Some(DiagFix {
                         label: "Disable mod".to_string(),
-                        description: format!(
-                            "Disable \"{}\" to reduce deployment size",
-                            sm.mod_id
-                        ),
+                        description: format!("Disable \"{}\" to reduce deployment size", sm.mod_id),
                     }),
                 }
             })
@@ -107,10 +173,7 @@ impl DiagnosticRule for DangerousCollisionRule {
                     .collect();
                 Diagnostic {
                     severity: Severity::Warning,
-                    title: format!(
-                        "Dangerous collision: {} vs {}",
-                        pair.loser, pair.winner
-                    ),
+                    title: format!("Dangerous collision: {} vs {}", pair.loser, pair.winner),
                     detail: format!(
                         "{} script/plugin/DLL files conflict: {}",
                         dangerous_files.len(),
@@ -152,10 +215,7 @@ impl DiagnosticEngine {
     }
 
     pub fn run_all(&self, ctx: &DiagContext) -> Vec<Diagnostic> {
-        let mut results: Vec<Diagnostic> = self.rules
-            .iter()
-            .flat_map(|r| r.check(ctx))
-            .collect();
+        let mut results: Vec<Diagnostic> = self.rules.iter().flat_map(|r| r.check(ctx)).collect();
         results.sort_by_key(|d| d.severity);
         results
     }
@@ -170,7 +230,7 @@ impl Default for DiagnosticEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::profile::{EnabledMod, Profile, ProfileSource};
+    use crate::profile::{Profile, ProfileSource};
     use crate::resolver::{ConflictMap, GameId};
     use smallvec::smallvec;
     use std::path::PathBuf;
@@ -240,6 +300,7 @@ mod tests {
         let ctx = DiagContext {
             game_id: "skyrim-se",
             profile: &profile,
+            active_plugins: &[],
             conflict_map: &conflict_map,
             collision_report: None,
             store_dir: store.path(),
@@ -288,6 +349,7 @@ mod tests {
         let ctx = DiagContext {
             game_id: "skyrim-se",
             profile: &profile,
+            active_plugins: &[],
             conflict_map: &conflict_map,
             collision_report: None,
             store_dir: store.path(),
@@ -309,6 +371,7 @@ mod tests {
         let ctx = DiagContext {
             game_id: "skyrim-se",
             profile: &profile,
+            active_plugins: &[],
             conflict_map: &conflict_map,
             collision_report: None,
             store_dir: store.path(),

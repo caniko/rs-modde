@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use iced::widget::{button, column, container, progress_bar, row, scrollable, text};
-use iced::{color, Alignment, Element, Length};
+use iced::{Alignment, Element, Length, color};
 
 use crate::app::Message;
 
@@ -9,10 +9,20 @@ use crate::app::Message;
 #[derive(Debug, Clone)]
 pub enum DownloadState {
     Queued,
-    Active { bytes_downloaded: u64, total_bytes: Option<u64> },
-    Paused { bytes_downloaded: u64, total_bytes: Option<u64> },
-    Complete { path: PathBuf },
-    Failed { error: String },
+    Active {
+        bytes_downloaded: u64,
+        total_bytes: Option<u64>,
+    },
+    Paused {
+        bytes_downloaded: u64,
+        total_bytes: Option<u64>,
+    },
+    Complete {
+        path: PathBuf,
+    },
+    Failed {
+        error: String,
+    },
 }
 
 /// A download task for UI display.
@@ -24,7 +34,7 @@ pub struct DownloadTask {
 }
 
 /// Render the downloads view.
-pub fn view<'a>(tasks: &'a [DownloadTask]) -> Element<'a, Message> {
+pub fn view(tasks: &[DownloadTask]) -> Element<'static, Message> {
     let title_bar = row![
         text("Downloads").size(20),
         iced::widget::space::horizontal(),
@@ -48,7 +58,7 @@ pub fn view<'a>(tasks: &'a [DownloadTask]) -> Element<'a, Message> {
     let items: Vec<Element<Message>> = tasks
         .iter()
         .map(|task| {
-            let name = text(&task.name).size(14);
+            let name = text(task.name.clone()).size(14);
 
             let (status_text, status_color) = match &task.state {
                 DownloadState::Queued => ("Queued", color!(0xAAAAFF)),
@@ -128,7 +138,9 @@ pub fn view<'a>(tasks: &'a [DownloadTask]) -> Element<'a, Message> {
                     .padding([3, 8])
                     .into(),
                 DownloadState::Failed { error } => column![
-                    text(format!("Error: {error}")).size(11).color(color!(0xFF4444)),
+                    text(format!("Error: {error}"))
+                        .size(11)
+                        .color(color!(0xFF4444)),
                     button(text("Retry").size(11))
                         .on_press(Message::ResumeDownload(task.id))
                         .style(button::secondary)
@@ -139,13 +151,11 @@ pub fn view<'a>(tasks: &'a [DownloadTask]) -> Element<'a, Message> {
                 DownloadState::Complete { .. } => text("").into(),
             };
 
-            container(
-                column![row![name, status].spacing(8), progress_widget, actions,].spacing(4),
-            )
-            .padding(8)
-            .width(Length::Fill)
-            .style(container::rounded_box)
-            .into()
+            container(column![row![name, status].spacing(8), progress_widget, actions,].spacing(4))
+                .padding(8)
+                .width(Length::Fill)
+                .style(container::rounded_box)
+                .into()
         })
         .collect();
 

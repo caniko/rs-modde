@@ -5,7 +5,9 @@ pub mod github;
 pub mod installers;
 pub mod manager;
 pub mod mega;
+pub mod meta;
 pub mod nexus;
+pub mod queue;
 pub mod traits;
 pub mod wabbajack;
 

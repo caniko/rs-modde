@@ -5,5 +5,5 @@ template = "comparison.html"
 path = "comparison"
 
 [extra]
-subtitle = "modde brings NixOS-native mod management with features MO2 can't offer — while steadily closing the gap on MO2's mature feature set."
+subtitle = "Truth-first comparison: what is fully shipped today, what is only partial, and which MO2 gaps still matter most."
 +++

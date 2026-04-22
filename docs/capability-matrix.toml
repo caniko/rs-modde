@@ -1,0 +1,66 @@
+[status]
+done = "Shipped end to end and user-reachable."
+partial = "Core logic exists, but the UX, integration, or production safety is still incomplete."
+not_shipped = "Must not be marketed as available yet."
+
+[games."skyrim-se"]
+display_name = "Skyrim SE/AE"
+overall = "Done"
+save_tracking = "Done"
+
+[games.fallout4]
+display_name = "Fallout 4"
+overall = "Done"
+save_tracking = "Done"
+
+[games.fallout76]
+display_name = "Fallout 76"
+overall = "Partial"
+save_tracking = "Partial"
+
+[games.starfield]
+display_name = "Starfield"
+overall = "Partial"
+save_tracking = "Not shipped"
+
+[games.cyberpunk2077]
+display_name = "Cyberpunk 2077"
+overall = "Done"
+save_tracking = "Done"
+
+[games."stellar-blade"]
+display_name = "Stellar Blade"
+overall = "Partial"
+save_tracking = "Not shipped"
+
+[features.instance_switching]
+label = "Instance switching"
+status = "Partial"
+
+[features.bethesda_plugin_management]
+label = "Bethesda plugin management"
+status = "Done"
+
+[features.diagnostics]
+label = "Diagnostics"
+status = "Partial"
+
+[features.downloads_ui]
+label = "Downloads UI"
+status = "Partial"
+
+[features.tool_management]
+label = "Tool management"
+status = "Partial"
+
+[features.bain]
+label = "BAIN"
+status = "Partial"
+
+[features.generic_game_support]
+label = "Generic game support"
+status = "Not shipped"
+
+[features.starfield_save_tracking]
+label = "Starfield save tracking"
+status = "Not shipped"

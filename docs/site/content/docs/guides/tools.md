@@ -7,6 +7,7 @@ weight = 35
 ## Overview
 
 modde can manage gaming tools and overlays that enhance or modify how games run. Supported tools include performance overlays, graphics filters, upscaling frameworks, and performance boosters.
+The current truthful scope is narrower than MO2: tool state and tracked file patching are shipped, but full executable-management workflows are not.
 
 ## Supported tools
 
