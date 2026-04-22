@@ -21,11 +21,10 @@ pub fn view<'a>(
             .on_press(Message::OpenWabbajackFile)
             .style(button::primary)
             .padding([6, 14]),
-        text(
-            state
-                .file_path
-                .as_ref().map_or_else(|| "No file selected".to_string(), |p| p.display().to_string())
-        )
+        text(state.file_path.as_ref().map_or_else(
+            || "No file selected".to_string(),
+            |p| p.display().to_string()
+        ))
         .size(13),
     ]
     .spacing(12)

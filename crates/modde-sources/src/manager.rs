@@ -57,19 +57,21 @@ impl DownloadManager {
     /// Pause an active download, recording how many bytes were fetched so far.
     pub fn pause(&mut self, id: usize, bytes_so_far: u64) {
         if let Some(dl) = self.get_mut(id)
-            && matches!(dl.state, DownloadState::Active { .. }) {
-                dl.state = DownloadState::Paused {
-                    bytes: bytes_so_far,
-                };
-            }
+            && matches!(dl.state, DownloadState::Active { .. })
+        {
+            dl.state = DownloadState::Paused {
+                bytes: bytes_so_far,
+            };
+        }
     }
 
     /// Move a paused download back to the queue.
     pub fn resume(&mut self, id: usize) {
         if let Some(dl) = self.get_mut(id)
-            && matches!(dl.state, DownloadState::Paused { .. }) {
-                dl.state = DownloadState::Queued;
-            }
+            && matches!(dl.state, DownloadState::Paused { .. })
+        {
+            dl.state = DownloadState::Queued;
+        }
     }
 
     /// Remove a download from the manager entirely.

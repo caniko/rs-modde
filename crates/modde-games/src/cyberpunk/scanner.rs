@@ -68,10 +68,11 @@ impl ModScanner for CyberpunkScanner {
                 "mods/{}/",
                 name.to_lowercase()
             )))
-        } else { mod_id.strip_prefix("archive/").map(|stem| ModFootprint::File(format!(
-                "archive/pc/mod/{}.archive",
-                stem.to_lowercase()
-            ))) }
+        } else {
+            mod_id.strip_prefix("archive/").map(|stem| {
+                ModFootprint::File(format!("archive/pc/mod/{}.archive", stem.to_lowercase()))
+            })
+        }
     }
 }
 

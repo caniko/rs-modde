@@ -373,7 +373,9 @@ impl ProfileManager {
 
     /// Delete a profile. If `game_id` is None, the name must be unambiguous.
     pub fn delete(&self, name: &str, game_id: Option<&str>) -> Result<()> {
-        if let Some(gid) = game_id { self.db.delete_profile(name, gid) } else {
+        if let Some(gid) = game_id {
+            self.db.delete_profile(name, gid)
+        } else {
             // Resolve the game_id first
             let profile = self.db.load_profile_by_name(name)?;
             self.db.delete_profile(name, profile.game_id.as_str())

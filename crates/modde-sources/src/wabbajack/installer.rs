@@ -249,7 +249,10 @@ impl WabbajackInstaller {
             .await;
 
         // Collect any errors
-        let errors: Vec<_> = results.into_iter().filter_map(std::result::Result::err).collect();
+        let errors: Vec<_> = results
+            .into_iter()
+            .filter_map(std::result::Result::err)
+            .collect();
 
         if !errors.is_empty() {
             let msg = errors
@@ -310,9 +313,7 @@ impl WabbajackInstaller {
         let data = extract_from_archive_cached(&archive_path, from, &self.extract_cache)
             .await
             .with_context(|| {
-                format!(
-                    "failed to extract '{from}' from archive {archive_hash:016x}"
-                )
+                format!("failed to extract '{from}' from archive {archive_hash:016x}")
             })?;
 
         tokio::fs::write(&output_path, &data).await?;
@@ -338,9 +339,9 @@ impl WabbajackInstaller {
             let file = std::fs::File::open(&wj_path)
                 .with_context(|| format!("failed to open wabbajack file: {}", wj_path.display()))?;
             let mut archive = zip::ZipArchive::new(file)?;
-            let mut entry = archive.by_name(&sid).with_context(|| {
-                format!("inline data entry '{sid}' not found in wabbajack zip")
-            })?;
+            let mut entry = archive
+                .by_name(&sid)
+                .with_context(|| format!("inline data entry '{sid}' not found in wabbajack zip"))?;
             validate_zip_entry(&entry)?;
             let mut data = Vec::with_capacity(entry.size() as usize);
             std::io::Read::read_to_end(&mut entry, &mut data)?;
@@ -373,9 +374,7 @@ impl WabbajackInstaller {
         let source_data = extract_from_archive_cached(&src_archive_path, from, &self.extract_cache)
             .await
             .with_context(|| {
-                format!(
-                    "failed to extract '{from}' from archive {archive_hash:016x} for patching"
-                )
+                format!("failed to extract '{from}' from archive {archive_hash:016x} for patching")
             })?;
 
         // Validate the output path against traversal attacks
@@ -459,9 +458,7 @@ fn validate_zip_entry<R: std::io::Read + ?Sized>(entry: &zip::read::ZipFile<'_, 
 
     // Reject symlink entries from zip archives
     if entry.is_symlink() {
-        bail!(
-            "archive entry is a symlink (rejected for security): {name}"
-        );
+        bail!("archive entry is a symlink (rejected for security): {name}");
     }
 
     Ok(())
@@ -541,9 +538,7 @@ async fn extract_from_archive_cached(
         if file_path.exists() {
             // Reject symlinks extracted by external tools (7z, unrar)
             if file_path.symlink_metadata()?.file_type().is_symlink() {
-                anyhow::bail!(
-                    "extracted file is a symlink (rejected for security): {inner_path}"
-                );
+                anyhow::bail!("extracted file is a symlink (rejected for security): {inner_path}");
             }
             return Ok(std::fs::read(&file_path)?);
         }
@@ -579,9 +574,7 @@ fn find_file_case_insensitive(base: &Path, relative_path: &str) -> Result<Vec<u8
                 current = entry.path();
                 // Reject symlinks in intermediate path components
                 if current.symlink_metadata()?.file_type().is_symlink() {
-                    anyhow::bail!(
-                        "path component is a symlink (rejected for security): {part}"
-                    );
+                    anyhow::bail!("path component is a symlink (rejected for security): {part}");
                 }
                 found = true;
                 break;
@@ -599,9 +592,7 @@ fn find_file_case_insensitive(base: &Path, relative_path: &str) -> Result<Vec<u8
 
     // Final resolved file must not be a symlink either
     if current.symlink_metadata()?.file_type().is_symlink() {
-        anyhow::bail!(
-            "resolved file is a symlink (rejected for security): {relative_path}"
-        );
+        anyhow::bail!("resolved file is a symlink (rejected for security): {relative_path}");
     }
 
     Ok(std::fs::read(&current)?)

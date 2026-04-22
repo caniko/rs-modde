@@ -83,20 +83,21 @@ impl DownloadQueue {
                 bytes_downloaded,
                 total_bytes,
             } = task.state
-            {
-                task.state = DownloadState::Paused {
-                    bytes_downloaded,
-                    total_bytes,
-                };
-            }
+        {
+            task.state = DownloadState::Paused {
+                bytes_downloaded,
+                total_bytes,
+            };
+        }
     }
 
     /// Resume a paused download by moving it back to `Queued`.
     pub fn resume(&mut self, id: usize) {
         if let Some(task) = self.tasks.iter_mut().find(|t| t.id == id)
-            && matches!(task.state, DownloadState::Paused { .. }) {
-                task.state = DownloadState::Queued;
-            }
+            && matches!(task.state, DownloadState::Paused { .. })
+        {
+            task.state = DownloadState::Queued;
+        }
     }
 
     /// Remove a task from the queue entirely.

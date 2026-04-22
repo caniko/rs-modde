@@ -150,9 +150,11 @@ impl GamePlugin for Cyberpunk2077 {
             {
                 let name = dll_entry.file_name().to_string_lossy().to_lowercase();
                 if let Some(stem) = name.strip_suffix(".dll")
-                    && KNOWN_PROXY_DLLS.contains(&stem) && !overrides.contains(&stem.to_string()) {
-                        overrides.push(stem.to_string());
-                    }
+                    && KNOWN_PROXY_DLLS.contains(&stem)
+                    && !overrides.contains(&stem.to_string())
+                {
+                    overrides.push(stem.to_string());
+                }
             }
         }
 

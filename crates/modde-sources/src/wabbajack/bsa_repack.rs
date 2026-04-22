@@ -394,7 +394,11 @@ fn bsa_hash_path(path: &str) -> u64 {
     // Last character
     hash1 = hash1.wrapping_add(u32::from(bytes[len - 1]));
     // Include length
-    hash1 |= (if len >= 2 { u32::from(bytes[len - 2]) } else { 0 }) << 8;
+    hash1 |= (if len >= 2 {
+        u32::from(bytes[len - 2])
+    } else {
+        0
+    }) << 8;
     hash1 |= (len as u32) << 16;
     hash1 |= u32::from(bytes[0]) << 24;
 

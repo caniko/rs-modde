@@ -44,9 +44,10 @@ pub fn scan_plugins() -> Vec<(PathBuf, PluginManifest)> {
         for entry in entries.flatten() {
             let manifest_path = entry.path().join("plugin.toml");
             if manifest_path.exists()
-                && let Ok(manifest) = load_manifest(&manifest_path) {
-                    plugins.push((entry.path(), manifest));
-                }
+                && let Ok(manifest) = load_manifest(&manifest_path)
+            {
+                plugins.push((entry.path(), manifest));
+            }
         }
     }
     plugins

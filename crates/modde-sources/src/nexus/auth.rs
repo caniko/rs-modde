@@ -77,9 +77,10 @@ pub fn load_api_key() -> Result<String> {
 
     // 1. Try environment variable first
     if let Ok(key) = std::env::var("NEXUS_API_KEY")
-        && !key.is_empty() {
-            return Ok(key);
-        }
+        && !key.is_empty()
+    {
+        return Ok(key);
+    }
 
     // 2. Try system keyring
     if let Some(key) = load_from_keyring() {

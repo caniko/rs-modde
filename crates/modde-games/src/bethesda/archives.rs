@@ -11,12 +11,10 @@ pub const BSA_EXTENSIONS: &[&str] = &[".bsa", ".ba2"];
 /// Check if a file path is a BSA/BA2 archive.
 #[must_use]
 pub fn is_archive(path: &Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| {
-            let ext = format!(".{}", e.to_lowercase());
-            BSA_EXTENSIONS.contains(&ext.as_str())
-        })
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+        let ext = format!(".{}", e.to_lowercase());
+        BSA_EXTENSIONS.contains(&ext.as_str())
+    })
 }
 
 /// Determine the expected staging location for a BSA/BA2 archive.

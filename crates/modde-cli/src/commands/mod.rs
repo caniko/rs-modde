@@ -78,7 +78,9 @@ pub fn load_profile_or_default(
     name: Option<&str>,
     game_id: Option<&str>,
 ) -> Result<Profile> {
-    if let Some(name) = name { Ok(pm.load(name, game_id)?) } else {
+    if let Some(name) = name {
+        Ok(pm.load(name, game_id)?)
+    } else {
         let profiles = pm.list()?;
         let first = profiles.first().ok_or_else(|| {
             anyhow::anyhow!(
@@ -102,9 +104,10 @@ pub fn load_plugin_order(pm: &ProfileManager, profile: &Profile) -> Result<Vec<P
         plugins =
             modde_games::read_native_plugin_order(profile.game_id.as_str()).unwrap_or_default();
         if !plugins.is_empty()
-            && let Some(profile_id) = profile.id {
-                pm.db().set_plugin_order(profile_id, &plugins)?;
-            }
+            && let Some(profile_id) = profile.id
+        {
+            pm.db().set_plugin_order(profile_id, &plugins)?;
+        }
     }
 
     Ok(plugins)

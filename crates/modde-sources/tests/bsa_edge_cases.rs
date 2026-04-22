@@ -207,10 +207,12 @@ async fn test_bsa_nested_subdirectory_folder_grouping() {
     let output = staging.path().join("test.bsa");
 
     // Create files in multiple nested directories
-    let dirs = ["meshes/armor/iron",
+    let dirs = [
+        "meshes/armor/iron",
         "meshes/armor/steel",
         "textures/armor/iron",
-        "textures/armor/steel"];
+        "textures/armor/steel",
+    ];
     let mut states = Vec::new();
 
     for (i, dir) in dirs.iter().enumerate() {

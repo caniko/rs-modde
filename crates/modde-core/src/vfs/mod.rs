@@ -63,9 +63,10 @@ impl SymlinkFarm<Built> {
                 for (rel_path, source) in files {
                     // Skip hidden files
                     if let Some(hidden) = hidden
-                        && hidden.contains(&(mod_id.0.clone(), rel_path.clone())) {
-                            continue;
-                        }
+                        && hidden.contains(&(mod_id.0.clone(), rel_path.clone()))
+                    {
+                        continue;
+                    }
                     links.insert(rel_path.clone(), source.clone());
                 }
             }

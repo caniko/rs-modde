@@ -151,7 +151,10 @@ pub fn find_fomod_config(mod_dir: &Path) -> Option<std::path::PathBuf> {
                 continue;
             };
             for inner_entry in inner.flatten() {
-                if inner_entry.file_name().eq_ignore_ascii_case("moduleconfig.xml") {
+                if inner_entry
+                    .file_name()
+                    .eq_ignore_ascii_case("moduleconfig.xml")
+                {
                     return Some(inner_entry.path());
                 }
             }
@@ -365,7 +368,8 @@ async fn handle_wabbajack(
     };
 
     let modlist_name = manifest.name.clone();
-    let game_id = modde_games::normalize_wabbajack_game(&manifest.game).map_or_else(|| manifest.game.to_lowercase(), String::from);
+    let game_id = modde_games::normalize_wabbajack_game(&manifest.game)
+        .map_or_else(|| manifest.game.to_lowercase(), String::from);
     let profile_name = profile_name.unwrap_or_else(|| modlist_name.clone());
 
     println!(
@@ -432,10 +436,9 @@ async fn handle_wabbajack(
                     InstallProgress::Applying {
                         directive_index,
                         total,
+                    } if (directive_index % 100 == 0 || directive_index == total - 1) => {
+                        println!("  Applying directives: {}/{total}", directive_index + 1);
                     }
-                        if (directive_index % 100 == 0 || directive_index == total - 1) => {
-                            println!("  Applying directives: {}/{total}", directive_index + 1);
-                        }
                     InstallProgress::Patching { name } => {
                         println!("  Patching: {name}");
                     }
@@ -634,13 +637,14 @@ pub async fn deploy_mo2_to_game(staging: &Path, game_dir: &Path, force: bool) ->
                     && let (Ok(src_meta), Ok(dst_meta)) = (
                         tokio::fs::metadata(&entry_path).await,
                         tokio::fs::metadata(&dest).await,
-                    ) {
-                        use std::os::unix::fs::MetadataExt;
-                        if src_meta.ino() == dst_meta.ino() && src_meta.dev() == dst_meta.dev() {
-                            skipped += 1;
-                            continue;
-                        }
+                    )
+                {
+                    use std::os::unix::fs::MetadataExt;
+                    if src_meta.ino() == dst_meta.ino() && src_meta.dev() == dst_meta.dev() {
+                        skipped += 1;
+                        continue;
                     }
+                }
 
                 // Create parent directories
                 if let Some(parent) = dest.parent() {
@@ -701,7 +705,9 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
     let client = build_http_client()?;
 
     // If no file_id provided, fetch mod files and select the most-recent MAIN file.
-    let file_id = if let Some(id) = file_id_opt { id } else {
+    let file_id = if let Some(id) = file_id_opt {
+        id
+    } else {
         let api = NexusApi::new(client.clone(), api_key.clone());
         let files = api
             .get_mod_files(&game_domain, mod_id)
@@ -781,7 +787,8 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
         // Resolve the game plugin to build a probe. Games we don't
         // recognize yet still install through the generic pipeline,
         // just without game-specific hints.
-        let probe = modde_games::resolve_game_plugin(&game_domain).map_or_else(installer::InstallProbe::noop, modde_games::game_probe);
+        let probe = modde_games::resolve_game_plugin(&game_domain)
+            .map_or_else(installer::InstallProbe::noop, modde_games::game_probe);
 
         let mut plan = installer::analyze(&staging_root, &probe, source_hash)
             .context("installer analyze failed")?;

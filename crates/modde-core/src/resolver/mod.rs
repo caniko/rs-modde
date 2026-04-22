@@ -238,12 +238,14 @@ pub fn resolve(profile: &Profile) -> Result<ResolvedLoadOrder> {
     // Check for incompatible mods — must fail before we try to resolve.
     for rule in &profile.load_order_rules {
         if let LoadOrderRule::Incompatible { mod_a, mod_b } = rule
-            && enabled_set.contains(mod_a.as_str()) && enabled_set.contains(mod_b.as_str()) {
-                return Err(CoreError::FileConflict {
-                    path: String::new(),
-                    mods: Box::new(smallvec::smallvec![mod_a.0.clone(), mod_b.0.clone()]),
-                });
-            }
+            && enabled_set.contains(mod_a.as_str())
+            && enabled_set.contains(mod_b.as_str())
+        {
+            return Err(CoreError::FileConflict {
+                path: String::new(),
+                mods: Box::new(smallvec::smallvec![mod_a.0.clone(), mod_b.0.clone()]),
+            });
+        }
     }
 
     // Build adjacency + in-degree. `successors[u] = [v, ...]` means "u must

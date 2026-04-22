@@ -208,9 +208,10 @@ fn looks_like_dll_overlay(dir: &Path) -> bool {
                 has_asset_dir = true;
             }
         } else if let Some(ext) = path.extension().and_then(|e| e.to_str())
-            && ext.eq_ignore_ascii_case("dll") {
-                has_dll = true;
-            }
+            && ext.eq_ignore_ascii_case("dll")
+        {
+            has_dll = true;
+        }
     }
     has_dll && !has_asset_dir
 }

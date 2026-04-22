@@ -104,14 +104,15 @@ fn extract_label(save_path: &Path, dir_name: &str) -> Option<String> {
     let meta_path = save_path.join("metadata.9.json");
     if meta_path.exists()
         && let Ok(content) = std::fs::read_to_string(&meta_path)
-            && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
-                && let Some(name) = json
-                    .get("customName")
-                    .or_else(|| json.get("name"))
-                    .and_then(|v| v.as_str())
-                    && !name.is_empty() {
-                        return Some(name.to_string());
-                    }
+        && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+        && let Some(name) = json
+            .get("customName")
+            .or_else(|| json.get("name"))
+            .and_then(|v| v.as_str())
+        && !name.is_empty()
+    {
+        return Some(name.to_string());
+    }
 
     // Fall back to directory name (strip prefix and numeric suffix for readability)
     Some(dir_name.to_string())

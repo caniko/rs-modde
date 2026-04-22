@@ -131,10 +131,7 @@ pub fn handle(
             "\n  {:>5}  {:>6}  {:12}  Name",
             "Files", "Conf%", "Location"
         );
-        println!(
-            "  {:>5}  {:>6}  {:12}  ----",
-            "-----", "-----", "--------"
-        );
+        println!("  {:>5}  {:>6}  {:12}  ----", "-----", "-----", "--------");
         for m in &fs_mods {
             let location = match &m.source {
                 modde_games::ModSource::Filesystem { location } => location.as_str(),
@@ -229,7 +226,9 @@ pub fn handle(
         let pm = ProfileManager::open().context("failed to open profile database")?;
 
         // Load existing profile or create a new one.
-        let mut profile = if let Ok(p) = pm.load(profile_name, Some(&game)) { p } else {
+        let mut profile = if let Ok(p) = pm.load(profile_name, Some(&game)) {
+            p
+        } else {
             println!("Creating new profile '{profile_name}' for game '{game}'");
             Profile {
                 id: None,
@@ -267,7 +266,11 @@ pub fn handle(
                     report.genuine.len()
                 );
             } else {
-                let leaked_set: HashSet<&str> = report.leaked.iter().map(std::string::String::as_str).collect();
+                let leaked_set: HashSet<&str> = report
+                    .leaked
+                    .iter()
+                    .map(std::string::String::as_str)
+                    .collect();
                 let before = profile.mods.len();
                 profile
                     .mods
@@ -323,9 +326,10 @@ pub fn handle(
                 && let Err(e) = modde_core::manifest::wabbajack::cache_wabbajack_file(
                     manifest_path,
                     &report.manifest_hash,
-                ) {
-                    tracing::warn!("failed to cache wabbajack source file: {e:#}");
-                }
+                )
+            {
+                tracing::warn!("failed to cache wabbajack source file: {e:#}");
+            }
         }
 
         pm.create_or_update(&profile)

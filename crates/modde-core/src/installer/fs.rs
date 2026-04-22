@@ -98,9 +98,10 @@ fn walk_files_into(
         if path.is_dir() {
             walk_files_into(base, &path, out)?;
         } else if path.is_file()
-            && let Ok(rel) = path.strip_prefix(base) {
-                out.push((path.clone(), rel.to_path_buf()));
-            }
+            && let Ok(rel) = path.strip_prefix(base)
+        {
+            out.push((path.clone(), rel.to_path_buf()));
+        }
     }
     Ok(())
 }

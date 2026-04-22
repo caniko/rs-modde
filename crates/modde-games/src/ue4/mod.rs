@@ -145,9 +145,11 @@ impl GamePlugin for Ue4Game {
             for f in inner.flatten() {
                 let name = f.file_name().to_string_lossy().to_lowercase();
                 if let Some(stem) = name.strip_suffix(".dll")
-                    && UE4_PROXY_DLLS.contains(&stem) && !out.iter().any(|x| x == stem) {
-                        out.push(stem.to_string());
-                    }
+                    && UE4_PROXY_DLLS.contains(&stem)
+                    && !out.iter().any(|x| x == stem)
+                {
+                    out.push(stem.to_string());
+                }
             }
         }
         out

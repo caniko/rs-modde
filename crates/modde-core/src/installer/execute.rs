@@ -215,8 +215,10 @@ fn stage_tree(
 }
 
 fn dest_rel(dest_root: &Path, dest_path: &Path) -> String {
-    dest_path
-        .strip_prefix(dest_root).map_or_else(|_| dest_path.to_string_lossy().to_string(), |p| p.to_string_lossy().to_string())
+    dest_path.strip_prefix(dest_root).map_or_else(
+        |_| dest_path.to_string_lossy().to_string(),
+        |p| p.to_string_lossy().to_string(),
+    )
 }
 
 #[cfg(test)]

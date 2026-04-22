@@ -145,10 +145,11 @@ fn simulate_ui_init(
 
     // Auto-detect: if no game selected but profiles exist, pick first profile's game
     if selected_game.is_none()
-        && let Some(first) = profiles.first() {
-            selected_game = Some(first.game_id.to_string());
-            settings.selected_game = Some(first.game_id.to_string());
-        }
+        && let Some(first) = profiles.first()
+    {
+        selected_game = Some(first.game_id.to_string());
+        settings.selected_game = Some(first.game_id.to_string());
+    }
 
     (profiles, selected_game)
 }

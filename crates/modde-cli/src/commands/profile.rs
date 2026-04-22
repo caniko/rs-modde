@@ -455,8 +455,11 @@ fn dedup(
     // Persist: remove leaked rows from the in-memory profile and save.
     // `update_profile` does DELETE + re-INSERT of all profile_mods, so
     // sort_index is automatically contiguous after the prune.
-    let leaked_set: std::collections::HashSet<&str> =
-        report.leaked.iter().map(std::string::String::as_str).collect();
+    let leaked_set: std::collections::HashSet<&str> = report
+        .leaked
+        .iter()
+        .map(std::string::String::as_str)
+        .collect();
     let before = profile.mods.len();
     profile
         .mods

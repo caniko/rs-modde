@@ -216,11 +216,13 @@ pub fn handle_enable(tool_id: &str, game_id: &str) -> Result<()> {
     let db = ModdeDb::open().context("failed to open database")?;
 
     // Load existing or use defaults
-    let mut config = if let Some(row) = db.load_tool_config(game_id, tool_id)? { modde_games::tools::ToolConfig {
-        tool_id: row.tool_id,
-        enabled: true,
-        settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
-    } } else {
+    let mut config = if let Some(row) = db.load_tool_config(game_id, tool_id)? {
+        modde_games::tools::ToolConfig {
+            tool_id: row.tool_id,
+            enabled: true,
+            settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+        }
+    } else {
         let mut cfg = tool.default_config();
         cfg.enabled = true;
         cfg
@@ -255,7 +257,8 @@ pub fn handle_disable(tool_id: &str, game_id: &str) -> Result<()> {
 
     // Load existing config to preserve settings
     let settings_json = db
-        .load_tool_config(game_id, tool_id)?.map_or_else(|| "{}".into(), |r| r.settings_json);
+        .load_tool_config(game_id, tool_id)?
+        .map_or_else(|| "{}".into(), |r| r.settings_json);
 
     db.save_tool_config(game_id, tool_id, false, &settings_json)?;
 

@@ -232,10 +232,7 @@ impl SaveSnapshot {
         if let Some((char_part, save_part)) = body.split_once(" — ") {
             // Check if it's a multi-save summary like "3 saves — Lydia (slots 1, 2); ..."
             if char_part.ends_with("saves")
-                && char_part
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_ascii_digit())
+                && char_part.chars().next().is_some_and(|c| c.is_ascii_digit())
             {
                 // Multi-save: use the whole body as the label
                 self.save_label = Some(first_line.to_string());
@@ -261,10 +258,16 @@ impl SaveSnapshot {
             return FingerprintCheck::Compatible;
         }
 
-        let stored_set: std::collections::HashSet<&str> =
-            stored.mod_ids.iter().map(std::string::String::as_str).collect();
-        let current_set: std::collections::HashSet<&str> =
-            current.mod_ids.iter().map(std::string::String::as_str).collect();
+        let stored_set: std::collections::HashSet<&str> = stored
+            .mod_ids
+            .iter()
+            .map(std::string::String::as_str)
+            .collect();
+        let current_set: std::collections::HashSet<&str> = current
+            .mod_ids
+            .iter()
+            .map(std::string::String::as_str)
+            .collect();
 
         let removed: SmallVec<[String; 4]> = stored_set
             .difference(&current_set)

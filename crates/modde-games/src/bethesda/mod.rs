@@ -234,12 +234,13 @@ impl GamePlugin for BethesdaGame {
                     return true;
                 }
             } else if path.is_file()
-                && let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                    let ext_lc = ext.to_lowercase();
-                    if matches!(ext_lc.as_str(), "esp" | "esm" | "esl" | "bsa" | "ba2") {
-                        return true;
-                    }
+                && let Some(ext) = path.extension().and_then(|e| e.to_str())
+            {
+                let ext_lc = ext.to_lowercase();
+                if matches!(ext_lc.as_str(), "esp" | "esm" | "esl" | "bsa" | "ba2") {
+                    return true;
                 }
+            }
         }
         false
     }

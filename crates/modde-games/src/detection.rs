@@ -469,9 +469,10 @@ pub fn find_game_install(game_id: &str) -> Option<PathBuf> {
     // Check settings override first
     let settings = modde_core::settings::AppSettings::load();
     if let Some(path) = settings.game_path(game_id)
-        && path.is_dir() {
-            return Some(path.clone());
-        }
+        && path.is_dir()
+    {
+        return Some(path.clone());
+    }
 
     // Scan all launchers
     scan_installed_games()

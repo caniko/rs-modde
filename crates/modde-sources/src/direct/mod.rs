@@ -69,9 +69,7 @@ async fn download_with_resume(
     dest: &Path,
     progress: &ProgressCallback,
 ) -> Result<()> {
-    let existing_len = tokio::fs::metadata(dest)
-        .await
-        .map_or(0, |m| m.len());
+    let existing_len = tokio::fs::metadata(dest).await.map_or(0, |m| m.len());
 
     let mut req = client.get(&handle.url);
     for (k, v) in &handle.headers {

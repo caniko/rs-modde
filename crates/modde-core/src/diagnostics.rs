@@ -127,7 +127,11 @@ impl DiagnosticRule for ShadowedModRule {
             .shadowed_mods
             .iter()
             .map(|sm| {
-                let by: Vec<&str> = sm.shadowed_by.iter().map(super::resolver::ModId::as_str).collect();
+                let by: Vec<&str> = sm
+                    .shadowed_by
+                    .iter()
+                    .map(super::resolver::ModId::as_str)
+                    .collect();
                 Diagnostic {
                     severity: Severity::Warning,
                     title: format!("Mod \"{}\" is completely shadowed", sm.mod_id),

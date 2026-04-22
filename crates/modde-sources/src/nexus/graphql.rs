@@ -65,9 +65,10 @@ pub async fn post<T: DeserializeOwned>(
         .context("failed to decode GraphQL response")?;
 
     if let Some(errors) = envelope.get("errors")
-        && !errors.is_null() {
-            bail!("Nexus GraphQL errors: {errors}");
-        }
+        && !errors.is_null()
+    {
+        bail!("Nexus GraphQL errors: {errors}");
+    }
     let data = envelope
         .get("data")
         .cloned()

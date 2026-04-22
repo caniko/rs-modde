@@ -47,13 +47,15 @@ impl AppSettings {
     pub fn save(&self) {
         let path = Self::config_path();
         if let Some(parent) = path.parent()
-            && let Err(e) = std::fs::create_dir_all(parent) {
-                tracing::warn!(error = %e, "failed to create config directory");
-            }
+            && let Err(e) = std::fs::create_dir_all(parent)
+        {
+            tracing::warn!(error = %e, "failed to create config directory");
+        }
         if let Ok(s) = toml::to_string_pretty(self)
-            && let Err(e) = std::fs::write(&path, s) {
-                tracing::warn!(error = %e, "failed to write settings file");
-            }
+            && let Err(e) = std::fs::write(&path, s)
+        {
+            tracing::warn!(error = %e, "failed to write settings file");
+        }
     }
 
     /// Get the install path for a game, if configured.
@@ -89,13 +91,15 @@ impl AppSettings {
     /// Save settings to a specific file path.
     pub fn save_to(&self, path: &std::path::Path) {
         if let Some(parent) = path.parent()
-            && let Err(e) = std::fs::create_dir_all(parent) {
-                tracing::warn!(error = %e, "failed to create config directory");
-            }
+            && let Err(e) = std::fs::create_dir_all(parent)
+        {
+            tracing::warn!(error = %e, "failed to create config directory");
+        }
         if let Ok(s) = toml::to_string_pretty(self)
-            && let Err(e) = std::fs::write(path, s) {
-                tracing::warn!(error = %e, "failed to write settings file");
-            }
+            && let Err(e) = std::fs::write(path, s)
+        {
+            tracing::warn!(error = %e, "failed to write settings file");
+        }
     }
 }
 

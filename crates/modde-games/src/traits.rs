@@ -460,12 +460,13 @@ pub fn walk_files_relative(base: &Path, dir: &Path) -> Vec<DiscoveredFile> {
             if path.is_dir() {
                 result.extend(walk_files_relative(base, &path));
             } else if let Ok(meta) = path.metadata()
-                && let Ok(rel) = path.strip_prefix(base) {
-                    result.push(DiscoveredFile {
-                        rel_path: rel.to_string_lossy().to_string(),
-                        size: meta.len(),
-                    });
-                }
+                && let Ok(rel) = path.strip_prefix(base)
+            {
+                result.push(DiscoveredFile {
+                    rel_path: rel.to_string_lossy().to_string(),
+                    size: meta.len(),
+                });
+            }
         }
     }
     result

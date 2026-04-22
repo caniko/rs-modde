@@ -95,10 +95,13 @@ impl SaveTracker for BethesdaSaveTracker {
                 .unwrap_or(SystemTime::UNIX_EPOCH);
 
             // Parse header to extract save number and character name
-            let header = if let Ok(h) = read_save_header(&path, self.magic) { h } else {
+            let header = if let Ok(h) = read_save_header(&path, self.magic) {
+                h
+            } else {
                 // Unreadable or wrong-game save — include without metadata
                 let rel = path
-                    .file_name().map_or_else(|| path.clone(), std::path::PathBuf::from);
+                    .file_name()
+                    .map_or_else(|| path.clone(), std::path::PathBuf::from);
                 saves.push(DetectedSave {
                     rel_path: rel,
                     category: classify_slot_name(
@@ -117,7 +120,8 @@ impl SaveTracker for BethesdaSaveTracker {
             let category =
                 classify_slot_name(path.file_stem().and_then(|s| s.to_str()).unwrap_or(""));
             let rel = path
-                .file_name().map_or_else(|| path.clone(), std::path::PathBuf::from);
+                .file_name()
+                .map_or_else(|| path.clone(), std::path::PathBuf::from);
 
             saves.push(DetectedSave {
                 rel_path: rel,
@@ -166,7 +170,10 @@ impl SaveTracker for BethesdaSaveTracker {
                         } else {
                             let mut sorted = slots.clone();
                             sorted.sort_unstable();
-                            let slot_list: Vec<_> = sorted.iter().map(std::string::ToString::to_string).collect();
+                            let slot_list: Vec<_> = sorted
+                                .iter()
+                                .map(std::string::ToString::to_string)
+                                .collect();
                             format!("{name} (slots {})", slot_list.join(", "))
                         }
                     })

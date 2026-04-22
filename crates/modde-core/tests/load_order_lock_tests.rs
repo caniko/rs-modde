@@ -932,10 +932,11 @@ fn cp_footprint(mod_id: &str) -> Option<ModFootprint> {
             "bin/x64/plugins/cyber_engine_tweaks/mods/{}/",
             name.to_lowercase()
         )))
-    } else { mod_id.strip_prefix("archive/").map(|stem| ModFootprint::File(format!(
-            "archive/pc/mod/{}.archive",
-            stem.to_lowercase()
-        ))) }
+    } else {
+        mod_id.strip_prefix("archive/").map(|stem| {
+            ModFootprint::File(format!("archive/pc/mod/{}.archive", stem.to_lowercase()))
+        })
+    }
 }
 
 /// Helper: footprint mapping for the Skyrim-style paths in the sample
@@ -948,7 +949,11 @@ fn skyrim_test_footprint(mod_id: &str) -> Option<ModFootprint> {
             "data/{}/",
             rest.to_lowercase()
         )))
-    } else { mod_id.strip_prefix("file/").map(|rest| ModFootprint::File(rest.to_lowercase())) }
+    } else {
+        mod_id
+            .strip_prefix("file/")
+            .map(|rest| ModFootprint::File(rest.to_lowercase()))
+    }
 }
 
 #[test]

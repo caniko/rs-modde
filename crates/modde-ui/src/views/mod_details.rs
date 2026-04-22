@@ -84,6 +84,8 @@ impl ModDetailsState {
 
     /// The URL of the image currently displayed in the thumbnail slot, if any.
     pub fn current_image_url(&self) -> Option<&str> {
-        self.gallery.get(self.gallery_index).map(std::string::String::as_str)
+        self.gallery
+            .get(self.gallery_index)
+            .map(std::string::String::as_str)
     }
 }

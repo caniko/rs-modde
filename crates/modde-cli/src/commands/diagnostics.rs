@@ -9,7 +9,9 @@ pub fn handle(game_id: &str, profile_name: Option<String>) -> Result<()> {
     let pm = ProfileManager::open().context("failed to open profile database")?;
 
     // Load profile (use active or specified)
-    let profile = if let Some(name) = profile_name { pm.load(&name, Some(game_id))? } else {
+    let profile = if let Some(name) = profile_name {
+        pm.load(&name, Some(game_id))?
+    } else {
         let (_, name) = pm
             .db()
             .get_active_profile(game_id)?

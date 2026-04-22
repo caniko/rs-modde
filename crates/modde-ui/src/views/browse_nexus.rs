@@ -228,10 +228,7 @@ fn collections_grid(
     scrollable(col).height(Length::Fill).into()
 }
 
-fn collection_card(
-    tile: &GqlCollectionTile,
-    _game_domain: Option<String>,
-) -> Element<'_, Message> {
+fn collection_card(tile: &GqlCollectionTile, _game_domain: Option<String>) -> Element<'_, Message> {
     let header = row![
         text(&tile.name).size(16),
         iced::widget::space::horizontal(),

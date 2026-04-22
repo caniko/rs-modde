@@ -129,9 +129,10 @@ impl NexusApi {
         // Check rate limit headers
         if let Some(remaining) = resp.headers().get("x-rl-hourly-remaining")
             && let Ok(val) = remaining.to_str().unwrap_or("").parse::<u32>()
-                && val < 10 {
-                    warn!(remaining = val, "Nexus API hourly rate limit running low");
-                }
+            && val < 10
+        {
+            warn!(remaining = val, "Nexus API hourly rate limit running low");
+        }
 
         if resp.status() == 429 {
             bail!("Nexus API rate limit exceeded. Please wait before retrying.");
@@ -494,9 +495,7 @@ impl NexusApi {
             let rev = meta
                 .latest_published_revision
                 .map(|r| r.revision_number)
-                .ok_or_else(|| {
-                    anyhow::anyhow!("collection '{slug}' has no published revisions")
-                })?;
+                .ok_or_else(|| anyhow::anyhow!("collection '{slug}' has no published revisions"))?;
             (meta.game.domain_name, rev)
         };
 

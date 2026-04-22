@@ -100,15 +100,16 @@ fn heroic_game_matches(config_dir: &Path, game_id: &str, game_dir: &Path) -> boo
         if let Some(games) = val.get("installed").and_then(|v| v.as_array()) {
             for game in games {
                 if game.get("appName").and_then(|v| v.as_str()) == Some(game_id)
-                    && let Some(install_path) = game.get("install_path").and_then(|v| v.as_str()) {
-                        let canonical_game = game_dir
-                            .canonicalize()
-                            .unwrap_or_else(|_| game_dir.to_path_buf());
-                        let canonical_install = PathBuf::from(install_path)
-                            .canonicalize()
-                            .unwrap_or_else(|_| PathBuf::from(install_path));
-                        return canonical_game == canonical_install;
-                    }
+                    && let Some(install_path) = game.get("install_path").and_then(|v| v.as_str())
+                {
+                    let canonical_game = game_dir
+                        .canonicalize()
+                        .unwrap_or_else(|_| game_dir.to_path_buf());
+                    let canonical_install = PathBuf::from(install_path)
+                        .canonicalize()
+                        .unwrap_or_else(|_| PathBuf::from(install_path));
+                    return canonical_game == canonical_install;
+                }
             }
         }
     }
@@ -131,15 +132,17 @@ fn detect_steam(game_dir: &Path) -> Option<String> {
             for entry in manifests.flatten() {
                 let name = entry.file_name();
                 let name_str = name.to_string_lossy();
-                if name_str.starts_with("appmanifest_") && name_str.ends_with(".acf")
+                if name_str.starts_with("appmanifest_")
+                    && name_str.ends_with(".acf")
                     && let Ok(content) = std::fs::read_to_string(entry.path())
-                        && content.contains(&*game_name) {
-                            let app_id = name_str
-                                .strip_prefix("appmanifest_")?
-                                .strip_suffix(".acf")?
-                                .to_string();
-                            return Some(app_id);
-                        }
+                    && content.contains(&*game_name)
+                {
+                    let app_id = name_str
+                        .strip_prefix("appmanifest_")?
+                        .strip_suffix(".acf")?
+                        .to_string();
+                    return Some(app_id);
+                }
             }
         }
     }
@@ -260,7 +263,8 @@ pub fn generate_launch_wrapper(
     let wrapper_dir = modde_core::paths::modde_data_dir().join("bin");
     std::fs::create_dir_all(&wrapper_dir).context("failed to create modde bin directory")?;
 
-    let modde_bin = std::env::current_exe().map_or_else(|_| "modde".to_string(), |p| p.to_string_lossy().to_string());
+    let modde_bin = std::env::current_exe()
+        .map_or_else(|_| "modde".to_string(), |p| p.to_string_lossy().to_string());
 
     #[cfg(unix)]
     let (wrapper_path, script) = generate_wrapper_unix(

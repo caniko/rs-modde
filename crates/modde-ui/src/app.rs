@@ -313,7 +313,8 @@ impl Modde {
     fn current_game_dir(&self) -> Option<PathBuf> {
         let game_id = self.current_game_id()?;
         self.settings.game_path(game_id).cloned().or_else(|| {
-            modde_games::resolve_game_plugin(game_id).and_then(modde_games::GamePlugin::detect_install)
+            modde_games::resolve_game_plugin(game_id)
+                .and_then(modde_games::GamePlugin::detect_install)
         })
     }
 
@@ -628,7 +629,10 @@ async fn run_browse_install(game_domain: String, mod_id: u64) -> Result<String, 
         .map_err(|e| e.to_string())?;
 
     // Build a probe from whichever game plugin is registered.
-    let probe = modde_games::resolve_game_plugin(&game_domain).map_or_else(modde_core::installer::InstallProbe::noop, modde_games::game_probe);
+    let probe = modde_games::resolve_game_plugin(&game_domain).map_or_else(
+        modde_core::installer::InstallProbe::noop,
+        modde_games::game_probe,
+    );
 
     let outcome = modde_sources::nexus::install::install_single_mod(
         &client,
@@ -730,7 +734,7 @@ pub use modde_core::profile::ReorderDirection;
 /// messages and UI banners. Centralised so `lock_reason` strings stay
 /// consistent across the handler, `load_order` banner, and `mod_list` row.
 pub(crate) fn format_lock_reason(reason: &modde_core::LockReason) -> String {
-    use modde_core::LockReason::{Wabbajack, NexusCollection, TomlImport, Manual};
+    use modde_core::LockReason::{Manual, NexusCollection, TomlImport, Wabbajack};
     match reason {
         Wabbajack { manifest_hash } => format!("Wabbajack (hash {manifest_hash})"),
         NexusCollection { slug, version } => format!("Nexus Collection '{slug}' v{version}"),
@@ -1336,18 +1340,20 @@ impl Modde {
 
         // Auto-detect: if no game is selected but profiles exist, pick the first profile's game
         if app.selected_game.is_none()
-            && let Some(first) = app.profiles.first() {
-                app.selected_game = Some(first.game_id.to_string());
-                app.settings.selected_game = Some(first.game_id.to_string());
-            }
+            && let Some(first) = app.profiles.first()
+        {
+            app.selected_game = Some(first.game_id.to_string());
+            app.settings.selected_game = Some(first.game_id.to_string());
+        }
 
         // Auto-detect: if the selected game has no path in settings, try detect_install()
         if let Some(ref game_id) = app.selected_game {
             if app.settings.game_path(game_id).is_none()
                 && let Some(plugin) = modde_games::resolve_game_plugin(game_id)
-                    && let Some(path) = plugin.detect_install() {
-                        app.settings.set_game_path(game_id, path);
-                    }
+                && let Some(path) = plugin.detect_install()
+            {
+                app.settings.set_game_path(game_id, path);
+            }
             app.save_settings();
         }
 
@@ -1479,19 +1485,20 @@ impl Modde {
             Message::ToggleMod { mod_id, enabled } => {
                 if let Some(ref profile_name) = self.active_profile
                     && let Ok(pm) = ProfileManager::open()
-                        && let Ok(mut profile) = pm.load(profile_name, None) {
-                            if let Some(m) = profile.mods.iter_mut().find(|m| m.mod_id == mod_id) {
-                                m.enabled = enabled;
-                            }
-                            let _ = pm
-                                .create(&profile)
-                                .or_else(|_| pm.update(&profile).map(|()| 0));
-                            self.status_message = format!(
-                                "Mod {mod_id} {}",
-                                if enabled { "enabled" } else { "disabled" }
-                            );
-                            self.reload_profile();
-                        }
+                    && let Ok(mut profile) = pm.load(profile_name, None)
+                {
+                    if let Some(m) = profile.mods.iter_mut().find(|m| m.mod_id == mod_id) {
+                        m.enabled = enabled;
+                    }
+                    let _ = pm
+                        .create(&profile)
+                        .or_else(|_| pm.update(&profile).map(|()| 0));
+                    self.status_message = format!(
+                        "Mod {mod_id} {}",
+                        if enabled { "enabled" } else { "disabled" }
+                    );
+                    self.reload_profile();
+                }
             }
             Message::FilterChanged(filter) => self.mod_filter = filter,
             Message::ToggleFilterMode => {
@@ -1533,22 +1540,25 @@ impl Modde {
             }
             Message::AddModFromPath(path) => {
                 if let Some(ref profile_name) = self.active_profile {
-                    let mod_name = path
-                        .file_stem().map_or_else(|| "unknown-mod".to_string(), |s| s.to_string_lossy().to_string());
+                    let mod_name = path.file_stem().map_or_else(
+                        || "unknown-mod".to_string(),
+                        |s| s.to_string_lossy().to_string(),
+                    );
 
                     if let Ok(pm) = ProfileManager::open()
-                        && let Ok(mut profile) = pm.load(profile_name, None) {
-                            profile.mods.push(modde_core::EnabledMod {
-                                mod_id: mod_name.clone(),
-                                enabled: true,
-                                ..Default::default()
-                            });
-                            let _ = pm
-                                .create(&profile)
-                                .or_else(|_| pm.update(&profile).map(|()| 0));
-                            self.status_message = format!("Added mod: {mod_name}");
-                            self.reload_profile();
-                        }
+                        && let Ok(mut profile) = pm.load(profile_name, None)
+                    {
+                        profile.mods.push(modde_core::EnabledMod {
+                            mod_id: mod_name.clone(),
+                            enabled: true,
+                            ..Default::default()
+                        });
+                        let _ = pm
+                            .create(&profile)
+                            .or_else(|_| pm.update(&profile).map(|()| 0));
+                        self.status_message = format!("Added mod: {mod_name}");
+                        self.reload_profile();
+                    }
                 } else {
                     self.status_message = "No active profile — create one first".to_string();
                 }
@@ -1556,16 +1566,17 @@ impl Modde {
             Message::RemoveMod(index) => {
                 if let Some(ref profile_name) = self.active_profile
                     && let Ok(pm) = ProfileManager::open()
-                        && let Ok(mut profile) = pm.load(profile_name, None)
-                            && index < profile.mods.len() {
-                                let removed = profile.mods.remove(index);
-                                let _ = pm
-                                    .create(&profile)
-                                    .or_else(|_| pm.update(&profile).map(|()| 0));
-                                self.selected_mod_index = None;
-                                self.status_message = format!("Removed mod: {}", removed.mod_id);
-                                self.reload_profile();
-                            }
+                    && let Ok(mut profile) = pm.load(profile_name, None)
+                    && index < profile.mods.len()
+                {
+                    let removed = profile.mods.remove(index);
+                    let _ = pm
+                        .create(&profile)
+                        .or_else(|_| pm.update(&profile).map(|()| 0));
+                    self.selected_mod_index = None;
+                    self.status_message = format!("Removed mod: {}", removed.mod_id);
+                    self.reload_profile();
+                }
             }
             Message::SelectMod(index) => {
                 self.selected_mod_index = Some(index);
@@ -2003,9 +2014,10 @@ impl Modde {
                 is_tracked,
             } => {
                 if let Some(ref mut s) = self.selected_mod_details
-                    && s.nexus_mod_id == nexus_mod_id {
-                        s.is_tracked = Some(is_tracked);
-                    }
+                    && s.nexus_mod_id == nexus_mod_id
+                {
+                    s.is_tracked = Some(is_tracked);
+                }
             }
             Message::Deploy => {
                 self.status_message = "Deploying mods...".to_string();
@@ -2250,24 +2262,26 @@ impl Modde {
                     self.browse_nexus.install_status = Some(msg.clone());
                     self.status_message = msg;
                     if let Some(task_id) = self.download_lookup.get(&download_key).copied()
-                        && let Some(task) = self.download_queue.get_mut(task_id) {
-                            task.state = modde_sources::queue::DownloadState::Complete {
-                                path: task.dest.clone(),
-                                hash: 0,
-                            };
-                            task.meta.status = "complete".to_string();
-                        }
+                        && let Some(task) = self.download_queue.get_mut(task_id)
+                    {
+                        task.state = modde_sources::queue::DownloadState::Complete {
+                            path: task.dest.clone(),
+                            hash: 0,
+                        };
+                        task.meta.status = "complete".to_string();
+                    }
                     self.reload_profile();
                 }
                 Err(e) => {
                     self.browse_nexus.install_status = Some(format!("Install failed: {e}"));
                     self.status_message = format!("Install failed: {e}");
                     if let Some(task_id) = self.download_lookup.get(&download_key).copied()
-                        && let Some(task) = self.download_queue.get_mut(task_id) {
-                            task.state =
-                                modde_sources::queue::DownloadState::Failed { error: e.clone() };
-                            task.meta.status = "failed".to_string();
-                        }
+                        && let Some(task) = self.download_queue.get_mut(task_id)
+                    {
+                        task.state =
+                            modde_sources::queue::DownloadState::Failed { error: e.clone() };
+                        task.meta.status = "failed".to_string();
+                    }
                 }
             },
 
@@ -2319,37 +2333,35 @@ impl Modde {
             }
             Message::WabbajackStartInstall => {
                 if let View::WabbajackInstaller(ref mut state) = self.active_view
-                    && let Some(ref wj_path) = state.file_path {
-                        state.status = "Starting installation...".to_string();
-                        state.log_lines.push("Installation started".to_string());
-                        state.progress = 0.0;
-                        let path = wj_path.clone();
-                        return Task::perform(
-                            async move {
-                                let file = std::fs::File::open(&path)?;
-                                let mut archive = zip::ZipArchive::new(file)?;
-                                let manifest: modde_core::WabbajackManifest = {
-                                    let name = if archive.file_names().any(|n| n == "modlist.json")
-                                    {
-                                        "modlist.json"
-                                    } else {
-                                        "modlist"
-                                    };
-                                    let mut entry = archive.by_name(name)?;
-                                    let mut buf = String::new();
-                                    std::io::Read::read_to_string(&mut entry, &mut buf)?;
-                                    serde_json::from_str(&buf)?
+                    && let Some(ref wj_path) = state.file_path
+                {
+                    state.status = "Starting installation...".to_string();
+                    state.log_lines.push("Installation started".to_string());
+                    state.progress = 0.0;
+                    let path = wj_path.clone();
+                    return Task::perform(
+                        async move {
+                            let file = std::fs::File::open(&path)?;
+                            let mut archive = zip::ZipArchive::new(file)?;
+                            let manifest: modde_core::WabbajackManifest = {
+                                let name = if archive.file_names().any(|n| n == "modlist.json") {
+                                    "modlist.json"
+                                } else {
+                                    "modlist"
                                 };
-                                Ok::<String, anyhow::Error>(manifest.name)
-                            },
-                            |result: Result<String, anyhow::Error>| match result {
-                                Ok(name) => {
-                                    Message::WabbajackLog(format!("Parsed manifest: {name}"))
-                                }
-                                Err(e) => Message::WabbajackLog(format!("Error: {e}")),
-                            },
-                        );
-                    }
+                                let mut entry = archive.by_name(name)?;
+                                let mut buf = String::new();
+                                std::io::Read::read_to_string(&mut entry, &mut buf)?;
+                                serde_json::from_str(&buf)?
+                            };
+                            Ok::<String, anyhow::Error>(manifest.name)
+                        },
+                        |result: Result<String, anyhow::Error>| match result {
+                            Ok(name) => Message::WabbajackLog(format!("Parsed manifest: {name}")),
+                            Err(e) => Message::WabbajackLog(format!("Error: {e}")),
+                        },
+                    );
+                }
                 self.status_message = "No wabbajack file selected".to_string();
             }
             Message::WabbajackLog(line) => {
@@ -2409,8 +2421,10 @@ impl Modde {
                     let group_type = installer.group_type_at(step, group);
                     let entry = self.fomod_selections.entry((step, group)).or_default();
                     match group_type {
-                        Some(fomod_oxide::config::GroupType::SelectExactlyOne |
-fomod_oxide::config::GroupType::SelectAtMostOne) => {
+                        Some(
+                            fomod_oxide::config::GroupType::SelectExactlyOne
+                            | fomod_oxide::config::GroupType::SelectAtMostOne,
+                        ) => {
                             if selected {
                                 *entry = vec![option];
                             } else {
@@ -2521,23 +2535,25 @@ fomod_oxide::config::GroupType::SelectAtMostOne) => {
             }
             Message::DownloadComplete { id } => {
                 if let Some(task_id) = self.download_lookup.get(&id).copied()
-                    && let Some(task) = self.download_queue.get_mut(task_id) {
-                        task.meta.status = "complete".to_string();
-                        task.state = modde_sources::queue::DownloadState::Complete {
-                            path: task.dest.clone(),
-                            hash: task.expected_hash.unwrap_or(0),
-                        };
-                    }
+                    && let Some(task) = self.download_queue.get_mut(task_id)
+                {
+                    task.meta.status = "complete".to_string();
+                    task.state = modde_sources::queue::DownloadState::Complete {
+                        path: task.dest.clone(),
+                        hash: task.expected_hash.unwrap_or(0),
+                    };
+                }
                 self.status_message = format!("Download complete: {id}");
             }
             Message::DownloadFailed { id, error } => {
                 if let Some(task_id) = self.download_lookup.get(&id).copied()
-                    && let Some(task) = self.download_queue.get_mut(task_id) {
-                        task.meta.status = "failed".to_string();
-                        task.state = modde_sources::queue::DownloadState::Failed {
-                            error: error.clone(),
-                        };
-                    }
+                    && let Some(task) = self.download_queue.get_mut(task_id)
+                {
+                    task.meta.status = "failed".to_string();
+                    task.state = modde_sources::queue::DownloadState::Failed {
+                        error: error.clone(),
+                    };
+                }
                 self.status_message = format!("Download failed ({id}): {error}");
             }
 
@@ -2817,8 +2833,8 @@ fomod_oxide::config::GroupType::SelectAtMostOne) => {
                 if let Some(ref profile) = self.loaded_profile {
                     let game_id = profile.game_id.clone();
                     let profile_name = profile.name.clone();
-                    let save_dir =
-                        modde_games::resolve_game_plugin(&game_id).and_then(modde_games::GamePlugin::save_directory);
+                    let save_dir = modde_games::resolve_game_plugin(&game_id)
+                        .and_then(modde_games::GamePlugin::save_directory);
                     if let Some(save_dir) = save_dir {
                         match modde_core::save::SaveManager::restore(
                             &game_id,
@@ -2933,10 +2949,14 @@ fomod_oxide::config::GroupType::SelectAtMostOne) => {
                         let settings_json = db
                             .load_tool_config(&game_id, &tool_id)
                             .ok()
-                            .flatten().map_or_else(|| {
-                                serde_json::to_string(&tool.default_config().settings)
-                                    .unwrap_or_else(|_| "{}".to_string())
-                            }, |row| row.settings_json);
+                            .flatten()
+                            .map_or_else(
+                                || {
+                                    serde_json::to_string(&tool.default_config().settings)
+                                        .unwrap_or_else(|_| "{}".to_string())
+                                },
+                                |row| row.settings_json,
+                            );
                         match db.save_tool_config(&game_id, &tool_id, enabled, &settings_json) {
                             Ok(()) => {
                                 let _ = modde_games::launcher::generate_tool_configs(&game_id, &db);
@@ -2973,12 +2993,15 @@ fomod_oxide::config::GroupType::SelectAtMostOne) => {
                 match modde_core::db::ModdeDb::open() {
                     Ok(db) => {
                         let row = db.load_tool_config(&game_id, &id).ok().flatten();
-                        let mut config = row.map_or_else(|| tool.default_config(), |row| modde_games::tools::ToolConfig {
+                        let mut config = row.map_or_else(
+                            || tool.default_config(),
+                            |row| modde_games::tools::ToolConfig {
                                 tool_id: row.tool_id,
                                 enabled: row.enabled,
                                 settings: serde_json::from_str(&row.settings_json)
                                     .unwrap_or_default(),
-                            });
+                            },
+                        );
                         config.enabled = true;
                         config.set("_game_id", serde_json::json!(game_id));
                         match tool.apply(&game_dir, &config) {
@@ -3620,7 +3643,9 @@ mod tests {
     /// Acquire the serial lock. Discards poisoning (a prior panicking
     /// test shouldn't block the rest of the suite).
     fn db_lock() -> MutexGuard<'static, ()> {
-        DB_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        DB_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Redirect `modde_core::paths::modde_data_dir` to a per-process

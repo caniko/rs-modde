@@ -127,7 +127,11 @@ pub(crate) fn collect_expected_files(manifest: &WabbajackManifest) -> Vec<(Strin
                     .first()
                     .and_then(|v| v.as_str())
                     .and_then(modde_core::manifest::wabbajack::parse_b64_hash)
-                    .or_else(|| archive_hash_path.first().and_then(serde_json::Value::as_u64))
+                    .or_else(|| {
+                        archive_hash_path
+                            .first()
+                            .and_then(serde_json::Value::as_u64)
+                    })
                     .unwrap_or(0);
 
                 // Use the archive's hash as a proxy for the expected output hash

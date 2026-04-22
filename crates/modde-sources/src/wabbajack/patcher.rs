@@ -32,9 +32,7 @@ pub fn apply_patch(source: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
         .read_exact(&mut magic)
         .context("failed to read patch magic")?;
     if &magic != OCTODELTA_MAGIC {
-        bail!(
-            "invalid patch magic: expected {OCTODELTA_MAGIC:?}, got {magic:?}"
-        );
+        bail!("invalid patch magic: expected {OCTODELTA_MAGIC:?}, got {magic:?}");
     }
 
     // Read version
@@ -88,9 +86,7 @@ pub fn apply_patch(source: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
                     );
                 }
                 if output.len().saturating_add(length) > MAX_PATCH_OUTPUT {
-                    bail!(
-                        "patch output exceeds maximum size of {MAX_PATCH_OUTPUT} bytes"
-                    );
+                    bail!("patch output exceeds maximum size of {MAX_PATCH_OUTPUT} bytes");
                 }
                 output.extend_from_slice(&source[offset..offset + length]);
             }
@@ -98,9 +94,7 @@ pub fn apply_patch(source: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
                 let length =
                     read_u64_le(&mut cursor).context("failed to read data length")? as usize;
                 if output.len().saturating_add(length) > MAX_PATCH_OUTPUT {
-                    bail!(
-                        "patch output exceeds maximum size of {MAX_PATCH_OUTPUT} bytes"
-                    );
+                    bail!("patch output exceeds maximum size of {MAX_PATCH_OUTPUT} bytes");
                 }
                 let mut data = vec![0u8; length];
                 cursor

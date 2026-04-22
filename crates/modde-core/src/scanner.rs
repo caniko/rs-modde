@@ -82,9 +82,10 @@ pub fn match_wabbajack_manifest(
 
                 // Extract the MO2 mod name before lowercasing (preserves casing).
                 if archive_mod_names.get(archive_hash).is_none()
-                    && let Some(name) = extract_mo2_mod_name(&normalized) {
-                        archive_mod_names.insert(*archive_hash, name);
-                    }
+                    && let Some(name) = extract_mo2_mod_name(&normalized)
+                {
+                    archive_mod_names.insert(*archive_hash, name);
+                }
 
                 // Strip prefix and lowercase for matching.
                 let game_relative = strip_mo2_prefix(&normalized.to_lowercase());
@@ -215,9 +216,10 @@ fn extract_mo2_mod_name(path: &str) -> Option<String> {
 /// Non-mod paths (e.g., MO2 executables) are returned as-is.
 fn strip_mo2_prefix(path: &str) -> String {
     if let Some(rest) = path.strip_prefix("mods/")
-        && let Some(idx) = rest.find('/') {
-            return rest[idx + 1..].to_string();
-        }
+        && let Some(idx) = rest.find('/')
+    {
+        return rest[idx + 1..].to_string();
+    }
     path.to_string()
 }
 

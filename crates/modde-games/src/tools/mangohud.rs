@@ -50,10 +50,11 @@ impl GameTool for MangoHud {
 
         // Point to per-game config if we generated one
         if config.settings.as_object().is_some_and(|m| !m.is_empty())
-            && let Some(game_id) = config.get_str("_game_id") {
-                let conf_path = tool_config_dir(game_id).join("MangoHud.conf");
-                vars.push(("MANGOHUD_CONFIG".into(), conf_path.to_string_lossy().into()));
-            }
+            && let Some(game_id) = config.get_str("_game_id")
+        {
+            let conf_path = tool_config_dir(game_id).join("MangoHud.conf");
+            vars.push(("MANGOHUD_CONFIG".into(), conf_path.to_string_lossy().into()));
+        }
 
         vars
     }

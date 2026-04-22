@@ -105,7 +105,11 @@ pub async fn handle(uri: String, _profile: Option<String>) -> Result<()> {
     let file_name = file_info
         .files
         .iter()
-        .find(|f| f.file_id == parsed.file_id).map_or_else(|| format!("{}_{}.zip", parsed.mod_id, parsed.file_id), |f| f.file_name.clone());
+        .find(|f| f.file_id == parsed.file_id)
+        .map_or_else(
+            || format!("{}_{}.zip", parsed.mod_id, parsed.file_id),
+            |f| f.file_name.clone(),
+        );
 
     let dest = downloads_dir.join(&file_name);
     println!("  Downloading to: {}", dest.display());

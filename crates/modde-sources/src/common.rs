@@ -66,7 +66,8 @@ where
                     let base_delay = BACKOFF_BASE_MS * (1 << attempt);
                     // Add deterministic jitter: up to 50% of base delay, derived from attempt index
                     let jitter = base_delay / 4
-                        + (base_delay / 2).wrapping_mul(u64::from(attempt) + 1) % (base_delay / 2 + 1);
+                        + (base_delay / 2).wrapping_mul(u64::from(attempt) + 1)
+                            % (base_delay / 2 + 1);
                     let delay = base_delay + jitter;
                     warn!(attempt = attempt + 1, delay_ms = delay, error = %e, "{label} failed, retrying");
                     tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
