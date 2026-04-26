@@ -1,0 +1,71 @@
+# modde Documentation — Zola + AdiDoks
+# Local dev: cd docs/site && zola serve
+# Build: nix build .#docs
+
+base_url = "https://caniko.codeberg.page/rs-modde/docs"
+title = "modde"
+description = "Documentation for modde — NixOS-native game mod manager"
+default_language = "en"
+theme = "adidoks"
+
+compile_sass = true
+build_search_index = true
+minify_html = false
+generate_feeds = false
+
+[markdown]
+[markdown.highlighting]
+theme = "nord"
+
+[search]
+include_title = true
+include_description = true
+include_content = true
+include_path = false
+truncate_content_length = 100
+
+[extra]
+title_separator = "|"
+title_addition = "NixOS-native game mod manager"
+author = "Can Tartanoglu"
+default_theme = "dark"
+
+[extra.docs]
+section = "docs"
+
+[[extra.menu.main]]
+name = "Docs"
+section = "docs"
+url = "/docs/getting-started/installation/"
+weight = 10
+
+[[extra.menu.main]]
+name = "Games"
+section = "docs/games"
+url = "/docs/games/"
+weight = 20
+
+[[extra.menu.main]]
+name = "Reference"
+section = "docs/reference"
+url = "/docs/reference/cli/"
+weight = 25
+
+[[extra.menu.main]]
+name = "Guides"
+section = "docs/guides"
+url = "/docs/guides/"
+weight = 30
+
+[[extra.menu.social]]
+name = "Codeberg"
+pre = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 19.5h20L12 2z"/></svg>'
+url = "https://codeberg.org/caniko/rs-modde"
+weight = 10
+
+[extra.schema]
+type = "Organization"
+logo = "modde-logo.svg"
+
+[extra.footer]
+info = 'Powered by <a href="https://www.getzola.org/">Zola</a> and <a href="https://github.com/ES-Alexander/adidoks">AdiDoks</a>'

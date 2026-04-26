@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} — {{ config.description }}{% endblock %}
+
+{% block content %}
+<section class="comparison-hero">
+  <h1>{{ page.title }}</h1>
+  <p class="subtitle">{{ page.extra.subtitle }}</p>
+</section>
+
+<section class="comparison-content">
+  <div class="comparison-section">
+    <h2>modde-only features</h2>
+    <p class="section-subtitle">Features that exist in modde but have no MO2 equivalent.</p>
+    <div class="features-grid">
+      <div class="feature-card highlight">
+        <h3>Git-backed save vaults</h3>
+        <p>Full history, branching, and restore for game saves. Every snapshot is a git commit you can roll back to.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Save fingerprinting</h3>
+        <p>SHA-256 fingerprint of save-breaking mods. Warns you before loading a save that's incompatible with your current mod setup.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Experiment stack</h3>
+        <p>Try profile changes non-destructively. Stack experiments like git branches — rollback or commit when done.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Declarative FOMOD configs</h3>
+        <p>TOML/JSON/Nix configs for reproducible, non-interactive FOMOD installations. No more clicking through wizards.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Wabbajack installation</h3>
+        <p>Install complete Wabbajack modlists natively on Linux. MO2 is a target for Wabbajack, not an installer.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Nexus Collections</h3>
+        <p>Install curated Nexus Collections directly. MO2 doesn't support Collections.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>NixOS-native</h3>
+        <p>Declarative profiles in home-manager. sops-nix compatible API key management. No Wine needed for the manager.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Profile forking with saves</h3>
+        <p>Clone a profile including its entire save history. Fork locked Wabbajack profiles into freely editable copies.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Save auto-capture</h3>
+        <p>Automatically snapshot saves when the game exits or via continuous polling. Never lose progress.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Stock game verification</h3>
+        <p>Tree-hash your vanilla installation to detect unexpected modifications.</p>
+      </div>
+      <div class="feature-card highlight">
+        <h3>Multi-launcher detection</h3>
+        <p>Auto-detect games across Steam and Heroic (GOG, Epic, Sideload) in a single scan.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="comparison-section">
+    <h2>Shipped today</h2>
+    <p class="section-subtitle">This page no longer publishes a hand-maintained percentage. These are the areas that are actually trustworthy today.</p>
+    <table class="coverage-table">
+      <thead>
+        <tr>
+          <th>Area</th>
+          <th>Status</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Profiles + save vaults</td><td><span class="badge high">Done</span></td><td>Profile switching, experiments, git-backed save history, and fingerprints are shipped.</td></tr>
+        <tr><td>VFS deployment</td><td><span class="badge high">Done</span></td><td>Symlink-farm deployment, rollback, and conflict resolution are strong differentiators on Linux.</td></tr>
+        <tr><td>Bethesda plugin pipeline</td><td><span class="badge high">Done</span></td><td>LOOT parsing, plugin validation, real plugin-order backup/restore, and archive-aware conflict analysis are shipped.</td></tr>
+        <tr><td>Nexus / Wabbajack / Collections</td><td><span class="badge high">Done</span></td><td>These are the first-class install flows today.</td></tr>
+        <tr><td>Data Files / Diagnostics / Tools / Downloads views</td><td><span class="badge mid">Partial</span></td><td>All are now reachable and data-backed, but they are not yet MO2-complete.</td></tr>
+        <tr><td>BAIN and non-Nexus source breadth</td><td><span class="badge mid">Partial</span></td><td>Core plumbing exists, but the UX and positioning are still incomplete.</td></tr>
+        <tr><td>Starfield + generic game story</td><td><span class="badge low">Not shipped</span></td><td>Starfield save tracking is intentionally unavailable until it has a real tracker, and `GenericGame` is internal-only.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="comparison-section">
+    <h2>Where MO2 is ahead</h2>
+    <p class="section-subtitle">These are the gaps that still matter most for any serious “replace MO2/Vortex” claim.</p>
+    <ul class="gap-list">
+      <li><strong>Executables management</strong> — named executables, args, working dir, per-executable output mods, shortcut creation, and DLL injection semantics</li>
+      <li><strong>Mod Information Dialog</strong> — file tree, conflict tabs, image preview, text/INI editing, and optional plugin management</li>
+      <li><strong>Durable download pipeline</strong> — transport-level pause/resume/cancel, ETA, concurrency, and update-all workflows</li>
+      <li><strong>Merged VFS browser</strong> — a true Data tab with archive visibility, overwrite workflows, and conflict navigation</li>
+      <li><strong>Sharper load-order UX</strong> — richer LOOT reports, plugin pinning, and clearer load-order governance</li>
+      <li><strong>Broader title depth</strong> — not by chasing every game first, but by being unquestionably solid for the supported Linux-first workflows</li>
+    </ul>
+  </div>
+</section>
+{% endblock %}
