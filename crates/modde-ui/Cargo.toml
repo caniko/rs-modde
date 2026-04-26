@@ -1,0 +1,38 @@
+[package]
+name = "modde-ui"
+version = "0.1.0"
+description = "GUI application for modde"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+modde-core = { workspace = true }
+modde-sources = { workspace = true }
+modde-games = { workspace = true }
+iced = { version = "0.14", features = ["tokio", "image", "svg", "advanced"] }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+reqwest = { workspace = true, features = ["blocking"] }
+rfd = { workspace = true }
+zip = { workspace = true }
+tracing = { workspace = true }
+smallvec = { workspace = true }
+tracing-subscriber = { workspace = true }
+fomod-oxide = { workspace = true }
+image = { workspace = true }
+open = { workspace = true }
+unicode-segmentation = "1.12"
+
+[dev-dependencies]
+iced_test = "0.14"
+tempfile = { workspace = true }

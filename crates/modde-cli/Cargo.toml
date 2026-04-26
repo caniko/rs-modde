@@ -1,0 +1,48 @@
+[package]
+name = "modde-cli"
+version = "0.1.0"
+description = "CLI interface for modde"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "modde"
+path = "src/main.rs"
+
+[dependencies]
+modde-core = { workspace = true }
+modde-sources = { workspace = true }
+modde-games = { workspace = true }
+modde-ui = { workspace = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+reqwest = { workspace = true }
+xxhash-rust = { workspace = true }
+fomod-oxide = { workspace = true }
+serde = { workspace = true }
+smallvec = { workspace = true }
+zip = { workspace = true }
+url = "2"
+notify = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+winreg = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+assert_cmd = "2"
