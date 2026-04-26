@@ -1,8 +1,6 @@
-use std::io::Write;
-use std::path::PathBuf;
-
 use modde_core::manifest::wabbajack::{ArchiveState, InstallDirective};
 use modde_sources::wabbajack::manifest::parse_wabbajack_file;
+use std::io::Write;
 
 /// Helper: create a zip file on disk with the given entries.
 fn write_zip(path: &std::path::Path, entries: &[(&str, &[u8])]) {
@@ -121,16 +119,19 @@ fn parse_wabbajack_invalid_zip() {
 }
 
 #[test]
-#[ignore = "requires MODDE_REAL_LOTF_WABBAJACK=/path/to/lotf.wabbajack"]
-fn parse_real_lotf_wabbajack_game_file_sources() {
-    // Current LOTF registry URL:
-    // https://authored-files.wabbajack.org/Legends%20of%20the%20Frost.wabbajack_0547b088-116d-441e-a2d4-46c075368e90
-    // Current registry hash: Ye2P0hBmgpU=
-    let path = std::env::var_os("MODDE_REAL_LOTF_WABBAJACK")
-        .map(PathBuf::from)
-        .expect("set MODDE_REAL_LOTF_WABBAJACK to a local LOTF .wabbajack file");
-
+fn parse_lotf_fixture_wabbajack_game_file_sources() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("lotf-fixture.wabbajack");
+    write_zip(
+        &path,
+        &[(
+            "modlist",
+            include_bytes!("fixtures/lotf_manifest.json").as_slice(),
+        )],
+    );
     let manifest = parse_wabbajack_file(&path).expect("parse LOTF .wabbajack");
+    assert_eq!(manifest.name, "Legends of the Frost");
+
     let game_file_hashes: std::collections::HashSet<u64> = manifest
         .archives
         .iter()
@@ -164,5 +165,38 @@ fn parse_real_lotf_wabbajack_game_file_sources() {
             InstallDirective::InlineFile { .. } | InstallDirective::CreateBSA { .. } => false,
         }),
         "LOTF should plan at least one install directive from a game-file archive"
+    );
+}
+
+#[test]
+fn parse_3077_fixture_cyberpunk_mo2_paths() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("3077-fixture.wabbajack");
+    write_zip(
+        &path,
+        &[(
+            "modlist",
+            include_bytes!("fixtures/3077_manifest.json").as_slice(),
+        )],
+    );
+
+    let manifest = parse_wabbajack_file(&path).expect("parse 3077 .wabbajack");
+    assert_eq!(manifest.name, "Project 2077");
+    assert_eq!(manifest.game, "Cyberpunk2077");
+
+    let install_directives = manifest.install_directives();
+    assert!(
+        install_directives.iter().any(|directive| match directive {
+            InstallDirective::FromArchive { to, .. }
+            | InstallDirective::PatchedFromArchive { to, .. }
+            | InstallDirective::InlineFile { to, .. }
+            | InstallDirective::CreateBSA { to, .. } => {
+                let to = to.replace('\\', "/").to_ascii_lowercase();
+                to.starts_with("mods/")
+                    && (to.contains("/bin/x64/plugins/cyber_engine_tweaks/mods/")
+                        || to.contains("/archive/pc/mod/"))
+            }
+        }),
+        "3077 fixture should preserve Cyberpunk MO2-staged CET/archive paths"
     );
 }

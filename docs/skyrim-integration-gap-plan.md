@@ -19,7 +19,7 @@ Existing dirty-tree work to preserve:
 - `GameFileSourceDownloader` manifest parsing.
 - `WabbajackInstaller::set_game_dir` and local game-file-source reads.
 - Nix sandbox fix for `test_deploy_pipeline_end_to_end`.
-- Optional ignored real LOTF regression test using `MODDE_REAL_LOTF_WABBAJACK`.
+- Repo-local LOTF manifest fixture generated from the real Wabbajack archive.
 
 ## Phase 1: Wabbajack Core Correctness
 
@@ -39,8 +39,8 @@ Acceptance:
 
 - `modde install wabbajack <lotf.wabbajack> --profile lotf --game-dir <SkyrimSE>`
   no longer fails on `GameFileSourceDownloader`.
-- CI does not require a real LOTF file or local Skyrim installation.
-- The ignored real LOTF test remains available for manual smoke testing.
+- CI does not require network access or a local Skyrim installation.
+- The LOTF fixture can be refreshed with `scripts/update-lotf-fixture.sh`.
 
 ## Phase 2: Home Manager Declarative Install
 
