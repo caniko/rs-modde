@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
+  <moduleName position="Left">Test Mod Installer</moduleName>
+  <moduleImage path="images/banner.png" />
+  <requiredInstallFiles>
+    <file source="readme.txt" destination="docs/readme.txt" />
+    <folder source="core_files" destination="" />
+  </requiredInstallFiles>
+  <installSteps order="Explicit">
+    <installStep name="Choose Textures">
+      <optionalFileGroups order="Explicit">
+        <group name="Texture Quality" type="SelectExactlyOne">
+          <plugins order="Explicit">
+            <plugin name="High Resolution">
+              <description>4K textures for maximum quality.</description>
+              <image path="images/high_res.png" />
+              <typeDescriptor>
+                <type name="Recommended" />
+              </typeDescriptor>
+              <conditionFlags>
+                <flag name="texture_quality">high</flag>
+              </conditionFlags>
+              <files>
+                <folder source="textures/high" destination="Data/textures" />
+              </files>
+            </plugin>
+            <plugin name="Standard Resolution">
+              <description>2K textures for balanced performance.</description>
+              <typeDescriptor>
+                <type name="Optional" />
+              </typeDescriptor>
+              <conditionFlags>
+                <flag name="texture_quality">standard</flag>
+              </conditionFlags>
+              <files>
+                <folder source="textures/standard" destination="Data/textures" />
+              </files>
+            </plugin>
+          </plugins>
+        </group>
+      </optionalFileGroups>
+    </installStep>
+    <installStep name="Optional Patches">
+      <visible>
+        <flagDependency flag="texture_quality" value="high" />
+      </visible>
+      <optionalFileGroups order="Explicit">
+        <group name="Performance Patch" type="SelectAny">
+          <plugins order="Explicit">
+            <plugin name="ENB Compatibility">
+              <description>Compatibility patch for ENB.</description>
+              <typeDescriptor>
+                <type name="Optional" />
+              </typeDescriptor>
+              <files>
+                <file source="patches/enb_compat.esp" destination="Data/enb_compat.esp" />
+              </files>
+            </plugin>
+          </plugins>
+        </group>
+      </optionalFileGroups>
+    </installStep>
+  </installSteps>
+  <conditionalFileInstalls>
+    <patterns>
+      <pattern>
+        <dependencies operator="And">
+          <flagDependency flag="texture_quality" value="high" />
+        </dependencies>
+        <files>
+          <file source="lods/high_lod.esp" destination="Data/high_lod.esp" priority="10" />
+        </files>
+      </pattern>
+    </patterns>
+  </conditionalFileInstalls>
+</config>
