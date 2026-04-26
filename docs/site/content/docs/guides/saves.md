@@ -13,6 +13,7 @@ modde uses a **git-backed save vault** to manage save files per profile. Each ga
 - **Per-game vault**: A git repository at `~/.local/share/modde/saves/<game_id>/`
 - **Per-profile branches**: Each profile gets its own branch in the vault
 - **Automatic swapping**: When you switch profiles, saves are captured from the current profile and restored from the target profile
+- **Steam Cloud aware live directory**: Steam's `steam_autocloud.vdf` marker is preserved, and outgoing root saves are parked under `.modde/profiles/<profile>/` before the next profile is restored
 - **Fingerprinting**: SHA-256 hash of save-breaking mods is embedded in each snapshot, enabling compatibility warnings on restore
 
 ## Adopting existing saves
@@ -24,6 +25,13 @@ modde save adopt --game skyrim-se --profile my-skyrim
 ```
 
 This creates the initial vault branch and captures all existing saves as the first snapshot.
+If no profile is active for that game yet, the adopted profile becomes active so the next profile switch can safely put those saves away.
+
+## Steam Cloud
+
+modde no longer treats the live save directory as disposable. During profile switches it keeps Steam Cloud metadata in place and moves inactive root saves into a modde-owned `.modde/` directory before restoring the incoming profile's saves at the root. Skyrim only sees the root save files, while the git vault remains the authoritative history for capture and restore.
+
+This avoids deleting Steam's cloud marker and makes profile isolation compatible with cloud-synced save directories. If Steam later downloads stale root saves behind modde's back, switch profiles again or run `modde save restore` for the intended profile snapshot.
 
 ## Capturing saves
 

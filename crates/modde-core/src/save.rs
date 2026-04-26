@@ -10,6 +10,10 @@ use crate::db::{ModdeDb, SaveEntry};
 use crate::error::{CoreError, Result};
 use crate::profile::EnabledMod;
 
+const STEAM_CLOUD_MARKER: &str = "steam_autocloud.vdf";
+const MODDE_LIVE_STATE_DIR: &str = ".modde";
+const MODDE_PROFILE_PARK_DIR: &str = "profiles";
+
 // ── Save Fingerprint ─────────────────────────────────────────────
 
 /// A fingerprint of the save-breaking mods active when a save was captured.
@@ -430,7 +434,10 @@ impl<'a> SaveManager<'a> {
 
         Self::checkout_branch(game_id, profile_name)?;
 
-        let count = copy_dir_contents(game_save_dir, &vault_path)?;
+        remove_live_metadata_from_vault(&vault_path)?;
+
+        let count =
+            copy_dir_contents_filtered(game_save_dir, &vault_path, |name| !is_live_metadata(name))?;
 
         if count == 0 {
             return Ok(0);
@@ -517,13 +524,17 @@ impl<'a> SaveManager<'a> {
 
         let vault_path = crate::paths::save_vault_dir(game_id);
 
-        // Clear game save dir first
-        clear_dir(game_save_dir)?;
+        // Clear only active saves. Steam Cloud metadata and modde's parked
+        // inactive saves must stay in place.
+        clear_active_save_dir(game_save_dir)?;
 
         std::fs::create_dir_all(game_save_dir)?;
 
-        // Copy from vault working tree to game dir (skip .git)
-        let count = copy_dir_contents_filtered(&vault_path, game_save_dir, |name| name != ".git")?;
+        // Copy from vault working tree to game dir (skip .git and live metadata
+        // captured by older versions).
+        let count = copy_dir_contents_filtered(&vault_path, game_save_dir, |name| {
+            name != ".git" && !is_live_metadata(name)
+        })?;
 
         info!(game_id, profile = profile_name, count, "deployed saves");
         Ok(count)
@@ -556,6 +567,7 @@ impl<'a> SaveManager<'a> {
     ) -> Result<()> {
         if let Some(current) = current_profile {
             self.capture_with_fingerprint(game_id, current, game_save_dir, fingerprint)?;
+            park_active_saves(game_save_dir, current)?;
         }
 
         Self::ensure_branch(game_id, new_profile)?;
@@ -736,10 +748,12 @@ impl<'a> SaveManager<'a> {
             .map_err(|e| CoreError::SaveVaultError(format!("failed to set HEAD: {e}")))?;
 
         // Deploy from vault to game
-        clear_dir(game_save_dir)?;
+        clear_active_save_dir(game_save_dir)?;
         std::fs::create_dir_all(game_save_dir)?;
 
-        let count = copy_dir_contents_filtered(&vault_path, game_save_dir, |name| name != ".git")?;
+        let count = copy_dir_contents_filtered(&vault_path, game_save_dir, |name| {
+            name != ".git" && !is_live_metadata(name)
+        })?;
 
         info!(
             game_id,
@@ -968,13 +982,20 @@ fn collect_tree_paths(repo: &Repository, tree: &git2::Tree, prefix: &str) -> Vec
     paths
 }
 
-/// Remove all entries inside a directory (but not the directory itself).
-fn clear_dir(dir: &Path) -> Result<()> {
+/// Remove active root save entries while preserving Steam Cloud metadata and
+/// modde's parked inactive profile saves.
+fn clear_active_save_dir(dir: &Path) -> Result<()> {
     if !dir.exists() {
         return Ok(());
     }
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if is_live_metadata(&name) {
+            continue;
+        }
+
         let path = entry.path();
         if path.is_dir() {
             std::fs::remove_dir_all(&path)?;
@@ -983,6 +1004,78 @@ fn clear_dir(dir: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Park active root save entries under `.modde/profiles/<profile>/`.
+///
+/// This is intentionally in the live save tree: Steam Cloud sees inactive
+/// saves as moved rather than simply deleted, while the game only sees saves
+/// restored at the root.
+fn park_active_saves(game_save_dir: &Path, profile_name: &str) -> Result<()> {
+    if !game_save_dir.exists() {
+        return Ok(());
+    }
+
+    let parked_dir = game_save_dir
+        .join(MODDE_LIVE_STATE_DIR)
+        .join(MODDE_PROFILE_PARK_DIR)
+        .join(sanitize_path_component(profile_name));
+
+    if parked_dir.exists() {
+        std::fs::remove_dir_all(&parked_dir)?;
+    }
+    std::fs::create_dir_all(&parked_dir)?;
+
+    for entry in std::fs::read_dir(game_save_dir)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if is_live_metadata(&name_str) {
+            continue;
+        }
+
+        let src = entry.path();
+        let dst = parked_dir.join(&name);
+        if std::fs::rename(&src, &dst).is_err() {
+            if src.is_dir() {
+                copy_dir_contents(&src, &dst)?;
+                std::fs::remove_dir_all(&src)?;
+            } else {
+                std::fs::copy(&src, &dst)?;
+                std::fs::remove_file(&src)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn remove_live_metadata_from_vault(vault_path: &Path) -> Result<()> {
+    for name in [STEAM_CLOUD_MARKER, MODDE_LIVE_STATE_DIR] {
+        let path = vault_path.join(name);
+        if path.is_dir() {
+            std::fs::remove_dir_all(path)?;
+        } else if path.exists() {
+            std::fs::remove_file(path)?;
+        }
+    }
+    Ok(())
+}
+
+fn is_live_metadata(name: &str) -> bool {
+    name.eq_ignore_ascii_case(STEAM_CLOUD_MARKER) || name == MODDE_LIVE_STATE_DIR
+}
+
+fn sanitize_path_component(name: &str) -> String {
+    name.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect()
 }
 
 /// Copy all files/dirs from `src` to `dst`, returning the count of files copied.
@@ -1025,4 +1118,50 @@ fn copy_dir_contents_filtered(
     }
 
     Ok(count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn park_active_saves_preserves_steam_cloud_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let save_dir = tmp.path();
+        std::fs::write(save_dir.join("Save1.ess"), b"save").unwrap();
+        std::fs::write(save_dir.join(STEAM_CLOUD_MARKER), b"marker").unwrap();
+
+        park_active_saves(save_dir, "vanilla profile").unwrap();
+
+        assert!(!save_dir.join("Save1.ess").exists());
+        assert_eq!(
+            std::fs::read(save_dir.join(STEAM_CLOUD_MARKER)).unwrap(),
+            b"marker"
+        );
+        assert!(
+            save_dir
+                .join(MODDE_LIVE_STATE_DIR)
+                .join(MODDE_PROFILE_PARK_DIR)
+                .join("vanilla-profile")
+                .join("Save1.ess")
+                .exists()
+        );
+    }
+
+    #[test]
+    fn clear_active_save_dir_keeps_cloud_and_modde_metadata() {
+        let tmp = tempfile::tempdir().unwrap();
+        let save_dir = tmp.path();
+        let modde_dir = save_dir.join(MODDE_LIVE_STATE_DIR);
+        std::fs::create_dir_all(&modde_dir).unwrap();
+        std::fs::write(save_dir.join("Save1.ess"), b"save").unwrap();
+        std::fs::write(save_dir.join(STEAM_CLOUD_MARKER), b"marker").unwrap();
+        std::fs::write(modde_dir.join("state"), b"state").unwrap();
+
+        clear_active_save_dir(save_dir).unwrap();
+
+        assert!(!save_dir.join("Save1.ess").exists());
+        assert!(save_dir.join(STEAM_CLOUD_MARKER).exists());
+        assert!(modde_dir.join("state").exists());
+    }
 }

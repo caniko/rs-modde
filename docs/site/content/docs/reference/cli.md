@@ -332,6 +332,7 @@ modde save scan --game <id>
 ### `save adopt`
 
 Import existing saves from the game directory into a profile's vault.
+If no profile is active for the game, the adopted profile becomes active.
 
 ```bash
 modde save adopt --game <id> --profile <name>

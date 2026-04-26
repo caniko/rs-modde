@@ -50,8 +50,9 @@ On restore, if the current mod fingerprint differs from the snapshot's, modde wa
 
 When switching profiles (`profile switch`, `profile try`, `profile rollback`):
 1. Current saves are captured into the outgoing profile's vault
-2. Incoming profile's saves are restored to the game save directory
-3. Fingerprints are embedded in the capture commit
+2. Outgoing root saves are parked under `.modde/profiles/<profile>/` in the live save directory, preserving Steam Cloud metadata
+3. Incoming profile's saves are restored to the game save directory root
+4. Fingerprints are embedded in the capture commit
 
 ### Bethesda Save Detection
 
@@ -74,7 +75,7 @@ Binary save header parsing:
 
 ### Unadopted Save Detection
 
-On profile activation, if existing saves are found in the game directory with no active profile, `ActivateResult::AdoptionRequired` is returned so the caller can prompt the user before overwriting.
+On profile activation, if existing saves are found in the game directory with no active profile, `ActivateResult::AdoptionRequired` is returned so the caller can prompt the user before overwriting. `save adopt --game G --profile P` captures those saves and makes `P` the active profile when no profile is active yet.
 
 ### Key Files
 

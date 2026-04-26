@@ -125,9 +125,16 @@ pub async fn handle(action: SaveAction) -> Result<()> {
             let save_dir = require_save_dir(&game)?;
             let sm = SaveManager::new(pm.db());
             let count = sm.adopt(&game, &profile, &save_dir)?;
+            if pm.active(&game)?.is_none() {
+                let adopted_profile = pm.load(&profile, Some(&game))?;
+                let profile_id = adopted_profile
+                    .id
+                    .ok_or_else(|| anyhow::anyhow!("profile has no database ID"))?;
+                pm.db().set_active_profile(&game, profile_id)?;
+            }
             if count > 0 {
                 println!(
-                    "Adopted {count} save file(s) from game '{game}' into profile '{profile}'."
+                    "Adopted {count} save file(s) from game '{game}' into active profile '{profile}'."
                 );
             } else {
                 println!("No saves found to adopt for game '{game}'.");
