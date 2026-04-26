@@ -1,8 +1,8 @@
-use iced::widget::{
-    button, column, container, image, mouse_area, pick_list, row, text, text_input,
-};
+use crate::views::selectable_text::text;
+use iced::widget::{button, column, container, image, mouse_area, pick_list, row};
 use iced::{Element, Length, color};
 
+use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::{Message, View};
 use crate::views::mod_details::ModDetailsState;
 use crate::views::save_details::SaveDetailsState;
@@ -13,8 +13,6 @@ pub fn view<'a>(
     profiles: &'a [modde_core::profile::ProfileSummary],
     active_profile: &'a Option<String>,
     experiment_depth: usize,
-    new_profile_name: &'a str,
-    selected_game: &'a Option<String>,
     mod_details: Option<&'a ModDetailsState>,
     save_details: Option<&'a SaveDetailsState>,
 ) -> Element<'a, Message> {
@@ -24,11 +22,11 @@ pub fn view<'a>(
             .width(Length::Fill)
             .padding([6, 12]);
         if is_active {
-            btn.style(button::primary).into()
+            btn.style(button::primary)
+                .described_disabled("This section is already open.")
         } else {
-            btn.on_press(Message::SwitchView(target))
-                .style(button::secondary)
-                .into()
+            btn.style(button::secondary)
+                .on_action(ButtonAction::SwitchView(target))
         }
     };
 
@@ -65,50 +63,35 @@ pub fn view<'a>(
     ]
     .spacing(4);
 
-    // ── Profile actions (delete, fork) ──
+    // ── Profile actions ──
     let mut profile_actions = row![].spacing(4);
     if let Some(name) = active_profile {
         let name_del = name.clone();
         profile_actions = profile_actions.push(
             button(text("Del").size(11))
-                .on_press(Message::DeleteProfile(name_del))
                 .style(button::danger)
-                .padding([3, 8]),
+                .padding([3, 8])
+                .on_action(ButtonAction::DeleteProfile(name_del)),
         );
+    }
+    profile_actions = profile_actions.push(
+        button(text("New").size(11))
+            .style(button::success)
+            .padding([3, 8])
+            .on_action(ButtonAction::OpenNewProfileDialog),
+    );
+    if let Some(name) = active_profile {
         let name_fork = name.clone();
         profile_actions = profile_actions.push(
             button(text("Fork").size(11))
-                .on_press(Message::ForkProfile {
+                .style(button::secondary)
+                .padding([3, 8])
+                .on_action(ButtonAction::ForkProfile {
                     source: name_fork.clone(),
                     new_name: format!("{name_fork}-fork"),
-                })
-                .style(button::secondary)
-                .padding([3, 8]),
+                }),
         );
     }
-
-    // ── New profile form (uses the globally selected game from the title bar) ──
-    let new_profile_section = column![
-        text("New Profile").size(12),
-        text_input("Profile name...", new_profile_name)
-            .on_input(Message::NewProfileNameChanged)
-            .padding(4)
-            .size(13)
-            .width(Length::Fill),
-        button(text("Create").size(12))
-            .on_press_maybe(if new_profile_name.is_empty() || selected_game.is_none() {
-                None
-            } else {
-                Some(Message::CreateProfile {
-                    name: new_profile_name.to_string(),
-                    game_id: selected_game.clone().unwrap(),
-                })
-            },)
-            .style(button::success)
-            .padding([4, 12])
-            .width(Length::Fill),
-    ]
-    .spacing(4);
 
     // ── Experiment indicator ──
     let mut sections = column![
@@ -116,8 +99,6 @@ pub fn view<'a>(
         iced::widget::rule::horizontal(1),
         profile_selector,
         profile_actions,
-        iced::widget::rule::horizontal(1),
-        new_profile_section,
     ]
     .spacing(10)
     .padding(12)
@@ -130,13 +111,13 @@ pub fn view<'a>(
                 .color(color!(0xFFAA44)),
             row![
                 button(text("Rollback").size(11))
-                    .on_press(Message::RollbackExperiment)
                     .style(button::danger)
-                    .padding([3, 8]),
+                    .padding([3, 8])
+                    .on_action(ButtonAction::RollbackExperiment),
                 button(text("Commit").size(11))
-                    .on_press(Message::CommitExperiment)
                     .style(button::success)
-                    .padding([3, 8]),
+                    .padding([3, 8])
+                    .on_action(ButtonAction::CommitExperiment),
             ]
             .spacing(4),
         ]
@@ -148,10 +129,10 @@ pub fn view<'a>(
         sections = sections.push(iced::widget::rule::horizontal(1));
         sections = sections.push(
             button(text("Try Profile").size(11))
-                .on_press(Message::TryProfile)
                 .style(button::secondary)
                 .padding([3, 8])
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .on_action(ButtonAction::TryProfile),
         );
     }
 
@@ -199,9 +180,9 @@ fn render_mod_details(state: &ModDetailsState) -> Element<'_, Message> {
             text(&state.name).size(13),
             text(err.as_str()).size(11).color(color!(0xFF6666)),
             button(text("Open in Nexus").size(11))
-                .on_press(Message::OpenModPage)
                 .style(button::text)
-                .padding([2, 4]),
+                .padding([2, 4])
+                .on_action(ButtonAction::OpenModPage),
         ]
         .spacing(4)
         .width(Length::Fill)
@@ -291,13 +272,14 @@ fn render_mod_details(state: &ModDetailsState) -> Element<'_, Message> {
     } else {
         button::secondary
     };
-    let mut endorse_btn = button(text(endorse_label).size(11))
+    let endorse_btn = button(text(endorse_label).size(11))
         .style(endorse_style)
         .padding([3, 8])
-        .width(Length::Fill);
-    if !disabled && state.endorse_status.is_some() {
-        endorse_btn = endorse_btn.on_press(Message::ModEndorseToggle);
-    }
+        .width(Length::Fill)
+        .on_action_maybe(
+            (!disabled && state.endorse_status.is_some()).then_some(ButtonAction::ModEndorseToggle),
+            "Nexus endorsement status is still loading or an action is already in progress.",
+        );
 
     let tracked = state.is_tracked == Some(true);
     let track_label = if tracked { "Tracked" } else { "Track" };
@@ -308,13 +290,14 @@ fn render_mod_details(state: &ModDetailsState) -> Element<'_, Message> {
     } else {
         button::secondary
     };
-    let mut track_btn = button(text(track_label).size(11))
+    let track_btn = button(text(track_label).size(11))
         .style(track_style)
         .padding([3, 8])
-        .width(Length::Fill);
-    if !disabled && state.is_tracked.is_some() {
-        track_btn = track_btn.on_press(Message::ModTrackToggle);
-    }
+        .width(Length::Fill)
+        .on_action_maybe(
+            (!disabled && state.is_tracked.is_some()).then_some(ButtonAction::ModTrackToggle),
+            "Nexus tracking status is still loading or an action is already in progress.",
+        );
 
     let action_row = row![endorse_btn, track_btn].spacing(4);
 
@@ -330,9 +313,9 @@ fn render_mod_details(state: &ModDetailsState) -> Element<'_, Message> {
     };
 
     let link_button = button(text("Open in Nexus").size(11))
-        .on_press(Message::OpenModPage)
         .style(button::text)
-        .padding([2, 4]);
+        .padding([2, 4])
+        .on_action(ButtonAction::OpenModPage);
 
     column![
         thumb_area,
@@ -438,10 +421,10 @@ fn render_save_details(state: &SaveDetailsState) -> Element<'_, Message> {
     // Restore button
     col = col.push(
         button(text("Restore").size(12))
-            .on_press(Message::RestoreSaveSnapshot(state.commit_id.clone()))
             .style(button::secondary)
             .padding([4, 8])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .on_action(ButtonAction::RestoreSaveSnapshot(state.commit_id.clone())),
     );
 
     // Commit ID (subtle)

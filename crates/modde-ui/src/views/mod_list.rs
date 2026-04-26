@@ -1,11 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
-use iced::widget::{button, checkbox, column, container, row, scrollable, text, text_input};
+use crate::views::selectable_text::text;
+use iced::widget::{button, checkbox, column, container, row, scrollable, text_input};
 use iced::{Alignment, Element, Length};
 
 use modde_core::filter::{self, FilterCriterion, FilterKind, FilterMode, TriState};
 use modde_core::profile::EnabledMod;
 
+use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::Message;
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -35,18 +37,21 @@ pub fn view_filtered<'a>(
     // ── Action toolbar ──
     let toolbar = row![
         button(text("Add Mod").size(14))
-            .on_press(Message::AddMod)
             .style(button::primary)
-            .padding([6, 14]),
+            .padding([6, 14])
+            .on_action(ButtonAction::AddMod),
         button(text("Remove").size(14))
-            .on_press_maybe(selected_index.map(Message::RemoveMod))
             .style(button::secondary)
-            .padding([6, 14]),
+            .padding([6, 14])
+            .on_action_maybe(
+                selected_index.map(ButtonAction::RemoveMod),
+                "Select a mod before removing it from the active profile.",
+            ),
         iced::widget::space::horizontal(),
         button(text("Deploy").size(14))
-            .on_press(Message::Deploy)
             .style(button::success)
-            .padding([6, 14]),
+            .padding([6, 14])
+            .on_action(ButtonAction::Deploy),
     ]
     .spacing(8)
     .align_y(Alignment::Center);
@@ -59,13 +64,13 @@ pub fn view_filtered<'a>(
 
     let mode_label = filter_mode.label();
     let mode_btn = button(text(mode_label).size(11))
-        .on_press(Message::ToggleFilterMode)
         .style(if filter_mode == FilterMode::And {
             button::primary
         } else {
             button::secondary
         })
-        .padding([3, 8]);
+        .padding([3, 8])
+        .on_action(ButtonAction::ToggleFilterMode);
 
     let filter_buttons = row![
         mode_btn,
@@ -85,14 +90,14 @@ pub fn view_filtered<'a>(
             find_filter_state(active_filters, FilterKind::HasNexusId)
         ),
         button(text("Clear").size(11))
-            .on_press(Message::ClearFilters)
             .style(button::secondary)
-            .padding([3, 8]),
+            .padding([3, 8])
+            .on_action(ButtonAction::ClearFilters),
         iced::widget::space::horizontal(),
         button(text(if compact { "Normal" } else { "Compact" }).size(11))
-            .on_press(Message::ToggleCompactModList)
             .style(button::text)
-            .padding([3, 8]),
+            .padding([3, 8])
+            .on_action(ButtonAction::ToggleCompactModList),
     ]
     .spacing(4)
     .align_y(Alignment::Center);
@@ -202,10 +207,9 @@ fn tri_state_button(label: &str, kind: FilterKind, state: TriState) -> Element<'
         TriState::Exclude => button::danger,
     };
     button(text(display).size(11))
-        .on_press(Message::CycleFilter(kind))
         .style(style)
         .padding([3, 8])
-        .into()
+        .on_action(ButtonAction::CycleFilter(kind))
 }
 
 /// Group filtered mod indices by category.
@@ -277,10 +281,10 @@ fn build_categorized_rows<'a>(
                 .spacing(6)
                 .align_y(Alignment::Center),
         )
-        .on_press(Message::ToggleSeparator(*cat_id))
         .style(button::text)
         .padding([4, 8])
-        .width(Length::Fill);
+        .width(Length::Fill)
+        .on_action(ButtonAction::ToggleSeparator(*cat_id));
 
         col = col.push(separator);
         col = col.push(iced::widget::rule::horizontal(1));
@@ -322,27 +326,31 @@ fn mod_row(
 
     let row_blocked = profile_locked || entry.lock.is_some();
 
-    let up_btn = button(text("^").size(12))
-        .on_press_maybe(if !row_blocked && idx > 0 {
-            Some(Message::ReorderMod {
+    let up_btn = button(text("^").size(12)).padding([2, 6]).on_action_maybe(
+        if !row_blocked && idx > 0 {
+            Some(ButtonAction::ReorderMod {
                 mod_id: entry.mod_id.clone(),
                 direction: crate::app::ReorderDirection::Up,
             })
         } else {
             None
-        })
-        .padding([2, 6]);
+        },
+        "This mod cannot move up because it is first, pinned, or the profile load order is locked.",
+    );
 
     let down_btn = button(text("v").size(12))
-        .on_press_maybe(if !row_blocked && idx < total - 1 {
-            Some(Message::ReorderMod {
-                mod_id: entry.mod_id.clone(),
-                direction: crate::app::ReorderDirection::Down,
-            })
-        } else {
-            None
-        })
-        .padding([2, 6]);
+        .padding([2, 6])
+        .on_action_maybe(
+            if !row_blocked && idx < total - 1 {
+                Some(ButtonAction::ReorderMod {
+                    mod_id: entry.mod_id.clone(),
+                    direction: crate::app::ReorderDirection::Down,
+                })
+            } else {
+                None
+            },
+            "This mod cannot move down because it is last, pinned, or the profile load order is locked.",
+        );
 
     let priority = text(format!("{:>3}", idx + 1))
         .size(12)
@@ -366,13 +374,13 @@ fn mod_row(
         }
     };
     let name = button(text(label_owned).size(font_size))
-        .on_press(Message::SelectMod(idx))
         .style(if is_selected {
             button::primary
         } else {
             button::text
         })
-        .padding([2, 4]);
+        .padding([2, 4])
+        .on_action(ButtonAction::SelectMod(idx));
 
     let version_str = entry.version.as_deref().unwrap_or("-");
     let version = text(version_str).size(12).width(Length::Fixed(80.0));

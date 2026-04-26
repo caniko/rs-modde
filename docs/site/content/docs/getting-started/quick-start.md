@@ -30,6 +30,7 @@ programs.modde = {
 
   profiles.living-skyrim = {
     game = "skyrim-se";
+    gameDir = "/home/me/.local/share/Steam/steamapps/common/Skyrim Special Edition";
     wabbajackList = {
       url = "https://example.com/modlist.wabbajack";
       hash = "sha256-...";
@@ -37,6 +38,28 @@ programs.modde = {
   };
 };
 ```
+
+`hash` is the Nix fetch hash for the `.wabbajack` file. Skyrim SE lists that
+reference vanilla game files need `gameDir` so modde can verify those local
+files during installation.
+
+If Skyrim is not installed yet, you can declare the profile first and let Home
+Manager wait:
+
+```nix
+programs.modde.profiles.living-skyrim = {
+  game = "skyrim-se";
+  installMode = "await-game";
+  wabbajackList = {
+    url = "https://example.com/modlist.wabbajack";
+    hash = "sha256-...";
+  };
+};
+```
+
+Install Skyrim through Steam or Heroic, set `gameDir`, change `installMode` back
+to `"auto"` or remove it, and rebuild Home Manager. modde will then install and
+deploy the profile.
 
 ## Install from a Nexus Collection
 

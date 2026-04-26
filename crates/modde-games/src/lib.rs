@@ -62,12 +62,20 @@ pub fn supported_games() -> SmallVec<[(&'static str, &'static str); 8]> {
 /// Returns `None` if the name is not recognized.
 #[must_use]
 pub fn normalize_wabbajack_game(wj_game: &str) -> Option<&'static str> {
-    match wj_game {
-        "Cyberpunk2077" => Some("cyberpunk2077"),
-        "SkyrimSpecialEdition" => Some("skyrim-se"),
-        "Fallout4" => Some("fallout4"),
-        "Fallout76" => Some("fallout76"),
-        "Starfield" => Some("starfield"),
+    let key: String = wj_game
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect();
+
+    match key.as_str() {
+        "cyberpunk2077" => Some("cyberpunk2077"),
+        "skyrimspecialedition" | "skyrimse" => Some("skyrim-se"),
+        "skyrimanniversaryedition" | "skyrimae" => Some("skyrim-ae"),
+        "fallout4" => Some("fallout4"),
+        "fallout76" => Some("fallout76"),
+        "starfield" => Some("starfield"),
+        "stellarblade" => Some("stellar-blade"),
         _ => None,
     }
 }

@@ -137,7 +137,7 @@
 
         meta = with pkgs.lib; {
           description = "Cross-platform game mod manager";
-          license = with licenses; [mit asl20];
+          license = with licenses; [gpl3Only];
           platforms = platforms.linux ++ platforms.darwin;
         };
       };
@@ -175,6 +175,177 @@
             pname = "modde-ui";
           };
         };
+
+      checks = let
+        hmLib = lib.extend (_final: _prev: {
+          hm.dag.entryAfter = _deps: text: text;
+        });
+        evalHm = profiles:
+          (hmLib.evalModules {
+            specialArgs = {
+              inherit pkgs;
+            };
+            modules = [
+              ({lib, ...}: {
+                options = {
+                  assertions = lib.mkOption {
+                    type = lib.types.listOf lib.types.attrs;
+                    default = [];
+                  };
+                  home.packages = lib.mkOption {
+                    type = lib.types.listOf lib.types.package;
+                    default = [];
+                  };
+                  home.activation = lib.mkOption {
+                    type = lib.types.attrsOf lib.types.str;
+                    default = {};
+                  };
+                };
+              })
+              self.homeManagerModules.modde
+              {
+                programs.modde = {
+                  enable = true;
+                  package = pkgs.writeShellScriptBin "modde" "exit 0";
+                  profiles = profiles;
+                };
+              }
+            ];
+          })
+          .config;
+        activationReady =
+          (evalHm {
+            lotf = {
+              game = "skyrim-se";
+              gameDir = "/games/Skyrim Special Edition";
+              wabbajackList = {
+                url = "file://${./LICENSE}";
+                hash = "sha256-OXLcl0T2SZ8Pmy2/dmlvKuetivmyPd5m1q+Gyd+zaYY=";
+              };
+            };
+            manual = {
+              game = "skyrim-se";
+            };
+          })
+          .home
+          .activation
+          .modde-deploy;
+        activationNoGameDir =
+          (evalHm {
+            lotf = {
+              game = "skyrim-se";
+              wabbajackList = {
+                url = "file://${./LICENSE}";
+                hash = "sha256-OXLcl0T2SZ8Pmy2/dmlvKuetivmyPd5m1q+Gyd+zaYY=";
+              };
+            };
+          })
+          .home
+          .activation
+          .modde-deploy;
+        activationMissingPath =
+          (evalHm {
+            lotf = {
+              game = "skyrim-se";
+              gameDir = "/missing/Skyrim Special Edition";
+              wabbajackList = {
+                url = "file://${./LICENSE}";
+                hash = "sha256-OXLcl0T2SZ8Pmy2/dmlvKuetivmyPd5m1q+Gyd+zaYY=";
+              };
+            };
+          })
+          .home
+          .activation
+          .modde-deploy;
+        activationAwaitMode =
+          (evalHm {
+            lotf = {
+              game = "skyrim-se";
+              gameDir = "/games/Skyrim Special Edition";
+              installMode = "await-game";
+              wabbajackList = {
+                url = "file://${./LICENSE}";
+                hash = "sha256-OXLcl0T2SZ8Pmy2/dmlvKuetivmyPd5m1q+Gyd+zaYY=";
+              };
+            };
+          })
+          .home
+          .activation
+          .modde-deploy;
+        activationDisabled =
+          (evalHm {
+            lotf = {
+              game = "skyrim-se";
+              gameDir = "/games/Skyrim Special Edition";
+              installMode = "disabled";
+              wabbajackList = {
+                url = "file://${./LICENSE}";
+                hash = "sha256-OXLcl0T2SZ8Pmy2/dmlvKuetivmyPd5m1q+Gyd+zaYY=";
+              };
+            };
+          })
+          .home
+          .activation
+          .modde-deploy;
+        badAssertions =
+          (evalHm {
+            invalid = {
+              game = "skyrim-se";
+              wabbajackList = {
+                url = "file://${./LICENSE}";
+                hash = "sha256-OXLcl0T2SZ8Pmy2/dmlvKuetivmyPd5m1q+Gyd+zaYY=";
+              };
+              nexusCollection = {
+                slug = "collection";
+                version = "1";
+              };
+            };
+          })
+          .assertions;
+        mutualExclusionFails =
+          if (builtins.elemAt badAssertions 0).assertion then "true" else "false";
+      in {
+        hm-module = pkgs.runCommand "modde-hm-module-check" {} ''
+          cat > ready <<'EOF'
+          ${activationReady}
+          EOF
+          grep -q "modde install wabbajack" ready
+          grep -q -- "--game-dir '/games/Skyrim Special Edition'" ready
+          grep -q "modde deploy --profile lotf --game skyrim-se" ready
+          grep -q "modde deploy --profile manual --game skyrim-se" ready
+
+          cat > no-game-dir <<'EOF'
+          ${activationNoGameDir}
+          EOF
+          grep -q "awaiting game install" no-game-dir
+          grep -q "gameDir is not configured" no-game-dir
+          ! grep -q "modde install wabbajack" no-game-dir
+
+          cat > missing-path <<'EOF'
+          ${activationMissingPath}
+          EOF
+          grep -q "gameDir does not exist" missing-path
+          grep -q "modde install wabbajack" missing-path
+          grep -q "if \\[ ! -d '/missing/Skyrim Special Edition' \\]" missing-path
+
+          cat > await-mode <<'EOF'
+          ${activationAwaitMode}
+          EOF
+          grep -q "installMode = await-game" await-mode
+          ! grep -q "modde install wabbajack" await-mode
+          ! grep -q "modde deploy --profile lotf" await-mode
+
+          cat > disabled <<'EOF'
+          ${activationDisabled}
+          EOF
+          grep -q "is disabled; skipping activation" disabled
+          ! grep -q "modde install wabbajack" disabled
+          ! grep -q "modde deploy --profile lotf" disabled
+
+          test "${mutualExclusionFails}" = "false"
+          touch "$out"
+        '';
+      };
 
       devShells = rs-harbor.lib.mkDevShells {
         inherit pkgs cross;

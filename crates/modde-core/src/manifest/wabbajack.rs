@@ -180,6 +180,36 @@ pub enum ArchiveState {
         #[serde(default, rename = "Headers", deserialize_with = "deserialize_headers")]
         headers: HashMap<String, String>,
     },
+    #[serde(alias = "GameFileSourceDownloader, Wabbajack.Lib")]
+    GameFileSourceDownloader {
+        #[serde(flatten)]
+        metadata: HashMap<String, serde_json::Value>,
+    },
+}
+
+impl ArchiveState {
+    /// Relative path inside the game install for a Wabbajack game-file source.
+    ///
+    /// Wabbajack has used a few field names for this state over time. Keep the
+    /// parser strict about which string is treated as a path so game/version
+    /// metadata is not accidentally interpreted as a filesystem path.
+    #[must_use]
+    pub fn game_file_path(&self) -> Option<&str> {
+        let Self::GameFileSourceDownloader { metadata } = self else {
+            return None;
+        };
+
+        [
+            "File",
+            "FilePath",
+            "GameFile",
+            "GameFilePath",
+            "Path",
+            "RelativePath",
+        ]
+        .into_iter()
+        .find_map(|key| metadata.get(key).and_then(serde_json::Value::as_str))
+    }
 }
 
 /// A raw directive from the manifest, before we convert to our typed enums.
@@ -386,6 +416,7 @@ impl WabbajackManifest {
                         headers: headers.clone(),
                         hash: archive.hash,
                     },
+                    ArchiveState::GameFileSourceDownloader { .. } => return None,
                 })
             })
             .collect()
@@ -450,5 +481,67 @@ impl WabbajackManifest {
                 RawDirective::Unknown => None,
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn game_file_source_downloader_parses_and_is_not_downloaded() {
+        let json = r#"{
+            "Name": "Legends of the Frost synthetic",
+            "Author": "test",
+            "Description": "test",
+            "Game": "SkyrimSE",
+            "Version": "1.0.0",
+            "Archives": [
+                {
+                    "Hash": "AQAAAAAAAAA=",
+                    "Name": "Data_Skyrim.esm",
+                    "Size": 1024,
+                    "State": {
+                        "$type": "GameFileSourceDownloader, Wabbajack.Lib",
+                        "File": "Data\\Skyrim.esm"
+                    }
+                },
+                {
+                    "Hash": "AgAAAAAAAAA=",
+                    "Name": "mod.zip",
+                    "Size": 2048,
+                    "State": {
+                        "$type": "HttpDownloader, Wabbajack.Lib",
+                        "Url": "https://example.invalid/mod.zip",
+                        "Headers": []
+                    }
+                }
+            ],
+            "Directives": [
+                {
+                    "$type": "FromArchive, Wabbajack.Lib",
+                    "ArchiveHashPath": ["AQAAAAAAAAA="],
+                    "To": "mods/Skyrim Base/Skyrim.esm"
+                }
+            ]
+        }"#;
+
+        let manifest: WabbajackManifest = serde_json::from_str(json).unwrap();
+        let source = manifest.archives[0].state.as_ref().unwrap();
+        assert_eq!(source.game_file_path(), Some("Data\\Skyrim.esm"));
+
+        let downloads = manifest.download_directives();
+        assert_eq!(downloads.len(), 1);
+        assert_eq!(downloads[0].hash(), 2);
+
+        let installs = manifest.install_directives();
+        assert!(matches!(
+            installs.as_slice(),
+            [InstallDirective::FromArchive {
+                archive_hash: 1,
+                from,
+                to
+            }] if from.is_empty() && to == "mods/Skyrim Base/Skyrim.esm"
+        ));
     }
 }

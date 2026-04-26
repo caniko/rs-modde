@@ -111,6 +111,11 @@ enum Commands {
         #[command(subcommand)]
         action: NxmAction,
     },
+    /// Browse, download, and generate Home Manager snippets for Wabbajack modlists
+    Wabbajack {
+        #[command(subcommand)]
+        action: WabbajackAction,
+    },
     /// Scan game directory for installed mods
     Scan {
         #[arg(long)]
@@ -570,6 +575,39 @@ enum NxmAction {
 }
 
 #[derive(Subcommand)]
+pub enum WabbajackAction {
+    /// Search public Wabbajack modlist catalogs
+    Search {
+        query: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+        /// Catalog source: official, authored, or both
+        #[arg(long, default_value = "both")]
+        source: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Download a .wabbajack file by URL, machine URL, or title
+    Download {
+        url_or_machine_url: String,
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Generate a Home Manager profile snippet for a .wabbajack source
+    HmSnippet {
+        url_or_file: String,
+        #[arg(long)]
+        profile: String,
+        #[arg(long)]
+        game: String,
+        #[arg(long)]
+        game_dir: Option<PathBuf>,
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
 enum SaveAction {
     /// Assign a save to a profile
     Assign {
@@ -773,6 +811,7 @@ fn main() -> Result<()> {
             commands::nxm::install_handler()?;
             return Ok(());
         }
+        Commands::Wabbajack { .. } => {}
         _ => {}
     }
 
@@ -834,6 +873,7 @@ fn main() -> Result<()> {
                 NxmAction::Handle { uri, profile } => commands::nxm::handle(uri, profile).await?,
                 NxmAction::Install => unreachable!(),
             },
+            Commands::Wabbajack { action } => commands::wabbajack::handle(action).await?,
             // Already handled above
             Commands::Profile { .. }
             | Commands::Scan { .. }

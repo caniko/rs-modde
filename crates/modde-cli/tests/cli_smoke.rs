@@ -78,6 +78,35 @@ fn cli_install_wabbajack_help() {
 }
 
 #[test]
+fn cli_wabbajack_help() {
+    modde().args(["wabbajack", "--help"]).assert().success();
+}
+
+#[test]
+fn cli_wabbajack_search_help() {
+    modde()
+        .args(["wabbajack", "search", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_wabbajack_download_help() {
+    modde()
+        .args(["wabbajack", "download", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_wabbajack_hm_snippet_help() {
+    modde()
+        .args(["wabbajack", "hm-snippet", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
 fn cli_install_nexus_collection_help() {
     modde()
         .args(["install", "nexus-collection", "--help"])

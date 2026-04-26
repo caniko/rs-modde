@@ -1,6 +1,8 @@
-use iced::widget::{button, column, container, row, scrollable, text};
+use crate::views::selectable_text::text;
+use iced::widget::{button, column, container, row, scrollable};
 use iced::{Alignment, Element, Length, color};
 
+use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::Message;
 
 /// A single diagnostic finding.
@@ -42,13 +44,12 @@ pub fn view(state: &DiagnosticsState) -> Element<'_, Message> {
             })
             .size(14)
         )
-        .on_press_maybe(if running {
-            None
-        } else {
-            Some(Message::RunDiagnostics)
-        })
         .style(button::primary)
-        .padding([6, 14]),
+        .padding([6, 14])
+        .on_action_maybe(
+            (!running).then_some(ButtonAction::RunDiagnostics),
+            "Diagnostics are already running.",
+        ),
     ]
     .align_y(Alignment::Center);
 

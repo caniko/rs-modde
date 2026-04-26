@@ -1,4 +1,5 @@
 pub mod backup;
+pub mod bethesda_archive;
 pub mod collision;
 pub mod db;
 pub mod diagnostics;

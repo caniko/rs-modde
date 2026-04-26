@@ -16,7 +16,7 @@ workspace = true
 modde-core = { workspace = true }
 modde-sources = { workspace = true }
 modde-games = { workspace = true }
-iced = { version = "0.14", features = ["tokio", "image", "svg"] }
+iced = { version = "0.14", features = ["tokio", "image", "svg", "advanced"] }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
@@ -31,6 +31,7 @@ tracing-subscriber = { workspace = true }
 fomod-oxide = { workspace = true }
 image = { workspace = true }
 open = { workspace = true }
+unicode-segmentation = "1.12"
 
 [dev-dependencies]
 iced_test = "0.14"

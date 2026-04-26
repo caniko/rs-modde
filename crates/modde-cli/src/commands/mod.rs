@@ -21,6 +21,7 @@ pub mod tool;
 pub mod uninstall;
 pub mod update;
 pub mod verify;
+pub mod wabbajack;
 
 use std::path::PathBuf;
 

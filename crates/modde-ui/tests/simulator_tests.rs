@@ -7,7 +7,10 @@
 //! click/input interactions produce the right `Message` variants.
 
 use iced_test::simulator;
-use modde_ui::app::{Message, SettingsState, ToolState, ToolUiEntry, VerifyResults, VerifyState};
+use modde_ui::app::{
+    Message, SettingsState, ToolState, ToolUiEntry, VerifyResults, VerifyState,
+    WabbajackInstallerState,
+};
 use modde_ui::views::data_tab::DataTabState;
 use modde_ui::views::diagnostics::{DiagnosticEntry, DiagnosticSeverity, DiagnosticsState};
 use modde_ui::views::downloads::{DownloadState, DownloadTask};
@@ -197,6 +200,24 @@ fn settings_click_verify_snapshot_emits_message() {
     );
 }
 
+#[test]
+fn wabbajack_shows_generated_hm_snippet_preview() {
+    let state = WabbajackInstallerState {
+        hm_snippet: "programs.modde.profiles.lotf = {\n  game = \"skyrim-se\";\n};\n".to_string(),
+        ..Default::default()
+    };
+    let manifest = None;
+    let available_games = vec![("skyrim-se".to_string(), "Skyrim SE".to_string())];
+    let mut ui = simulator(modde_ui::views::wabbajack::view(
+        &state,
+        &manifest,
+        &available_games,
+    ));
+
+    ui.find("programs.modde.profiles.lotf = {\n  game = \"skyrim-se\";\n};\n")
+        .expect("should show generated snippet preview");
+}
+
 // ─── Mod List View ────────────────────────────────────────────
 
 /// Helper macro that declares filter state bindings at the caller's scope
@@ -326,16 +347,8 @@ macro_rules! sidebar_test {
             let view = modde_ui::app::View::ModList;
             let profiles = $profiles;
             let active = $active;
-            let selected_game: Option<String> = Some("skyrim-se".to_string());
             let mut $ui = simulator(modde_ui::views::sidebar::view(
-                &view,
-                &profiles,
-                &active,
-                $depth,
-                "",
-                &selected_game,
-                None,
-                None,
+                &view, &profiles, &active, $depth, None, None,
             ));
             $body
         }
@@ -397,13 +410,12 @@ sidebar_test!(
 );
 
 sidebar_test!(
-    sidebar_shows_new_profile_section,
+    sidebar_shows_new_profile_button,
     profiles = vec![],
     active = None,
     depth = 0,
     |ui| {
-        ui.find("New Profile").expect("should show 'New Profile'");
-        ui.find("Create").expect("should show 'Create' button");
+        ui.find("New").expect("should show 'New' button");
     }
 );
 

@@ -19,6 +19,7 @@ const BSA_VERSION_SSE: u32 = 105;
 const BSA_FLAG_HAS_FOLDER_NAMES: u32 = 1 << 0;
 const BSA_FLAG_HAS_FILE_NAMES: u32 = 1 << 1;
 const BSA_FLAG_COMPRESSED: u32 = 1 << 2;
+const BSA_SIZE_COMPRESS_TOGGLE: u32 = 0x4000_0000;
 
 /// BA2 format magic bytes: "BTDX"
 const BA2_MAGIC: &[u8; 4] = b"BTDX";
@@ -68,23 +69,23 @@ async fn create_bsa_inner(
         bail!("no file states provided for BSA creation");
     }
 
-    // Group files by folder
-    let mut folders: std::collections::BTreeMap<String, Vec<&BSAFileState>> =
-        std::collections::BTreeMap::new();
-    for state in file_states {
-        let path = state.path.replace('/', "\\");
-        let folder = if let Some(pos) = path.rfind('\\') {
-            path[..pos].to_string()
-        } else {
-            String::new()
-        };
-        folders.entry(folder).or_default().push(state);
+    struct BsaBuildEntry {
+        folder: String,
+        file_name: String,
+        payload: Vec<u8>,
+        compressed: bool,
     }
 
-    // Read all file data from staging directory
-    let mut file_data: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut entries = Vec::with_capacity(file_states.len());
     for state in file_states {
-        let file_path = staging_dir.join(&state.path);
+        let path = state.path.replace('/', "\\");
+        let (folder, file_name) = if let Some(pos) = path.rfind('\\') {
+            (path[..pos].to_string(), path[pos + 1..].to_string())
+        } else {
+            (String::new(), path)
+        };
+
+        let file_path = staging_dir.join(state.path.replace('\\', "/"));
         let data = if file_path.exists() {
             fs::read(&file_path)
                 .await
@@ -93,40 +94,45 @@ async fn create_bsa_inner(
             warn!(path = %state.path, "file not found in staging, using empty data");
             Vec::new()
         };
-        file_data.push((state.path.clone(), data));
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&data)?;
+        let compressed = encoder.finish()?;
+
+        let (payload, is_compressed) = if compressed.len() + 4 < data.len() {
+            let mut payload = Vec::with_capacity(compressed.len() + 4);
+            payload.write_all(&(data.len() as u32).to_le_bytes())?;
+            payload.write_all(&compressed)?;
+            (payload, true)
+        } else {
+            (data.clone(), false)
+        };
+
+        entries.push(BsaBuildEntry {
+            folder,
+            file_name,
+            payload,
+            compressed: is_compressed,
+        });
     }
 
-    // Compress file data using zlib
-    let mut compressed_data: Vec<Vec<u8>> = Vec::new();
-    for (_path, data) in &file_data {
-        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(data)?;
-        let compressed = encoder.finish()?;
-        // Only use compressed version if it's actually smaller
-        if compressed.len() < data.len() {
-            compressed_data.push(compressed);
-        } else {
-            compressed_data.push(data.clone());
-        }
+    let mut folders: std::collections::BTreeMap<String, Vec<usize>> =
+        std::collections::BTreeMap::new();
+    for (index, entry) in entries.iter().enumerate() {
+        folders.entry(entry.folder.clone()).or_default().push(index);
     }
 
     let folder_count = folders.len() as u32;
-    let file_count = file_states.len() as u32;
+    let file_count = entries.len() as u32;
 
-    // Collect file names for the file name block
-    let file_names: Vec<String> = file_states
-        .iter()
-        .map(|s| {
-            let path = s.path.replace('/', "\\");
-            if let Some(pos) = path.rfind('\\') {
-                path[pos + 1..].to_string()
-            } else {
-                path
-            }
-        })
+    let entry_order: Vec<usize> = folders
+        .values()
+        .flat_map(|indices| indices.iter().copied())
         .collect();
 
-    let total_file_name_length: u32 = file_names.iter().map(|n| n.len() as u32 + 1).sum();
+    let total_file_name_length: u32 = entry_order
+        .iter()
+        .map(|index| entries[*index].file_name.len() as u32 + 1)
+        .sum();
 
     // Collect folder names
     let folder_names: Vec<&String> = folders.keys().collect();
@@ -161,8 +167,9 @@ async fn create_bsa_inner(
 
     // --- Folder records (16 bytes each) ---
     // We need to calculate offsets for the file record blocks.
-    // File record blocks start after: header(36) + folder_records(folder_count * 16)
-    let folder_records_end = 36 + u64::from(folder_count) * 16;
+    // File record blocks start after: header(36) + SSE v105 folder records
+    // (hash + count + padding + 64-bit offset = 24 bytes each).
+    let folder_records_end = 36 + u64::from(folder_count) * 24;
 
     // Each file record block: folder_name_len(1) + folder_name + null(1) + file_records(16 * count)
     let mut block_offset = folder_records_end;
@@ -172,7 +179,8 @@ async fn create_bsa_inner(
 
         write_u64_le(&mut buf, name_hash)?;
         write_u32_le(&mut buf, file_count_in_folder)?;
-        write_u32_le(&mut buf, block_offset as u32)?;
+        write_u32_le(&mut buf, 0)?;
+        write_u64_le(&mut buf, block_offset)?;
 
         // Size of this block: name_length(1) + name_bytes + null(1) + file_records
         let name_len = if folder_name.is_empty() {
@@ -189,7 +197,6 @@ async fn create_bsa_inner(
     let file_data_start = file_name_block_offset + u64::from(total_file_name_length);
     let mut data_offset = file_data_start;
 
-    let mut file_index = 0usize;
     for folder_name in &folder_names {
         let files_in_folder = &folders[*folder_name];
 
@@ -204,30 +211,31 @@ async fn create_bsa_inner(
         buf.write_all(&[0])?; // null terminator
 
         // Write file records (16 bytes each: hash(8) + size(4) + offset(4))
-        for _file_state in files_in_folder {
-            let file_name = &file_names[file_index];
-            let name_hash = bsa_hash_file(file_name);
-            let cdata = &compressed_data[file_index];
-            let data_size = cdata.len() as u32;
+        for entry_index in files_in_folder {
+            let entry = &entries[*entry_index];
+            let name_hash = bsa_hash_file(&entry.file_name);
+            let mut data_size = entry.payload.len() as u32;
+            if !entry.compressed {
+                data_size |= BSA_SIZE_COMPRESS_TOGGLE;
+            }
 
             write_u64_le(&mut buf, name_hash)?;
             write_u32_le(&mut buf, data_size)?;
             write_u32_le(&mut buf, data_offset as u32)?;
 
-            data_offset += u64::from(data_size);
-            file_index += 1;
+            data_offset += entry.payload.len() as u64;
         }
     }
 
     // --- File name block ---
-    for name in &file_names {
-        buf.write_all(name.as_bytes())?;
+    for entry_index in &entry_order {
+        buf.write_all(entries[*entry_index].file_name.as_bytes())?;
         buf.write_all(&[0])?;
     }
 
     // --- File data blocks ---
-    for cdata in &compressed_data {
-        buf.write_all(cdata)?;
+    for entry_index in &entry_order {
+        buf.write_all(&entries[*entry_index].payload)?;
     }
 
     // Write the BSA to disk
@@ -252,7 +260,7 @@ async fn create_bsa_inner(
 ///
 /// BA2 layout:
 /// 1. Header (24 bytes): magic(4) + version(4) + type(4) + `file_count(4)` + `name_table_offset(8)`
-/// 2. File records (36 bytes each): `name_hash(4)` + ext(4) + `dir_hash(4)` + flags(4) + offset(8) + `packed_size(4)` + `unpacked_size(4)`
+/// 2. File records (36 bytes each): `name_hash(4)` + ext(4) + `dir_hash(4)` + flags(4) + offset(8) + `packed_size(4)` + `unpacked_size(4)` + sentinel(4)
 /// 3. File data blocks
 /// 4. Name table
 async fn create_ba2(file_states: &[BSAFileState], staging_dir: &Path, output: &Path) -> Result<()> {
@@ -263,7 +271,7 @@ async fn create_ba2(file_states: &[BSAFileState], staging_dir: &Path, output: &P
     // Read all file data
     let mut file_contents: Vec<Vec<u8>> = Vec::new();
     for state in file_states {
-        let file_path = staging_dir.join(&state.path);
+        let file_path = staging_dir.join(state.path.replace('\\', "/"));
         let data = if file_path.exists() {
             fs::read(&file_path)
                 .await
@@ -333,6 +341,7 @@ async fn create_ba2(file_states: &[BSAFileState], staging_dir: &Path, output: &P
         write_u64_le(&mut buf, offsets[i])?;
         write_u32_le(&mut buf, 0)?; // packed_size = 0 means uncompressed
         write_u32_le(&mut buf, file_contents[i].len() as u32)?;
+        write_u32_le(&mut buf, 0xBAAD_F00D)?;
     }
 
     // --- File data blocks ---
@@ -674,6 +683,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_bsa_round_trips_through_archive_index() {
+        let staging = tempfile::tempdir().unwrap();
+        let output = staging.path().join("test.bsa");
+
+        tokio::fs::create_dir_all(staging.path().join("textures"))
+            .await
+            .unwrap();
+        tokio::fs::create_dir_all(staging.path().join("meshes"))
+            .await
+            .unwrap();
+
+        let texture_data = vec![b'x'; 4096];
+        let mesh_data = b"mesh data that should remain uncompressed".to_vec();
+        tokio::fs::write(staging.path().join("textures/sky.dds"), &texture_data)
+            .await
+            .unwrap();
+        tokio::fs::write(staging.path().join("meshes/tree.nif"), &mesh_data)
+            .await
+            .unwrap();
+
+        // Deliberately not grouped by folder; the writer must keep record,
+        // filename, and data ordering aligned after folder sorting.
+        let states = vec![
+            BSAFileState {
+                path: "textures\\sky.dds".to_string(),
+                hash: 0,
+                size: texture_data.len() as u64,
+            },
+            BSAFileState {
+                path: "meshes\\tree.nif".to_string(),
+                hash: 0,
+                size: mesh_data.len() as u64,
+            },
+        ];
+
+        create_bsa(&states, staging.path(), &output).await.unwrap();
+
+        let index = modde_core::bethesda_archive::ArchiveIndex::read(&output).unwrap();
+        assert_eq!(
+            index.extract_file("textures/sky.dds").unwrap(),
+            texture_data
+        );
+        assert_eq!(index.extract_file("meshes/tree.nif").unwrap(), mesh_data);
+    }
+
+    #[tokio::test]
     async fn test_create_bsa_missing_file_uses_empty() {
         let staging = tempfile::tempdir().unwrap();
         let output = staging.path().join("test.bsa");
@@ -723,6 +778,46 @@ mod tests {
         let mut magic = [0u8; 4];
         f.read_exact(&mut magic).unwrap();
         assert_eq!(&magic, BA2_MAGIC);
+    }
+
+    #[tokio::test]
+    async fn test_create_ba2_round_trips_through_archive_index() {
+        let staging = tempfile::tempdir().unwrap();
+        let output = staging.path().join("test.ba2");
+
+        tokio::fs::create_dir_all(staging.path().join("data"))
+            .await
+            .unwrap();
+        tokio::fs::write(staging.path().join("data/file1.txt"), b"content one")
+            .await
+            .unwrap();
+        tokio::fs::write(staging.path().join("data/file2.txt"), b"content two")
+            .await
+            .unwrap();
+
+        let states = vec![
+            BSAFileState {
+                path: "data\\file1.txt".to_string(),
+                hash: 0,
+                size: 11,
+            },
+            BSAFileState {
+                path: "data\\file2.txt".to_string(),
+                hash: 0,
+                size: 11,
+            },
+        ];
+
+        create_bsa(&states, staging.path(), &output).await.unwrap();
+        let index = modde_core::bethesda_archive::ArchiveIndex::read(&output).unwrap();
+        assert_eq!(
+            index.extract_file("data/file1.txt").unwrap(),
+            b"content one"
+        );
+        assert_eq!(
+            index.extract_file("data/file2.txt").unwrap(),
+            b"content two"
+        );
     }
 
     #[tokio::test]

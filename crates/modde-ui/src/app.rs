@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use iced::widget::{button, column, container, mouse_area, pick_list, row, text};
+use crate::views::selectable_text::text;
+use iced::widget::{button, column, container, mouse_area, opaque, row, stack, text_input};
 use iced::{Element, Length, Subscription, Task, Theme, keyboard, window};
 use smallvec::SmallVec;
 
@@ -10,6 +11,8 @@ use modde_core::manifest::collection::CollectionManifest;
 use modde_core::profile::ProfileManager;
 use modde_core::save::SaveSnapshot;
 use modde_core::settings::AppSettings;
+
+use crate::action_button::{ButtonAction, DescribedButtonExt};
 
 /// Settings view state — consumed by the settings view.
 #[derive(Debug, Clone, Default)]
@@ -67,7 +70,13 @@ pub struct Modde {
     pub nexus_status: Option<NexusAuthStatus>,
     pub verify: VerifyState,
     pub new_profile_name: String,
+    pub new_profile_dialog_open: bool,
+    pub game_path_dialog_open: bool,
+    pub pending_game_path_game_id: Option<String>,
+    pub previous_game_before_path_dialog: Option<String>,
+    pub game_path_dialog_error: Option<String>,
     pub available_games: SmallVec<[(String, String); 8]>,
+    pub detected_games: HashSet<String>,
     pub selected_game: Option<String>,
     pub stock_snapshot_exists: bool,
     pub window_id: window::Id,
@@ -148,6 +157,36 @@ fn load_active_plugins(pm: &ProfileManager, profile: &modde_core::Profile) -> Ve
         .filter(|plugin| plugin.enabled)
         .map(|plugin| plugin.plugin_name)
         .collect()
+}
+
+fn detected_game_ids(
+    settings: &AppSettings,
+    available_games: &[(String, String)],
+) -> HashSet<String> {
+    let mut detected: HashSet<String> = settings
+        .game_paths
+        .iter()
+        .filter(|game_path| game_path.path.is_dir())
+        .map(|game_path| game_path.game_id.to_string())
+        .collect();
+
+    detected.extend(
+        modde_games::scan_installed_games()
+            .into_iter()
+            .map(|game| game.game_id.to_string()),
+    );
+
+    for (game_id, _) in available_games {
+        if !detected.contains(game_id)
+            && modde_games::resolve_game_plugin(game_id)
+                .and_then(modde_games::GamePlugin::detect_install)
+                .is_some()
+        {
+            detected.insert(game_id.clone());
+        }
+    }
+
+    detected
 }
 
 fn build_conflict_rows(
@@ -266,11 +305,27 @@ impl Modde {
         }
     }
 
+    fn clear_game_scoped_state(&mut self) {
+        self.selected_mod_index = None;
+        self.selected_mod_details = None;
+        self.selected_save_details = None;
+        self.save_snapshots.clear();
+        self.current_fingerprint = None;
+        self.experiment_depth = 0;
+        self.verify = VerifyState::Idle;
+        self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Idle;
+        self.data_tab_conflicts.clear();
+    }
+
     fn reload_profile(&mut self) {
         if let Some(ref name) = self.active_profile {
             if let Ok(pm) = ProfileManager::open() {
-                self.profiles = pm.list().unwrap_or_default();
-                if let Ok(profile) = pm.load(name, None) {
+                if let Some(game_id) = self.selected_game.as_deref() {
+                    self.profiles = pm.list_for_game(game_id).unwrap_or_default();
+                } else {
+                    self.profiles = pm.list().unwrap_or_default();
+                }
+                if let Ok(profile) = pm.load(name, self.selected_game.as_deref()) {
                     if let Ok(info) = pm.active(&profile.game_id) {
                         self.experiment_depth = info.map_or(0, |i| i.experiment_depth);
                     }
@@ -297,6 +352,72 @@ impl Modde {
         self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Idle;
         self.refresh_data_tab_conflicts();
         self.refresh_tools_state();
+    }
+
+    fn switch_game_context(&mut self, game_id: &str) {
+        self.clear_game_scoped_state();
+
+        let Ok(pm) = ProfileManager::open() else {
+            self.profiles.clear();
+            self.active_profile = None;
+            self.loaded_profile = None;
+            self.status_message = "Failed to open profile database".to_string();
+            return;
+        };
+
+        self.profiles = pm.list_for_game(game_id).unwrap_or_default();
+        self.active_profile = pm
+            .active(game_id)
+            .ok()
+            .flatten()
+            .map(|info| info.profile.name)
+            .or_else(|| self.profiles.first().map(|p| p.name.clone()));
+
+        if self.active_profile.is_some() {
+            self.reload_profile();
+        } else {
+            self.loaded_profile = None;
+            self.refresh_data_tab_conflicts();
+            self.refresh_tools_state();
+        }
+    }
+
+    fn accept_game_selection(&mut self, game_id: String, previous_game: Option<String>) {
+        self.selected_game = Some(game_id.clone());
+        self.settings.selected_game = Some(game_id.clone());
+
+        let configured_path_valid = self
+            .settings
+            .game_path(&game_id)
+            .is_some_and(|path| path.is_dir());
+        if !configured_path_valid {
+            if let Some(path) = modde_games::find_detected_game(&game_id)
+                .map(|detected| detected.install_path)
+                .or_else(|| {
+                    modde_games::resolve_game_plugin(&game_id)
+                        .and_then(modde_games::GamePlugin::detect_install)
+                })
+            {
+                self.settings.set_game_path(&game_id, path);
+                self.detected_games.insert(game_id.clone());
+            } else {
+                self.game_path_dialog_open = true;
+                self.pending_game_path_game_id = Some(game_id.clone());
+                self.previous_game_before_path_dialog = previous_game;
+                self.game_path_dialog_error = None;
+                self.status_message = format!("Set the game directory for {game_id}");
+                self.save_settings();
+                return;
+            }
+        }
+
+        self.game_path_dialog_open = false;
+        self.pending_game_path_game_id = None;
+        self.previous_game_before_path_dialog = None;
+        self.game_path_dialog_error = None;
+        self.switch_game_context(&game_id);
+        self.save_settings();
+        self.status_message = format!("Active game set to {game_id}");
     }
 
     fn save_settings(&self) {
@@ -724,6 +845,116 @@ async fn run_browse_install(game_domain: String, mod_id: u64) -> Result<String, 
     })
 }
 
+fn format_anyhow_error(error: anyhow::Error) -> String {
+    error
+        .chain()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(": ")
+}
+
+async fn download_wabbajack_source(source: String) -> Result<PathBuf, String> {
+    let client = reqwest::Client::new();
+    let url = if modde_sources::wabbajack::catalog::is_remote_url(&source) {
+        source
+    } else if std::path::Path::new(&source).exists() {
+        return Ok(PathBuf::from(source));
+    } else {
+        modde_sources::wabbajack::catalog::resolve_download_target(
+            &client,
+            &source,
+            modde_sources::wabbajack::catalog::CatalogSource::Both,
+        )
+        .await
+        .map_err(|e| e.to_string())?
+    };
+    let output = modde_core::paths::downloads_dir().join("wabbajack");
+    modde_sources::wabbajack::catalog::download_wabbajack_file(&client, &url, &output)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+async fn run_wabbajack_install_for_ui(
+    path: PathBuf,
+    profile_name: Option<String>,
+    game_dir: Option<PathBuf>,
+) -> Result<(String, Vec<String>), String> {
+    tokio::task::spawn_blocking(move || {
+        let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+        runtime.block_on(async move {
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+            let collector = tokio::spawn(async move {
+                let mut lines = Vec::new();
+                while let Some(progress) = rx.recv().await {
+                    lines.push(format_install_progress(&progress));
+                }
+                lines
+            });
+            let summary = modde_sources::wabbajack::runner::install_wabbajack(
+                modde_sources::wabbajack::runner::WabbajackInstallOptions {
+                    path,
+                    profile_name,
+                    game_dir,
+                    force: false,
+                },
+                Some(tx),
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+            let lines = collector.await.map_err(|e| e.to_string())?;
+            Ok((
+                format!(
+                    "Installed '{}' to profile '{}' ({} mods)",
+                    summary.modlist_name, summary.profile_name, summary.mod_count
+                ),
+                lines,
+            ))
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn format_install_progress(
+    progress: &modde_sources::wabbajack::installer::InstallProgress,
+) -> String {
+    use modde_sources::wabbajack::installer::InstallProgress;
+    match progress {
+        InstallProgress::Starting { total_downloads } => {
+            format!("Starting install: {total_downloads} downloads")
+        }
+        InstallProgress::Downloading { name, bytes, total } => {
+            format!("Downloading {name}: {bytes}/{total} bytes")
+        }
+        InstallProgress::DownloadComplete { name } => format!("Downloaded: {name}"),
+        InstallProgress::Verifying { name } => format!("Verifying: {name}"),
+        InstallProgress::Applying {
+            directive_index,
+            total,
+        } => format!("Applying directives: {}/{total}", directive_index + 1),
+        InstallProgress::Patching { name } => format!("Patching: {name}"),
+        InstallProgress::CreatingBSA { name } => format!("Creating BSA: {name}"),
+        InstallProgress::InlineFile { name } => format!("Writing inline file: {name}"),
+        InstallProgress::Complete => "Install pipeline complete".to_string(),
+        InstallProgress::Failed { error } => format!("Install failed: {error}"),
+    }
+}
+
+fn slugify_profile_name(name: &str) -> String {
+    let mut out = String::new();
+    let mut last_dash = false;
+    for ch in name.chars().flat_map(char::to_lowercase) {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch);
+            last_dash = false;
+        } else if !last_dash && !out.is_empty() {
+            out.push('-');
+            last_dash = true;
+        }
+    }
+    out.trim_matches('-').to_string()
+}
+
 /// Direction for `Message::ReorderMod`. Re-export of the core type so
 /// view and message construction sites don't have to import from
 /// `modde_core::profile` directly. The enforcement logic itself lives in
@@ -781,10 +1012,45 @@ pub struct ToolUiEntry {
 
 #[derive(Debug, Clone, Default)]
 pub struct WabbajackInstallerState {
+    pub tab: WabbajackTab,
+    pub entries: Vec<modde_sources::wabbajack::catalog::WabbajackCatalogEntry>,
+    pub loading: bool,
+    pub error: Option<String>,
+    pub search: String,
+    pub game_filter: Option<String>,
+    pub official_only: bool,
+    pub include_nsfw: bool,
+    pub include_down: bool,
+    pub selected_index: Option<usize>,
+    pub manual_source: String,
+    pub hm_profile: String,
+    pub hm_game: String,
+    pub hm_game_dir: String,
+    pub hm_game_dir_user_edited: bool,
+    pub hm_snippet: String,
+    pub downloaded_path: Option<PathBuf>,
     pub file_path: Option<PathBuf>,
     pub progress: f32,
     pub status: String,
     pub log_lines: Vec<String>,
+}
+
+fn prefill_wabbajack_game_dir(settings: &AppSettings, state: &mut WabbajackInstallerState) {
+    if state.hm_game_dir_user_edited && !state.hm_game_dir.is_empty() {
+        return;
+    }
+    let Some(path) = settings.game_path(&state.hm_game) else {
+        return;
+    };
+    state.hm_game_dir = path.display().to_string();
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum WabbajackTab {
+    #[default]
+    Catalog,
+    AuthoredFiles,
+    Manual,
 }
 
 pub struct FOMODWizardState {
@@ -1029,10 +1295,19 @@ pub enum Message {
     },
 
     // Profile dialog
+    OpenNewProfileDialog,
     NewProfileNameChanged(String),
+    CancelNewProfileDialog,
+    SubmitNewProfileDialog,
 
     // Game selection
     SelectGame(String),
+    GamePathDialogBrowse,
+    GamePathDialogPathSelected {
+        game_id: String,
+        path: PathBuf,
+    },
+    CancelGamePathDialog,
 
     // Window controls (custom title bar)
     GotWindowId(Option<window::Id>),
@@ -1131,10 +1406,34 @@ pub enum Message {
     },
 
     // Wabbajack
+    LoadWabbajackCatalog,
+    WabbajackCatalogLoaded(
+        Result<Vec<modde_sources::wabbajack::catalog::WabbajackCatalogEntry>, String>,
+    ),
+    WabbajackTabChanged(WabbajackTab),
+    WabbajackSearchChanged(String),
+    WabbajackGameFilterChanged(Option<String>),
+    WabbajackToggleOfficialOnly(bool),
+    WabbajackToggleNsfw(bool),
+    WabbajackToggleDown(bool),
+    WabbajackSelectEntry(usize),
+    WabbajackManualSourceChanged(String),
+    WabbajackHmProfileChanged(String),
+    WabbajackHmGameChanged(String),
+    WabbajackHmGameDirChanged(String),
+    WabbajackDownloadSelected,
+    WabbajackDownloadComplete(Result<PathBuf, String>),
+    WabbajackGenerateHmSnippet,
+    WabbajackHmSnippetGenerated(Result<String, String>),
+    WabbajackCopyHmSnippet,
+    WabbajackSaveHmSnippet,
+    WabbajackHmSnippetSaved(Result<PathBuf, String>),
+    WabbajackOpenUrl(String),
     OpenWabbajackFile,
     WabbajackFileSelected(PathBuf),
     WabbajackProgress(f32),
     WabbajackStartInstall,
+    WabbajackInstallComplete(Result<(String, Vec<String>), String>),
     WabbajackLog(String),
 
     // FOMOD
@@ -1277,7 +1576,7 @@ impl Modde {
         };
         let selected_game = settings.selected_game.clone();
 
-        let profiles = ProfileManager::open()
+        let all_profiles = ProfileManager::open()
             .and_then(|pm| pm.list())
             .unwrap_or_default();
 
@@ -1285,11 +1584,12 @@ impl Modde {
             .iter()
             .map(|(id, name)| (id.to_string(), name.to_string()))
             .collect();
+        let detected_games = detected_game_ids(&settings, available_games.as_slice());
 
         let mut app = Self {
             active_view: View::ModList,
-            active_profile: profiles.first().map(|p| p.name.clone()),
-            profiles,
+            active_profile: None,
+            profiles: Vec::new(),
             status_message: "Ready".to_string(),
             settings,
             collection_search: String::new(),
@@ -1318,7 +1618,13 @@ impl Modde {
             nexus_status: None,
             verify: VerifyState::Idle,
             new_profile_name: String::new(),
+            new_profile_dialog_open: false,
+            game_path_dialog_open: false,
+            pending_game_path_game_id: None,
+            previous_game_before_path_dialog: None,
+            game_path_dialog_error: None,
             available_games,
+            detected_games,
             selected_game,
             stock_snapshot_exists: false,
             window_id: window::Id::unique(),
@@ -1340,24 +1646,16 @@ impl Modde {
 
         // Auto-detect: if no game is selected but profiles exist, pick the first profile's game
         if app.selected_game.is_none()
-            && let Some(first) = app.profiles.first()
+            && let Some(first) = all_profiles.first()
         {
             app.selected_game = Some(first.game_id.to_string());
             app.settings.selected_game = Some(first.game_id.to_string());
         }
 
-        // Auto-detect: if the selected game has no path in settings, try detect_install()
-        if let Some(ref game_id) = app.selected_game {
-            if app.settings.game_path(game_id).is_none()
-                && let Some(plugin) = modde_games::resolve_game_plugin(game_id)
-                && let Some(path) = plugin.detect_install()
-            {
-                app.settings.set_game_path(game_id, path);
-            }
-            app.save_settings();
+        if let Some(game_id) = app.selected_game.clone() {
+            app.accept_game_selection(game_id, None);
         }
 
-        app.reload_profile();
         (app, window::oldest().map(Message::GotWindowId))
     }
 
@@ -1381,6 +1679,13 @@ impl Modde {
                     self.active_view = View::Tools;
                     self.refresh_tools_state();
                 }
+                View::WabbajackInstaller(state) => {
+                    let should_load = state.entries.is_empty();
+                    self.active_view = View::WabbajackInstaller(state);
+                    if should_load {
+                        return self.update(Message::LoadWabbajackCatalog);
+                    }
+                }
                 other => {
                     self.active_view = other;
                 }
@@ -1391,39 +1696,54 @@ impl Modde {
                 self.selected_save_details = None;
                 self.status_message = "Profile switched".to_string();
             }
-            Message::CreateProfile { name, game_id } => match ProfileManager::open() {
-                Ok(pm) => {
-                    let profile = modde_core::Profile {
-                        id: None,
-                        name: name.clone(),
-                        game_id: modde_core::GameId::from(game_id),
-                        source: modde_core::ProfileSource::Manual,
-                        mods: Vec::new(),
-                        overrides: PathBuf::from("overrides"),
-                        load_order_rules: smallvec::SmallVec::new(),
-                        load_order_lock: None,
-                    };
-                    match pm.create(&profile) {
-                        Ok(_) => {
-                            self.profiles = pm.list().unwrap_or_default();
-                            self.active_profile = Some(name);
-                            self.reload_profile();
-                            self.new_profile_name.clear();
-                            self.status_message = "Profile created".to_string();
-                        }
-                        Err(e) => {
-                            self.status_message = format!("Failed to create profile: {e}");
+            Message::CreateProfile { name, game_id } => {
+                let name = name.trim().to_string();
+                if name.is_empty() {
+                    self.status_message = "Profile name is required".to_string();
+                    return Task::none();
+                }
+                match ProfileManager::open() {
+                    Ok(pm) => {
+                        let profile = modde_core::Profile {
+                            id: None,
+                            name: name.clone(),
+                            game_id: modde_core::GameId::from(game_id.clone()),
+                            source: modde_core::ProfileSource::Manual,
+                            mods: Vec::new(),
+                            overrides: PathBuf::from("overrides"),
+                            load_order_rules: smallvec::SmallVec::new(),
+                            load_order_lock: None,
+                        };
+                        match pm.create(&profile) {
+                            Ok(_) => {
+                                self.profiles = pm.list_for_game(&game_id).unwrap_or_default();
+                                self.active_profile = Some(name);
+                                self.selected_game = Some(game_id.clone());
+                                self.settings.selected_game = Some(game_id);
+                                self.save_settings();
+                                self.reload_profile();
+                                self.new_profile_name.clear();
+                                self.new_profile_dialog_open = false;
+                                self.status_message = "Profile created".to_string();
+                            }
+                            Err(e) => {
+                                self.status_message = format!("Failed to create profile: {e}");
+                            }
                         }
                     }
+                    Err(e) => {
+                        self.status_message = format!("Failed to open profile manager: {e}");
+                    }
                 }
-                Err(e) => {
-                    self.status_message = format!("Failed to open profile manager: {e}");
-                }
-            },
+            }
             Message::DeleteProfile(name) => match ProfileManager::open() {
                 Ok(pm) => match pm.delete(&name, None) {
                     Ok(()) => {
-                        self.profiles = pm.list().unwrap_or_default();
+                        if let Some(game_id) = self.selected_game.clone() {
+                            self.switch_game_context(&game_id);
+                        } else {
+                            self.profiles = pm.list().unwrap_or_default();
+                        }
                         if self.active_profile.as_deref() == Some(&name) {
                             self.active_profile = self.profiles.first().map(|p| p.name.clone());
                             self.reload_profile();
@@ -1453,14 +1773,91 @@ impl Modde {
             }
 
             // ── Profile dialog ───────────────────────────────────
+            Message::OpenNewProfileDialog => {
+                self.new_profile_dialog_open = true;
+            }
             Message::NewProfileNameChanged(name) => self.new_profile_name = name,
+            Message::CancelNewProfileDialog => {
+                self.new_profile_dialog_open = false;
+                self.new_profile_name.clear();
+            }
+            Message::SubmitNewProfileDialog => {
+                let Some(game_id) = self.selected_game.clone() else {
+                    self.status_message = "Select a game before creating a profile".to_string();
+                    return Task::none();
+                };
+                let name = self.new_profile_name.trim().to_string();
+                if name.is_empty() {
+                    self.status_message = "Profile name is required".to_string();
+                    return Task::none();
+                }
+                return self.update(Message::CreateProfile { name, game_id });
+            }
 
             // ── Game selection ────────────────────────────────────
             Message::SelectGame(game_id) => {
+                let previous_game = self.selected_game.clone();
+                self.accept_game_selection(game_id, previous_game);
+            }
+            Message::GamePathDialogBrowse => {
+                let Some(game_id) = self.pending_game_path_game_id.clone() else {
+                    return Task::none();
+                };
+                return Task::perform(
+                    async move {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Select Game Directory")
+                            .pick_folder()
+                            .await
+                            .map(|h| h.path().to_path_buf())
+                    },
+                    move |path| match path {
+                        Some(path) => Message::GamePathDialogPathSelected {
+                            game_id: game_id.clone(),
+                            path,
+                        },
+                        None => Message::Noop,
+                    },
+                );
+            }
+            Message::GamePathDialogPathSelected { game_id, path } => {
+                if !path.is_dir() {
+                    self.game_path_dialog_error =
+                        Some(format!("Not a directory: {}", path.display()));
+                    self.status_message = "Select a valid game directory".to_string();
+                    return Task::none();
+                }
+                self.settings.set_game_path(&game_id, path);
+                self.detected_games.insert(game_id.clone());
                 self.selected_game = Some(game_id.clone());
-                self.settings.selected_game = Some(game_id);
+                self.settings.selected_game = Some(game_id.clone());
+                self.game_path_dialog_open = false;
+                self.pending_game_path_game_id = None;
+                self.previous_game_before_path_dialog = None;
+                self.game_path_dialog_error = None;
+                self.switch_game_context(&game_id);
                 self.save_settings();
-                self.refresh_tools_state();
+                self.status_message = format!("Active game set to {game_id}");
+            }
+            Message::CancelGamePathDialog => {
+                let previous = self.previous_game_before_path_dialog.clone();
+                self.game_path_dialog_open = false;
+                self.pending_game_path_game_id = None;
+                self.previous_game_before_path_dialog = None;
+                self.game_path_dialog_error = None;
+                self.selected_game = previous.clone();
+                self.settings.selected_game = previous.clone();
+                if let Some(game_id) = previous {
+                    self.switch_game_context(&game_id);
+                    self.status_message = format!("Active game remains {game_id}");
+                } else {
+                    self.clear_game_scoped_state();
+                    self.profiles.clear();
+                    self.active_profile = None;
+                    self.loaded_profile = None;
+                    self.status_message = "Game selection cancelled".to_string();
+                }
+                self.save_settings();
             }
 
             // ── Window controls (custom title bar) ───────────────
@@ -2286,6 +2683,260 @@ impl Modde {
             },
 
             // ── Wabbajack ────────────────────────────────────────
+            Message::LoadWabbajackCatalog => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.loading = true;
+                    state.error = None;
+                    state.status = "Loading Wabbajack catalogs...".to_string();
+                }
+                return Task::perform(
+                    async {
+                        let client = reqwest::Client::new();
+                        modde_sources::wabbajack::catalog::fetch_catalog(
+                            &client,
+                            modde_sources::wabbajack::catalog::CatalogSource::Both,
+                        )
+                        .await
+                        .map_err(|e| e.to_string())
+                    },
+                    Message::WabbajackCatalogLoaded,
+                );
+            }
+            Message::WabbajackCatalogLoaded(result) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.loading = false;
+                    match result {
+                        Ok(entries) => {
+                            state.status = format!("Loaded {} Wabbajack entries", entries.len());
+                            state.entries = entries;
+                            state.error = None;
+                        }
+                        Err(e) => {
+                            state.status = format!("Failed to load catalog: {e}");
+                            state.error = Some(e);
+                        }
+                    }
+                }
+            }
+            Message::WabbajackTabChanged(tab) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.tab = tab;
+                    state.selected_index = None;
+                }
+            }
+            Message::WabbajackSearchChanged(value) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.search = value;
+                }
+            }
+            Message::WabbajackGameFilterChanged(value) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.game_filter = value;
+                }
+            }
+            Message::WabbajackToggleOfficialOnly(value) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.official_only = value;
+                }
+            }
+            Message::WabbajackToggleNsfw(value) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.include_nsfw = value;
+                }
+            }
+            Message::WabbajackToggleDown(value) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.include_down = value;
+                }
+            }
+            Message::WabbajackSelectEntry(index) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.selected_index = Some(index);
+                    if let Some(entry) = state.entries.get(index) {
+                        state.manual_source = entry.download_url.clone();
+                        state.hm_profile = slugify_profile_name(&entry.title);
+                        if let Some(game) = &entry.game {
+                            state.hm_game = modde_games::normalize_wabbajack_game(game)
+                                .unwrap_or(game)
+                                .to_string();
+                            state.hm_game_dir_user_edited = false;
+                            prefill_wabbajack_game_dir(&self.settings, state);
+                        }
+                    }
+                }
+            }
+            Message::WabbajackManualSourceChanged(value) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.manual_source = value;
+                }
+            }
+            Message::WabbajackHmProfileChanged(value) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.hm_profile = value;
+                }
+            }
+            Message::WabbajackHmGameChanged(value) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.hm_game = value;
+                    prefill_wabbajack_game_dir(&self.settings, state);
+                }
+            }
+            Message::WabbajackHmGameDirChanged(value) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.hm_game_dir = value;
+                    state.hm_game_dir_user_edited = true;
+                }
+            }
+            Message::WabbajackDownloadSelected => {
+                let source = if let View::WabbajackInstaller(ref state) = self.active_view {
+                    state.manual_source.clone()
+                } else {
+                    String::new()
+                };
+                if source.is_empty() {
+                    self.status_message = "Enter or select a .wabbajack source first".to_string();
+                    return Task::none();
+                }
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.status = "Downloading .wabbajack file...".to_string();
+                }
+                return Task::perform(
+                    async move { download_wabbajack_source(source).await },
+                    Message::WabbajackDownloadComplete,
+                );
+            }
+            Message::WabbajackDownloadComplete(result) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    match result {
+                        Ok(path) => {
+                            state.downloaded_path = Some(path.clone());
+                            state.file_path = Some(path.clone());
+                            state.status = format!("Downloaded {}", path.display());
+                            state.log_lines.push(state.status.clone());
+                            self.wabbajack_manifest =
+                                modde_sources::wabbajack::runner::parse_wabbajack_manifest(&path)
+                                    .ok();
+                            if let Some(manifest) = &self.wabbajack_manifest {
+                                state.hm_profile = slugify_profile_name(&manifest.name);
+                                state.hm_game =
+                                    modde_games::normalize_wabbajack_game(&manifest.game)
+                                        .unwrap_or(&manifest.game)
+                                        .to_string();
+                                state.hm_game_dir_user_edited = false;
+                                prefill_wabbajack_game_dir(&self.settings, state);
+                            }
+                        }
+                        Err(e) => {
+                            state.status = format!("Download failed: {e}");
+                            state.log_lines.push(state.status.clone());
+                        }
+                    }
+                }
+            }
+            Message::WabbajackGenerateHmSnippet => {
+                let (source, profile, game, game_dir) =
+                    if let View::WabbajackInstaller(ref state) = self.active_view {
+                        (
+                            state.manual_source.clone(),
+                            state.hm_profile.clone(),
+                            state.hm_game.clone(),
+                            state.hm_game_dir.clone(),
+                        )
+                    } else {
+                        (String::new(), String::new(), String::new(), String::new())
+                    };
+                if source.is_empty() || profile.is_empty() || game.is_empty() {
+                    self.status_message =
+                        "Wabbajack source, HM profile, and game are required".to_string();
+                    return Task::none();
+                }
+                return Task::perform(
+                    async move {
+                        let client = reqwest::Client::new();
+                        let cache_dir = modde_core::paths::downloads_dir().join("wabbajack");
+                        let game_dir = (!game_dir.is_empty()).then(|| PathBuf::from(game_dir));
+                        modde_sources::wabbajack::catalog::hm_snippet_for_source(
+                            &client,
+                            &source,
+                            &profile,
+                            &game,
+                            game_dir.as_deref(),
+                            &cache_dir,
+                        )
+                        .await
+                        .map(|(snippet, _)| snippet)
+                        .map_err(format_anyhow_error)
+                    },
+                    Message::WabbajackHmSnippetGenerated,
+                );
+            }
+            Message::WabbajackHmSnippetGenerated(result) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    match result {
+                        Ok(snippet) => {
+                            state.hm_snippet = snippet;
+                            state.status = "Generated Home Manager snippet".to_string();
+                        }
+                        Err(e) => {
+                            state.status = format!("HM snippet failed: {e}");
+                        }
+                    }
+                }
+            }
+            Message::WabbajackCopyHmSnippet => {
+                if let View::WabbajackInstaller(ref state) = self.active_view
+                    && !state.hm_snippet.is_empty()
+                {
+                    self.status_message = "Copied Home Manager snippet".to_string();
+                    return iced::clipboard::write(state.hm_snippet.clone());
+                }
+            }
+            Message::WabbajackSaveHmSnippet => {
+                let snippet = if let View::WabbajackInstaller(ref state) = self.active_view {
+                    state.hm_snippet.clone()
+                } else {
+                    String::new()
+                };
+                if snippet.is_empty() {
+                    self.status_message = "Generate a Home Manager snippet first".to_string();
+                    return Task::none();
+                }
+                return Task::perform(
+                    async move {
+                        let file = rfd::AsyncFileDialog::new()
+                            .set_title("Save Home Manager snippet")
+                            .set_file_name("modde-wabbajack.nix")
+                            .save_file()
+                            .await
+                            .map(|h| h.path().to_path_buf());
+                        let Some(path) = file else {
+                            return Err("Save cancelled".to_string());
+                        };
+                        tokio::fs::write(&path, snippet)
+                            .await
+                            .map_err(|e| e.to_string())?;
+                        Ok(path)
+                    },
+                    Message::WabbajackHmSnippetSaved,
+                );
+            }
+            Message::WabbajackHmSnippetSaved(result) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    match result {
+                        Ok(path) => {
+                            state.status = format!("Saved snippet to {}", path.display());
+                        }
+                        Err(e) => {
+                            state.status = e;
+                        }
+                    }
+                }
+            }
+            Message::WabbajackOpenUrl(url) => {
+                if let Err(e) = open::that(&url) {
+                    self.status_message = format!("Failed to open {url}: {e}");
+                }
+            }
             Message::OpenWabbajackFile => {
                 return Task::perform(
                     async {
@@ -2303,26 +2954,27 @@ impl Modde {
                 );
             }
             Message::WabbajackFileSelected(path) => {
-                let manifest = (|| -> Option<modde_core::WabbajackManifest> {
-                    let file = std::fs::File::open(&path).ok()?;
-                    let mut archive = zip::ZipArchive::new(file).ok()?;
-                    let name = if archive.file_names().any(|n| n == "modlist.json") {
-                        "modlist.json"
-                    } else {
-                        "modlist"
-                    };
-                    let mut entry = archive.by_name(name).ok()?;
-                    let mut buf = String::new();
-                    std::io::Read::read_to_string(&mut entry, &mut buf).ok()?;
-                    serde_json::from_str(&buf).ok()
-                })();
+                let manifest =
+                    modde_sources::wabbajack::runner::parse_wabbajack_manifest(&path).ok();
                 self.wabbajack_manifest = manifest;
-                self.active_view = View::WabbajackInstaller(WabbajackInstallerState {
-                    file_path: Some(path.clone()),
-                    progress: 0.0,
-                    status: format!("Selected: {}", path.display()),
-                    log_lines: vec![format!("File selected: {}", path.display())],
-                });
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.file_path = Some(path.clone());
+                    state.downloaded_path = Some(path.clone());
+                    state.manual_source = path.display().to_string();
+                    state.progress = 0.0;
+                    state.status = format!("Selected: {}", path.display());
+                    state
+                        .log_lines
+                        .push(format!("File selected: {}", path.display()));
+                    if let Some(manifest) = &self.wabbajack_manifest {
+                        state.hm_profile = slugify_profile_name(&manifest.name);
+                        state.hm_game = modde_games::normalize_wabbajack_game(&manifest.game)
+                            .unwrap_or(&manifest.game)
+                            .to_string();
+                        state.hm_game_dir_user_edited = false;
+                        prefill_wabbajack_game_dir(&self.settings, state);
+                    }
+                }
                 self.status_message = format!("Wabbajack file loaded: {}", path.display());
             }
             Message::WabbajackProgress(progress) => {
@@ -2332,37 +2984,49 @@ impl Modde {
                 }
             }
             Message::WabbajackStartInstall => {
-                if let View::WabbajackInstaller(ref mut state) = self.active_view
-                    && let Some(ref wj_path) = state.file_path
-                {
-                    state.status = "Starting installation...".to_string();
-                    state.log_lines.push("Installation started".to_string());
-                    state.progress = 0.0;
-                    let path = wj_path.clone();
-                    return Task::perform(
-                        async move {
-                            let file = std::fs::File::open(&path)?;
-                            let mut archive = zip::ZipArchive::new(file)?;
-                            let manifest: modde_core::WabbajackManifest = {
-                                let name = if archive.file_names().any(|n| n == "modlist.json") {
-                                    "modlist.json"
-                                } else {
-                                    "modlist"
-                                };
-                                let mut entry = archive.by_name(name)?;
-                                let mut buf = String::new();
-                                std::io::Read::read_to_string(&mut entry, &mut buf)?;
-                                serde_json::from_str(&buf)?
-                            };
-                            Ok::<String, anyhow::Error>(manifest.name)
-                        },
-                        |result: Result<String, anyhow::Error>| match result {
-                            Ok(name) => Message::WabbajackLog(format!("Parsed manifest: {name}")),
-                            Err(e) => Message::WabbajackLog(format!("Error: {e}")),
-                        },
-                    );
+                let current_game_dir = self.current_game_dir();
+                let (path, profile_name, game_dir) =
+                    if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                        let Some(path) = state.file_path.clone() else {
+                            self.status_message = "No wabbajack file selected".to_string();
+                            return Task::none();
+                        };
+                        state.status = "Starting installation...".to_string();
+                        state.log_lines.push("Installation started".to_string());
+                        state.progress = 0.0;
+                        (
+                            path,
+                            self.active_profile.clone().or_else(|| {
+                                (!state.hm_profile.is_empty()).then(|| state.hm_profile.clone())
+                            }),
+                            current_game_dir,
+                        )
+                    } else {
+                        self.status_message = "No wabbajack file selected".to_string();
+                        return Task::none();
+                    };
+                return Task::perform(
+                    async move { run_wabbajack_install_for_ui(path, profile_name, game_dir).await },
+                    Message::WabbajackInstallComplete,
+                );
+            }
+            Message::WabbajackInstallComplete(result) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    match result {
+                        Ok((summary, lines)) => {
+                            state.progress = 1.0;
+                            state.status = summary.clone();
+                            state.log_lines.extend(lines);
+                            self.status_message = summary;
+                            self.reload_profile();
+                        }
+                        Err(e) => {
+                            state.status = format!("Install failed: {e}");
+                            state.log_lines.push(state.status.clone());
+                            self.status_message = state.status.clone();
+                        }
+                    }
                 }
-                self.status_message = "No wabbajack file selected".to_string();
             }
             Message::WabbajackLog(line) => {
                 if let View::WabbajackInstaller(ref mut state) = self.active_view {
@@ -2564,7 +3228,13 @@ impl Modde {
                 self.save_settings();
             }
             Message::SetGamePath { game_id, path } => {
+                let path_exists = path.is_dir();
                 self.settings.set_game_path(&game_id, path);
+                if path_exists {
+                    self.detected_games.insert(game_id.clone());
+                } else {
+                    self.detected_games.remove(&game_id);
+                }
                 self.status_message = format!("Game path set for {game_id}");
                 self.save_settings();
             }
@@ -3142,8 +3812,6 @@ impl Modde {
             &self.profiles,
             &self.active_profile,
             self.experiment_depth,
-            &self.new_profile_name,
-            &self.selected_game,
             mod_details_for_sidebar,
             save_details_for_sidebar,
         );
@@ -3184,9 +3852,11 @@ impl Modde {
             }
             View::FOMODWizard(_) => crate::views::fomod_wizard::view(self),
             View::Settings => crate::views::settings::view(settings_state),
-            View::WabbajackInstaller(state) => {
-                crate::views::wabbajack::view(state, &self.wabbajack_manifest)
-            }
+            View::WabbajackInstaller(state) => crate::views::wabbajack::view(
+                state,
+                &self.wabbajack_manifest,
+                self.available_games.as_slice(),
+            ),
             View::Saves => crate::views::saves::view(
                 &self.save_snapshots,
                 self.loaded_profile.as_ref().map(|p| p.name.as_str()),
@@ -3208,44 +3878,38 @@ impl Modde {
         };
 
         // ── Custom title bar ──
-        let game_names: Vec<String> = self
-            .available_games
-            .iter()
-            .map(|(_, name)| name.clone())
-            .collect();
-        let selected_game_display = self.selected_game.as_ref().and_then(|id| {
-            self.available_games
+        let game_options = crate::views::game_picker::supported_game_options_ordered(
+            self.available_games.iter(),
+            &self.detected_games,
+        );
+        let selected_game = self.selected_game.as_ref().and_then(|id| {
+            game_options
                 .iter()
-                .find(|(gid, _)| gid == id)
-                .map(|(_, name)| name.clone())
+                .find(|option| option.value == *id)
+                .cloned()
         });
-        let available_games = self.available_games.clone();
-        let game_picker = pick_list(game_names, selected_game_display, move |name: String| {
-            let game_id = available_games
-                .iter()
-                .find(|(_, n)| *n == name)
-                .map(|(id, _)| id.clone())
-                .unwrap_or(name);
-            Message::SelectGame(game_id)
-        })
-        .placeholder("Select a game")
-        .width(Length::Fixed(200.0));
+        let game_picker = crate::views::game_picker::game_pick_list(
+            game_options,
+            selected_game,
+            "Select a game",
+            |option| Message::SelectGame(option.value),
+        );
 
         let title_label = text("modde").size(14);
 
         let window_controls = row![
             button(text("\u{2212}").size(12))
-                .on_press(Message::WindowMinimize)
                 .style(button::secondary)
-                .padding([2, 10]),
+                .padding([2, 10])
+                .on_action(ButtonAction::WindowMinimize),
             button(text("\u{25A1}").size(12))
-                .on_press(Message::WindowToggleMaximize)
                 .style(button::secondary)
-                .padding([2, 10]),
+                .padding([2, 10])
+                .on_action(ButtonAction::WindowToggleMaximize),
             button(text("\u{2715}").size(12))
-                .on_press(Message::WindowClose)
                 .style(button::danger)
-                .padding([2, 10]),
+                .padding([2, 10])
+                .on_action(ButtonAction::WindowClose),
         ]
         .spacing(2);
 
@@ -3276,12 +3940,117 @@ impl Modde {
         ]
         .spacing(0);
 
-        let base: Element<Message> = container(main_layout)
+        let mut base: Element<Message> = container(main_layout)
             .width(Length::Fill)
             .height(Length::Fill)
             .into();
 
+        if self.new_profile_dialog_open {
+            base = stack([base, self.new_profile_dialog()]).into();
+        }
+        if self.game_path_dialog_open {
+            base = stack([base, self.game_path_dialog()]).into();
+        }
+
         base
+    }
+
+    fn new_profile_dialog(&self) -> Element<'_, Message> {
+        let trimmed_name = self.new_profile_name.trim();
+        let can_create = !trimmed_name.is_empty() && self.selected_game.is_some();
+        let submit = can_create.then_some(Message::SubmitNewProfileDialog);
+        let submit_action = can_create.then_some(ButtonAction::SubmitNewProfileDialog);
+
+        let dialog = container(
+            column![
+                text("New Profile").size(18),
+                text_input("Profile name...", &self.new_profile_name)
+                    .on_input(Message::NewProfileNameChanged)
+                    .on_submit_maybe(submit.clone())
+                    .padding(8)
+                    .width(Length::Fill),
+                row![
+                    iced::widget::Space::new().width(Length::Fill),
+                    button(text("Cancel").size(13))
+                        .style(button::secondary)
+                        .padding([6, 14])
+                        .on_action(ButtonAction::CancelNewProfileDialog),
+                    button(text("Create").size(13))
+                        .style(button::success)
+                        .padding([6, 14])
+                        .on_action_maybe(
+                            submit_action,
+                            "Enter a profile name and select a game before creating the profile.",
+                        ),
+                ]
+                .spacing(8)
+                .align_y(iced::Alignment::Center),
+            ]
+            .spacing(12),
+        )
+        .width(Length::Fixed(360.0))
+        .padding(16)
+        .style(container::rounded_box);
+
+        opaque(
+            container(dialog)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill),
+        )
+    }
+
+    fn game_path_dialog(&self) -> Element<'_, Message> {
+        let game_id = self
+            .pending_game_path_game_id
+            .as_deref()
+            .unwrap_or("the selected game");
+        let game_label = modde_games::resolve_game_plugin(game_id)
+            .map(|plugin| plugin.display_name())
+            .unwrap_or(game_id);
+
+        let mut body = column![
+            text("Game Path Required").size(18),
+            text(format!(
+                "modde could not detect {game_label}. Select the game installation directory to continue."
+            ))
+            .size(13),
+        ]
+        .spacing(12);
+
+        if let Some(error) = &self.game_path_dialog_error {
+            body = body.push(text(error).size(12).color(iced::color!(0xFF6666)));
+        }
+
+        let dialog = container(
+            body.push(
+                row![
+                    iced::widget::Space::new().width(Length::Fill),
+                    button(text("Cancel").size(13))
+                        .style(button::secondary)
+                        .padding([6, 14])
+                        .on_action(ButtonAction::CancelGamePathDialog),
+                    button(text("Browse").size(13))
+                        .style(button::primary)
+                        .padding([6, 14])
+                        .on_action(ButtonAction::GamePathDialogBrowse),
+                ]
+                .spacing(8)
+                .align_y(iced::Alignment::Center),
+            ),
+        )
+        .width(Length::Fixed(420.0))
+        .padding(16)
+        .style(container::rounded_box);
+
+        opaque(
+            container(dialog)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill),
+        )
     }
 
     fn theme(&self) -> Theme {
@@ -3343,6 +4112,7 @@ fn resize_thumbnail_bytes(raw: &[u8]) -> iced::widget::image::Handle {
 fn shortcut_action_to_message(action: &str) -> Option<Message> {
     match action {
         "deploy" => Some(Message::Deploy),
+        "dismiss_modal" => Some(Message::CancelNewProfileDialog),
         _ => None,
     }
 }
@@ -3395,10 +4165,16 @@ mod tests {
             nexus_status: None,
             verify: VerifyState::Idle,
             new_profile_name: String::new(),
+            new_profile_dialog_open: false,
+            game_path_dialog_open: false,
+            pending_game_path_game_id: None,
+            previous_game_before_path_dialog: None,
+            game_path_dialog_error: None,
             available_games: smallvec::smallvec![(
                 "skyrim-se".to_string(),
                 "Skyrim SE".to_string()
             )],
+            detected_games: HashSet::new(),
             selected_game: None,
             stock_snapshot_exists: false,
             window_id: window::Id::unique(),
@@ -3533,10 +4309,122 @@ mod tests {
     }
 
     #[test]
+    fn test_open_new_profile_dialog() {
+        let mut app = test_app();
+        let _ = app.update(Message::OpenNewProfileDialog);
+        assert!(app.new_profile_dialog_open);
+    }
+
+    #[test]
+    fn test_cancel_new_profile_dialog() {
+        let mut app = test_app();
+        app.new_profile_dialog_open = true;
+        app.new_profile_name = "draft".to_string();
+
+        let _ = app.update(Message::CancelNewProfileDialog);
+
+        assert!(!app.new_profile_dialog_open);
+        assert!(app.new_profile_name.is_empty());
+    }
+
+    #[test]
+    fn test_submit_new_profile_rejects_blank_name() {
+        let mut app = test_app();
+        app.new_profile_dialog_open = true;
+        app.selected_game = Some("skyrim-se".to_string());
+        app.new_profile_name = "   ".to_string();
+
+        let _ = app.update(Message::SubmitNewProfileDialog);
+
+        assert!(app.new_profile_dialog_open);
+        assert!(app.status_message.contains("Profile name is required"));
+    }
+
+    #[test]
+    fn test_submit_new_profile_creates_profile_and_closes_dialog() {
+        let _guard = db_lock();
+        reset_isolated_db();
+        let mut app = test_app();
+        app.new_profile_dialog_open = true;
+        app.selected_game = Some("skyrim-se".to_string());
+        app.new_profile_name = "  ui-profile-create  ".to_string();
+
+        let _ = app.update(Message::SubmitNewProfileDialog);
+
+        assert!(!app.new_profile_dialog_open);
+        assert!(app.new_profile_name.is_empty());
+        assert_eq!(app.active_profile.as_deref(), Some("ui-profile-create"));
+        assert_eq!(app.status_message, "Profile created");
+    }
+
+    #[test]
     fn test_select_game() {
         let mut app = test_app();
-        let _ = app.update(Message::SelectGame("cyberpunk2077".to_string()));
-        assert_eq!(app.selected_game, Some("cyberpunk2077".to_string()));
+        let _ = app.update(Message::SelectGame("missing-game".to_string()));
+        assert_eq!(app.selected_game, Some("missing-game".to_string()));
+        assert!(app.game_path_dialog_open);
+        assert_eq!(
+            app.pending_game_path_game_id.as_deref(),
+            Some("missing-game")
+        );
+    }
+
+    #[test]
+    fn wabbajack_select_entry_prefills_profiled_game_dir() {
+        let mut app = test_app();
+        app.settings
+            .set_game_path("skyrim-se", PathBuf::from("/games/skyrim"));
+        app.active_view = View::WabbajackInstaller(WabbajackInstallerState {
+            entries: vec![modde_sources::wabbajack::catalog::WabbajackCatalogEntry {
+                title: "Legends of the Frost".to_string(),
+                game: Some("SkyrimSpecialEdition".to_string()),
+                author: None,
+                version: None,
+                tags: Vec::new(),
+                image_url: None,
+                readme_url: None,
+                download_url: "https://example/lotf.wabbajack".to_string(),
+                repository_name: None,
+                machine_url: None,
+                discord_url: None,
+                website_url: None,
+                official: true,
+                nsfw: false,
+                force_down: false,
+                size: Default::default(),
+                source: modde_sources::wabbajack::catalog::CatalogEntrySource::Official,
+            }],
+            ..Default::default()
+        });
+
+        let _ = app.update(Message::WabbajackSelectEntry(0));
+
+        let View::WabbajackInstaller(state) = &app.active_view else {
+            panic!("expected Wabbajack installer view");
+        };
+        assert_eq!(state.hm_profile, "legends-of-the-frost");
+        assert_eq!(state.hm_game, "skyrim-se");
+        assert_eq!(state.hm_game_dir, "/games/skyrim");
+        assert!(!state.hm_game_dir_user_edited);
+    }
+
+    #[test]
+    fn wabbajack_game_dir_manual_edit_is_not_overwritten() {
+        let mut app = test_app();
+        app.settings
+            .set_game_path("skyrim-se", PathBuf::from("/games/skyrim"));
+        app.active_view = View::WabbajackInstaller(WabbajackInstallerState::default());
+
+        let _ = app.update(Message::WabbajackHmGameDirChanged(
+            "/custom/skyrim".to_string(),
+        ));
+        let _ = app.update(Message::WabbajackHmGameChanged("skyrim-se".to_string()));
+
+        let View::WabbajackInstaller(state) = &app.active_view else {
+            panic!("expected Wabbajack installer view");
+        };
+        assert_eq!(state.hm_game_dir, "/custom/skyrim");
+        assert!(state.hm_game_dir_user_edited);
     }
 
     #[test]
@@ -3574,6 +4462,14 @@ mod tests {
     fn test_shortcut_action_to_message_drops_unmapped() {
         assert!(shortcut_action_to_message("refresh").is_none());
         assert!(shortcut_action_to_message("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_shortcut_action_to_message_maps_dismiss_modal() {
+        assert!(matches!(
+            shortcut_action_to_message("dismiss_modal"),
+            Some(Message::CancelNewProfileDialog)
+        ));
     }
 
     #[test]
@@ -3626,18 +4522,10 @@ mod tests {
     static ISOLATED_DATA_DIR: OnceLock<tempfile::TempDir> = OnceLock::new();
 
     /// Process-wide test mutex. All lock-refusal tests share one
-    /// file-backed `SQLite` DB (via the `ISOLATED_DATA_DIR` `OnceLock`) and
-    /// open a fresh `ProfileManager` connection per test, which runs
-    /// [`ModdeDb::migrate`](../../../../modde-core/src/db.rs) on every
-    /// open. The V2 migration is **not idempotent** under parallel
-    /// writes (`ALTER TABLE ... ADD COLUMN` with no guard race on first
-    /// open) — so we serialize tests that touch the isolated DB.
-    ///
-    /// modde-core's own lock tests don't hit this because they use
-    /// `ModdeDb::open_memory()` (one fresh in-memory DB per test). We
-    /// can't do that here because the UI handlers call
-    /// `ProfileManager::open()` internally — no injection point for an
-    /// in-memory DB.
+    /// file-backed `SQLite` DB (via the `ISOLATED_DATA_DIR` `OnceLock`).
+    /// These tests still serialize DB access because the UI handlers call
+    /// `ProfileManager::open()` internally, so they need a predictable
+    /// process-wide data directory while each fixture is seeded and asserted.
     static DB_LOCK: Mutex<()> = Mutex::new(());
 
     /// Acquire the serial lock. Discards poisoning (a prior panicking
@@ -3657,6 +4545,22 @@ mod tests {
             modde_core::paths::set_data_dir(dir.path().to_path_buf());
             dir
         });
+    }
+
+    fn reset_isolated_db() {
+        isolated_data_dir();
+        let db_path = modde_core::paths::db_path();
+        if db_path.exists() {
+            std::fs::remove_file(&db_path).expect("remove isolated test DB");
+        }
+        let wal_path = db_path.with_extension("db-wal");
+        if wal_path.exists() {
+            std::fs::remove_file(&wal_path).expect("remove isolated test WAL");
+        }
+        let shm_path = db_path.with_extension("db-shm");
+        if shm_path.exists() {
+            std::fs::remove_file(&shm_path).expect("remove isolated test SHM");
+        }
     }
 
     /// Build an `EnabledMod` for the refusal-test fixtures. `lock` controls
@@ -3682,7 +4586,7 @@ mod tests {
         mods: Vec<modde_core::profile::EnabledMod>,
         lock: Option<LoadOrderLock>,
     ) {
-        isolated_data_dir();
+        reset_isolated_db();
         let pm = ProfileManager::open().expect("open isolated DB");
         let profile = modde_core::profile::Profile {
             id: None,
@@ -3695,6 +4599,23 @@ mod tests {
             load_order_lock: lock,
         };
         pm.create(&profile).expect("seed profile");
+    }
+
+    fn profile_for_game(
+        name: &str,
+        game_id: &str,
+        mods: Vec<modde_core::profile::EnabledMod>,
+    ) -> modde_core::profile::Profile {
+        modde_core::profile::Profile {
+            id: None,
+            name: name.to_string(),
+            game_id: modde_core::GameId::from(game_id),
+            source: ProfileSource::Manual,
+            mods,
+            overrides: PathBuf::from(format!("/tmp/{name}/overrides")),
+            load_order_rules: SmallVec::new(),
+            load_order_lock: None,
+        }
     }
 
     /// Build a `Modde` with `active_profile` set to the seeded profile
@@ -3718,6 +4639,215 @@ mod tests {
     /// Shorthand: return the `mod_id`s of a profile in current order.
     fn mod_ids(profile: &modde_core::profile::Profile) -> Vec<&str> {
         profile.mods.iter().map(|m| m.mod_id.as_str()).collect()
+    }
+
+    #[test]
+    fn select_game_filters_profiles_to_game_and_loads_active_profile() {
+        let _guard = db_lock();
+        reset_isolated_db();
+        let game_dir = tempfile::tempdir().expect("game dir");
+        let pm = ProfileManager::open().expect("open isolated DB");
+        let _skyrim_id = pm
+            .create(&profile_for_game(
+                "skyrim-profile",
+                "skyrim-se",
+                vec![seed_mod("skyrim-mod", None)],
+            ))
+            .expect("seed skyrim profile");
+        let inactive_id = pm
+            .create(&profile_for_game(
+                "cp-inactive",
+                "cyberpunk2077",
+                vec![seed_mod("inactive-mod", None)],
+            ))
+            .expect("seed inactive cyberpunk profile");
+        let active_id = pm
+            .create(&profile_for_game(
+                "cp-active",
+                "cyberpunk2077",
+                vec![seed_mod("active-mod", None)],
+            ))
+            .expect("seed active cyberpunk profile");
+        pm.db()
+            .set_active_profile("cyberpunk2077", active_id)
+            .expect("set active cyberpunk profile");
+        drop(pm);
+
+        let mut app = test_app();
+        app.settings
+            .set_game_path("cyberpunk2077", game_dir.path().to_path_buf());
+        let _ = app.update(Message::SelectGame("cyberpunk2077".to_string()));
+
+        let profile_names: Vec<_> = app.profiles.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(profile_names, vec!["cp-active", "cp-inactive"]);
+        assert_eq!(app.active_profile.as_deref(), Some("cp-active"));
+        assert_eq!(
+            app.loaded_profile.as_ref().map(|p| mod_ids(p)),
+            Some(vec!["active-mod"])
+        );
+        assert_ne!(inactive_id, active_id);
+    }
+
+    #[test]
+    fn select_game_falls_back_to_first_profile_for_game() {
+        let _guard = db_lock();
+        reset_isolated_db();
+        let game_dir = tempfile::tempdir().expect("game dir");
+        let pm = ProfileManager::open().expect("open isolated DB");
+        pm.create(&profile_for_game(
+            "zeta",
+            "cyberpunk2077",
+            vec![seed_mod("zeta-mod", None)],
+        ))
+        .expect("seed zeta profile");
+        pm.create(&profile_for_game(
+            "alpha",
+            "cyberpunk2077",
+            vec![seed_mod("alpha-mod", None)],
+        ))
+        .expect("seed alpha profile");
+        drop(pm);
+
+        let mut app = test_app();
+        app.settings
+            .set_game_path("cyberpunk2077", game_dir.path().to_path_buf());
+        let _ = app.update(Message::SelectGame("cyberpunk2077".to_string()));
+
+        assert_eq!(app.active_profile.as_deref(), Some("alpha"));
+        assert_eq!(
+            app.loaded_profile.as_ref().map(|p| mod_ids(p)),
+            Some(vec!["alpha-mod"])
+        );
+    }
+
+    #[test]
+    fn select_game_with_no_profiles_clears_profile_context() {
+        let _guard = db_lock();
+        reset_isolated_db();
+        let game_dir = tempfile::tempdir().expect("game dir");
+        let mut app = test_app();
+        app.active_profile = Some("old".to_string());
+        app.loaded_profile = Some(profile_for_game("old", "skyrim-se", vec![]));
+        app.settings
+            .set_game_path("cyberpunk2077", game_dir.path().to_path_buf());
+
+        let _ = app.update(Message::SelectGame("cyberpunk2077".to_string()));
+
+        assert!(app.profiles.is_empty());
+        assert!(app.active_profile.is_none());
+        assert!(app.loaded_profile.is_none());
+    }
+
+    #[test]
+    fn select_game_clears_stale_selection_state() {
+        let _guard = db_lock();
+        reset_isolated_db();
+        let game_dir = tempfile::tempdir().expect("game dir");
+        let pm = ProfileManager::open().expect("open isolated DB");
+        pm.create(&profile_for_game(
+            "cp-profile",
+            "cyberpunk2077",
+            vec![seed_mod("active-mod", None)],
+        ))
+        .expect("seed cyberpunk profile");
+        drop(pm);
+
+        let mut app = test_app();
+        app.selected_mod_index = Some(4);
+        app.selected_mod_details = Some(crate::views::mod_details::ModDetailsState::loading(
+            1,
+            "skyrimspecialedition".to_string(),
+            "Old mod".to_string(),
+            "1.0".to_string(),
+        ));
+        app.selected_save_details = Some(crate::views::save_details::SaveDetailsState {
+            commit_id: "abcdef".to_string(),
+            short_id: "abcdef".to_string(),
+            timestamp: 0,
+            profile_name: Some("old".to_string()),
+            character_name: None,
+            save_label: None,
+            category: None,
+            file_count: 0,
+            file_paths: None,
+            fingerprint: None,
+            compatibility: None,
+        });
+        app.save_snapshots = vec![SaveSnapshot {
+            id: "abcdef".to_string(),
+            timestamp: 0,
+            message: "snapshot".to_string(),
+            profile_name: Some("old".to_string()),
+            character_name: None,
+            save_label: None,
+            category: None,
+            file_count: 0,
+            fingerprint: None,
+        }];
+        app.settings
+            .set_game_path("cyberpunk2077", game_dir.path().to_path_buf());
+
+        let _ = app.update(Message::SelectGame("cyberpunk2077".to_string()));
+
+        assert!(app.selected_mod_index.is_none());
+        assert!(app.selected_mod_details.is_none());
+        assert!(app.selected_save_details.is_none());
+        assert!(app.save_snapshots.is_empty());
+    }
+
+    #[test]
+    fn game_path_dialog_selection_stores_path_and_switches_context() {
+        let _guard = db_lock();
+        reset_isolated_db();
+        let game_dir = tempfile::tempdir().expect("game dir");
+        let pm = ProfileManager::open().expect("open isolated DB");
+        pm.create(&profile_for_game(
+            "custom-profile",
+            "custom-game",
+            vec![seed_mod("custom-mod", None)],
+        ))
+        .expect("seed custom profile");
+        drop(pm);
+
+        let mut app = test_app();
+        app.game_path_dialog_open = true;
+        app.pending_game_path_game_id = Some("custom-game".to_string());
+        app.previous_game_before_path_dialog = Some("skyrim-se".to_string());
+
+        let _ = app.update(Message::GamePathDialogPathSelected {
+            game_id: "custom-game".to_string(),
+            path: game_dir.path().to_path_buf(),
+        });
+
+        assert!(!app.game_path_dialog_open);
+        assert_eq!(app.selected_game.as_deref(), Some("custom-game"));
+        assert_eq!(
+            app.settings.game_path("custom-game"),
+            Some(&game_dir.path().to_path_buf())
+        );
+        assert_eq!(app.active_profile.as_deref(), Some("custom-profile"));
+        assert_eq!(
+            app.loaded_profile.as_ref().map(|p| mod_ids(p)),
+            Some(vec!["custom-mod"])
+        );
+    }
+
+    #[test]
+    fn cancel_game_path_dialog_restores_previous_game() {
+        let _guard = db_lock();
+        reset_isolated_db();
+        let mut app = test_app();
+        app.selected_game = Some("custom-game".to_string());
+        app.settings.selected_game = Some("custom-game".to_string());
+        app.game_path_dialog_open = true;
+        app.pending_game_path_game_id = Some("custom-game".to_string());
+        app.previous_game_before_path_dialog = Some("skyrim-se".to_string());
+
+        let _ = app.update(Message::CancelGamePathDialog);
+
+        assert!(!app.game_path_dialog_open);
+        assert_eq!(app.selected_game.as_deref(), Some("skyrim-se"));
+        assert_eq!(app.settings.selected_game.as_deref(), Some("skyrim-se"));
     }
 
     // ─── ReorderMod refusal / allow paths ────────────────────────

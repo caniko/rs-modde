@@ -1,8 +1,10 @@
-use iced::widget::{button, column, container, mouse_area, row, scrollable, text};
+use crate::views::selectable_text::text;
+use iced::widget::{button, column, container, mouse_area, row, scrollable};
 use iced::{Alignment, Element, Length, color};
 
 use modde_core::save::{SaveFingerprint, SaveSnapshot};
 
+use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::Message;
 
 /// Render the save management view.
@@ -16,9 +18,9 @@ pub fn view<'a>(
         text("Save Management").size(20),
         iced::widget::space::horizontal(),
         button(text("Refresh").size(14))
-            .on_press(Message::LoadSaveHistory)
             .style(button::secondary)
-            .padding([6, 14]),
+            .padding([6, 14])
+            .on_action(ButtonAction::LoadSaveHistory),
     ]
     .align_y(Alignment::Center);
 

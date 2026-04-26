@@ -33,7 +33,7 @@ The materialized staging directory is symlinked into the game directory. Each re
 
 ### Automatic deployment
 
-After rebuilding your NixOS/home-manager configuration, modde deploys profiles automatically via an activation script.
+After rebuilding your NixOS/home-manager configuration, modde deploys profiles automatically via an activation script when their prerequisites are present. Wabbajack profiles can wait non-fatally for the game install: set `installMode = "await-game"` or leave `gameDir` unset until Steam or Heroic has installed the game, then set `gameDir` and rebuild.
 
 ### Manual deployment
 
@@ -66,6 +66,8 @@ This atomically swaps the staging directories, restoring the previous deployment
 ## Wabbajack profiles
 
 Wabbajack-installed profiles use a different deployment strategy: files are hardlinked (or copied) directly from the staging directory to the game directory, bypassing the VFS symlink farm. This is because Wabbajack modlists include pre-built file layouts that don't need conflict resolution.
+
+For Home Manager profiles, Wabbajack install happens before deployment only when the configured `gameDir` exists and contains the expected game content directory, such as `Data/` for Skyrim SE. Otherwise activation prints an awaiting message and continues.
 
 ## Verifying integrity
 

@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
-use iced::widget::{button, column, row, scrollable, text};
+use crate::views::selectable_text::text;
+use iced::widget::{button, column, row, scrollable};
 use iced::{Element, Length};
 
+use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::Message;
 
 /// State for the overwrite management view.
@@ -41,14 +43,14 @@ pub fn view(state: &OverwriteState) -> Element<'_, Message> {
 
     let actions = row![
         button(text("Clear All").size(12))
-            .on_press(Message::ClearOverwrite)
             .style(button::danger)
-            .padding([4, 12]),
+            .padding([4, 12])
+            .on_action(ButtonAction::ClearOverwrite),
         button(text("Create Mod from Overrides").size(12))
-            .on_press(Message::MoveOverwriteToMod(
-                "__from_overrides__".to_string()
-            ))
-            .padding([4, 12]),
+            .padding([4, 12])
+            .on_action(ButtonAction::MoveOverwriteToMod(
+                "__from_overrides__".to_string(),
+            )),
     ]
     .spacing(8);
 

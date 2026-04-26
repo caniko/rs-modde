@@ -115,15 +115,6 @@ CREATE TABLE IF NOT EXISTS mod_categories (
     UNIQUE(profile_id, name)
 );
 
--- Extend profile_mods with Nexus metadata, categories, notes, tags
-ALTER TABLE profile_mods ADD COLUMN nexus_mod_id INTEGER;
-ALTER TABLE profile_mods ADD COLUMN nexus_file_id INTEGER;
-ALTER TABLE profile_mods ADD COLUMN nexus_game_domain TEXT;
-ALTER TABLE profile_mods ADD COLUMN installed_timestamp INTEGER;
-ALTER TABLE profile_mods ADD COLUMN category_id INTEGER REFERENCES mod_categories(id);
-ALTER TABLE profile_mods ADD COLUMN notes TEXT;
-ALTER TABLE profile_mods ADD COLUMN tags TEXT;
-
 CREATE INDEX IF NOT EXISTS idx_hidden_profile ON hidden_files(profile_id);
 CREATE INDEX IF NOT EXISTS idx_plugin_order_profile ON plugin_order(profile_id);
 CREATE INDEX IF NOT EXISTS idx_categories_profile ON mod_categories(profile_id);
@@ -279,6 +270,17 @@ impl ModdeDb {
 
         if version < 2 {
             self.conn.execute_batch(SCHEMA_V2)?;
+            self.add_column_if_missing("profile_mods", "nexus_mod_id", "INTEGER")?;
+            self.add_column_if_missing("profile_mods", "nexus_file_id", "INTEGER")?;
+            self.add_column_if_missing("profile_mods", "nexus_game_domain", "TEXT")?;
+            self.add_column_if_missing("profile_mods", "installed_timestamp", "INTEGER")?;
+            self.add_column_if_missing(
+                "profile_mods",
+                "category_id",
+                "INTEGER REFERENCES mod_categories(id)",
+            )?;
+            self.add_column_if_missing("profile_mods", "notes", "TEXT")?;
+            self.add_column_if_missing("profile_mods", "tags", "TEXT")?;
             info!(
                 from = version.max(1),
                 to = 2,
@@ -387,6 +389,28 @@ impl ModdeDb {
             .execute_batch("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;")?;
 
         Ok(())
+    }
+
+    fn add_column_if_missing(&self, table: &str, column: &str, definition: &str) -> Result<()> {
+        if self.column_exists(table, column)? {
+            return Ok(());
+        }
+
+        self.conn.execute_batch(&format!(
+            "ALTER TABLE {table} ADD COLUMN {column} {definition};"
+        ))?;
+        Ok(())
+    }
+
+    fn column_exists(&self, table: &str, column: &str) -> Result<bool> {
+        let mut stmt = self.conn.prepare(&format!("PRAGMA table_info({table})"))?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+        for name in rows {
+            if name? == column {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     // ── Profile CRUD ──────────────────────────────────────────────

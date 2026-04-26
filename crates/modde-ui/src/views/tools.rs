@@ -1,6 +1,8 @@
-use iced::widget::{button, column, container, row, scrollable, text, toggler};
+use crate::views::selectable_text::text;
+use iced::widget::{button, column, container, row, scrollable, toggler};
 use iced::{Alignment, Element, Length, color};
 
+use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::{Message, ToolState, ToolUiEntry};
 
 /// Render the gaming tools/overlays management view.
@@ -9,9 +11,9 @@ pub fn view(state: &ToolState) -> Element<'_, Message> {
         text("Gaming Tools").size(20),
         iced::widget::space::horizontal(),
         button(text("Refresh").size(14))
-            .on_press(Message::RefreshTools)
             .style(button::secondary)
-            .padding([6, 14]),
+            .padding([6, 14])
+            .on_action(ButtonAction::RefreshTools),
     ]
     .align_y(Alignment::Center);
 
@@ -94,21 +96,19 @@ fn tool_card(entry: &ToolUiEntry) -> Element<'_, Message> {
 
         let actions = row![
             button(text("Apply").size(12))
-                .on_press_maybe(if available {
-                    Some(Message::ApplyTool(tid_apply))
-                } else {
-                    None
-                })
                 .style(button::primary)
-                .padding([4, 10]),
+                .padding([4, 10])
+                .on_action_maybe(
+                    available.then_some(ButtonAction::ApplyTool(tid_apply)),
+                    "Install or enable this tool before applying its files.",
+                ),
             button(text("Revert").size(12))
-                .on_press_maybe(if entry.applied_files > 0 {
-                    Some(Message::RevertTool(tid_revert))
-                } else {
-                    None
-                })
                 .style(button::danger)
-                .padding([4, 10]),
+                .padding([4, 10])
+                .on_action_maybe(
+                    (entry.applied_files > 0).then_some(ButtonAction::RevertTool(tid_revert)),
+                    "This tool has no applied files to revert.",
+                ),
         ]
         .spacing(6);
 

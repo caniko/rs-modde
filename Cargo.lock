@@ -2930,6 +2930,7 @@ dependencies = [
  "anyhow",
  "base64",
  "dirs",
+ "flate2",
  "fomod-oxide",
  "git2",
  "libc",
@@ -2982,10 +2983,12 @@ dependencies = [
  "futures",
  "keyring",
  "modde-core",
+ "modde-games",
  "reqwest",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "smallvec",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -3018,6 +3021,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+ "unicode-segmentation",
  "zip",
 ]
 

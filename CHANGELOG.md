@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- **Skyrim/Wabbajack**: Support Wabbajack `GameFileSourceDownloader` entries used by Legends of the Frost, with local game-file verification through `--game-dir`.
+- **Nix**: Home Manager Wabbajack profiles now fetch, install, and deploy declarative modlists, including explicit `gameDir` support.
+- **Nix**: Home Manager profiles can now wait non-fatally for a game install through `installMode = "await-game"` or missing `gameDir` prerequisites.
+- **Tests**: Hardened Wabbajack game-file-source regressions and the Nix sandbox-sensitive deploy pipeline test.
+
 ## [0.1.0] - 2026-04-13
 
 ### Added

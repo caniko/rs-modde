@@ -7,7 +7,9 @@ use futures::stream::{self, StreamExt};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
-use modde_core::manifest::wabbajack::{DownloadDirective, InstallDirective, WabbajackManifest};
+use modde_core::manifest::wabbajack::{
+    ArchiveState, DownloadDirective, InstallDirective, WabbajackManifest,
+};
 
 use crate::traits::{AnySource, DownloadHandle, DownloadSource};
 
@@ -60,6 +62,7 @@ pub struct WabbajackInstaller {
     wabbajack_path: PathBuf,
     store_dir: PathBuf,
     staging_dir: PathBuf,
+    game_dir: Option<PathBuf>,
     sources: Arc<Vec<AnySource>>,
     concurrency: usize,
     /// Cache of fully-extracted non-zip archives (archive path → temp dir with all contents).
@@ -79,10 +82,16 @@ impl WabbajackInstaller {
             wabbajack_path,
             store_dir,
             staging_dir,
+            game_dir: None,
             sources: Arc::new(Vec::new()),
             concurrency: DEFAULT_CONCURRENCY,
             extract_cache: Arc::new(std::sync::Mutex::new(HashMap::new())),
         }
+    }
+
+    /// Set the game install directory used by Wabbajack game-file sources.
+    pub fn set_game_dir(&mut self, game_dir: PathBuf) {
+        self.game_dir = Some(game_dir);
     }
 
     /// Register a download source implementation.
@@ -101,6 +110,9 @@ impl WabbajackInstaller {
     pub async fn install(&self, progress_tx: mpsc::UnboundedSender<InstallProgress>) -> Result<()> {
         let downloads = self.manifest.download_directives();
         let installs = self.manifest.install_directives();
+
+        self.validate_game_file_sources()?;
+        self.verify_game_file_sources().await?;
 
         progress_tx
             .send(InstallProgress::Starting {
@@ -302,15 +314,16 @@ impl WabbajackInstaller {
         validate_archive_entry(from)?;
         validate_archive_entry(to)?;
 
-        let archive_path = archive_path(&self.store_dir, &archive_hash);
         let output_path = self.staging_dir.join(normalize_path(to));
 
         if let Some(parent) = output_path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
 
-        // Extract the specific file from the archive (using cache for non-zip)
-        let data = extract_from_archive_cached(&archive_path, from, &self.extract_cache)
+        // Extract the specific file from a downloaded archive or resolve a
+        // Wabbajack game-file source from the local game install.
+        let data = self
+            .read_archive_source(archive_hash, from)
             .await
             .with_context(|| {
                 format!("failed to extract '{from}' from archive {archive_hash:016x}")
@@ -363,15 +376,15 @@ impl WabbajackInstaller {
         to: &str,
         patch_id: &str,
     ) -> Result<()> {
-        let src_archive_path = archive_path(&self.store_dir, &archive_hash);
         let output_path = self.staging_dir.join(normalize_path(to));
 
         if let Some(parent) = output_path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
 
-        // Extract source file from archive (using cache for non-zip)
-        let source_data = extract_from_archive_cached(&src_archive_path, from, &self.extract_cache)
+        // Extract source file from a downloaded archive or local game-file source.
+        let source_data = self
+            .read_archive_source(archive_hash, from)
             .await
             .with_context(|| {
                 format!("failed to extract '{from}' from archive {archive_hash:016x} for patching")
@@ -428,6 +441,129 @@ impl WabbajackInstaller {
         info!(to = %to, files = file_states.len(), "created BSA archive");
         Ok(())
     }
+
+    fn validate_game_file_sources(&self) -> Result<()> {
+        if !self.manifest.archives.iter().any(is_game_file_archive) {
+            return Ok(());
+        }
+
+        let Some(game_dir) = &self.game_dir else {
+            bail!(
+                "wabbajack modlist references local game files; pass --game-dir so modde can read the installed game files"
+            );
+        };
+
+        if !game_dir.is_dir() {
+            bail!(
+                "game directory for Wabbajack game-file sources does not exist: {}",
+                game_dir.display()
+            );
+        }
+
+        Ok(())
+    }
+
+    async fn verify_game_file_sources(&self) -> Result<()> {
+        for archive in self
+            .manifest
+            .archives
+            .iter()
+            .filter(|a| is_game_file_archive(a))
+        {
+            let Some(source) = self.game_file_source_path(archive.hash)? else {
+                continue;
+            };
+
+            if !source.path.exists() {
+                bail!(
+                    "game-file source '{}' is missing at {}",
+                    source.rel_path,
+                    source.path.display()
+                );
+            }
+
+            modde_core::hash::verify_xxh64(&source.path, archive.hash)
+                .await
+                .with_context(|| {
+                    format!(
+                        "game-file source '{}' failed hash verification (expected xxh64 {:016x})",
+                        source.rel_path, archive.hash
+                    )
+                })?;
+        }
+
+        Ok(())
+    }
+
+    async fn read_archive_source(&self, archive_hash: u64, from: &str) -> Result<Vec<u8>> {
+        if let Some(source) = self.game_file_source_path(archive_hash)? {
+            return read_game_file_source(&source.path, from).await;
+        }
+
+        let archive_path = archive_path(&self.store_dir, &archive_hash);
+        extract_from_archive_cached(&archive_path, from, &self.extract_cache).await
+    }
+
+    fn game_file_source_path(&self, archive_hash: u64) -> Result<Option<GameFileSourcePath>> {
+        let Some(archive) = self
+            .manifest
+            .archives
+            .iter()
+            .find(|a| a.hash == archive_hash)
+        else {
+            return Ok(None);
+        };
+
+        let Some(state) = archive.state.as_ref() else {
+            return Ok(None);
+        };
+
+        let rel_path = match state {
+            ArchiveState::GameFileSourceDownloader { metadata } => state.game_file_path().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "game-file source archive '{}' does not contain a recognized file path field; metadata keys: {}",
+                    archive.name,
+                    metadata.keys().cloned().collect::<Vec<_>>().join(", ")
+                )
+            })?,
+            _ => return Ok(None),
+        };
+
+        validate_archive_entry(rel_path)?;
+
+        let Some(game_dir) = &self.game_dir else {
+            bail!(
+                "archive {} is a game-file source, but no game directory was provided",
+                archive.name
+            );
+        };
+
+        let path = game_dir.join(normalize_path(rel_path));
+        if path.exists() {
+            return Ok(Some(GameFileSourcePath {
+                rel_path: rel_path.to_string(),
+                path,
+            }));
+        }
+
+        Ok(Some(GameFileSourcePath {
+            rel_path: rel_path.to_string(),
+            path: find_path_case_insensitive(game_dir, &normalize_path(rel_path)).unwrap_or(path),
+        }))
+    }
+}
+
+#[derive(Debug)]
+struct GameFileSourcePath {
+    rel_path: String,
+    path: PathBuf,
+}
+
+fn is_game_file_archive(archive: &modde_core::manifest::wabbajack::ArchiveEntry) -> bool {
+    matches!(
+        archive.state.as_ref(),
+        Some(ArchiveState::GameFileSourceDownloader { .. })
+    )
 }
 
 /// Validate that an archive entry name does not contain path traversal components
@@ -469,6 +605,47 @@ fn normalize_path(path: &str) -> String {
     path.replace('\\', "/")
 }
 
+async fn read_game_file_source(path: &Path, from: &str) -> Result<Vec<u8>> {
+    if !from.trim().is_empty() {
+        validate_archive_entry(from)?;
+    }
+
+    if path.symlink_metadata()?.file_type().is_symlink() {
+        bail!(
+            "game-file source is a symlink (rejected for security): {}",
+            path.display()
+        );
+    }
+
+    if from.trim().is_empty() || from == "." {
+        return tokio::fs::read(path)
+            .await
+            .with_context(|| format!("failed to read game-file source: {}", path.display()));
+    }
+
+    // Most GameFileSourceDownloader entries represent the whole game file as
+    // the source archive. If Wabbajack records the same relative path in the
+    // ArchiveHashPath, treat that as a whole-file copy too.
+    let normalized_from = normalize_path(from);
+    let normalized_path = normalize_path(&path.to_string_lossy());
+    let path_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(normalize_path);
+
+    if normalized_path.ends_with(&normalized_from)
+        || path_name
+            .as_deref()
+            .is_some_and(|name| name.eq_ignore_ascii_case(&normalized_from))
+    {
+        return tokio::fs::read(path)
+            .await
+            .with_context(|| format!("failed to read game-file source: {}", path.display()));
+    }
+
+    extract_from_archive_cached(path, from, &Arc::new(std::sync::Mutex::new(HashMap::new()))).await
+}
+
 /// Compute the storage path for an archive by its hash.
 fn archive_path(store_dir: &Path, hash: &u64) -> PathBuf {
     store_dir.join(format!("{hash:016x}.archive"))
@@ -496,6 +673,16 @@ async fn extract_from_archive_cached(
         // Try zip first (fast per-file extraction)
         if let Ok(data) = extract_from_zip(&archive_path, &inner_path) {
             return Ok(data);
+        }
+
+        if modde_core::bethesda_archive::ArchiveIndex::has_bethesda_magic(&archive_path)
+            .unwrap_or(false)
+        {
+            let index = modde_core::bethesda_archive::ArchiveIndex::read(&archive_path)
+                .with_context(|| {
+                    format!("failed to read Bethesda archive {}", archive_path.display())
+                })?;
+            return index.extract_file(&inner_path);
         }
 
         // For non-zip: check or populate the extraction cache
@@ -559,6 +746,20 @@ async fn extract_from_archive_cached(
 fn find_file_case_insensitive(base: &Path, relative_path: &str) -> Result<Vec<u8>> {
     validate_archive_entry(relative_path)?;
 
+    let current = find_path_case_insensitive(base, relative_path)?;
+
+    // Final resolved file must not be a symlink either
+    if current.symlink_metadata()?.file_type().is_symlink() {
+        anyhow::bail!("resolved file is a symlink (rejected for security): {relative_path}");
+    }
+
+    Ok(std::fs::read(&current)?)
+}
+
+/// Find a path by case-insensitive path matching in a directory tree.
+fn find_path_case_insensitive(base: &Path, relative_path: &str) -> Result<PathBuf> {
+    validate_archive_entry(relative_path)?;
+
     let parts: Vec<&str> = relative_path.split('/').collect();
     let mut current = base.to_path_buf();
 
@@ -590,12 +791,7 @@ fn find_file_case_insensitive(base: &Path, relative_path: &str) -> Result<Vec<u8
         }
     }
 
-    // Final resolved file must not be a symlink either
-    if current.symlink_metadata()?.file_type().is_symlink() {
-        anyhow::bail!("resolved file is a symlink (rejected for security): {relative_path}");
-    }
-
-    Ok(std::fs::read(&current)?)
+    Ok(current)
 }
 
 /// Extract a file from a zip archive.
@@ -724,6 +920,7 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::io::Write as _;
+    use xxhash_rust::xxh64::xxh64;
 
     /// Helper: create a zip file on disk with the given entries.
     fn create_zip_file(path: &std::path::Path, entries: &[(&str, &[u8])]) {
@@ -753,6 +950,34 @@ mod tests {
             version: "1.0".into(),
             archives: vec![],
             directives: vec![],
+        }
+    }
+
+    fn game_file_archive(
+        hash: u64,
+        rel_path: &str,
+    ) -> modde_core::manifest::wabbajack::ArchiveEntry {
+        modde_core::manifest::wabbajack::ArchiveEntry {
+            hash,
+            name: rel_path.replace(['\\', '/'], "_"),
+            size: 0,
+            state: Some(ArchiveState::GameFileSourceDownloader {
+                metadata: HashMap::from([(
+                    "File".to_string(),
+                    serde_json::Value::String(rel_path.to_string()),
+                )]),
+            }),
+        }
+    }
+
+    fn manifest_with_game_file(hash: u64, rel_path: &str, to: &str) -> WabbajackManifest {
+        WabbajackManifest {
+            archives: vec![game_file_archive(hash, rel_path)],
+            directives: vec![modde_core::manifest::wabbajack::RawDirective::FromArchive {
+                archive_hash_path: vec![serde_json::Value::Number(hash.into())],
+                to: to.into(),
+            }],
+            ..minimal_manifest()
         }
     }
 
@@ -801,6 +1026,152 @@ mod tests {
         );
         inst.set_concurrency(0);
         assert_eq!(inst.concurrency, 1);
+    }
+
+    #[tokio::test]
+    async fn install_reads_game_file_source_from_game_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let game_dir = dir.path().join("game");
+        let store_dir = dir.path().join("store");
+        let staging_dir = dir.path().join("staging");
+        std::fs::create_dir_all(game_dir.join("Data")).unwrap();
+        let source_bytes = b"game file bytes";
+        std::fs::write(game_dir.join("Data/Update.esm"), source_bytes).unwrap();
+
+        let manifest = manifest_with_game_file(
+            xxh64(source_bytes, 0),
+            "Data\\Update.esm",
+            "mods/Skyrim Base/Update.esm",
+        );
+
+        let mut inst = WabbajackInstaller::new(
+            manifest,
+            dir.path().join("test.wabbajack"),
+            store_dir,
+            staging_dir.clone(),
+        );
+        inst.set_game_dir(game_dir);
+
+        let (progress_tx, _progress_rx) = mpsc::unbounded_channel();
+        inst.install(progress_tx).await.unwrap();
+
+        assert_eq!(
+            std::fs::read(staging_dir.join("mods/Skyrim Base/Update.esm")).unwrap(),
+            b"game file bytes"
+        );
+    }
+
+    #[tokio::test]
+    async fn install_requires_game_dir_for_game_file_sources() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = WabbajackManifest {
+            archives: vec![game_file_archive(0x1234, "Data\\Update.esm")],
+            directives: vec![],
+            ..minimal_manifest()
+        };
+
+        let inst = WabbajackInstaller::new(
+            manifest,
+            dir.path().join("test.wabbajack"),
+            dir.path().join("store"),
+            dir.path().join("staging"),
+        );
+
+        let (progress_tx, _progress_rx) = mpsc::unbounded_channel();
+        let err = inst.install(progress_tx).await.unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("pass --game-dir"),
+            "unexpected error message: {msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn install_rejects_mismatched_game_file_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let game_dir = dir.path().join("game");
+        std::fs::create_dir_all(game_dir.join("Data")).unwrap();
+        std::fs::write(game_dir.join("Data/Update.esm"), b"actual bytes").unwrap();
+
+        let manifest = manifest_with_game_file(
+            xxh64(b"expected bytes", 0),
+            "Data\\Update.esm",
+            "mods/Update.esm",
+        );
+        let mut inst = WabbajackInstaller::new(
+            manifest,
+            dir.path().join("test.wabbajack"),
+            dir.path().join("store"),
+            dir.path().join("staging"),
+        );
+        inst.set_game_dir(game_dir);
+
+        let (progress_tx, _progress_rx) = mpsc::unbounded_channel();
+        let err = inst.install(progress_tx).await.unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("Data\\Update.esm"), "unexpected error: {msg}");
+        assert!(
+            msg.contains("expected xxh64"),
+            "unexpected error message: {msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn install_rejects_missing_game_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let game_dir = dir.path().join("game");
+        std::fs::create_dir_all(&game_dir).unwrap();
+
+        let manifest = manifest_with_game_file(
+            xxh64(b"missing bytes", 0),
+            "Data\\Update.esm",
+            "mods/Update.esm",
+        );
+        let mut inst = WabbajackInstaller::new(
+            manifest,
+            dir.path().join("test.wabbajack"),
+            dir.path().join("store"),
+            dir.path().join("staging"),
+        );
+        inst.set_game_dir(game_dir);
+
+        let (progress_tx, _progress_rx) = mpsc::unbounded_channel();
+        let err = inst.install(progress_tx).await.unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("Data\\Update.esm"), "unexpected error: {msg}");
+        assert!(msg.contains("missing"), "unexpected error: {msg}");
+    }
+
+    #[tokio::test]
+    async fn install_resolves_game_file_path_case_insensitively() {
+        let dir = tempfile::tempdir().unwrap();
+        let game_dir = dir.path().join("game");
+        let store_dir = dir.path().join("store");
+        let staging_dir = dir.path().join("staging");
+        std::fs::create_dir_all(game_dir.join("DATA")).unwrap();
+        let source_bytes = b"case insensitive game file";
+        std::fs::write(game_dir.join("DATA/update.ESM"), source_bytes).unwrap();
+
+        let manifest = manifest_with_game_file(
+            xxh64(source_bytes, 0),
+            "Data\\Update.esm",
+            "mods/Update.esm",
+        );
+        let mut inst = WabbajackInstaller::new(
+            manifest,
+            dir.path().join("test.wabbajack"),
+            store_dir,
+            staging_dir.clone(),
+        );
+        inst.set_game_dir(game_dir);
+
+        let (progress_tx, _progress_rx) = mpsc::unbounded_channel();
+        inst.install(progress_tx).await.unwrap();
+
+        assert_eq!(
+            std::fs::read(staging_dir.join("mods/Update.esm")).unwrap(),
+            source_bytes
+        );
     }
 
     // -----------------------------------------------------------------------

@@ -1,4 +1,3 @@
-use std::io::Read as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -10,17 +9,14 @@ use modde_core::installer::{
     self as installer, DossierContext, InstallMethod, InstallStatus, InstallerError,
 };
 use modde_core::manifest::collection::CollectionManifest;
-use modde_core::manifest::wabbajack::{WabbajackManifest, compute_manifest_hash};
 use modde_core::paths;
 use modde_core::profile::{
     EnabledMod, LoadOrderLock, LockReason, Profile, ProfileManager, ProfileSource,
 };
-use modde_sources::direct::DirectSource;
-use modde_sources::nexus::NexusSource;
 use modde_sources::nexus::api::NexusApi;
 use modde_sources::nexus::auth::load_api_key;
 use modde_sources::nexus::cdn::generate_download_link;
-use modde_sources::wabbajack::installer::{InstallProgress, WabbajackInstaller};
+use modde_sources::wabbajack::installer::InstallProgress;
 
 use crate::InstallSource;
 
@@ -342,36 +338,7 @@ async fn handle_wabbajack(
     game_dir: Option<PathBuf>,
     force: bool,
 ) -> Result<()> {
-    info!(path = %path.display(), ?profile_name, "installing Wabbajack modlist");
-
-    // Read the .wabbajack file (it's a zip containing modlist.json)
-    let file = std::fs::File::open(&path)
-        .with_context(|| format!("failed to open wabbajack file: {}", path.display()))?;
-    let mut archive = zip::ZipArchive::new(file)
-        .with_context(|| format!("failed to read wabbajack archive: {}", path.display()))?;
-
-    let manifest: WabbajackManifest = {
-        // Try "modlist" first (actual Wabbajack format), then "modlist.json"
-        let entry_name = if archive.by_name("modlist").is_ok() {
-            "modlist"
-        } else {
-            "modlist.json"
-        };
-        let mut entry = archive
-            .by_name(entry_name)
-            .context("wabbajack archive missing modlist entry")?;
-        let mut json_str = String::new();
-        entry
-            .read_to_string(&mut json_str)
-            .context("failed to read modlist entry")?;
-        serde_json::from_str(&json_str).context("failed to parse modlist JSON")?
-    };
-
-    let modlist_name = manifest.name.clone();
-    let game_id = modde_games::normalize_wabbajack_game(&manifest.game)
-        .map_or_else(|| manifest.game.to_lowercase(), String::from);
-    let profile_name = profile_name.unwrap_or_else(|| modlist_name.clone());
-
+    let manifest = modde_sources::wabbajack::runner::parse_wabbajack_manifest(&path)?;
     println!(
         "Wabbajack modlist: {} by {} (game: {})",
         manifest.name, manifest.author, manifest.game
@@ -382,150 +349,56 @@ async fn handle_wabbajack(
         manifest.directives.len()
     );
 
-    let store = paths::store_dir();
-    let staging = paths::staging_dir().join(&profile_name);
-    std::fs::create_dir_all(&store)?;
-    std::fs::create_dir_all(&staging)?;
-
-    // Compute a manifest hash for provenance tracking. Shared helper so
-    // installer and retroactive `scan --manifest` produce bit-identical
-    // values — see modde-core/src/manifest/wabbajack.rs.
-    let manifest_hash = compute_manifest_hash(&manifest);
-
-    let client = build_http_client()?;
-    let mut installer = WabbajackInstaller::new(
-        manifest.clone(),
-        path.clone(),
-        store.clone(),
-        staging.clone(),
-    );
-
-    // Register Nexus download source
-    match NexusSource::new(client.clone()) {
-        Ok(nexus) => {
-            installer.add_source(modde_sources::AnySource::Nexus(nexus));
-            info!("registered Nexus download source");
-        }
-        Err(e) => {
-            warn!("failed to create Nexus source (no API key?): {e:#}");
-        }
-    }
-
-    // Register direct HTTP download source
-    installer.add_source(modde_sources::AnySource::Direct(DirectSource::new(client)));
-
-    // Preflight: skip the install pipeline if staging already has all expected files.
-    let skip_install =
-        !force && modde_sources::wabbajack::validator::preflight_staging(&manifest, &staging).await;
-
-    if skip_install {
-        println!("  Staging already complete, skipping install pipeline (use --force to redo)");
-    } else {
-        let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
-
-        // Spawn a task to print progress
-        let progress_handle = tokio::spawn(async move {
-            while let Some(progress) = progress_rx.recv().await {
-                match progress {
-                    InstallProgress::Starting { total_downloads } => {
-                        println!("  Starting install: {total_downloads} downloads");
-                    }
-                    InstallProgress::DownloadComplete { name } => {
-                        println!("  Downloaded: {name}");
-                    }
-                    InstallProgress::Applying {
-                        directive_index,
-                        total,
-                    } if (directive_index % 100 == 0 || directive_index == total - 1) => {
-                        println!("  Applying directives: {}/{total}", directive_index + 1);
-                    }
-                    InstallProgress::Patching { name } => {
-                        println!("  Patching: {name}");
-                    }
-                    InstallProgress::CreatingBSA { name } => {
-                        println!("  Creating BSA: {name}");
-                    }
-                    InstallProgress::Complete => {
-                        println!("  Install pipeline complete");
-                    }
-                    InstallProgress::Failed { error } => {
-                        eprintln!("  Install failed: {error}");
-                    }
-                    _ => {}
+    let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
+    let progress_handle = tokio::spawn(async move {
+        while let Some(progress) = progress_rx.recv().await {
+            match progress {
+                InstallProgress::Starting { total_downloads } => {
+                    println!("  Starting install: {total_downloads} downloads");
                 }
+                InstallProgress::DownloadComplete { name } => {
+                    println!("  Downloaded: {name}");
+                }
+                InstallProgress::Applying {
+                    directive_index,
+                    total,
+                } if (directive_index % 100 == 0 || directive_index == total - 1) => {
+                    println!("  Applying directives: {}/{total}", directive_index + 1);
+                }
+                InstallProgress::Patching { name } => {
+                    println!("  Patching: {name}");
+                }
+                InstallProgress::CreatingBSA { name } => {
+                    println!("  Creating BSA: {name}");
+                }
+                InstallProgress::Complete => {
+                    println!("  Install pipeline complete");
+                }
+                InstallProgress::Failed { error } => {
+                    eprintln!("  Install failed: {error}");
+                }
+                _ => {}
             }
-        });
+        }
+    });
 
-        installer
-            .install(progress_tx)
-            .await
-            .context("wabbajack install pipeline failed")?;
-
-        progress_handle.await?;
-    }
-
-    // Deploy MO2 mods/ layout to game directory
-    if let Some(ref game_dir) = game_dir {
-        deploy_mo2_to_game(&staging, game_dir, force)
-            .await
-            .context("failed to deploy mods to game directory")?;
-
-        // Detect proxy DLLs and configure Wine overrides for the launcher
-        configure_wine_overrides(&game_id, game_dir, &staging)?;
-    }
-
-    // Build mod entries from the manifest's archives
-    let mut enabled_mods = Vec::new();
-    for archive in &manifest.archives {
-        // Use the shared helper so retroactive `modde scan --manifest` over
-        // the same modlist produces matching mod_ids (rather than duplicating
-        // Nexus-sourced archives under a `wj_` prefix here but a `nexus_`
-        // prefix in the scanner).
-        let mod_id = modde_core::scanner::archive_mod_id(archive);
-        enabled_mods.push(EnabledMod {
-            mod_id,
-            enabled: true,
-            version: None,
-            fomod_config: None,
-            ..Default::default()
-        });
-    }
-
-    // Create and save profile. The profile gets both:
-    //   - `ProfileSource::Wabbajack` — provenance metadata (unchanged)
-    //   - `load_order_lock = Wabbajack{...}` — business-rule lock that
-    //     drives reorder refusal throughout the UI / CLI. See
-    //     plans/greedy-shimmying-pine.md.
-    let pm = ProfileManager::open().context("failed to open profile database")?;
-    let profile = Profile {
-        id: None,
-        name: profile_name.clone(),
-        game_id: modde_core::GameId::from(game_id.clone()),
-        source: ProfileSource::Wabbajack {
-            manifest_hash: manifest_hash.clone(),
+    let summary = modde_sources::wabbajack::runner::install_wabbajack(
+        modde_sources::wabbajack::runner::WabbajackInstallOptions {
+            path: path.clone(),
+            profile_name,
+            game_dir,
+            force,
         },
-        mods: enabled_mods,
-        overrides: ProfileManager::default_overrides(&profile_name),
-        load_order_rules: smallvec::SmallVec::new(),
-        load_order_lock: Some(LoadOrderLock::now(LockReason::Wabbajack {
-            manifest_hash: manifest_hash.clone(),
-        })),
-    };
-
-    save_profile_and_settings(&pm, &profile, game_dir.as_deref())?;
-
-    // Self-contained re-verify: stash the .wabbajack source file in the
-    // content-addressed cache so a later `modde profile lock-info` can point
-    // at it even if the original source path moves. Log-and-continue — a
-    // cache miss shouldn't fail an otherwise successful install.
-    if let Err(e) = modde_core::manifest::wabbajack::cache_wabbajack_file(&path, &manifest_hash) {
-        warn!("failed to cache wabbajack source file: {e:#}");
-    }
+        Some(progress_tx),
+    )
+    .await?;
+    progress_handle.await?;
 
     println!(
         "Wabbajack modlist '{}' installed to profile '{profile_name}' ({} mods)",
-        modlist_name,
-        profile.mods.len()
+        summary.modlist_name,
+        summary.mod_count,
+        profile_name = summary.profile_name
     );
 
     Ok(())

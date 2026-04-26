@@ -1,8 +1,10 @@
-use iced::widget::{button, column, container, progress_bar, row, scrollable, text, text_input};
+use crate::views::selectable_text::text;
+use iced::widget::{button, column, container, progress_bar, row, scrollable, text_input};
 use iced::{Alignment, Element, Length};
 
 use modde_core::manifest::collection::CollectionManifest;
 
+use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::Message;
 
 /// State for an in-progress collection download.
@@ -122,10 +124,9 @@ fn collection_card<'a>(
         let slug = collection.slug.clone();
         let version = collection.version.version.clone();
         button(text("Install").size(14))
-            .on_press(Message::InstallCollection { slug, version })
             .style(button::primary)
             .padding([6, 14])
-            .into()
+            .on_action(ButtonAction::InstallCollection { slug, version })
     };
 
     container(

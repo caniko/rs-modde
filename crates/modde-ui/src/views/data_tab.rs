@@ -1,4 +1,5 @@
-use iced::widget::{checkbox, column, container, row, scrollable, text, text_input};
+use crate::views::selectable_text::text;
+use iced::widget::{checkbox, column, container, row, scrollable, text_input};
 use iced::{Alignment, Element, Length};
 
 use crate::app::Message;

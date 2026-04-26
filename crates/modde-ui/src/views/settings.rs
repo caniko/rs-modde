@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
-use iced::widget::{button, column, pick_list, row, scrollable, text, text_input};
+use crate::views::selectable_text::text;
+use iced::widget::{button, column, pick_list, row, scrollable, text_input};
 use iced::{Alignment, Element, Length, color};
 
+use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::{Message, NexusAuthStatus, SettingsState};
 
 /// Render the settings view.
@@ -51,9 +53,9 @@ pub fn view(state: SettingsState) -> Element<'static, Message> {
                 .padding(8)
                 .width(Length::Fill),
             button(text("Validate").size(13))
-                .on_press(Message::ValidateNexusKey)
                 .style(button::primary)
-                .padding([6, 12]),
+                .padding([6, 12])
+                .on_action(ButtonAction::ValidateNexusKey),
         ]
         .spacing(8)
         .align_y(Alignment::Center),
@@ -69,14 +71,14 @@ pub fn view(state: SettingsState) -> Element<'static, Message> {
             text_input("/path/to/game", &game_path_str,)
                 .on_input(|s| Message::SetGamePath {
                     game_id: "default".to_string(),
-                    path: PathBuf::from(s),
+                    path: PathBuf::from(s)
                 })
                 .padding(8)
                 .width(Length::Fill),
             button(text("Browse").size(13))
-                .on_press(Message::BrowseGamePath)
                 .style(button::secondary)
-                .padding([6, 12]),
+                .padding([6, 12])
+                .on_action(ButtonAction::BrowseGamePath),
         ]
         .spacing(8)
         .align_y(Alignment::Center),
@@ -93,9 +95,9 @@ pub fn view(state: SettingsState) -> Element<'static, Message> {
                 .padding(8)
                 .width(Length::Fill),
             button(text("Browse").size(13))
-                .on_press(Message::BrowseDownloadDir)
                 .style(button::secondary)
-                .padding([6, 12]),
+                .padding([6, 12])
+                .on_action(ButtonAction::BrowseDownloadDir),
         ]
         .spacing(8)
         .align_y(Alignment::Center),
@@ -108,13 +110,13 @@ pub fn view(state: SettingsState) -> Element<'static, Message> {
         text("Create a snapshot of your clean game install for virtual deployment.").size(11),
         row![
             button(text("Create Snapshot").size(13))
-                .on_press(Message::CreateStockSnapshot)
                 .style(button::primary)
-                .padding([6, 14]),
+                .padding([6, 14])
+                .on_action(ButtonAction::CreateStockSnapshot),
             button(text("Verify Snapshot").size(13))
-                .on_press(Message::VerifyStockSnapshot)
                 .style(button::secondary)
-                .padding([6, 14]),
+                .padding([6, 14])
+                .on_action(ButtonAction::VerifyStockSnapshot),
             text(if state.has_stock_snapshot {
                 "Snapshot exists"
             } else {

@@ -18,6 +18,23 @@ programs.modde.profiles.my-skyrim = {
 };
 ```
 
+For Wabbajack profiles, Home Manager can also manage the first install. If the
+game is not installed yet, keep the profile in an awaiting state:
+
+```nix
+programs.modde.profiles.my-skyrim = {
+  game = "skyrim-se";
+  installMode = "await-game";
+  wabbajackList = {
+    url = "https://example.com/modlist.wabbajack";
+    hash = "sha256-...";
+  };
+};
+```
+
+After installing the game through Steam or Heroic, set `gameDir` and switch back
+to the default `installMode = "auto"`.
+
 ### Via CLI (imperative)
 
 ```bash

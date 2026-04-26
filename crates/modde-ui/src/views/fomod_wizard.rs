@@ -1,10 +1,12 @@
+use crate::views::selectable_text::text;
 use iced::widget::{
-    button, checkbox, column, container, image, progress_bar, radio, row, scrollable, text,
+    button, checkbox, column, container, image, progress_bar, radio, row, scrollable,
 };
 use iced::{Element, Length};
 
 use fomod_oxide::config::GroupType;
 
+use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::{Message, Modde};
 
 /// Render the FOMOD wizard view from the live installer state.
@@ -237,27 +239,25 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
     // ── Navigation buttons ──
     let mut nav = row![].spacing(10);
 
-    nav = nav.push(button(text("Cancel")).on_press(Message::FOMODCancel));
+    nav = nav.push(button(text("Cancel")).on_action(ButtonAction::FomodCancel));
 
     // Undo button
     if app.fomod_can_undo {
-        nav = nav.push(button(text("Undo")).on_press(Message::FOMODUndo));
+        nav = nav.push(button(text("Undo")).on_action(ButtonAction::FomodUndo));
     }
 
     if app.fomod_wizard_pos > 0 {
-        nav = nav.push(button(text("Back")).on_press(Message::FOMODBack));
+        nav = nav.push(button(text("Back")).on_action(ButtonAction::FomodBack));
     }
 
     let is_last = app.fomod_is_last_step();
     let next_label = if is_last { "Install" } else { "Next" };
 
     // Disable Install button if not ready
-    let next_btn = button(text(next_label));
-    let next_btn = if is_last && !installer.is_ready_to_install() {
-        next_btn // disabled — no on_press
-    } else {
-        next_btn.on_press(Message::FOMODNext)
-    };
+    let next_btn = button(text(next_label)).on_action_maybe(
+        (!(is_last && !installer.is_ready_to_install())).then_some(ButtonAction::FomodNext),
+        "Complete the required FOMOD choices before installing.",
+    );
     nav = nav.push(next_btn);
 
     let content = column![header, scrollable(groups_col).height(Length::Fill), nav,]

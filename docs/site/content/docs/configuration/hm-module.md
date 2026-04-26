@@ -32,6 +32,28 @@ Game identifier string.
 - **Required:** yes
 - **Values:** `"skyrim-se"`, `"skyrim-ae"`, `"fallout4"`, `"fallout76"`, `"starfield"`, `"cyberpunk2077"`, `"stellar-blade"`
 
+#### `profiles.<name>.gameDir`
+
+Runtime path to the game installation. This is required for Wabbajack modlists
+that reference local vanilla game files, including Skyrim SE lists such as
+Legends of the Frost.
+
+- **Type:** `null`, path, or string
+- **Default:** `null`
+
+#### `profiles.<name>.installMode`
+
+Controls what Home Manager activation does for this profile.
+
+- **Type:** `"auto"`, `"await-game"`, or `"disabled"`
+- **Default:** `"auto"`
+
+| Value | Behavior |
+|-------|----------|
+| `"auto"` | Install/deploy when prerequisites are present; otherwise print an awaiting message |
+| `"await-game"` | Always skip install/deploy and print the next setup step |
+| `"disabled"` | Skip all activation work for the profile |
+
 #### `profiles.<name>.wabbajackList`
 
 Wabbajack modlist source. Mutually exclusive with `nexusCollection`.
@@ -42,7 +64,7 @@ Wabbajack modlist source. Mutually exclusive with `nexusCollection`.
 | Option | Type | Description |
 |--------|------|-------------|
 | `url` | `str` | URL to the `.wabbajack` modlist file |
-| `hash` | `str` | SHA-256 hash of the modlist file |
+| `hash` | `str` | Nix fetch hash for the `.wabbajack` file |
 
 #### `profiles.<name>.nexusCollection`
 
@@ -74,6 +96,8 @@ programs.modde = {
   profiles = {
     living-skyrim = {
       game = "skyrim-se";
+      installMode = "auto";
+      gameDir = "/home/me/.local/share/Steam/steamapps/common/Skyrim Special Edition";
       wabbajackList = {
         url = "https://example.com/living-skyrim.wabbajack";
         hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
@@ -90,3 +114,13 @@ programs.modde = {
   };
 };
 ```
+
+## First install flow
+
+modde does not install Steam or Heroic games. You can declare the profile before
+the game exists by omitting `gameDir` or setting `installMode = "await-game"`.
+Home Manager activation will print the next step and continue without failing.
+
+After installing Skyrim SE through Steam or Heroic, set `gameDir` to the game
+installation directory and use `installMode = "auto"`. The next Home Manager
+activation installs the Wabbajack profile if it is missing, then deploys it.

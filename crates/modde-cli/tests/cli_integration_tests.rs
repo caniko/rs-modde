@@ -365,6 +365,11 @@ async fn test_deploy_pipeline_end_to_end() {
         &store.join("mesh_mod/textures/shared.dds")
     );
 
+    // Keep the materialized farm under this test's tempdir. The production
+    // builder uses the global modde data dir, which may be unwritable inside
+    // Nix check sandboxes.
+    let farm = SymlinkFarm::from_links(tmp.path().join("profile-staging"), farm.links.clone());
+
     // Materialize
     let farm = farm.materialize().await.unwrap();
 

@@ -585,6 +585,31 @@ fn test_http_downloader_empty_headers() {
     }
 }
 
+#[test]
+fn test_game_file_source_downloader_parses_and_is_not_download_directive() {
+    let json = r#"{
+        "Hash": 123,
+        "Name": "Data_Update.esm",
+        "Size": 4096,
+        "State": {
+            "$type": "GameFileSourceDownloader, Wabbajack.Lib",
+            "Game": "SkyrimSpecialEdition",
+            "GameVersion": "1.6.1170.0",
+            "File": "Data\\Update.esm"
+        }
+    }"#;
+
+    let archive: ArchiveEntry = serde_json::from_str(json).unwrap();
+    let state = archive.state.as_ref().unwrap();
+    assert_eq!(state.game_file_path(), Some("Data\\Update.esm"));
+
+    let manifest = WabbajackManifest {
+        archives: vec![archive],
+        ..test_manifest()
+    };
+    assert!(manifest.download_directives().is_empty());
+}
+
 // ── Mixed directives ───────────────────────────────────────────────
 
 #[test]

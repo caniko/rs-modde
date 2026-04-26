@@ -18,6 +18,29 @@ If your game doesn't appear:
 - For Heroic, check that the game appears in `~/.config/heroic/GamesConfig/`
 - Use `--game-dir` flags to specify the path manually
 
+## Wabbajack install issues
+
+If a Skyrim SE modlist reports that it references local game files, pass
+`--game-dir "/path/to/Skyrim Special Edition"` or set `profiles.<name>.gameDir`
+in Home Manager. Lists such as Legends of the Frost need vanilla files from the
+local `Data/` directory.
+
+If Home Manager says a profile is awaiting game install, install the game with
+Steam or Heroic first. modde waits for launcher-managed game installs; it does
+not install Skyrim itself. After the game exists, set `gameDir` and rebuild Home
+Manager.
+
+If a local game file fails hash verification, verify that Skyrim SE is fully
+installed, up to date, and not modified in place. Wabbajack expects exact
+vanilla file contents for game-file sources.
+
+If Home Manager reports a Wabbajack URL/hash mismatch, recompute the Nix fetch
+hash for the actual authored-files `.wabbajack` URL and update
+`wabbajackList.hash`.
+
+If downloads fail before staging begins, check that
+`programs.modde.nexus.apiKeyFile` points to a readable Nexus API key file.
+
 ## Nexus API authentication fails
 
 Check your API key status:

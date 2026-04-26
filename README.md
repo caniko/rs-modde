@@ -47,7 +47,9 @@ The canonical status baseline for these claims lives in `docs/capability-matrix.
 modde detect
 
 # Install a Wabbajack modlist
-modde install wabbajack /path/to/modlist.wabbajack --game skyrim-se
+modde install wabbajack /path/to/modlist.wabbajack \
+  --profile my-skyrim \
+  --game-dir "/home/me/.local/share/Steam/steamapps/common/Skyrim Special Edition"
 
 # Deploy mods and play
 modde play my-skyrim --game skyrim-se
@@ -117,6 +119,8 @@ A NixOS home-manager module is included for declarative mod profile configuratio
     profiles = {
       my-skyrim = {
         game = "skyrim-se";
+        installMode = "auto";
+        gameDir = "/home/me/.local/share/Steam/steamapps/common/Skyrim Special Edition";
         wabbajackList = {
           url = "https://example.com/modlist.wabbajack";
           hash = "sha256-...";
@@ -133,6 +137,10 @@ A NixOS home-manager module is included for declarative mod profile configuratio
   };
 }
 ```
+
+Set `installMode = "await-game"` while the game is not installed yet. modde
+waits for Steam/Heroic-managed game installs and does not install the base game
+itself.
 
 Add the module to your home-manager imports from the flake:
 

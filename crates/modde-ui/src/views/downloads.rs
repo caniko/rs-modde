@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
-use iced::widget::{button, column, container, progress_bar, row, scrollable, text};
+use crate::views::selectable_text::text;
+use iced::widget::{button, column, container, progress_bar, row, scrollable};
 use iced::{Alignment, Element, Length, color};
 
+use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::Message;
 
 /// Download state for UI display.
@@ -111,41 +113,40 @@ pub fn view(tasks: &[DownloadTask]) -> Element<'static, Message> {
             let actions: Element<Message> = match &task.state {
                 DownloadState::Active { .. } => row![
                     button(text("Pause").size(11))
-                        .on_press(Message::PauseDownload(task.id))
                         .style(button::secondary)
-                        .padding([3, 8]),
+                        .padding([3, 8])
+                        .on_action(ButtonAction::PauseDownload(task.id)),
                     button(text("Cancel").size(11))
-                        .on_press(Message::CancelDownload(task.id))
                         .style(button::danger)
-                        .padding([3, 8]),
+                        .padding([3, 8])
+                        .on_action(ButtonAction::CancelDownload(task.id)),
                 ]
                 .spacing(4)
                 .into(),
                 DownloadState::Paused { .. } => row![
                     button(text("Resume").size(11))
-                        .on_press(Message::ResumeDownload(task.id))
                         .style(button::success)
-                        .padding([3, 8]),
+                        .padding([3, 8])
+                        .on_action(ButtonAction::ResumeDownload(task.id)),
                     button(text("Cancel").size(11))
-                        .on_press(Message::CancelDownload(task.id))
                         .style(button::danger)
-                        .padding([3, 8]),
+                        .padding([3, 8])
+                        .on_action(ButtonAction::CancelDownload(task.id)),
                 ]
                 .spacing(4)
                 .into(),
                 DownloadState::Queued => button(text("Cancel").size(11))
-                    .on_press(Message::CancelDownload(task.id))
                     .style(button::danger)
                     .padding([3, 8])
-                    .into(),
+                    .on_action(ButtonAction::CancelDownload(task.id)),
                 DownloadState::Failed { error } => column![
                     text(format!("Error: {error}"))
                         .size(11)
                         .color(color!(0xFF4444)),
                     button(text("Retry").size(11))
-                        .on_press(Message::ResumeDownload(task.id))
                         .style(button::secondary)
-                        .padding([3, 8]),
+                        .padding([3, 8])
+                        .on_action(ButtonAction::ResumeDownload(task.id)),
                 ]
                 .spacing(2)
                 .into(),

@@ -4,11 +4,13 @@
 //! The view is render-only; all state + task dispatch lives in
 //! [`crate::app::Modde`] (see `BrowseNexus*` messages).
 
-use iced::widget::{button, column, container, row, scrollable, text, text_input};
+use crate::views::selectable_text::text;
+use iced::widget::{button, column, container, row, scrollable, text_input};
 use iced::{Alignment, Element, Length};
 
 use modde_sources::nexus::graphql::{GqlCollectionTile, GqlModTile};
 
+use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::Message;
 
 /// Which tab of the browse view is currently active.
@@ -132,15 +134,13 @@ pub fn view<'a>(state: &'a NexusBrowseState, game_domain: Option<String>) -> Ele
 fn render_tab_bar(active: BrowseTab) -> Element<'static, Message> {
     let mut bar = row![].spacing(6);
     for tab in BrowseTab::ALL {
-        let mut btn = button(text(tab.label()).size(13))
-            .on_press(Message::BrowseTabSwitched(tab))
-            .padding([6, 14]);
-        if tab == active {
-            btn = btn.style(button::primary);
+        let btn = button(text(tab.label()).size(13)).padding([6, 14]);
+        let btn = if tab == active {
+            btn.style(button::primary)
         } else {
-            btn = btn.style(button::secondary);
-        }
-        bar = bar.push(btn);
+            btn.style(button::secondary)
+        };
+        bar = bar.push(btn.on_action(ButtonAction::BrowseTabSwitched(tab)));
     }
     bar.align_y(Alignment::Center).into()
 }
@@ -184,17 +184,16 @@ fn mod_card(tile: &GqlModTile, game_domain: Option<String>) -> Element<'_, Messa
 
     let install_btn: Element<Message> = match game_domain {
         Some(domain) => button(text("Install").size(13))
-            .on_press(Message::BrowseInstallMod {
-                game_domain: domain,
-                mod_id: tile.mod_id,
-            })
             .style(button::primary)
             .padding([6, 14])
-            .into(),
+            .on_action(ButtonAction::BrowseInstallMod {
+                game_domain: domain,
+                mod_id: tile.mod_id,
+            }),
         None => button(text("Install").size(13))
             .padding([6, 14])
             .style(button::secondary)
-            .into(),
+            .described_disabled("Load a profile before installing Nexus mods."),
     };
 
     container(
@@ -244,12 +243,12 @@ fn collection_card(tile: &GqlCollectionTile, _game_domain: Option<String>) -> El
     let summary = tile.summary.as_deref().unwrap_or("No summary provided.");
 
     let install_btn = button(text("Install collection").size(13))
-        .on_press(Message::InstallCollection {
+        .style(button::primary)
+        .padding([6, 14])
+        .on_action(ButtonAction::InstallCollection {
             slug: tile.slug.clone(),
             version: String::new(),
-        })
-        .style(button::primary)
-        .padding([6, 14]);
+        });
 
     container(
         column![header, text(summary).size(13), install_btn]

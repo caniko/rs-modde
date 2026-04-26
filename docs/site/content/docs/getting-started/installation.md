@@ -32,6 +32,24 @@ The recommended way to use modde is through the home-manager module:
 }
 ```
 
+You can declare Wabbajack profiles before the game is installed. Use
+`installMode = "await-game"` or leave `gameDir` unset, install the game through
+Steam or Heroic, then set `gameDir` and rebuild Home Manager:
+
+```nix
+programs.modde.profiles.lotf = {
+  game = "skyrim-se";
+  installMode = "await-game";
+  wabbajackList = {
+    url = "https://example.com/lotf.wabbajack";
+    hash = "sha256-...";
+  };
+};
+```
+
+modde waits for launcher-managed game installs; it does not install the base
+game itself.
+
 ## Standalone package
 
 You can also install modde as a standalone package:

@@ -1,6 +1,8 @@
-use iced::widget::{button, column, container, row, scrollable, text};
+use crate::views::selectable_text::text;
+use iced::widget::{button, column, container, row, scrollable};
 use iced::{Alignment, Element, Length, color};
 
+use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::{Message, VerifyState};
 
 /// Render the verification results view.
@@ -10,13 +12,12 @@ pub fn view(state: &VerifyState) -> Element<'_, Message> {
         text("Verification").size(20),
         iced::widget::space::horizontal(),
         button(text(if running { "Running..." } else { "Run Verify" }).size(14))
-            .on_press_maybe(if running {
-                None
-            } else {
-                Some(Message::RunVerify)
-            })
             .style(button::primary)
-            .padding([6, 14]),
+            .padding([6, 14])
+            .on_action_maybe(
+                (!running).then_some(ButtonAction::RunVerify),
+                "Verification is already running.",
+            ),
     ]
     .align_y(Alignment::Center);
 
