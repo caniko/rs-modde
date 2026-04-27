@@ -37,17 +37,27 @@ flake: {
         type = lib.types.nullOr (lib.types.submodule {
           options = {
             url = lib.mkOption {
-              type = lib.types.str;
+              type = lib.types.nullOr lib.types.str;
+              default = null;
               description = "URL to the .wabbajack modlist file.";
             };
             hash = lib.mkOption {
-              type = lib.types.str;
+              type = lib.types.nullOr lib.types.str;
+              default = null;
               description = "SHA-256 hash of the modlist file.";
+            };
+            path = lib.mkOption {
+              type = lib.types.nullOr (lib.types.either lib.types.path lib.types.str);
+              default = null;
+              description = "Local or Nix store path to an already available .wabbajack file.";
             };
           };
         });
         default = null;
-        description = "Wabbajack modlist source (mutually exclusive with nexusCollection).";
+        description = ''
+          Wabbajack modlist source (mutually exclusive with nexusCollection).
+          Set either path, or both url and hash.
+        '';
       };
 
       nexusCollection = lib.mkOption {
@@ -69,11 +79,36 @@ flake: {
     };
   });
   profileAssertions =
-    lib.mapAttrsToList (name: profile: {
-      assertion = !(profile.wabbajackList != null && profile.nexusCollection != null);
-      message = "programs.modde.profiles.${name}: wabbajackList and nexusCollection are mutually exclusive.";
-    })
-    cfg.profiles;
+    lib.attrValues (
+      lib.concatMapAttrs (
+        name: profile: let
+          hasWabbajack = profile.wabbajackList != null;
+          hasPath = hasWabbajack && profile.wabbajackList.path != null;
+          hasUrlHash =
+            hasWabbajack
+            && profile.wabbajackList.url != null
+            && profile.wabbajackList.hash != null;
+          hasPartialUrlHash =
+            hasWabbajack
+            && (profile.wabbajackList.url != null || profile.wabbajackList.hash != null)
+            && !hasUrlHash;
+        in {
+          "${name}-exclusive-source" = {
+            assertion = !(profile.wabbajackList != null && profile.nexusCollection != null);
+            message = "programs.modde.profiles.${name}: wabbajackList and nexusCollection are mutually exclusive.";
+          };
+          "${name}-wabbajack-source" = {
+            assertion = !hasWabbajack || (hasPath != hasUrlHash);
+            message = "programs.modde.profiles.${name}: wabbajackList must set exactly one source: path, or url plus hash.";
+          };
+          "${name}-wabbajack-url-hash" = {
+            assertion = !hasPartialUrlHash;
+            message = "programs.modde.profiles.${name}: wabbajackList url and hash must be set together.";
+          };
+        }
+      )
+      cfg.profiles
+    );
   profileActivation = name: profile: let
     nameArg = lib.escapeShellArg name;
     gameArg = lib.escapeShellArg profile.game;
@@ -100,9 +135,13 @@ flake: {
     then awaitingMessage "installMode = await-game"
     else if profile.wabbajackList != null
     then let
-      modlist = pkgs.fetchurl {
-        inherit (profile.wabbajackList) url hash;
-      };
+      modlist =
+        if profile.wabbajackList.path != null
+        then profile.wabbajackList.path
+        else
+          pkgs.fetchurl {
+            inherit (profile.wabbajackList) url hash;
+          };
       modlistArg = lib.escapeShellArg (toString modlist);
     in
       if profile.gameDir == null

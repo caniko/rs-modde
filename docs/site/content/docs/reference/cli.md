@@ -227,6 +227,50 @@ modde install mod <url> [--profile <name>] [--fomod-config <path>]
 
 ---
 
+## `modde wabbajack`
+
+Search, download, inspect, and support Wabbajack modlists.
+
+### `wabbajack search`
+
+Search public Wabbajack modlist catalogs.
+
+```bash
+modde wabbajack search [query] [--game <id>] [--source official|authored|both] [--json]
+```
+
+### `wabbajack download`
+
+Download a `.wabbajack` file by URL, machine URL, or title. Authored-files
+URLs are downloaded through modde's chunk-aware downloader when required.
+
+```bash
+modde wabbajack download <url-or-machine-url> [--output <dir>]
+```
+
+### `wabbajack hm-snippet`
+
+Generate a Home Manager profile snippet for a `.wabbajack` source.
+
+```bash
+modde wabbajack hm-snippet <url-or-file> --profile <name> --game <id> [--game-dir <path>] [--output <path>]
+```
+
+### `wabbajack import-archive`
+
+Import local archives into the modde store by matching the Wabbajack manifest
+hash. This is useful when an upstream authored-files archive disappeared but
+you still have the exact archive in an old Wabbajack cache.
+
+```bash
+modde wabbajack import-archive <path.wabbajack> <archive-path>...
+```
+
+The command hashes each archive and imports only files whose Wabbajack hash is
+referenced by the manifest. Matching by filename is intentionally refused.
+
+---
+
 ## `modde mod`
 
 Manage individual mods.

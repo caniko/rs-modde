@@ -32,6 +32,9 @@ programs.modde.profiles.my-skyrim = {
 };
 ```
 
+Use `wabbajackList.path` instead when the `.wabbajack` file is already present
+locally or in the Nix store.
+
 After installing the game through Steam or Heroic, set `gameDir` and switch back
 to the default `installMode = "auto"`.
 

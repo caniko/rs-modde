@@ -1,4 +1,6 @@
 use anyhow::{Context, Result, bail};
+use keyring_core::{Entry, Error as KeyringError};
+use modde_core::paths;
 use reqwest::Client;
 use serde::Deserialize;
 use tracing::{debug, info, warn};
@@ -16,8 +18,7 @@ struct ValidateResponse {
 
 /// Store the Nexus API key in the system keyring.
 pub fn store_api_key(api_key: &str) -> Result<()> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_KEY)
-        .context("failed to create keyring entry")?;
+    let entry = keyring_entry(KEYRING_SERVICE, KEYRING_KEY)?;
     entry
         .set_password(api_key)
         .context("failed to store API key in keyring")?;
@@ -27,8 +28,7 @@ pub fn store_api_key(api_key: &str) -> Result<()> {
 
 /// Delete the Nexus API key from the system keyring.
 pub fn delete_api_key() -> Result<()> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_KEY)
-        .context("failed to create keyring entry")?;
+    let entry = keyring_entry(KEYRING_SERVICE, KEYRING_KEY)?;
     entry
         .delete_credential()
         .context("failed to delete API key from keyring")?;
@@ -38,7 +38,7 @@ pub fn delete_api_key() -> Result<()> {
 
 /// Retrieve the API key from the system keyring, returning `None` if unavailable.
 fn load_from_keyring() -> Option<String> {
-    let entry = match keyring::Entry::new(KEYRING_SERVICE, KEYRING_KEY) {
+    let entry = match keyring_entry(KEYRING_SERVICE, KEYRING_KEY) {
         Ok(e) => e,
         Err(e) => {
             debug!("keyring unavailable: {e}");
@@ -51,7 +51,7 @@ fn load_from_keyring() -> Option<String> {
             Some(key)
         }
         Ok(_) => None,
-        Err(keyring::Error::NoEntry) => None,
+        Err(KeyringError::NoEntry) => None,
         Err(e) => {
             warn!("failed to read from keyring: {e}");
             None
@@ -59,12 +59,18 @@ fn load_from_keyring() -> Option<String> {
     }
 }
 
+fn keyring_entry(service: &str, key: &str) -> Result<Entry> {
+    keyring::use_native_store(false).context("failed to initialize system keyring store")?;
+    Entry::new(service, key).context("failed to create keyring entry")
+}
+
 /// Load Nexus API key from environment, keyring, or file fallback.
 ///
 /// Lookup chain:
 /// 1. `NEXUS_API_KEY` environment variable
 /// 2. System keyring (secret-service D-Bus)
-/// 3. `NEXUS_API_KEY_FILE` file path (sops-nix compatible)
+/// 3. `modde nexus auth` config file
+/// 4. `NEXUS_API_KEY_FILE` file path (sops-nix compatible)
 pub fn load_api_key() -> Result<String> {
     // 0. Try OAuth token first
     if let Some(token) = super::oauth::load_token() {
@@ -87,7 +93,12 @@ pub fn load_api_key() -> Result<String> {
         return Ok(key);
     }
 
-    // 3. Try reading from file path (sops-nix compatible)
+    // 3. Try the config file written by `modde nexus auth`.
+    if let Some(key) = load_from_config_file(&config_api_key_path())? {
+        return Ok(key);
+    }
+
+    // 4. Try reading from file path (sops-nix compatible)
     if let Ok(path) = std::env::var("NEXUS_API_KEY_FILE") {
         let key = std::fs::read_to_string(&path)
             .with_context(|| format!("failed to read API key from {path}"))?
@@ -99,6 +110,28 @@ pub fn load_api_key() -> Result<String> {
     }
 
     bail!("No Nexus API key found. Set NEXUS_API_KEY env var or run `modde nexus auth`.")
+}
+
+/// Path to the API key file written by `modde nexus auth`.
+#[must_use]
+pub fn config_api_key_path() -> std::path::PathBuf {
+    paths::modde_config_dir().join("nexus_api_key")
+}
+
+fn load_from_config_file(path: &std::path::Path) -> Result<Option<String>> {
+    if !path.exists() {
+        return Ok(None);
+    }
+
+    let key = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read API key from {}", path.display()))?
+        .trim()
+        .to_string();
+    if key.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(key))
+    }
 }
 
 /// Check if the given API key belongs to a premium account.
@@ -119,4 +152,30 @@ pub async fn check_premium(client: &Client, api_key: &str) -> Result<bool> {
     );
 
     Ok(resp.is_premium)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::load_from_config_file;
+
+    #[test]
+    fn load_from_config_file_trims_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nexus_api_key");
+        std::fs::write(&path, "  test-key\n").unwrap();
+
+        let key = load_from_config_file(&path).unwrap();
+        assert_eq!(key.as_deref(), Some("test-key"));
+    }
+
+    #[test]
+    fn load_from_config_file_ignores_missing_or_empty_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("missing");
+        assert!(load_from_config_file(&missing).unwrap().is_none());
+
+        let empty = dir.path().join("nexus_api_key");
+        std::fs::write(&empty, "\n").unwrap();
+        assert!(load_from_config_file(&empty).unwrap().is_none());
+    }
 }

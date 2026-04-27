@@ -63,8 +63,13 @@ Wabbajack modlist source. Mutually exclusive with `nexusCollection`.
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `url` | `str` | URL to the `.wabbajack` modlist file |
-| `hash` | `str` | Nix fetch hash for the `.wabbajack` file |
+| `url` | `null` or `str` | URL to the `.wabbajack` modlist file |
+| `hash` | `null` or `str` | Nix fetch hash for the `.wabbajack` file |
+| `path` | `null`, `path`, or `str` | Local or Nix store path to an already available `.wabbajack` file |
+
+Set exactly one source: either `path`, or both `url` and `hash`. Use `path`
+when composing with `requireFile` or another fetcher that already materializes
+the `.wabbajack` file.
 
 #### `profiles.<name>.nexusCollection`
 

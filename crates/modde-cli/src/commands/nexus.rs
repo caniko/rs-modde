@@ -3,7 +3,6 @@ use std::io::Write;
 use anyhow::{Context, Result};
 use tracing::info;
 
-use modde_core::paths;
 use modde_sources::nexus::auth;
 
 use crate::NexusAction;
@@ -43,19 +42,7 @@ fn map_nexus_error(e: anyhow::Error, rejected_advice: &str) -> anyhow::Error {
 }
 
 async fn handle_auth() -> Result<()> {
-    // Prompt user for API key
-    print!("Enter your Nexus API key: ");
-    std::io::stdout().flush()?;
-
-    let mut api_key = String::new();
-    std::io::stdin()
-        .read_line(&mut api_key)
-        .context("failed to read API key from stdin")?;
-    let api_key = api_key.trim().to_string();
-
-    if api_key.is_empty() {
-        anyhow::bail!("API key cannot be empty");
-    }
+    let (api_key, source) = read_auth_api_key()?;
 
     let client = nexus_client()?;
     let is_premium = auth::check_premium(&client, &api_key).await.map_err(|e| {
@@ -66,7 +53,7 @@ async fn handle_auth() -> Result<()> {
     })?;
 
     // Store the key at XDG config path
-    let key_path = config_key_path();
+    let key_path = auth::config_api_key_path();
     if let Some(parent) = key_path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
@@ -83,6 +70,9 @@ async fn handle_auth() -> Result<()> {
 
     info!(key_path = %key_path.display(), "API key stored");
 
+    if source == AuthKeySource::Environment {
+        println!("Loaded Nexus API key from NEXUS_API_KEY.");
+    }
     println!("API key validated and saved to {}", key_path.display());
     if is_premium {
         println!("Account type: Premium (automated downloads enabled)");
@@ -91,6 +81,48 @@ async fn handle_auth() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AuthKeySource {
+    Environment,
+    Prompt,
+}
+
+fn read_auth_api_key() -> Result<(String, AuthKeySource)> {
+    if let Ok(api_key) = std::env::var("NEXUS_API_KEY") {
+        return select_auth_api_key(Some(api_key), None);
+    }
+
+    print!("Enter your Nexus API key: ");
+    std::io::stdout().flush()?;
+
+    let mut api_key = String::new();
+    std::io::stdin()
+        .read_line(&mut api_key)
+        .context("failed to read API key from stdin")?;
+    select_auth_api_key(None, Some(api_key))
+}
+
+fn select_auth_api_key(
+    env_key: Option<String>,
+    prompted_key: Option<String>,
+) -> Result<(String, AuthKeySource)> {
+    if let Some(key) = env_key {
+        let key = key.trim().to_string();
+        if !key.is_empty() {
+            return Ok((key, AuthKeySource::Environment));
+        }
+    }
+
+    if let Some(key) = prompted_key {
+        let key = key.trim().to_string();
+        if !key.is_empty() {
+            return Ok((key, AuthKeySource::Prompt));
+        }
+    }
+
+    anyhow::bail!("API key cannot be empty");
 }
 
 async fn handle_status() -> Result<()> {
@@ -115,7 +147,29 @@ async fn handle_status() -> Result<()> {
     Ok(())
 }
 
-/// Path to store the API key: `~/.config/modde/nexus_api_key`.
-fn config_key_path() -> std::path::PathBuf {
-    paths::modde_config_dir().join("nexus_api_key")
+#[cfg(test)]
+mod tests {
+    use super::{AuthKeySource, select_auth_api_key};
+
+    #[test]
+    fn auth_prefers_non_empty_env_key() {
+        let (key, source) =
+            select_auth_api_key(Some(" env-key \n".into()), Some("prompt-key".into())).unwrap();
+        assert_eq!(key, "env-key");
+        assert_eq!(source, AuthKeySource::Environment);
+    }
+
+    #[test]
+    fn auth_falls_back_to_prompt_when_env_key_is_empty() {
+        let (key, source) =
+            select_auth_api_key(Some(" \n".into()), Some(" prompt-key ".into())).unwrap();
+        assert_eq!(key, "prompt-key");
+        assert_eq!(source, AuthKeySource::Prompt);
+    }
+
+    #[test]
+    fn auth_rejects_empty_keys() {
+        let err = select_auth_api_key(Some("".into()), Some(" \n".into())).unwrap_err();
+        assert!(format!("{err:#}").contains("API key cannot be empty"));
+    }
 }

@@ -41,6 +41,21 @@ hash for the actual authored-files `.wabbajack` URL and update
 If downloads fail before staging begins, check that
 `programs.modde.nexus.apiKeyFile` points to a readable Nexus API key file.
 
+If modde reports unavailable Wabbajack authored files, the upstream
+authored-files entries referenced by the `.wabbajack` manifest are missing.
+The error lists each archive, expected hash, metadata URL, and a `curl -fI`
+validation command. The upstream modlist or Wabbajack authored-files publisher
+must restore those exact files or publish a newer `.wabbajack` manifest.
+
+If you have the exact archives locally, import them explicitly:
+
+```bash
+modde wabbajack import-archive /path/to/list.wabbajack /path/to/archive.7z
+```
+
+Import matches by Wabbajack hash only. A file with the same name but a different
+hash is refused.
+
 ## Nexus API authentication fails
 
 Check your API key status:

@@ -43,6 +43,19 @@ programs.modde = {
 reference vanilla game files need `gameDir` so modde can verify those local
 files during installation.
 
+For Wabbajack files you already have in the Nix store, use a local path source
+instead:
+
+```nix
+programs.modde.profiles.living-skyrim = {
+  game = "skyrim-se";
+  gameDir = "/home/me/.local/share/Steam/steamapps/common/Skyrim Special Edition";
+  wabbajackList = {
+    path = /nix/store/...-Living-Skyrim.wabbajack;
+  };
+};
+```
+
 If Skyrim is not installed yet, you can declare the profile first and let Home
 Manager wait:
 

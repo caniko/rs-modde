@@ -126,6 +126,13 @@ A NixOS home-manager module is included for declarative mod profile configuratio
           hash = "sha256-...";
         };
       };
+      my-local-skyrim = {
+        game = "skyrim-se";
+        gameDir = "/home/me/.local/share/Steam/steamapps/common/Skyrim Special Edition";
+        wabbajackList = {
+          path = /nix/store/...-Legends-of-the-Frost.wabbajack;
+        };
+      };
       my-cyberpunk = {
         game = "cyberpunk2077";
         nexusCollection = {

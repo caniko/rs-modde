@@ -47,6 +47,9 @@ programs.modde.profiles.lotf = {
 };
 ```
 
+If the `.wabbajack` file is supplied by `requireFile` or another local Nix
+path, set `wabbajackList.path` instead of `url` and `hash`.
+
 modde waits for launcher-managed game installs; it does not install the base
 game itself.
 

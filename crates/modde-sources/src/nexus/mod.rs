@@ -71,6 +71,7 @@ impl DownloadSource for NexusSource {
 
         Ok(DownloadHandle {
             url: download_url,
+            candidate_urls: Vec::new(),
             headers: HashMap::new(),
             expected_hash: *hash,
             size_hint: None,

@@ -51,6 +51,19 @@ programs.modde = {
 };
 ```
 
+If the modlist is already available locally, for example through
+`pkgs.requireFile` or a custom fetcher, use `path` instead of `url` and `hash`:
+
+```nix
+programs.modde.profiles.my-modlist = {
+  game = "skyrim-se";
+  gameDir = "/home/me/.local/share/Steam/steamapps/common/Skyrim Special Edition";
+  wabbajackList = {
+    path = /nix/store/...-Legends-of-the-Frost.wabbajack;
+  };
+};
+```
+
 Use `installMode = "await-game"` while the game is not installed yet. Activation
 will skip install/deploy and print the next step instead of failing.
 
@@ -63,9 +76,32 @@ modde install wabbajack /path/to/modlist.wabbajack \
 ```
 
 Wabbajack registry pages usually link through to an authored-files URL for the
-actual `.wabbajack` archive. Use that archive URL for `wabbajackList.url`, then
-compute the Nix hash with `nix store prefetch-file <url>` or a normal Nix
-prefetch workflow.
+actual `.wabbajack` archive. Some authored-files CDN links now resolve through
+Wabbajack's chunked download page instead of a plain file response, so
+`pkgs.fetchurl` may 404 even when modde's chunk-aware downloader works. In that
+case, download the file with `modde wabbajack download` and use
+`wabbajackList.path`, or use a dedicated fetcher that reconstructs the chunks.
+
+## Missing authored-files archives
+
+Some Wabbajack modlists reference generated authored-files archives hosted by
+Wabbajack. If those upstream entries disappear, modde fails before bulk
+downloads and prints every missing archive plus a `curl -fI` validation command.
+modde will not substitute similarly named files because the manifest hash is the
+only safe identity for an archive.
+
+If you already have the exact missing archives in an old Wabbajack cache or a
+backup, import them into the modde store:
+
+```bash
+modde wabbajack import-archive /path/to/list.wabbajack \
+  /path/to/missing-archive-1.7z \
+  /path/to/missing-archive-2.7z
+```
+
+The import command hashes each file and imports only archives whose Wabbajack
+hash matches an archive referenced by the manifest. Filename-only matches are
+reported as mismatches and are not imported.
 
 ## Supported games
 

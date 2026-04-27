@@ -1,4 +1,5 @@
 use anyhow::Result;
+use keyring_core::Entry;
 use tracing::info;
 
 /// Nexus `OAuth2` application credentials.
@@ -119,7 +120,7 @@ pub async fn refresh_token(client: &reqwest::Client, refresh: &str) -> Result<OA
 /// Store OAuth token in keyring.
 pub fn store_token(token: &OAuthToken) -> Result<()> {
     let json = serde_json::to_string(token)?;
-    let entry = keyring::Entry::new("modde", "nexus-oauth-token")?;
+    let entry = keyring_entry()?;
     entry.set_password(&json)?;
     Ok(())
 }
@@ -127,16 +128,21 @@ pub fn store_token(token: &OAuthToken) -> Result<()> {
 /// Load OAuth token from keyring.
 #[must_use]
 pub fn load_token() -> Option<OAuthToken> {
-    let entry = keyring::Entry::new("modde", "nexus-oauth-token").ok()?;
+    let entry = keyring_entry().ok()?;
     let json = entry.get_password().ok()?;
     serde_json::from_str(&json).ok()
 }
 
 /// Delete stored token.
 pub fn delete_token() -> Result<()> {
-    let entry = keyring::Entry::new("modde", "nexus-oauth-token")?;
+    let entry = keyring_entry()?;
     entry.delete_credential()?;
     Ok(())
+}
+
+fn keyring_entry() -> Result<Entry> {
+    keyring::use_native_store(false)?;
+    Ok(Entry::new("modde", "nexus-oauth-token")?)
 }
 
 fn urlencoding_simple(s: &str) -> String {
