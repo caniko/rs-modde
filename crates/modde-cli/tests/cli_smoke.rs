@@ -107,6 +107,14 @@ fn cli_wabbajack_hm_snippet_help() {
 }
 
 #[test]
+fn cli_wabbajack_import_archive_help() {
+    modde()
+        .args(["wabbajack", "import-archive", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
 fn cli_install_nexus_collection_help() {
     modde()
         .args(["install", "nexus-collection", "--help"])

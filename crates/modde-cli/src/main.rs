@@ -605,6 +605,11 @@ pub enum WabbajackAction {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Import local archives into the modde store by matching Wabbajack hashes
+    ImportArchive {
+        manifest: PathBuf,
+        archives: Vec<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]

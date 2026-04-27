@@ -1,6 +1,7 @@
 pub mod bsa_repack;
 pub mod catalog;
 pub mod cdn;
+pub mod import;
 pub mod installer;
 pub mod manifest;
 pub mod patcher;

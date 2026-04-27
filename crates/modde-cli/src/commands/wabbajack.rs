@@ -6,6 +6,8 @@ use modde_sources::wabbajack::catalog::{
     CatalogFilter, CatalogSource, download_wabbajack_file, fetch_catalog, filter_entries,
     find_entry, hm_snippet_for_source, resolve_download_target,
 };
+use modde_sources::wabbajack::import::{ArchiveImportStatus, import_archives};
+use modde_sources::wabbajack::runner::parse_wabbajack_manifest;
 
 use crate::WabbajackAction;
 
@@ -28,6 +30,9 @@ pub async fn handle(action: WabbajackAction) -> Result<()> {
             game_dir,
             output,
         } => hm_snippet(url_or_file, profile, game, game_dir, output).await,
+        WabbajackAction::ImportArchive { manifest, archives } => {
+            import_archive(manifest, archives).await
+        }
     }
 }
 
@@ -81,6 +86,65 @@ async fn search(
         println!("  source: {:?}  official: {}", entry.source, entry.official);
         println!("  download: {}", entry.download_url);
     }
+    Ok(())
+}
+
+async fn import_archive(manifest_path: PathBuf, archives: Vec<PathBuf>) -> Result<()> {
+    if archives.is_empty() {
+        anyhow::bail!("at least one archive path is required");
+    }
+    let manifest = parse_wabbajack_manifest(&manifest_path)?;
+    let store = modde_core::paths::store_dir();
+    let results = import_archives(&manifest, &store, &archives).await?;
+
+    let mut refused = 0_usize;
+    for result in &results {
+        match result.status {
+            ArchiveImportStatus::Imported => {
+                println!(
+                    "imported {} -> {} ({})",
+                    result.source_path.display(),
+                    result
+                        .store_path
+                        .as_ref()
+                        .map_or_else(|| "<missing>".into(), |p| p.display().to_string()),
+                    result.matched_archive.as_deref().unwrap_or("<unknown>")
+                );
+            }
+            ArchiveImportStatus::AlreadyPresent => {
+                println!(
+                    "already-present {} -> {} ({})",
+                    result.source_path.display(),
+                    result
+                        .store_path
+                        .as_ref()
+                        .map_or_else(|| "<missing>".into(), |p| p.display().to_string()),
+                    result.matched_archive.as_deref().unwrap_or("<unknown>")
+                );
+            }
+            ArchiveImportStatus::Mismatched => {
+                refused += 1;
+                eprintln!(
+                    "mismatched {}: filename appears in manifest, but computed xxh64 {:016x} does not match any archive hash",
+                    result.source_path.display(),
+                    result.computed_xxh64
+                );
+            }
+            ArchiveImportStatus::Unused => {
+                refused += 1;
+                eprintln!(
+                    "unused {}: computed xxh64 {:016x} is not referenced by the manifest",
+                    result.source_path.display(),
+                    result.computed_xxh64
+                );
+            }
+        }
+    }
+
+    if refused > 0 {
+        anyhow::bail!("refused {refused} archive import(s)");
+    }
+
     Ok(())
 }
 
