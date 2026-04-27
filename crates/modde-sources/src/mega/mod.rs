@@ -129,6 +129,7 @@ impl DownloadSource for MegaSource {
 
         Ok(DownloadHandle {
             url: file_info.g,
+            candidate_urls: Vec::new(),
             headers,
             expected_hash: *hash,
             size_hint: Some(file_info.s),
@@ -507,6 +508,7 @@ mod tests {
         let directive = DownloadDirective::DirectURL {
             url: "https://example.com/file.zip".to_string(),
             headers: HashMap::new(),
+            mirror_resolver: None,
             hash: 0,
         };
         assert!(!source.can_handle(&directive));

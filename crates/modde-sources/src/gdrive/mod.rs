@@ -38,6 +38,7 @@ impl DownloadSource for GoogleDriveSource {
 
         Ok(DownloadHandle {
             url,
+            candidate_urls: Vec::new(),
             headers: HashMap::new(),
             expected_hash: *hash,
             size_hint: None,
@@ -288,6 +289,7 @@ mod tests {
         let directive = DownloadDirective::DirectURL {
             url: "https://example.com/file".to_string(),
             headers: std::collections::HashMap::new(),
+            mirror_resolver: None,
             hash: 0,
         };
         assert!(!source.can_handle(&directive));

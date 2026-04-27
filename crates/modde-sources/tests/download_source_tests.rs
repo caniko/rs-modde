@@ -15,12 +15,14 @@ use modde_sources::traits::{AnySource, DownloadHandle, DownloadSource, VerifiedF
 fn test_download_handle_default_fields() {
     let handle = DownloadHandle {
         url: "https://example.com/file.zip".to_string(),
+        candidate_urls: Vec::new(),
         headers: HashMap::new(),
         expected_hash: 12345,
         size_hint: None,
     };
 
     assert_eq!(handle.url, "https://example.com/file.zip");
+    assert!(handle.candidate_urls.is_empty());
     assert!(handle.headers.is_empty());
     assert_eq!(handle.expected_hash, 12345);
     assert!(handle.size_hint.is_none());
@@ -34,6 +36,7 @@ fn test_download_handle_with_headers() {
 
     let handle = DownloadHandle {
         url: "https://cdn.example.com/file.zip".to_string(),
+        candidate_urls: Vec::new(),
         headers,
         expected_hash: 0,
         size_hint: Some(1024 * 1024),
@@ -47,6 +50,7 @@ fn test_download_handle_with_headers() {
 fn test_download_handle_clone() {
     let handle = DownloadHandle {
         url: "https://example.com/file.zip".to_string(),
+        candidate_urls: vec!["https://mirror.example.com/file.zip".to_string()],
         headers: HashMap::from([("key".to_string(), "value".to_string())]),
         expected_hash: 42,
         size_hint: Some(100),
@@ -54,6 +58,7 @@ fn test_download_handle_clone() {
 
     let cloned = handle.clone();
     assert_eq!(handle.url, cloned.url);
+    assert_eq!(handle.candidate_urls, cloned.candidate_urls);
     assert_eq!(handle.expected_hash, cloned.expected_hash);
     assert_eq!(handle.headers, cloned.headers);
     assert_eq!(handle.size_hint, cloned.size_hint);
@@ -92,6 +97,7 @@ fn test_direct_source_can_handle_direct_url() {
     let directive = DownloadDirective::DirectURL {
         url: "https://example.com/mod.zip".to_string(),
         headers: HashMap::new(),
+        mirror_resolver: None,
         hash: 123,
     };
     assert!(source.can_handle(&directive));
@@ -139,6 +145,7 @@ async fn test_direct_source_resolve() {
     let directive = DownloadDirective::DirectURL {
         url: "https://cdn.example.com/mod.zip".to_string(),
         headers: headers.clone(),
+        mirror_resolver: None,
         hash: 12345,
     };
 
@@ -146,6 +153,7 @@ async fn test_direct_source_resolve() {
     assert_eq!(handle.url, "https://cdn.example.com/mod.zip");
     assert_eq!(handle.expected_hash, 12345);
     assert_eq!(handle.headers.get("X-Custom").unwrap(), "value");
+    assert!(handle.candidate_urls.is_empty());
     assert!(handle.size_hint.is_none());
 }
 
@@ -190,6 +198,7 @@ fn test_github_source_rejects_direct() {
     let directive = DownloadDirective::DirectURL {
         url: "https://example.com".to_string(),
         headers: HashMap::new(),
+        mirror_resolver: None,
         hash: 1,
     };
     assert!(!source.can_handle(&directive));
@@ -291,6 +300,7 @@ fn test_mega_source_rejects_direct() {
     let directive = DownloadDirective::DirectURL {
         url: "https://example.com".to_string(),
         headers: HashMap::new(),
+        mirror_resolver: None,
         hash: 1,
     };
     assert!(!source.can_handle(&directive));
@@ -335,12 +345,16 @@ fn test_exactly_one_source_handles_each_directive_type() {
             client.clone(),
         )),
         AnySource::Mega(modde_sources::mega::MegaSource::new(client.clone())),
+        AnySource::WabbajackCdn(modde_sources::wabbajack::cdn::WabbajackCdnSource::new(
+            client.clone(),
+        )),
     ];
 
     let test_directives: Vec<DownloadDirective> = vec![
         DownloadDirective::DirectURL {
             url: "https://x.com".to_string(),
             headers: HashMap::new(),
+            mirror_resolver: None,
             hash: 1,
         },
         DownloadDirective::GitHub {
@@ -357,6 +371,10 @@ fn test_exactly_one_source_handles_each_directive_type() {
         DownloadDirective::Mega {
             url: "https://mega.nz/file/X#Y".to_string(),
             hash: 4,
+        },
+        DownloadDirective::WabbajackCdn {
+            url: "https://authored-files.wabbajack.org/file.zip_abc".to_string(),
+            hash: 5,
         },
     ];
 

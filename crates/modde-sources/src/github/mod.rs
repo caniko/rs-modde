@@ -73,6 +73,7 @@ impl DownloadSource for GitHubSource {
 
         Ok(DownloadHandle {
             url: found.browser_download_url.clone(),
+            candidate_urls: Vec::new(),
             headers: HashMap::new(),
             expected_hash: *hash,
             size_hint: Some(found.size),

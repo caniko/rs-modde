@@ -4,11 +4,12 @@ use anyhow::Result;
 use futures::StreamExt;
 use reqwest::Client;
 use tokio::io::AsyncWriteExt;
-use tracing::debug;
+use tracing::{debug, info};
 
 use modde_core::manifest::wabbajack::DownloadDirective;
 
 use crate::common::{ensure_parent, verify_and_wrap, with_retry};
+use crate::mirror::resolve_html_mirrors;
 use crate::traits::{DownloadHandle, DownloadSource, ProgressCallback, VerifiedFile};
 
 /// Plain HTTPS download source with Range header support for resume.
@@ -29,13 +30,34 @@ impl DownloadSource for DirectSource {
     }
 
     async fn resolve(&self, directive: &DownloadDirective) -> Result<DownloadHandle> {
-        let DownloadDirective::DirectURL { url, headers, hash } = directive else {
+        let DownloadDirective::DirectURL {
+            url,
+            headers,
+            mirror_resolver,
+            hash,
+        } = directive
+        else {
             anyhow::bail!("not a DirectURL directive");
         };
 
+        let candidate_urls = if let Some(resolver) = mirror_resolver {
+            resolve_html_mirrors(&self.client, resolver).await?
+        } else {
+            Vec::new()
+        };
+        let mut headers = headers.clone();
+        if let Some(resolver) = mirror_resolver
+            && let Some(user_agent) = &resolver.user_agent
+        {
+            headers
+                .entry("User-Agent".to_string())
+                .or_insert_with(|| user_agent.clone());
+        }
+
         Ok(DownloadHandle {
             url: url.clone(),
-            headers: headers.clone(),
+            candidate_urls,
+            headers,
             expected_hash: *hash,
             size_hint: None,
         })
@@ -50,16 +72,45 @@ impl DownloadSource for DirectSource {
         ensure_parent(dest).await?;
 
         let client = self.client.clone();
-        let handle_ref = &handle;
         let dest_ref = dest;
         let progress_ref = &progress;
+        let candidates = if handle.candidate_urls.is_empty() {
+            vec![handle.url.clone()]
+        } else {
+            handle.candidate_urls.clone()
+        };
 
-        with_retry("direct download", || async {
-            download_with_resume(&client, handle_ref, dest_ref, progress_ref).await
-        })
-        .await?;
+        let mut errors = Vec::new();
+        for (idx, url) in candidates.iter().enumerate() {
+            let mut candidate = handle.clone();
+            candidate.url = url.clone();
+            let result = with_retry("direct download", || async {
+                download_with_resume(&client, &candidate, dest_ref, progress_ref).await
+            })
+            .await;
+            match result {
+                Ok(()) => {
+                    if idx > 0 {
+                        info!(url = %candidate.url, "direct download mirror succeeded");
+                    }
+                    return verify_and_wrap(dest, handle.expected_hash).await;
+                }
+                Err(e) => {
+                    errors.push(format!("{}: {e:#}", candidate.url));
+                    let _ = tokio::fs::remove_file(dest).await;
+                }
+            }
+        }
 
-        verify_and_wrap(dest, handle.expected_hash).await
+        anyhow::bail!(
+            "all {} direct download candidate(s) failed:\n{}",
+            candidates.len(),
+            errors
+                .iter()
+                .map(|error| format!("  - {error}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
     }
 }
 
@@ -119,4 +170,76 @@ async fn download_with_resume(
 
     file.flush().await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::io::{Read as _, Write as _};
+    use std::net::TcpListener;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use std::thread;
+    use xxhash_rust::xxh64::xxh64;
+
+    #[tokio::test]
+    async fn direct_download_tries_candidate_urls_in_order() {
+        let body = b"mirror payload";
+        let expected_hash = xxh64(body, 0);
+        let (base_url, requests) = start_fallback_server(body);
+        let handle = DownloadHandle {
+            url: format!("{base_url}/original"),
+            candidate_urls: vec![format!("{base_url}/bad"), format!("{base_url}/good")],
+            headers: HashMap::new(),
+            expected_hash,
+            size_hint: None,
+        };
+        let temp = tempfile::tempdir().unwrap();
+        let dest = temp.path().join("download.archive");
+        let source = DirectSource::new(Client::new());
+
+        let verified = source.download(handle, &dest).await.unwrap();
+        assert_eq!(verified.hash, expected_hash);
+        assert_eq!(tokio::fs::read(&verified.path).await.unwrap(), body);
+        assert!(requests.load(Ordering::SeqCst) >= 2);
+    }
+
+    fn start_fallback_server(body: &'static [u8]) -> (String, Arc<AtomicUsize>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let requests = Arc::new(AtomicUsize::new(0));
+        let request_count = Arc::clone(&requests);
+        thread::spawn(move || {
+            for stream in listener.incoming().take(8) {
+                let mut stream = stream.unwrap();
+                let mut buf = [0_u8; 1024];
+                let n = stream.read(&mut buf).unwrap();
+                let request = String::from_utf8_lossy(&buf[..n]);
+                let path = request
+                    .lines()
+                    .next()
+                    .and_then(|line| line.split_whitespace().nth(1))
+                    .unwrap_or("/");
+                request_count.fetch_add(1, Ordering::SeqCst);
+                match path {
+                    "/bad" => write_response(&mut stream, "500 Internal Server Error", b"bad"),
+                    "/good" => write_response(&mut stream, "200 OK", body),
+                    _ => write_response(&mut stream, "404 Not Found", b"missing"),
+                }
+            }
+        });
+        (format!("http://{addr}"), requests)
+    }
+
+    fn write_response(stream: &mut std::net::TcpStream, status: &str, body: &[u8]) {
+        let headers = format!(
+            "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        stream.write_all(headers.as_bytes()).unwrap();
+        stream.write_all(body).unwrap();
+    }
 }

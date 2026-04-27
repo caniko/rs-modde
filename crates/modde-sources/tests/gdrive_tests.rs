@@ -76,6 +76,7 @@ fn gdrive_source_rejects_direct_url_directive() {
     let directive = DownloadDirective::DirectURL {
         url: "https://example.com/dl".to_string(),
         headers: HashMap::new(),
+        mirror_resolver: None,
         hash: 0,
     };
     assert!(!source.can_handle(&directive));

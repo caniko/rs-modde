@@ -6,6 +6,7 @@ pub mod installers;
 pub mod manager;
 pub mod mega;
 pub mod meta;
+pub(crate) mod mirror;
 pub mod nexus;
 pub mod queue;
 pub mod traits;

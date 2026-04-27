@@ -14,6 +14,7 @@ pub type ProgressCallback = Arc<dyn Fn(u64, u64) + Send + Sync>;
 #[derive(Debug, Clone)]
 pub struct DownloadHandle {
     pub url: String,
+    pub candidate_urls: Vec<String>,
     pub headers: HashMap<String, String>,
     pub expected_hash: u64,
     pub size_hint: Option<u64>,
@@ -70,6 +71,7 @@ pub enum AnySource {
     GoogleDrive(crate::gdrive::GoogleDriveSource),
     Mega(crate::mega::MegaSource),
     Direct(crate::direct::DirectSource),
+    WabbajackCdn(crate::wabbajack::cdn::WabbajackCdnSource),
 }
 
 /// Dispatch a non-async method call to the inner source variant.
@@ -81,6 +83,7 @@ macro_rules! dispatch {
             AnySource::GoogleDrive(s) => s.$method($($arg),*),
             AnySource::Mega(s) => s.$method($($arg),*),
             AnySource::Direct(s) => s.$method($($arg),*),
+            AnySource::WabbajackCdn(s) => s.$method($($arg),*),
         }
     };
 }
@@ -94,6 +97,7 @@ macro_rules! dispatch_async {
             AnySource::GoogleDrive(s) => s.$method($($arg),*).await,
             AnySource::Mega(s) => s.$method($($arg),*).await,
             AnySource::Direct(s) => s.$method($($arg),*).await,
+            AnySource::WabbajackCdn(s) => s.$method($($arg),*).await,
         }
     };
 }
