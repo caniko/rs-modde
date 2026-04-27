@@ -128,6 +128,33 @@ files or publish a new `.wabbajack` artifact whose manifest references available
 authored-file IDs. modde cannot proceed truthfully without the exact files
 because the archive hashes and directive inputs are fixed by the manifest.
 
+## Local Recovery Attempt
+
+On 2026-04-27, the three authoritative metadata URLs were rechecked with
+`curl -fI`. All three still returned `404 Not Found`.
+
+Local recovery was attempted without substituting archives. The search covered:
+
+- `/tmp/modde-lotf-plan`
+- `/tmp/modde-lotf-data`
+- `/home/can`
+- `/data`
+
+The search looked for the expected archive names and the exact modde store
+filenames:
+
+```text
+b547423a91bc433a.archive
+15f31c001fe701ce.archive
+d75635216ba812cd.archive
+```
+
+No candidate files were found, and the three exact store paths under
+`/tmp/modde-lotf-data/modde/store` are absent. Because there were no candidate
+archives, `modde wabbajack import-archive` was not run against local files and
+the synthetic install was not rerun. The blocker remains the missing upstream
+authored-files inputs.
+
 ## Implemented Follow-Up Features
 
 The previously identified follow-up features are now implemented:
