@@ -113,6 +113,8 @@ impl WabbajackInstaller {
 
         self.validate_game_file_sources()?;
         self.verify_game_file_sources().await?;
+        self.validate_download_sources(&downloads)?;
+        self.preflight_authored_files().await?;
 
         progress_tx
             .send(InstallProgress::Starting {
@@ -225,13 +227,27 @@ impl WabbajackInstaller {
                         tokio::fs::create_dir_all(parent).await?;
                     }
 
-                    // Skip if already downloaded
+                    // Skip only if the existing archive is complete and valid.
+                    // Interrupted installs can leave partial files at the final
+                    // store path; those must be discarded before retrying.
                     if dest.exists() {
-                        info!(name = %name, "archive already exists, skipping download");
-                        progress_tx
-                            .send(InstallProgress::DownloadComplete { name })
-                            .ok();
-                        return Ok(());
+                        match modde_core::hash::verify_xxh64(&dest, handle.expected_hash).await {
+                            Ok(()) => {
+                                info!(name = %name, "archive already exists, skipping download");
+                                progress_tx
+                                    .send(InstallProgress::DownloadComplete { name })
+                                    .ok();
+                                return Ok(());
+                            }
+                            Err(e) => {
+                                warn!(
+                                    name = %name,
+                                    path = %dest.display(),
+                                    "existing archive failed verification, redownloading: {e}"
+                                );
+                                let _ = tokio::fs::remove_file(&dest).await;
+                            }
+                        }
                     }
 
                     // Report download start
@@ -463,7 +479,54 @@ impl WabbajackInstaller {
         Ok(())
     }
 
+    fn validate_download_sources(&self, downloads: &[DownloadDirective]) -> Result<()> {
+        let missing: Vec<String> = downloads
+            .iter()
+            .filter(|directive| {
+                !self
+                    .sources
+                    .iter()
+                    .any(|source| source.can_handle(directive))
+            })
+            .map(|directive| directive.display_name().into_owned())
+            .collect();
+
+        if !missing.is_empty() {
+            let shown = missing
+                .iter()
+                .take(20)
+                .map(|name| format!("  - {name}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let omitted = missing.len().saturating_sub(20);
+            let suffix = if omitted == 0 {
+                String::new()
+            } else {
+                format!("\n  ... and {omitted} more")
+            };
+            bail!(
+                "Wabbajack manifest requires {} download(s) with no registered source:\n{}{}\nConfigure the missing source before running the install.",
+                missing.len(),
+                shown,
+                suffix
+            );
+        }
+
+        Ok(())
+    }
+
+    async fn preflight_authored_files(&self) -> Result<()> {
+        for source in self.sources.iter() {
+            if let AnySource::WabbajackCdn(source) = source {
+                return source.preflight_archives(&self.manifest.archives).await;
+            }
+        }
+        Ok(())
+    }
+
     async fn verify_game_file_sources(&self) -> Result<()> {
+        let mut failures = Vec::new();
+
         for archive in self
             .manifest
             .archives
@@ -475,21 +538,37 @@ impl WabbajackInstaller {
             };
 
             if !source.path.exists() {
-                bail!(
+                failures.push(format!(
                     "game-file source '{}' is missing at {}",
                     source.rel_path,
                     source.path.display()
-                );
+                ));
+                continue;
             }
 
-            modde_core::hash::verify_xxh64(&source.path, archive.hash)
+            let actual = modde_core::hash::hash_file_xxh64(&source.path)
                 .await
                 .with_context(|| {
-                    format!(
-                        "game-file source '{}' failed hash verification (expected xxh64 {:016x})",
-                        source.rel_path, archive.hash
-                    )
+                    format!("failed to hash game-file source '{}'", source.rel_path)
                 })?;
+            if actual != archive.hash {
+                failures.push(format!(
+                    "game-file source '{}' failed hash verification (expected xxh64 {:016x}, got {:016x})",
+                    source.rel_path, archive.hash, actual
+                ));
+            }
+        }
+
+        if !failures.is_empty() {
+            bail!(
+                "Wabbajack game-file source validation failed for {} file(s):\n{}",
+                failures.len(),
+                failures
+                    .iter()
+                    .map(|failure| format!("  - {failure}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
         }
 
         Ok(())
@@ -647,7 +726,7 @@ async fn read_game_file_source(path: &Path, from: &str) -> Result<Vec<u8>> {
 }
 
 /// Compute the storage path for an archive by its hash.
-fn archive_path(store_dir: &Path, hash: &u64) -> PathBuf {
+pub(crate) fn archive_path(store_dir: &Path, hash: &u64) -> PathBuf {
     store_dir.join(format!("{hash:016x}.archive"))
 }
 
@@ -919,7 +998,10 @@ fn find_entry_in_archive(archive: &zip::ZipArchive<std::fs::File>, path: &str) -
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use std::io::Write as _;
+    use std::io::{Read as _, Write as _};
+    use std::net::TcpListener;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::thread;
     use xxhash_rust::xxh64::xxh64;
 
     /// Helper: create a zip file on disk with the given entries.
@@ -933,6 +1015,36 @@ mod tests {
             writer.write_all(data).unwrap();
         }
         writer.finish().unwrap();
+    }
+
+    fn zip_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        {
+            let mut writer = zip::ZipWriter::new(&mut cursor);
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            for (name, data) in entries {
+                writer.start_file(*name, options).unwrap();
+                writer.write_all(data).unwrap();
+            }
+            writer.finish().unwrap();
+        }
+        cursor.into_inner()
+    }
+
+    fn data_patch(data: &[u8]) -> Vec<u8> {
+        let mut patch = Vec::new();
+        patch.extend_from_slice(b"OCTODELTA");
+        patch.push(1);
+        patch.push(4);
+        patch.extend_from_slice(b"SHA1");
+        patch.extend_from_slice(&20_u32.to_le_bytes());
+        patch.extend_from_slice(&[0_u8; 20]);
+        patch.extend_from_slice(b">>>");
+        patch.push(0x80);
+        patch.extend_from_slice(&(data.len() as u64).to_le_bytes());
+        patch.extend_from_slice(data);
+        patch
     }
 
     /// Helper: open a zip for `find_entry_in_archive` tests.
@@ -981,6 +1093,78 @@ mod tests {
         }
     }
 
+    fn manifest_with_nexus_download(hash: u64) -> WabbajackManifest {
+        WabbajackManifest {
+            archives: vec![modde_core::manifest::wabbajack::ArchiveEntry {
+                hash,
+                name: "nexus archive".into(),
+                size: 1,
+                state: Some(ArchiveState::NexusDownloader {
+                    game_name: "skyrimspecialedition".into(),
+                    mod_id: 123,
+                    file_id: 456,
+                }),
+            }],
+            ..minimal_manifest()
+        }
+    }
+
+    fn synthetic_server(
+        cdn_archive: Vec<u8>,
+        direct_archive: Vec<u8>,
+    ) -> (String, Arc<AtomicUsize>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let count = Arc::new(AtomicUsize::new(0));
+        let thread_count = Arc::clone(&count);
+        thread::spawn(move || {
+            for stream in listener.incoming().take(8) {
+                let mut stream = stream.unwrap();
+                let mut buf = [0_u8; 2048];
+                let n = stream.read(&mut buf).unwrap();
+                let request = String::from_utf8_lossy(&buf[..n]);
+                let path = request
+                    .lines()
+                    .next()
+                    .and_then(|line| line.split_whitespace().nth(1))
+                    .unwrap_or("/");
+                thread_count.fetch_add(1, Ordering::SeqCst);
+                match path {
+                    "/authored_files/download/cdn.zip_abc" => {
+                        let body = format!(
+                            r#"<script>
+                              const MUNGED_NAME = "cdn.zip_abc";
+                              const FILE_NAME = "cdn.zip";
+                              const FILE_SIZE_BYTES = {};
+                              const PARTS = [{{"Size":{},"Offset":0,"Index":0}}];
+                            </script>"#,
+                            cdn_archive.len(),
+                            cdn_archive.len()
+                        );
+                        write_response(&mut stream, "200 OK", body.as_bytes());
+                    }
+                    "/authored_files/cdn.zip_abc/parts/0" => {
+                        write_response(&mut stream, "200 OK", &cdn_archive);
+                    }
+                    "/direct.zip" => {
+                        write_response(&mut stream, "200 OK", &direct_archive);
+                    }
+                    _ => write_response(&mut stream, "404 Not Found", b"not found"),
+                }
+            }
+        });
+        (format!("http://{addr}"), count)
+    }
+
+    fn write_response(stream: &mut std::net::TcpStream, status: &str, body: &[u8]) {
+        let headers = format!(
+            "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        stream.write_all(headers.as_bytes()).unwrap();
+        stream.write_all(body).unwrap();
+    }
+
     // -----------------------------------------------------------------------
     // 1. WabbajackInstaller::new() creates correct directory structure
     // -----------------------------------------------------------------------
@@ -999,6 +1183,144 @@ mod tests {
         assert_eq!(inst.store_dir, PathBuf::from("/tmp/store"));
         assert_eq!(inst.staging_dir, PathBuf::from("/tmp/staging"));
         assert_eq!(inst.manifest.name, "test");
+    }
+
+    #[test]
+    fn validate_download_sources_rejects_required_source_before_network() {
+        let dir = tempfile::tempdir().unwrap();
+        let inst = WabbajackInstaller::new(
+            manifest_with_nexus_download(1),
+            dir.path().join("test.wabbajack"),
+            dir.path().join("store"),
+            dir.path().join("staging"),
+        );
+
+        let downloads = inst.manifest.download_directives();
+        let err = inst.validate_download_sources(&downloads).unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("no registered source"),
+            "unexpected error: {msg}"
+        );
+        assert!(msg.contains("nexus:123"), "unexpected error: {msg}");
+    }
+
+    #[tokio::test]
+    async fn synthetic_wabbajack_pipeline_reaches_late_directives() {
+        let dir = tempfile::tempdir().unwrap();
+        let cdn_archive = zip_bytes(&[("source.txt", b"basis")]);
+        let direct_archive = zip_bytes(&[("direct.txt", b"direct")]);
+        let cdn_hash = xxh64(&cdn_archive, 0);
+        let direct_hash = xxh64(&direct_archive, 0);
+        let (base_url, _requests) = synthetic_server(cdn_archive, direct_archive);
+        let wabbajack_path = dir.path().join("synthetic.wabbajack");
+        create_zip_file(
+            &wabbajack_path,
+            &[
+                ("inline-data", b"inline"),
+                ("patch-data", &data_patch(b"patched")),
+            ],
+        );
+
+        let manifest = WabbajackManifest {
+            archives: vec![
+                modde_core::manifest::wabbajack::ArchiveEntry {
+                    hash: cdn_hash,
+                    name: "cdn.zip".into(),
+                    size: 0,
+                    state: Some(ArchiveState::WabbajackCDNDownloader {
+                        metadata: HashMap::from([(
+                            "Url".into(),
+                            serde_json::Value::String(format!(
+                                "{base_url}/authored_files/download/cdn.zip_abc"
+                            )),
+                        )]),
+                    }),
+                },
+                modde_core::manifest::wabbajack::ArchiveEntry {
+                    hash: direct_hash,
+                    name: "direct.zip".into(),
+                    size: 0,
+                    state: Some(ArchiveState::HttpDownloader {
+                        url: format!("{base_url}/direct.zip"),
+                        headers: HashMap::new(),
+                    }),
+                },
+            ],
+            directives: vec![
+                modde_core::manifest::wabbajack::RawDirective::FromArchive {
+                    archive_hash_path: vec![
+                        serde_json::Value::Number(cdn_hash.into()),
+                        serde_json::Value::String("source.txt".into()),
+                    ],
+                    to: "mods/cdn/source.txt".into(),
+                },
+                modde_core::manifest::wabbajack::RawDirective::FromArchive {
+                    archive_hash_path: vec![
+                        serde_json::Value::Number(direct_hash.into()),
+                        serde_json::Value::String("direct.txt".into()),
+                    ],
+                    to: "mods/direct/direct.txt".into(),
+                },
+                modde_core::manifest::wabbajack::RawDirective::InlineFile {
+                    hash: 0,
+                    size: 6,
+                    source_data_id: "inline-data".into(),
+                    to: "mods/inline/inline.txt".into(),
+                },
+                modde_core::manifest::wabbajack::RawDirective::PatchedFromArchive {
+                    archive_hash_path: vec![
+                        serde_json::Value::Number(cdn_hash.into()),
+                        serde_json::Value::String("source.txt".into()),
+                    ],
+                    to: "mods/patched/patched.txt".into(),
+                    hash: 0,
+                    patch_id: "patch-data".into(),
+                },
+            ],
+            ..minimal_manifest()
+        };
+        let mut inst = WabbajackInstaller::new(
+            manifest,
+            wabbajack_path,
+            dir.path().join("store"),
+            dir.path().join("staging"),
+        );
+        let client = reqwest::Client::new();
+        inst.add_source(crate::AnySource::WabbajackCdn(
+            crate::wabbajack::cdn::WabbajackCdnSource::new(client.clone()),
+        ));
+        inst.add_source(crate::AnySource::Direct(crate::direct::DirectSource::new(
+            client,
+        )));
+
+        let (progress_tx, _progress_rx) = mpsc::unbounded_channel();
+        inst.install(progress_tx).await.unwrap();
+
+        assert_eq!(
+            tokio::fs::read(dir.path().join("staging/mods/cdn/source.txt"))
+                .await
+                .unwrap(),
+            b"basis"
+        );
+        assert_eq!(
+            tokio::fs::read(dir.path().join("staging/mods/direct/direct.txt"))
+                .await
+                .unwrap(),
+            b"direct"
+        );
+        assert_eq!(
+            tokio::fs::read(dir.path().join("staging/mods/inline/inline.txt"))
+                .await
+                .unwrap(),
+            b"inline"
+        );
+        assert_eq!(
+            tokio::fs::read(dir.path().join("staging/mods/patched/patched.txt"))
+                .await
+                .unwrap(),
+            b"patched"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1139,6 +1461,53 @@ mod tests {
         let err = inst.install(progress_tx).await.unwrap_err();
         let msg = format!("{err:#}");
         assert!(msg.contains("Data\\Update.esm"), "unexpected error: {msg}");
+        assert!(msg.contains("missing"), "unexpected error: {msg}");
+    }
+
+    #[tokio::test]
+    async fn install_reports_all_invalid_game_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let game_dir = dir.path().join("game");
+        std::fs::create_dir_all(game_dir.join("Data")).unwrap();
+        std::fs::write(game_dir.join("Data/Update.esm"), b"actual bytes").unwrap();
+
+        let mismatch_hash = xxh64(b"expected bytes", 0);
+        let missing_hash = xxh64(b"missing bytes", 0);
+        let manifest = WabbajackManifest {
+            archives: vec![
+                game_file_archive(mismatch_hash, "Data\\Update.esm"),
+                game_file_archive(missing_hash, "SkyrimSE.exe"),
+            ],
+            directives: vec![
+                modde_core::manifest::wabbajack::RawDirective::FromArchive {
+                    archive_hash_path: vec![serde_json::Value::Number(mismatch_hash.into())],
+                    to: "mods/Update.esm".into(),
+                },
+                modde_core::manifest::wabbajack::RawDirective::FromArchive {
+                    archive_hash_path: vec![serde_json::Value::Number(missing_hash.into())],
+                    to: "mods/SkyrimSE.exe".into(),
+                },
+            ],
+            ..minimal_manifest()
+        };
+        let mut inst = WabbajackInstaller::new(
+            manifest,
+            dir.path().join("test.wabbajack"),
+            dir.path().join("store"),
+            dir.path().join("staging"),
+        );
+        inst.set_game_dir(game_dir);
+
+        let (progress_tx, _progress_rx) = mpsc::unbounded_channel();
+        let err = inst.install(progress_tx).await.unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("validation failed for 2 file(s)"),
+            "unexpected error: {msg}"
+        );
+        assert!(msg.contains("Data\\Update.esm"), "unexpected error: {msg}");
+        assert!(msg.contains("got"), "unexpected error: {msg}");
+        assert!(msg.contains("SkyrimSE.exe"), "unexpected error: {msg}");
         assert!(msg.contains("missing"), "unexpected error: {msg}");
     }
 
@@ -1316,6 +1685,7 @@ mod tests {
         let d = DownloadDirective::DirectURL {
             url: "https://example.com/files/mod.zip".into(),
             headers: HashMap::new(),
+            mirror_resolver: None,
             hash: 0,
         };
         let name = d.display_name();
@@ -1382,6 +1752,7 @@ mod tests {
         let d = DownloadDirective::DirectURL {
             url: "u".into(),
             headers: HashMap::new(),
+            mirror_resolver: None,
             hash: 0xFFFF,
         };
         assert_eq!(d.hash(), 0xFFFF);

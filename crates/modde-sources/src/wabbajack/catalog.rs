@@ -1,11 +1,13 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tokio::io::AsyncWriteExt as _;
+use tokio::io::{AsyncSeekExt as _, AsyncWriteExt as _};
+
+use crate::ProgressCallback;
 
 pub const OFFICIAL_MODLISTS_URL: &str =
     "https://raw.githubusercontent.com/wabbajack-tools/mod-lists/master/modlists.json";
@@ -13,6 +15,20 @@ pub const REPOSITORIES_URL: &str =
     "https://raw.githubusercontent.com/wabbajack-tools/mod-lists/master/repositories.json";
 pub const AUTHORED_FILES_URL: &str = "https://build.wabbajack.org/authored_files";
 const AUTHORED_FILES_CDN_PREFIX: &str = "https://authored-files.wabbajack.org/";
+const AUTHORED_FILES_DOWNLOAD_MARKER: &str = "/authored_files/download/";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AuthoredFileTarget {
+    pub(crate) base_url: String,
+    pub(crate) munged_name: String,
+    pub(crate) metadata_url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AuthoredFileAvailability {
+    pub(crate) target: AuthoredFileTarget,
+    pub(crate) status: reqwest::StatusCode,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -443,15 +459,10 @@ pub async fn download_wabbajack_file(
     url: &str,
     output_dir: &Path,
 ) -> Result<PathBuf> {
-    if let Some(munged_name) = authored_files_munged_name(url) {
-        return download_authored_wabbajack_file(
-            client,
-            &munged_name,
-            AUTHORED_FILES_URL,
-            output_dir,
-        )
-        .await
-        .with_context(|| format!("failed to download Wabbajack authored-files archive {url}"));
+    if let Some((base_url, munged_name)) = authored_files_download_target(url) {
+        return download_authored_wabbajack_file(client, &munged_name, &base_url, output_dir)
+            .await
+            .with_context(|| format!("failed to download Wabbajack authored-files archive {url}"));
     }
 
     let file_name = url
@@ -482,10 +493,31 @@ pub async fn download_wabbajack_file(
     Ok(dest)
 }
 
+#[cfg(test)]
 fn authored_files_munged_name(url: &str) -> Option<String> {
-    url.strip_prefix(AUTHORED_FILES_CDN_PREFIX)
+    authored_files_download_target(url).map(|(_, munged_name)| munged_name)
+}
+
+fn authored_files_download_target(url: &str) -> Option<(String, String)> {
+    if let Some(munged_name) = url
+        .strip_prefix(AUTHORED_FILES_CDN_PREFIX)
         .filter(|name| !name.is_empty())
         .map(percent_decode_lossy)
+    {
+        return Some((AUTHORED_FILES_URL.to_string(), munged_name));
+    }
+
+    let marker_start = url.find(AUTHORED_FILES_DOWNLOAD_MARKER)?;
+    let munged_start = marker_start + AUTHORED_FILES_DOWNLOAD_MARKER.len();
+    let munged_name = url.get(munged_start..)?.split(['?', '#']).next()?;
+    if munged_name.is_empty() {
+        return None;
+    }
+    let base_end = marker_start + "/authored_files".len();
+    Some((
+        url[..base_end].to_string(),
+        percent_decode_lossy(munged_name),
+    ))
 }
 
 fn authored_files_download_page_url(base_url: &str, munged_name: &str) -> String {
@@ -496,6 +528,16 @@ fn authored_files_download_page_url(base_url: &str, munged_name: &str) -> String
     )
 }
 
+pub(crate) fn authored_file_target(url: &str) -> Option<AuthoredFileTarget> {
+    let (base_url, munged_name) = authored_files_download_target(url)?;
+    let metadata_url = authored_files_download_page_url(&base_url, &munged_name);
+    Some(AuthoredFileTarget {
+        base_url,
+        munged_name,
+        metadata_url,
+    })
+}
+
 fn authored_files_part_url(base_url: &str, munged_name: &str, index: u64) -> String {
     format!(
         "{}/{}/parts/{index}",
@@ -504,7 +546,7 @@ fn authored_files_part_url(base_url: &str, munged_name: &str, index: u64) -> Str
     )
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
 struct AuthoredFilePart {
     size: u64,
@@ -512,12 +554,54 @@ struct AuthoredFilePart {
     index: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct AuthoredFilesDownloadPage {
     munged_name: String,
     file_name: String,
     file_size_bytes: u64,
     parts: Vec<AuthoredFilePart>,
+}
+
+pub(crate) async fn check_authored_file_available(
+    client: &reqwest::Client,
+    url: &str,
+) -> Result<AuthoredFileAvailability> {
+    let target = authored_file_target(url)
+        .with_context(|| format!("not a Wabbajack authored-files URL: {url}"))?;
+    let response = client
+        .get(&target.metadata_url)
+        .send()
+        .await
+        .with_context(|| {
+            format!(
+                "failed to fetch Wabbajack authored-files metadata page {}",
+                target.metadata_url
+            )
+        })?;
+    let status = response.status();
+    let text = response
+        .error_for_status()
+        .with_context(|| {
+            format!(
+                "Wabbajack authored-files metadata page returned {status} for {}",
+                target.metadata_url
+            )
+        })?
+        .text()
+        .await
+        .with_context(|| {
+            format!(
+                "failed to read Wabbajack authored-files metadata page {}",
+                target.metadata_url
+            )
+        })?;
+    parse_authored_files_download_page(&text).with_context(|| {
+        format!(
+            "failed to parse Wabbajack authored-files metadata page {}",
+            target.metadata_url
+        )
+    })?;
+    Ok(AuthoredFileAvailability { target, status })
 }
 
 async fn download_authored_wabbajack_file(
@@ -526,6 +610,58 @@ async fn download_authored_wabbajack_file(
     base_url: &str,
     output_dir: &Path,
 ) -> Result<PathBuf> {
+    let page = fetch_authored_files_download_page(client, munged_name, base_url).await?;
+    let file_name = sanitize_file_name(&page.file_name);
+    let dest = output_dir.join(file_name);
+    if let Some(parent) = dest.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+
+    download_authored_file_parts_from_page(client, page, munged_name, base_url, &dest, None)
+        .await?;
+    Ok(dest)
+}
+
+/// Download a Wabbajack authored-files URL to an exact destination path.
+///
+/// This is used by the installer for `WabbajackCDNDownloader` archives, where
+/// the store path is hash-addressed and cannot be derived from the authored
+/// file's original filename.
+pub async fn download_authored_file_to_path(
+    client: &reqwest::Client,
+    url: &str,
+    dest: &Path,
+    progress: Option<&ProgressCallback>,
+) -> Result<()> {
+    let target = authored_file_target(url)
+        .with_context(|| format!("not a Wabbajack authored-files URL: {url}"))?;
+    download_authored_file_parts(
+        client,
+        &target.munged_name,
+        &target.base_url,
+        dest,
+        progress,
+    )
+    .await
+}
+
+async fn download_authored_file_parts(
+    client: &reqwest::Client,
+    munged_name: &str,
+    base_url: &str,
+    dest: &Path,
+    progress: Option<&ProgressCallback>,
+) -> Result<()> {
+    let page = fetch_authored_files_download_page(client, munged_name, base_url).await?;
+    download_authored_file_parts_from_page(client, page, munged_name, base_url, dest, progress)
+        .await
+}
+
+async fn fetch_authored_files_download_page(
+    client: &reqwest::Client,
+    munged_name: &str,
+    base_url: &str,
+) -> Result<AuthoredFilesDownloadPage> {
     let page_url = authored_files_download_page_url(base_url, munged_name);
     let page_response = client.get(&page_url).send().await.with_context(|| {
         format!("failed to fetch Wabbajack authored-files metadata page {page_url}")
@@ -542,29 +678,76 @@ async fn download_authored_wabbajack_file(
             format!("failed to read Wabbajack authored-files metadata page {page_url}")
         })?;
 
-    let page = parse_authored_files_download_page(&page_text).with_context(|| {
+    parse_authored_files_download_page(&page_text).with_context(|| {
         format!("failed to parse Wabbajack authored-files metadata page {page_url}")
-    })?;
+    })
+}
 
+async fn download_authored_file_parts_from_page(
+    client: &reqwest::Client,
+    page: AuthoredFilesDownloadPage,
+    munged_name: &str,
+    base_url: &str,
+    dest: &Path,
+    progress: Option<&ProgressCallback>,
+) -> Result<()> {
     let munged_name = if page.munged_name.is_empty() {
         munged_name
     } else {
         &page.munged_name
     };
-    let file_name = sanitize_file_name(&page.file_name);
-    let dest = output_dir.join(file_name);
     if let Some(parent) = dest.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
+    // Authored CDN files can be multi-gigabyte generated outputs. Keep the
+    // interrupted body and sidecar next to the final hash-addressed store path
+    // so reruns can resume only the missing chunk suffix.
     let part_dest = dest.with_extension("part");
-    let mut file = tokio::fs::File::create(&part_dest)
-        .await
-        .with_context(|| format!("failed to create {}", part_dest.display()))?;
-    let mut written = 0_u64;
+    let sidecar_dest = dest.with_extension("part.json");
 
     let mut parts = page.parts;
     parts.sort_by_key(|part| part.offset);
-    for part in parts {
+    validate_authored_parts(&parts, page.file_size_bytes)?;
+
+    let mut state =
+        AuthoredDownloadState::load_valid(&sidecar_dest, munged_name, page.file_size_bytes, &parts)
+            .await
+            .unwrap_or_default();
+    state.munged_name = munged_name.to_string();
+    state.file_size_bytes = page.file_size_bytes;
+    state.parts = parts.clone();
+    let expected_completed_bytes = parts
+        .iter()
+        .take(state.completed_parts.len())
+        .map(|part| part.size)
+        .sum::<u64>();
+
+    let existing_len = tokio::fs::metadata(&part_dest)
+        .await
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
+    if existing_len != expected_completed_bytes {
+        let _ = tokio::fs::remove_file(&part_dest).await;
+        let _ = tokio::fs::remove_file(&sidecar_dest).await;
+        state = AuthoredDownloadState::default();
+        state.munged_name = munged_name.to_string();
+        state.file_size_bytes = page.file_size_bytes;
+        state.parts = parts.clone();
+    }
+
+    let mut file = tokio::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&part_dest)
+        .await
+        .with_context(|| format!("failed to create {}", part_dest.display()))?;
+    let mut written = tokio::fs::metadata(&part_dest)
+        .await
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
+    file.seek(std::io::SeekFrom::End(0)).await?;
+
+    for part in parts.into_iter().skip(state.completed_parts.len()) {
         if part.offset != written {
             anyhow::bail!(
                 "Wabbajack authored-files part {} has offset {}, expected {}",
@@ -608,6 +791,13 @@ async fn download_authored_wabbajack_file(
             );
         }
         written += part_written;
+        state.completed_parts.push(part.index);
+        state
+            .save(&sidecar_dest, munged_name, page.file_size_bytes)
+            .await?;
+        if let Some(progress) = progress {
+            progress(written, page.file_size_bytes);
+        }
     }
     file.flush().await?;
     drop(file);
@@ -629,7 +819,80 @@ async fn download_authored_wabbajack_file(
                 dest.display()
             )
         })?;
-    Ok(dest)
+    let _ = tokio::fs::remove_file(&sidecar_dest).await;
+    Ok(())
+}
+
+fn validate_authored_parts(parts: &[AuthoredFilePart], file_size_bytes: u64) -> Result<()> {
+    let mut offset = 0_u64;
+    for part in parts {
+        if part.offset != offset {
+            bail!(
+                "Wabbajack authored-files part {} has offset {}, expected {}",
+                part.index,
+                part.offset,
+                offset
+            );
+        }
+        offset += part.size;
+    }
+    if offset != file_size_bytes {
+        bail!(
+            "Wabbajack authored-files parts total {} bytes, expected {} bytes",
+            offset,
+            file_size_bytes
+        );
+    }
+    Ok(())
+}
+
+/// Resume metadata for the `.part` file beside an authored-files download.
+/// It is accepted only when the metadata page still describes the same file and
+/// the completed prefix length matches the downloaded body.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct AuthoredDownloadState {
+    munged_name: String,
+    file_size_bytes: u64,
+    parts: Vec<AuthoredFilePart>,
+    completed_parts: Vec<u64>,
+}
+
+impl AuthoredDownloadState {
+    async fn load_valid(
+        path: &Path,
+        munged_name: &str,
+        file_size_bytes: u64,
+        parts: &[AuthoredFilePart],
+    ) -> Option<Self> {
+        let bytes = tokio::fs::read(path).await.ok()?;
+        let state: Self = serde_json::from_slice(&bytes).ok()?;
+        if state.munged_name == munged_name
+            && state.file_size_bytes == file_size_bytes
+            && state.parts == parts
+            && state.completed_parts.len() <= parts.len()
+            && state
+                .completed_parts
+                .iter()
+                .zip(parts.iter())
+                .all(|(completed, part)| *completed == part.index)
+        {
+            Some(state)
+        } else {
+            None
+        }
+    }
+
+    async fn save(&self, path: &Path, munged_name: &str, file_size_bytes: u64) -> Result<()> {
+        let state = Self {
+            munged_name: munged_name.to_string(),
+            file_size_bytes,
+            parts: self.parts.clone(),
+            completed_parts: self.completed_parts.clone(),
+        };
+        tokio::fs::write(path, serde_json::to_vec_pretty(&state)?)
+            .await
+            .with_context(|| format!("failed to write {}", path.display()))
+    }
 }
 
 fn parse_authored_files_download_page(input: &str) -> Result<AuthoredFilesDownloadPage> {
@@ -784,7 +1047,10 @@ pub async fn hm_snippet_for_source(
     } else {
         let path = PathBuf::from(source);
         if path.exists() {
-            (path.to_string_lossy().to_string(), Some(path))
+            return Ok((
+                format_hm_path_snippet(profile, game, game_dir, &path),
+                Some(path),
+            ));
         } else {
             let url = resolve_download_target(client, source, CatalogSource::Both).await?;
             let path = download_wabbajack_file(client, &url, cache_dir).await?;
@@ -826,6 +1092,31 @@ pub fn format_hm_snippet(
     url: &str,
     hash: &str,
 ) -> String {
+    let mut out = format_hm_profile_prefix(profile, game, game_dir);
+    out.push_str(&format!(
+        "  wabbajackList = {{\n    url = \"{}\";\n    hash = \"{}\";\n  }};\n}};\n",
+        escape_nix_string(url),
+        escape_nix_string(hash)
+    ));
+    out
+}
+
+#[must_use]
+pub fn format_hm_path_snippet(
+    profile: &str,
+    game: &str,
+    game_dir: Option<&Path>,
+    path: &Path,
+) -> String {
+    let mut out = format_hm_profile_prefix(profile, game, game_dir);
+    out.push_str(&format!(
+        "  wabbajackList = {{\n    path = \"{}\";\n  }};\n}};\n",
+        escape_nix_string(&path.display().to_string())
+    ));
+    out
+}
+
+fn format_hm_profile_prefix(profile: &str, game: &str, game_dir: Option<&Path>) -> String {
     let mut out = format!(
         "programs.modde.profiles.{profile} = {{\n  game = \"{game}\";\n  installMode = \"auto\";\n"
     );
@@ -835,11 +1126,6 @@ pub fn format_hm_snippet(
             escape_nix_string(&game_dir.display().to_string())
         ));
     }
-    out.push_str(&format!(
-        "  wabbajackList = {{\n    url = \"{}\";\n    hash = \"{}\";\n  }};\n}};\n",
-        escape_nix_string(url),
-        escape_nix_string(hash)
-    ));
     out
 }
 
@@ -1022,6 +1308,24 @@ mod tests {
             .as_deref(),
             Some("Twisted Skyrim.wabbajack_abc")
         );
+        assert_eq!(
+            authored_files_munged_name(
+                "https://build.wabbajack.org/authored_files/download/Twisted%20Skyrim.wabbajack_abc"
+            )
+            .as_deref(),
+            Some("Twisted Skyrim.wabbajack_abc")
+        );
+        assert_eq!(
+            authored_files_download_target(
+                "https://example.test/authored_files/download/Twisted%20Skyrim.wabbajack_abc?x=1"
+            )
+            .as_ref()
+            .map(|(base, munged)| (base.as_str(), munged.as_str())),
+            Some((
+                "https://example.test/authored_files",
+                "Twisted Skyrim.wabbajack_abc",
+            ))
+        );
         assert!(authored_files_munged_name("https://example/lotf.wabbajack").is_none());
     }
 
@@ -1097,6 +1401,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn hm_snippet_for_local_file_uses_path_source() {
+        let temp = tempfile::tempdir().unwrap();
+        let modlist = temp.path().join("Legends of the Frost.wabbajack");
+        tokio::fs::write(&modlist, b"fake modlist").await.unwrap();
+        let client = reqwest::Client::new();
+
+        let (snippet, cached_path) = hm_snippet_for_source(
+            &client,
+            &modlist.to_string_lossy(),
+            "lotf",
+            "skyrim-se",
+            Some(Path::new("/games/Skyrim")),
+            temp.path(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(cached_path.as_deref(), Some(modlist.as_path()));
+        assert!(snippet.contains("path = \""));
+        assert!(snippet.contains("Legends of the Frost.wabbajack"));
+        assert!(!snippet.contains("hash = "));
+        assert!(!snippet.contains("url = "));
+    }
+
+    #[tokio::test]
     async fn authored_files_downloader_assembles_parts() {
         let (base_url, request_count) = start_authored_files_test_server();
         let temp = tempfile::tempdir().unwrap();
@@ -1117,6 +1446,95 @@ mod tests {
             Some("Test List.wabbajack")
         );
         assert_eq!(bytes, b"hello world");
+        assert_eq!(request_count.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn download_wabbajack_file_uses_chunked_authored_download_page_url() {
+        let (base_url, request_count) = start_authored_files_test_server();
+        let temp = tempfile::tempdir().unwrap();
+        let client = reqwest::Client::new();
+        let url = format!("{base_url}/authored_files/download/Test%20List.wabbajack_abc");
+
+        let path = download_wabbajack_file(&client, &url, temp.path())
+            .await
+            .unwrap();
+
+        let bytes = tokio::fs::read(&path).await.unwrap();
+        assert_eq!(
+            path.file_name().and_then(|name| name.to_str()),
+            Some("Test List.wabbajack")
+        );
+        assert_eq!(bytes, b"hello world");
+        assert_eq!(request_count.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn authored_files_resume_skips_completed_prefix_parts() {
+        let (base_url, request_count) = start_authored_files_test_server();
+        let temp = tempfile::tempdir().unwrap();
+        let client = reqwest::Client::new();
+        let dest = temp.path().join("out.archive");
+        tokio::fs::write(dest.with_extension("part"), b"hello")
+            .await
+            .unwrap();
+        tokio::fs::write(
+            dest.with_extension("part.json"),
+            r#"{
+              "munged_name":"Test List.wabbajack_abc",
+              "file_size_bytes":11,
+              "parts":[{"Size":5,"Offset":0,"Index":0},{"Size":6,"Offset":5,"Index":1}],
+              "completed_parts":[0]
+            }"#,
+        )
+        .await
+        .unwrap();
+
+        download_authored_file_to_path(
+            &client,
+            &format!("{base_url}/authored_files/download/Test%20List.wabbajack_abc"),
+            &dest,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(tokio::fs::read(&dest).await.unwrap(), b"hello world");
+        assert!(!dest.with_extension("part.json").exists());
+        assert_eq!(request_count.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn authored_files_resume_discards_corrupt_partial_state() {
+        let (base_url, request_count) = start_authored_files_test_server();
+        let temp = tempfile::tempdir().unwrap();
+        let client = reqwest::Client::new();
+        let dest = temp.path().join("out.archive");
+        tokio::fs::write(dest.with_extension("part"), b"bad")
+            .await
+            .unwrap();
+        tokio::fs::write(
+            dest.with_extension("part.json"),
+            r#"{
+              "munged_name":"Test List.wabbajack_abc",
+              "file_size_bytes":11,
+              "parts":[{"Size":5,"Offset":0,"Index":0},{"Size":6,"Offset":5,"Index":1}],
+              "completed_parts":[0]
+            }"#,
+        )
+        .await
+        .unwrap();
+
+        download_authored_file_to_path(
+            &client,
+            &format!("{base_url}/authored_files/download/Test%20List.wabbajack_abc"),
+            &dest,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(tokio::fs::read(&dest).await.unwrap(), b"hello world");
         assert_eq!(request_count.load(Ordering::SeqCst), 3);
     }
 

@@ -15,6 +15,7 @@ use modde_core::profile::{
 
 use crate::direct::DirectSource;
 use crate::nexus::NexusSource;
+use crate::wabbajack::cdn::WabbajackCdnSource;
 use crate::wabbajack::installer::{InstallProgress, WabbajackInstaller};
 
 #[derive(Debug, Clone)]
@@ -99,6 +100,9 @@ pub async fn install_wabbajack(
         Ok(nexus) => installer.add_source(crate::AnySource::Nexus(nexus)),
         Err(e) => warn!("failed to create Nexus source (no API key?): {e:#}"),
     }
+    installer.add_source(crate::AnySource::WabbajackCdn(WabbajackCdnSource::new(
+        client.clone(),
+    )));
     installer.add_source(crate::AnySource::Direct(DirectSource::new(client)));
 
     let skip_install =

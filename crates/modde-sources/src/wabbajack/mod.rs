@@ -1,7 +1,9 @@
 pub mod bsa_repack;
 pub mod catalog;
+pub mod cdn;
 pub mod installer;
 pub mod manifest;
 pub mod patcher;
+pub(crate) mod preflight;
 pub mod runner;
 pub mod validator;
