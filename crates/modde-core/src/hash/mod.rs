@@ -36,12 +36,17 @@ pub async fn verify_xxhash(path: &Path, expected: u64) -> Result<()> {
 
 /// Verify a file's classic xxHash64 matches the expected value (used by Wabbajack).
 pub async fn verify_xxh64(path: &Path, expected: u64) -> Result<()> {
-    let data = tokio::fs::read(path).await?;
-    let actual = xxh64(&data, 0);
+    let actual = hash_file_xxh64(path).await?;
     if actual != expected {
         return Err(hash_mismatch(path, expected, actual));
     }
     Ok(())
+}
+
+/// Compute classic xxHash64 of a file (used by Wabbajack).
+pub async fn hash_file_xxh64(path: &Path) -> Result<u64> {
+    let data = tokio::fs::read(path).await?;
+    Ok(xxh64(&data, 0))
 }
 
 /// Verify a file's hash using Wabbajack-compatible strategy: try xxHash64 first, fall back to XXH3.
@@ -70,7 +75,11 @@ pub async fn hash_file_sha256(path: &Path) -> Result<String> {
         hasher.update(&buf[..n]);
     }
 
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect())
 }
 
 /// Verify a file's SHA-256 matches the expected hex string.

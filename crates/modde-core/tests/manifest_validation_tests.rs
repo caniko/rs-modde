@@ -138,7 +138,9 @@ fn test_download_directives_all_types() {
     }
 
     match &directives[4] {
-        DownloadDirective::DirectURL { url, headers, hash } => {
+        DownloadDirective::DirectURL {
+            url, headers, hash, ..
+        } => {
             assert_eq!(url, "https://example.com/mod.zip");
             assert_eq!(headers.get("Authorization").unwrap(), "Bearer xyz");
             assert_eq!(*hash, 500);
@@ -528,6 +530,7 @@ fn test_download_directive_roundtrip() {
         DownloadDirective::DirectURL {
             url: "https://example.com/f.zip".to_string(),
             headers: HashMap::new(),
+            mirror_resolver: None,
             hash: 33333,
         },
     ];

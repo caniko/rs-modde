@@ -649,7 +649,7 @@ impl ModdeDb {
                 name: row.get(1)?,
                 game_id: GameId::from(row.get::<_, String>(2)?),
                 source_type: row.get(3)?,
-                mod_count: row.get(4)?,
+                mod_count: row.get::<_, i64>(4)? as usize,
             })
         };
 

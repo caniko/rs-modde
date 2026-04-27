@@ -45,7 +45,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Hashing
 xxhash-rust = { version = "0.8", features = ["xxh3", "xxh64"] }
-sha2 = "0.10"
+sha2 = "0.11"
 
 # Small-vec inline optimization
 smallvec = { version = "1", features = ["serde"] }
@@ -54,19 +54,21 @@ smallvec = { version = "1", features = ["serde"] }
 petgraph = "0.8"
 
 # HTTP
-reqwest = { version = "0.12", default-features = false, features = [
-    "rustls-tls",
+reqwest = { version = "0.13.2", default-features = false, features = [
+    "rustls",
     "stream",
     "json",
+    "form",
     "cookies",
 ] }
 
 # Keyring
-keyring = "3"
+keyring = "4"
+keyring-core = "1"
 
 # Crypto
-aes = "0.8"
-ctr = "0.9"
+aes = "0.9"
+ctr = "0.10"
 base64 = "0.22"
 
 # Compression
@@ -80,8 +82,8 @@ pretty_assertions = "1"
 # OS / system
 libc = "0.2"
 dirs = "6"
-which = "7"
-winreg = "0.55"
+which = "8"
+winreg = "0.56"
 
 # Filesystem watch (inotify/kqueue)
 notify = { version = "8", default-features = false, features = [
@@ -89,7 +91,7 @@ notify = { version = "8", default-features = false, features = [
 ] }
 
 # Database
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.39", features = ["bundled"] }
 
 # Git
 git2 = "0.20"

@@ -180,8 +180,20 @@ pub enum ArchiveState {
         #[serde(default, rename = "Headers", deserialize_with = "deserialize_headers")]
         headers: HashMap<String, String>,
     },
+    #[serde(alias = "ModDBDownloader, Wabbajack.Lib")]
+    ModDBDownloader {
+        #[serde(rename = "Url")]
+        url: String,
+        #[serde(flatten)]
+        metadata: HashMap<String, serde_json::Value>,
+    },
     #[serde(alias = "GameFileSourceDownloader, Wabbajack.Lib")]
     GameFileSourceDownloader {
+        #[serde(flatten)]
+        metadata: HashMap<String, serde_json::Value>,
+    },
+    #[serde(alias = "WabbajackCDNDownloader+State, Wabbajack.Lib")]
+    WabbajackCDNDownloader {
         #[serde(flatten)]
         metadata: HashMap<String, serde_json::Value>,
     },
@@ -293,8 +305,26 @@ pub enum DownloadDirective {
     DirectURL {
         url: String,
         headers: HashMap<String, String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        mirror_resolver: Option<HtmlMirrorResolver>,
         hash: u64,
     },
+    WabbajackCdn {
+        url: String,
+        hash: u64,
+    },
+}
+
+/// Optional generic HTML mirror resolver metadata for direct downloads that
+/// point at an intermediate mirror-selection page instead of a file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HtmlMirrorResolver {
+    pub name: String,
+    pub original_url: String,
+    pub listing_url: String,
+    pub link_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_agent: Option<String>,
 }
 
 impl DownloadDirective {
@@ -306,7 +336,8 @@ impl DownloadDirective {
             | Self::GitHub { hash, .. }
             | Self::GoogleDrive { hash, .. }
             | Self::Mega { hash, .. }
-            | Self::DirectURL { hash, .. } => *hash,
+            | Self::DirectURL { hash, .. }
+            | Self::WabbajackCdn { hash, .. } => *hash,
         }
     }
 
@@ -323,6 +354,9 @@ impl DownloadDirective {
             Self::GoogleDrive { id, .. } => format!("gdrive:{id}").into(),
             Self::Mega { url, .. } => format!("mega:{}", &url[..url.len().min(30)]).into(),
             Self::DirectURL { url, .. } => format!("http:{}", &url[..url.len().min(30)]).into(),
+            Self::WabbajackCdn { url, .. } => {
+                format!("wabbajack-cdn:{}", &url[..url.len().min(30)]).into()
+            }
         }
     }
 }
@@ -358,6 +392,7 @@ pub enum InstallDirective {
 pub struct BSAFileState {
     pub path: String,
     #[serde(
+        default,
         deserialize_with = "deserialize_b64_hash",
         serialize_with = "serialize_b64_hash"
     )]
@@ -414,8 +449,21 @@ impl WabbajackManifest {
                     ArchiveState::HttpDownloader { url, headers } => DownloadDirective::DirectURL {
                         url: url.clone(),
                         headers: headers.clone(),
+                        mirror_resolver: None,
                         hash: archive.hash,
                     },
+                    ArchiveState::ModDBDownloader { url, .. } => DownloadDirective::DirectURL {
+                        url: url.clone(),
+                        headers: HashMap::new(),
+                        mirror_resolver: moddb_html_mirror_resolver(url),
+                        hash: archive.hash,
+                    },
+                    ArchiveState::WabbajackCDNDownloader { metadata } => {
+                        DownloadDirective::WabbajackCdn {
+                            url: wabbajack_cdn_url(metadata)?,
+                            hash: archive.hash,
+                        }
+                    }
                     ArchiveState::GameFileSourceDownloader { .. } => return None,
                 })
             })
@@ -484,6 +532,40 @@ impl WabbajackManifest {
     }
 }
 
+fn moddb_html_mirror_resolver(url: &str) -> Option<HtmlMirrorResolver> {
+    let id = moddb_download_id(url)?;
+    Some(HtmlMirrorResolver {
+        name: "moddb-html-mirror".to_string(),
+        original_url: url.to_string(),
+        listing_url: format!("https://www.moddb.com/downloads/start/{id}/all"),
+        link_id: "downloadon".to_string(),
+        user_agent: Some("Wabbajack/4.0 modde".to_string()),
+    })
+}
+
+fn wabbajack_cdn_url(metadata: &HashMap<String, serde_json::Value>) -> Option<String> {
+    metadata
+        .get("Url")
+        .and_then(serde_json::Value::as_str)
+        .filter(|url| !url.is_empty())
+        .map(str::to_string)
+}
+
+fn moddb_download_id(url: &str) -> Option<&str> {
+    let rest = url.split_once("/downloads/start/")?.1;
+    let id_len = rest
+        .char_indices()
+        .take_while(|(_, ch)| ch.is_ascii_digit())
+        .map(|(idx, ch)| idx + ch.len_utf8())
+        .last()
+        .unwrap_or(0);
+    if id_len == 0 {
+        None
+    } else {
+        Some(&rest[..id_len])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -542,6 +624,163 @@ mod tests {
                 from,
                 to
             }] if from.is_empty() && to == "mods/Skyrim Base/Skyrim.esm"
+        ));
+    }
+
+    #[test]
+    fn wabbajack_cdn_downloader_parses_as_authored_download() {
+        let json = r#"{
+            "Name": "Legends of the Frost synthetic",
+            "Author": "test",
+            "Description": "test",
+            "Game": "SkyrimSE",
+            "Version": "1.0.0",
+            "Archives": [
+                {
+                    "Hash": "AQAAAAAAAAA=",
+                    "Name": "Legends of the Frost - Generated Output.7z",
+                    "Size": 1024,
+                    "State": {
+                        "$type": "WabbajackCDNDownloader+State, Wabbajack.Lib",
+                        "Url": "https://authored-files.wabbajack.org/Generated%20Output.7z_abc",
+                        "MungedName": "Generated Output.7z_abc"
+                    }
+                },
+                {
+                    "Hash": "AgAAAAAAAAA=",
+                    "Name": "mod.zip",
+                    "Size": 2048,
+                    "State": {
+                        "$type": "HttpDownloader, Wabbajack.Lib",
+                        "Url": "https://example.invalid/mod.zip",
+                        "Headers": []
+                    }
+                }
+            ],
+            "Directives": []
+        }"#;
+
+        let manifest: WabbajackManifest = serde_json::from_str(json).unwrap();
+        assert!(matches!(
+            manifest.archives[0].state.as_ref(),
+            Some(ArchiveState::WabbajackCDNDownloader { metadata })
+                if metadata.get("MungedName").and_then(serde_json::Value::as_str)
+                    == Some("Generated Output.7z_abc")
+        ));
+
+        let downloads = manifest.download_directives();
+        assert_eq!(downloads.len(), 2);
+        assert!(matches!(
+            &downloads[0],
+            DownloadDirective::WabbajackCdn { url, hash }
+                if url == "https://authored-files.wabbajack.org/Generated%20Output.7z_abc"
+                    && *hash == 1
+        ));
+        assert_eq!(downloads[1].hash(), 2);
+    }
+
+    #[test]
+    fn moddb_downloader_parses_as_direct_url_download() {
+        let json = r#"{
+            "Name": "Legends of the Frost synthetic",
+            "Author": "test",
+            "Description": "test",
+            "Game": "SkyrimSE",
+            "Version": "1.0.0",
+            "Archives": [
+                {
+                    "Hash": "AQAAAAAAAAA=",
+                    "Name": "Skyrim_Realistic_Overhaul_Part_1.7z",
+                    "Size": 1024,
+                    "State": {
+                        "$type": "ModDBDownloader, Wabbajack.Lib",
+                        "Url": "https://www.moddb.com/downloads/start/116891",
+                        "PrimaryKeyString": "ModDBDownloader+State|https://www.moddb.com/downloads/start/116891"
+                    }
+                }
+            ],
+            "Directives": []
+        }"#;
+
+        let manifest: WabbajackManifest = serde_json::from_str(json).unwrap();
+        assert!(matches!(
+            manifest.archives[0].state.as_ref(),
+            Some(ArchiveState::ModDBDownloader { url, metadata })
+                if url == "https://www.moddb.com/downloads/start/116891"
+                    && metadata.contains_key("PrimaryKeyString")
+        ));
+
+        let downloads = manifest.download_directives();
+        assert!(matches!(
+            downloads.as_slice(),
+            [DownloadDirective::DirectURL {
+                url,
+                headers,
+                mirror_resolver,
+                hash
+            }]
+                if url == "https://www.moddb.com/downloads/start/116891"
+                    && headers.is_empty()
+                    && mirror_resolver.as_ref().is_some_and(|resolver| {
+                        resolver.name == "moddb-html-mirror"
+                            && resolver.original_url == "https://www.moddb.com/downloads/start/116891"
+                            && resolver.listing_url == "https://www.moddb.com/downloads/start/116891/all"
+                            && resolver.link_id == "downloadon"
+                            && resolver.user_agent.as_deref() == Some("Wabbajack/4.0 modde")
+                    })
+                    && *hash == 1
+        ));
+    }
+
+    #[test]
+    fn moddb_downloader_derives_mirror_listing_url_with_query_string() {
+        assert_eq!(
+            moddb_download_id("https://www.moddb.com/downloads/start/116927?referer=x"),
+            Some("116927")
+        );
+        let resolver =
+            moddb_html_mirror_resolver("https://www.moddb.com/downloads/start/116927?referer=x")
+                .unwrap();
+        assert_eq!(
+            resolver.listing_url,
+            "https://www.moddb.com/downloads/start/116927/all"
+        );
+    }
+
+    #[test]
+    fn create_bsa_file_state_hash_defaults_when_absent() {
+        let json = r#"{
+            "Name": "Legends of the Frost synthetic",
+            "Author": "test",
+            "Description": "test",
+            "Game": "SkyrimSE",
+            "Version": "1.0.0",
+            "Archives": [],
+            "Directives": [
+                {
+                    "$type": "CreateBSA, Wabbajack.Lib",
+                    "TempID": "textures.bsa",
+                    "To": "mods/Generated/textures.bsa",
+                    "FileStates": [
+                        {
+                            "$type": "BSAFileState, Compression.BSA",
+                            "FlipCompression": false,
+                            "Index": 0,
+                            "Path": "textures\\architecture\\riften\\riftenrope01.dds"
+                        }
+                    ]
+                }
+            ]
+        }"#;
+
+        let manifest: WabbajackManifest = serde_json::from_str(json).unwrap();
+        let installs = manifest.install_directives();
+        assert!(matches!(
+            installs.as_slice(),
+            [InstallDirective::CreateBSA { file_states, .. }]
+                if file_states.len() == 1
+                    && file_states[0].path == "textures\\architecture\\riften\\riftenrope01.dds"
+                    && file_states[0].hash == 0
         ));
     }
 }

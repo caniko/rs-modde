@@ -59,7 +59,11 @@ impl SaveFingerprint {
             hasher.update(id.as_bytes());
             hasher.update(b"\0");
         }
-        let hash = format!("{:x}", hasher.finalize());
+        let hash = hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
 
         Self {
             hash,
