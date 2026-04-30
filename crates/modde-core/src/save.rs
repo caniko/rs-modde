@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
 use git2::{IndexAddOption, Repository, Signature};
@@ -59,11 +60,10 @@ impl SaveFingerprint {
             hasher.update(id.as_bytes());
             hasher.update(b"\0");
         }
-        let hash = hasher
-            .finalize()
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect();
+        let mut hash = String::with_capacity(64);
+        for byte in hasher.finalize() {
+            write!(&mut hash, "{byte:02x}").expect("writing to String cannot fail");
+        }
 
         Self {
             hash,

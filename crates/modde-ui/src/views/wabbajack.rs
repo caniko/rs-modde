@@ -12,6 +12,7 @@ use modde_sources::wabbajack::catalog::{
 use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::{Message, WabbajackInstallerState, WabbajackTab};
 use crate::views::game_picker::{GameOption, game_pick_list, wabbajack_game_options};
+use crate::views::tabs::{Tab, tab_bar};
 
 pub fn view<'a>(
     state: &'a WabbajackInstallerState,
@@ -27,24 +28,25 @@ pub fn view<'a>(
     ]
     .align_y(Alignment::Center);
 
-    let tab_button = |label: &'static str, tab: WabbajackTab| {
-        let btn = button(text(label).size(13)).padding([5, 12]);
-        if state.tab == tab {
-            btn.style(button::primary)
-                .described_disabled("This Wabbajack tab is already open.")
-        } else {
-            btn.style(button::secondary)
-                .on_action(ButtonAction::WabbajackTabChanged(tab))
-        }
-    };
+    let tabs = tab_bar([
+        Tab::new(
+            "Catalog",
+            state.tab == WabbajackTab::Catalog,
+            ButtonAction::WabbajackTabChanged(WabbajackTab::Catalog),
+        ),
+        Tab::new(
+            "Authored Files",
+            state.tab == WabbajackTab::AuthoredFiles,
+            ButtonAction::WabbajackTabChanged(WabbajackTab::AuthoredFiles),
+        ),
+        Tab::new(
+            "Manual",
+            state.tab == WabbajackTab::Manual,
+            ButtonAction::WabbajackTabChanged(WabbajackTab::Manual),
+        ),
+    ]);
 
-    let tabs = row![
-        tab_button("Catalog", WabbajackTab::Catalog),
-        tab_button("Authored Files", WabbajackTab::AuthoredFiles),
-        tab_button("Manual", WabbajackTab::Manual),
-    ]
-    .spacing(6);
-
+    let manifest = manifest.as_ref();
     let content = match state.tab {
         WabbajackTab::Catalog | WabbajackTab::AuthoredFiles => explorer_tab(state, manifest),
         WabbajackTab::Manual => manual_tab(state, manifest),
@@ -60,7 +62,7 @@ pub fn view<'a>(
 
 fn explorer_tab<'a>(
     state: &'a WabbajackInstallerState,
-    manifest: &'a Option<WabbajackManifest>,
+    manifest: Option<&'a WabbajackManifest>,
 ) -> Element<'a, Message> {
     let source = match state.tab {
         WabbajackTab::Catalog => CatalogEntrySource::Official,
@@ -164,7 +166,7 @@ fn explorer_tab<'a>(
 
 fn manual_tab<'a>(
     state: &'a WabbajackInstallerState,
-    manifest: &'a Option<WabbajackManifest>,
+    manifest: Option<&'a WabbajackManifest>,
 ) -> Element<'a, Message> {
     column![
         text_input(
@@ -240,7 +242,7 @@ fn entry_row<'a>(
 
 fn detail_panel<'a>(
     state: &'a WabbajackInstallerState,
-    manifest: &'a Option<WabbajackManifest>,
+    manifest: Option<&'a WabbajackManifest>,
     entry: Option<&'a WabbajackCatalogEntry>,
 ) -> container::Container<'a, Message> {
     let mut details = column![text("Details").size(16)].spacing(6);

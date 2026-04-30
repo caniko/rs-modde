@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use smallvec::{SmallVec, smallvec};
 use tracing::info;
 
-use super::{AppliedFiles, GameTool, ToolAvailability, ToolCategory, ToolConfig};
+use super::{AppliedFiles, GameTool, ToolAvailability, ToolCategory, ToolConfig, ToolGameContext};
 
 pub static RESHADE: ReShade = ReShade;
 
@@ -27,6 +27,31 @@ impl GameTool for ReShade {
 
     fn category(&self) -> ToolCategory {
         ToolCategory::PostProcess
+    }
+
+    fn description(&self) -> &'static str {
+        "Wine/Proton ReShade deployment through proxy DLLs and shader directories."
+    }
+
+    fn settings_schema(&self) -> Vec<super::ToolSettingSpec> {
+        vec![
+            super::ToolSettingSpec::path(
+                "source_dir",
+                "Source directory",
+                "Directory containing ReShade DLLs, ReShade.ini, and shader folders.",
+            ),
+            super::ToolSettingSpec::select(
+                "dll_name",
+                "Proxy DLL",
+                "DLL name copied into the executable directory.",
+                &["dxgi.dll", "d3d11.dll", "dinput8.dll"],
+            ),
+            super::ToolSettingSpec::read_only(
+                "derived_executable_dir",
+                "Executable directory",
+                "Derived from the selected game's metadata.",
+            ),
+        ]
     }
 
     fn detect_available(&self) -> ToolAvailability {
@@ -47,19 +72,31 @@ impl GameTool for ReShade {
     }
 
     fn apply(&self, game_dir: &Path, config: &ToolConfig) -> Result<AppliedFiles> {
+        self.apply_for(game_dir, None, config)
+    }
+
+    fn apply_for(
+        &self,
+        game_dir: &Path,
+        context: Option<&ToolGameContext>,
+        config: &ToolConfig,
+    ) -> Result<AppliedFiles> {
         let source_dir = config
             .get_str("source_dir")
             .map(PathBuf::from)
             .context("reshade: 'source_dir' setting is required (path to ReShade DLLs)")?;
 
         let dll_name = config.get_str("dll_name").unwrap_or("dxgi.dll");
-        let exe_subdir = config.get_str("exe_subdir").unwrap_or("");
-
-        let target_dir = if exe_subdir.is_empty() {
-            game_dir.to_path_buf()
-        } else {
-            game_dir.join(exe_subdir)
-        };
+        let target_dir = context
+            .and_then(|context| context.executable_dir.clone())
+            .unwrap_or_else(|| {
+                let exe_subdir = config.get_str("exe_subdir").unwrap_or("");
+                if exe_subdir.is_empty() {
+                    game_dir.to_path_buf()
+                } else {
+                    game_dir.join(exe_subdir)
+                }
+            });
 
         std::fs::create_dir_all(&target_dir)?;
 
@@ -100,7 +137,6 @@ impl GameTool for ReShade {
     fn default_config(&self) -> ToolConfig {
         let mut config = ToolConfig::new("reshade");
         config.set("dll_name", serde_json::json!("dxgi.dll"));
-        config.set("exe_subdir", serde_json::json!(""));
         config
     }
 }

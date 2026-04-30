@@ -252,8 +252,16 @@ pub fn generate_launch_wrapper(
     game_id: &str,
     tool_env_vars: &[(String, String)],
 ) -> Result<Option<PathBuf>> {
-    // Delegate fgmod restore scanning to the optiscaler module
-    let restore_commands = crate::tools::optiscaler::fgmod_restore_commands(game_dir, staging_dir);
+    // Delegate fgmod restore scanning to the optiscaler module, using the
+    // selected game's metadata to derive the executable directory.
+    let executable_dir = crate::resolve_game_plugin(game_id)
+        .map(|plugin| plugin.executable_dir(game_dir))
+        .unwrap_or_else(|| game_dir.to_path_buf());
+    let restore_commands = crate::tools::optiscaler::fgmod_restore_commands_for_executable_dir(
+        game_dir,
+        staging_dir,
+        &executable_dir,
+    );
 
     if restore_commands.is_empty() && tool_env_vars.is_empty() {
         return Ok(None);

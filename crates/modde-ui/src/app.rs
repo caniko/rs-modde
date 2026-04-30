@@ -33,6 +33,7 @@ pub enum NexusAuthStatus {
 }
 
 /// Top-level application state.
+#[allow(clippy::struct_excessive_bools)]
 pub struct Modde {
     pub active_view: View,
     pub active_profile: Option<String>,
@@ -97,6 +98,8 @@ pub struct Modde {
     pub filter_criteria: Vec<FilterCriterion>,
     /// Whether the mod list uses compact row rendering.
     pub compact_mod_list: bool,
+    /// Sidebar groups the user has collapsed for this session.
+    pub collapsed_sidebar_groups: HashSet<SidebarGroup>,
 }
 
 #[derive(Debug, Clone)]
@@ -257,6 +260,260 @@ fn build_default_download_meta(id: &str, name: &str) -> modde_sources::meta::Dow
         version: None,
         status: "queued".to_string(),
     }
+}
+
+fn normalize_tool_setting_value(
+    settings: &serde_json::Value,
+    key: &str,
+    value: serde_json::Value,
+) -> serde_json::Value {
+    if settings.get(key).is_some_and(serde_json::Value::is_array)
+        && let Some(raw) = value.as_str()
+    {
+        return serde_json::Value::Array(
+            raw.split([',', ':'])
+                .filter_map(|part| {
+                    let trimmed = part.trim();
+                    (!trimmed.is_empty()).then(|| serde_json::Value::String(trimmed.to_string()))
+                })
+                .collect(),
+        );
+    }
+    value
+}
+
+fn set_nested_tool_setting(settings: &mut serde_json::Value, key: &str, value: serde_json::Value) {
+    if let Some((root, child)) = key.split_once('.') {
+        if !settings.is_object() {
+            *settings = serde_json::json!({});
+        }
+        let object = settings.as_object_mut().expect("settings object");
+        let root_value = object
+            .entry(root.to_string())
+            .or_insert_with(|| serde_json::json!({}));
+        if !root_value.is_object() {
+            *root_value = serde_json::json!({});
+        }
+        root_value
+            .as_object_mut()
+            .expect("nested object")
+            .insert(child.to_string(), value);
+    } else if let serde_json::Value::Object(map) = settings {
+        map.insert(key.to_string(), value);
+    }
+}
+
+fn apply_derived_tool_settings(
+    config: &mut modde_games::tools::ToolConfig,
+    context: Option<&modde_games::tools::ToolGameContext>,
+) {
+    if let Some(context) = context {
+        if let Some(path) = &context.executable_dir {
+            config.set(
+                "derived_executable_dir",
+                serde_json::json!(path.display().to_string()),
+            );
+        }
+        config.set(
+            "derived_launcher",
+            serde_json::json!(context.launcher_label()),
+        );
+        if let Some(app_id) = &context.steam_app_id {
+            config.set("derived_steam_app_id", serde_json::json!(app_id));
+        }
+    }
+}
+
+fn format_tool_availability(availability: &modde_games::tools::ToolAvailability) -> String {
+    match availability {
+        modde_games::tools::ToolAvailability::Available {
+            version: Some(version),
+        } => format!("available ({version})"),
+        modde_games::tools::ToolAvailability::Available { version: None } => {
+            "available".to_string()
+        }
+        modde_games::tools::ToolAvailability::NotInstalled { .. } => "missing".to_string(),
+    }
+}
+
+fn build_tool_derived_facts(
+    context: Option<&modde_games::tools::ToolGameContext>,
+) -> Vec<(String, String)> {
+    let Some(context) = context else {
+        return Vec::new();
+    };
+    let mut facts = vec![
+        ("Game".to_string(), context.display_name.clone()),
+        ("Launcher".to_string(), context.launcher_label()),
+    ];
+    if let Some(path) = &context.install_path {
+        facts.push(("Install path".to_string(), path.display().to_string()));
+    }
+    if let Some(path) = &context.executable_dir {
+        facts.push((
+            "Executable directory".to_string(),
+            path.display().to_string(),
+        ));
+    }
+    if let Some(app_id) = &context.steam_app_id {
+        facts.push(("Steam app id".to_string(), app_id.clone()));
+    }
+    facts
+}
+
+fn patch_tool_setting_options(
+    tool_id: &str,
+    specs: &mut [modde_games::tools::ToolSettingSpec],
+    optiscaler_tags: &[String],
+    optiscaler_assets: &[String],
+    proton_versions: &[String],
+) {
+    for spec in specs {
+        match (tool_id, spec.key) {
+            ("optiscaler", "release_tag") if !optiscaler_tags.is_empty() => {
+                spec.kind = modde_games::tools::ToolSettingKind::Select {
+                    options: optiscaler_tags.to_vec(),
+                };
+            }
+            ("optiscaler", "release_asset") if !optiscaler_assets.is_empty() => {
+                spec.kind = modde_games::tools::ToolSettingKind::Select {
+                    options: optiscaler_assets.to_vec(),
+                };
+            }
+            ("proton", "selected_version") if !proton_versions.is_empty() => {
+                spec.kind = modde_games::tools::ToolSettingKind::Select {
+                    options: proton_versions.to_vec(),
+                };
+            }
+            _ => {}
+        }
+    }
+}
+
+fn installable_tool_assets(
+    tool_id: &str,
+    release: &modde_games::tools::ToolReleaseSummary,
+) -> Vec<String> {
+    modde_games::tools::resolve_tool(tool_id)
+        .map(|tool| tool.installable_release_assets(release))
+        .unwrap_or_default()
+}
+
+fn tool_assets_for_tag(
+    tool_id: &str,
+    releases: &[modde_games::tools::ToolReleaseSummary],
+    tag: &str,
+) -> Vec<String> {
+    releases
+        .iter()
+        .find(|release| release.tag == tag)
+        .map(|release| installable_tool_assets(tool_id, release))
+        .unwrap_or_default()
+}
+
+fn first_installable_tool_release(
+    tool_id: &str,
+    releases: &[modde_games::tools::ToolReleaseSummary],
+) -> Option<(String, String)> {
+    releases.iter().find_map(|release| {
+        installable_tool_assets(tool_id, release)
+            .into_iter()
+            .next()
+            .map(|asset| (release.tag.clone(), asset))
+    })
+}
+
+fn current_tool_config(
+    game_id: &str,
+    tool_id: &str,
+) -> Result<modde_games::tools::ToolConfig, String> {
+    let tool = modde_games::tools::resolve_tool(tool_id)
+        .ok_or_else(|| format!("Tool is not registered: {tool_id}"))?;
+    let Some(row) = modde_core::db::ModdeDb::open()
+        .ok()
+        .and_then(|db| db.load_tool_config(game_id, tool_id).ok().flatten())
+    else {
+        return Ok(tool.default_config());
+    };
+    Ok(modde_games::tools::ToolConfig {
+        tool_id: row.tool_id,
+        enabled: row.enabled,
+        settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+    })
+}
+
+fn save_tool_settings(
+    game_id: &str,
+    tool_id: &str,
+    config: &modde_games::tools::ToolConfig,
+) -> Result<(), String> {
+    let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
+    let settings_json = serde_json::to_string(&config.settings).map_err(|err| err.to_string())?;
+    db.save_tool_config(game_id, tool_id, config.enabled, &settings_json)
+        .map_err(|err| err.to_string())
+}
+
+async fn load_tool_releases(
+    tool_id: String,
+) -> Result<Vec<modde_games::tools::ToolReleaseSummary>, String> {
+    let tool = modde_games::tools::resolve_tool(&tool_id)
+        .ok_or_else(|| format!("Tool is not registered: {tool_id}"))?;
+    if !tool.supports_releases() {
+        return Err(format!(
+            "{} does not support release selection",
+            tool.display_name()
+        ));
+    }
+    tool.list_releases().await.map_err(|err| err.to_string())
+}
+
+async fn install_selected_tool_release(game_id: String, tool_id: String) -> Result<String, String> {
+    let tool = modde_games::tools::resolve_tool(&tool_id)
+        .ok_or_else(|| format!("Tool is not registered: {tool_id}"))?;
+    let config = current_tool_config(&game_id, &tool_id)?;
+    let selected_tag = config
+        .get_str("release_tag")
+        .unwrap_or("latest")
+        .to_string();
+    let selected_asset = config.get_str("release_asset").unwrap_or("").to_string();
+    if selected_asset.trim().is_empty() {
+        return Err(format!(
+            "Select a {} release asset before installing",
+            tool.display_name()
+        ));
+    }
+    let config = tool
+        .install_release(&game_id, config, &selected_tag, &selected_asset)
+        .await
+        .map_err(|err| err.to_string())?;
+    save_tool_settings(&game_id, &tool_id, &config)?;
+    Ok(format!(
+        "Installed {} {}",
+        tool.display_name(),
+        config.get_str("release_tag").unwrap_or("release")
+    ))
+}
+
+async fn install_selected_proton_version(game_id: String) -> Result<String, String> {
+    let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
+    let tool = modde_games::tools::resolve_tool("proton")
+        .ok_or_else(|| "Proton tool is not registered".to_string())?;
+    let row = db
+        .load_tool_config(&game_id, "proton")
+        .map_err(|err| err.to_string())?;
+    let config = row.map_or_else(
+        || tool.default_config(),
+        |row| modde_games::tools::ToolConfig {
+            tool_id: row.tool_id,
+            enabled: row.enabled,
+            settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+        },
+    );
+    let version = config.get_str("selected_version").unwrap_or("latest");
+    let target = config.get_str("install_target").unwrap_or("steam");
+    modde_games::tools::proton::install_ge_proton_with_protonup_rs(version, target)
+        .map_err(|err| err.to_string())?;
+    Ok(format!("Installed GEProton {version} for {target}"))
 }
 
 impl Modde {
@@ -439,6 +696,24 @@ impl Modde {
         })
     }
 
+    fn current_tool_game_context(&self) -> Option<modde_games::tools::ToolGameContext> {
+        let game_id = self.current_game_id()?;
+        let display_name = self
+            .available_games
+            .iter()
+            .find(|(id, _)| id == game_id)
+            .map(|(_, name)| name.clone())
+            .unwrap_or_else(|| game_id.to_string());
+        let install_path = self.current_game_dir();
+        let detected = modde_games::detection::find_detected_game(game_id);
+        Some(modde_games::tools::ToolGameContext::from_parts(
+            game_id,
+            display_name,
+            install_path,
+            detected.as_ref(),
+        ))
+    }
+
     fn refresh_data_tab_conflicts(&mut self) {
         let Some(profile) = self.loaded_profile.as_ref() else {
             self.data_tab_conflicts.clear();
@@ -530,13 +805,42 @@ impl Modde {
     fn refresh_tools_state(&mut self) {
         let Some(game_id) = self.current_game_id().map(str::to_string) else {
             self.tool_state.entries.clear();
+            self.tool_state.active_tool_id = None;
+            self.tool_state.game_label = None;
+            self.tool_state.game_dir_configured = false;
             return;
         };
 
         let Ok(db) = modde_core::db::ModdeDb::open() else {
             self.tool_state.entries.clear();
+            self.tool_state.active_tool_id = None;
             return;
         };
+
+        self.tool_state.game_label = self
+            .available_games
+            .iter()
+            .find(|(id, _)| id == &game_id)
+            .map(|(_, name)| name.clone())
+            .or_else(|| Some(game_id.clone()));
+        self.tool_state.game_dir_configured = self.current_game_dir().is_some();
+        self.tool_state.proton_versions = modde_games::tools::proton::proton_version_options();
+        if !self.tool_state.optiscaler_releases.is_empty()
+            && let Ok(config) = current_tool_config(&game_id, "optiscaler")
+        {
+            self.tool_state.optiscaler_release_tags = self
+                .tool_state
+                .optiscaler_releases
+                .iter()
+                .filter(|release| !installable_tool_assets("optiscaler", release).is_empty())
+                .map(|release| release.tag.clone())
+                .collect();
+            if let Some(tag) = config.get_str("release_tag") {
+                self.tool_state.optiscaler_release_assets =
+                    tool_assets_for_tag("optiscaler", &self.tool_state.optiscaler_releases, tag);
+            }
+        }
+        let context = self.current_tool_game_context();
 
         self.tool_state.entries = modde_games::tools::all_tools()
             .iter()
@@ -545,29 +849,145 @@ impl Modde {
                 let availability = tool.detect_available();
                 let applied_files = db
                     .load_applied_files(&game_id, tool.tool_id())
-                    .map_or(0, |files| files.len());
-                let status_message = match availability {
+                    .unwrap_or_default();
+                let status_message = match &availability {
                     modde_games::tools::ToolAvailability::Available {
                         version: Some(version),
                     } => Some(format!("Detected {version}")),
                     modde_games::tools::ToolAvailability::NotInstalled { install_hint } => {
-                        Some(install_hint)
+                        Some(install_hint.clone())
                     }
                     modde_games::tools::ToolAvailability::Available { version: None } => None,
                 };
+                let availability_text = format_tool_availability(&availability);
+                let mut config = row.map_or_else(
+                    || tool.default_config_for(context.as_ref()),
+                    |row| modde_games::tools::ToolConfig {
+                        tool_id: row.tool_id,
+                        enabled: row.enabled,
+                        settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+                    },
+                );
+                config.set("_game_id", serde_json::json!(game_id));
+                apply_derived_tool_settings(&mut config, context.as_ref());
+                let generated_config_path = tool
+                    .generate_config_for(context.as_ref(), &config)
+                    .map(|generated| generated.path.display().to_string());
+                let env_preview = tool
+                    .env_vars_for(context.as_ref(), &config)
+                    .into_iter()
+                    .collect();
+                let dll_overrides = tool
+                    .wine_dll_overrides_for(context.as_ref(), &config)
+                    .into_iter()
+                    .collect();
+                let wrapper_preview = tool
+                    .wrapper_command(&config)
+                    .map(|wrapper| {
+                        if wrapper.args.is_empty() {
+                            vec![wrapper.exe]
+                        } else {
+                            vec![format!("{} {}", wrapper.exe, wrapper.args)]
+                        }
+                    })
+                    .unwrap_or_default();
+                let mut setting_specs = tool.settings_schema_for(context.as_ref(), &config);
+                patch_tool_setting_options(
+                    tool.tool_id(),
+                    &mut setting_specs,
+                    &self.tool_state.optiscaler_release_tags,
+                    &self.tool_state.optiscaler_release_assets,
+                    &self.tool_state.proton_versions,
+                );
+                let mut derived_facts = build_tool_derived_facts(context.as_ref());
+                let (optiscaler_state, optiscaler_latest_backup, optiscaler_detected_files) =
+                    if tool.tool_id() == "optiscaler" {
+                        let managed =
+                            modde_games::tools::optiscaler::managed_paths_from_config(&config);
+                        if let Some(game_dir) = self.current_game_dir() {
+                            if let Ok(state) =
+                                modde_games::tools::optiscaler::scan_optiscaler_install(
+                                    &game_id, &game_dir, &managed,
+                                )
+                            {
+                                derived_facts
+                                    .push(("OptiScaler state".to_string(), state.summary()));
+                                if let Some(path) = &state.config_path {
+                                    derived_facts.push((
+                                        "OptiScaler config".to_string(),
+                                        format!(
+                                            "{} ({} setting(s))",
+                                            path.display(),
+                                            state.ini_settings.len()
+                                        ),
+                                    ));
+                                }
+                                if let Some(path) = &state.latest_backup {
+                                    derived_facts.push((
+                                        "OptiScaler backup".to_string(),
+                                        path.display().to_string(),
+                                    ));
+                                }
+                                (
+                                    Some(state.summary()),
+                                    state.latest_backup.map(|path| path.display().to_string()),
+                                    state.recognized_files.len(),
+                                )
+                            } else {
+                                (None, None, 0)
+                            }
+                        } else {
+                            (None, None, 0)
+                        }
+                    } else {
+                        (None, None, 0)
+                    };
 
                 ToolUiEntry {
                     tool_id: tool.tool_id().to_string(),
                     display_name: tool.display_name().to_string(),
+                    description: tool.description().to_string(),
                     category: tool.category().to_string(),
-                    available: tool.detect_available().is_available(),
-                    enabled: row.as_ref().is_some_and(|config| config.enabled),
+                    available: availability.is_available(),
+                    availability_text,
+                    enabled: config.enabled,
+                    settings: config.settings.clone(),
+                    setting_specs,
+                    generated_config_path,
                     applied_files,
                     has_file_patching: matches!(tool.tool_id(), "reshade" | "optiscaler"),
+                    release_support: ToolReleaseSupport::from_supports_releases(
+                        tool.supports_releases(),
+                    ),
                     status_message,
+                    env_preview,
+                    dll_overrides,
+                    wrapper_preview,
+                    derived_facts,
+                    optiscaler_state,
+                    optiscaler_latest_backup,
+                    optiscaler_detected_files,
                 }
             })
             .collect();
+
+        let active_still_valid = self
+            .tool_state
+            .active_tool_id
+            .as_deref()
+            .is_some_and(|active| {
+                self.tool_state
+                    .entries
+                    .iter()
+                    .any(|entry| entry.tool_id == active)
+            });
+        if !active_still_valid {
+            self.tool_state.active_tool_id = self
+                .tool_state
+                .entries
+                .first()
+                .map(|entry| entry.tool_id.clone());
+        }
     }
 
     fn track_download(&mut self, key: &str, name: &str) -> usize {
@@ -993,24 +1413,88 @@ pub enum View {
     Tools,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SidebarGroup {
+    Game,
+    Install,
+    Maintenance,
+    General,
+}
+
+impl SidebarGroup {
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            SidebarGroup::Game => "Game",
+            SidebarGroup::Install => "Install",
+            SidebarGroup::Maintenance => "Maintenance",
+            SidebarGroup::General => "General",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ToolState {
     pub entries: Vec<ToolUiEntry>,
+    pub active_tool_id: Option<String>,
+    pub game_label: Option<String>,
+    pub game_dir_configured: bool,
+    pub optiscaler_releases: Vec<modde_games::tools::ToolReleaseSummary>,
+    pub optiscaler_release_tags: Vec<String>,
+    pub optiscaler_release_assets: Vec<String>,
+    pub optiscaler_releases_loading: bool,
+    pub proton_versions: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ToolUiEntry {
     pub tool_id: String,
     pub display_name: String,
+    pub description: String,
     pub category: String,
     pub available: bool,
+    pub availability_text: String,
     pub enabled: bool,
-    pub applied_files: usize,
+    pub settings: serde_json::Value,
+    pub setting_specs: Vec<modde_games::tools::ToolSettingSpec>,
+    pub generated_config_path: Option<String>,
+    pub applied_files: Vec<String>,
     pub has_file_patching: bool,
+    pub release_support: ToolReleaseSupport,
     pub status_message: Option<String>,
+    pub env_preview: Vec<(String, String)>,
+    pub dll_overrides: Vec<String>,
+    pub wrapper_preview: Vec<String>,
+    pub derived_facts: Vec<(String, String)>,
+    pub optiscaler_state: Option<String>,
+    pub optiscaler_latest_backup: Option<String>,
+    pub optiscaler_detected_files: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolReleaseSupport {
+    None,
+    Supported,
+}
+
+impl ToolReleaseSupport {
+    #[must_use]
+    pub fn from_supports_releases(supports_releases: bool) -> Self {
+        if supports_releases {
+            Self::Supported
+        } else {
+            Self::None
+        }
+    }
+
+    #[must_use]
+    pub fn is_supported(self) -> bool {
+        matches!(self, Self::Supported)
+    }
 }
 
 #[derive(Debug, Clone, Default)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct WabbajackInstallerState {
     pub tab: WabbajackTab,
     pub entries: Vec<modde_sources::wabbajack::catalog::WabbajackCatalogEntry>,
@@ -1283,6 +1767,7 @@ impl FOMODWizardState {
 pub enum Message {
     // Navigation
     SwitchView(View),
+    ToggleSidebarGroup(SidebarGroup),
     SwitchProfile(String),
     CreateProfile {
         name: String,
@@ -1512,12 +1997,27 @@ pub enum Message {
 
     // Tools
     RefreshTools,
+    SelectToolTab(String),
+    UpdateToolSetting {
+        tool_id: String,
+        key: String,
+        value: serde_json::Value,
+    },
     ToggleTool {
         tool_id: String,
         enabled: bool,
     },
     ApplyTool(String),
     RevertTool(String),
+    AdoptOptiScaler,
+    RestoreOptiScalerBackup,
+    ResetOptiScalerConfig,
+    RefreshOptiScalerReleases,
+    OptiScalerReleasesLoaded(Result<Vec<modde_games::tools::ToolReleaseSummary>, String>),
+    InstallOptiScalerRelease,
+    OptiScalerReleaseInstalled(Result<String, String>),
+    InstallProtonVersion,
+    ProtonVersionInstalled(Result<String, String>),
 
     // Downloads
     PauseDownload(usize),
@@ -1642,6 +2142,10 @@ impl Modde {
                 FilterCriterion::new(FilterKind::HasNexusId),
             ],
             compact_mod_list: false,
+            collapsed_sidebar_groups: HashSet::from([
+                SidebarGroup::Maintenance,
+                SidebarGroup::General,
+            ]),
         };
 
         // Auto-detect: if no game is selected but profiles exist, pick the first profile's game
@@ -1690,6 +2194,11 @@ impl Modde {
                     self.active_view = other;
                 }
             },
+            Message::ToggleSidebarGroup(group) => {
+                if !self.collapsed_sidebar_groups.insert(group) {
+                    self.collapsed_sidebar_groups.remove(&group);
+                }
+            }
             Message::SwitchProfile(name) => {
                 self.active_profile = Some(name);
                 self.reload_profile();
@@ -3605,6 +4114,210 @@ impl Modde {
                     format!("Loaded {} tool(s)", self.tool_state.entries.len())
                 };
             }
+            Message::RefreshOptiScalerReleases => {
+                self.tool_state.optiscaler_releases_loading = true;
+                self.status_message = "Loading OptiScaler releases...".to_string();
+                return Task::perform(
+                    load_tool_releases("optiscaler".to_string()),
+                    Message::OptiScalerReleasesLoaded,
+                );
+            }
+            Message::OptiScalerReleasesLoaded(result) => {
+                self.tool_state.optiscaler_releases_loading = false;
+                match result {
+                    Ok(releases) => {
+                        let Some(game_id) = self.current_game_id().map(str::to_string) else {
+                            self.status_message =
+                                "Select a game before loading OptiScaler releases".to_string();
+                            return Task::none();
+                        };
+                        let Ok(mut config) = current_tool_config(&game_id, "optiscaler") else {
+                            self.status_message =
+                                "Failed to load OptiScaler configuration".to_string();
+                            return Task::none();
+                        };
+                        self.tool_state.optiscaler_release_tags = releases
+                            .iter()
+                            .filter(|release| {
+                                !installable_tool_assets("optiscaler", release).is_empty()
+                            })
+                            .map(|release| release.tag.clone())
+                            .collect();
+                        let configured_tag = config.get_str("release_tag").unwrap_or("");
+                        let configured_asset = config.get_str("release_asset").unwrap_or("");
+                        let selected = if self
+                            .tool_state
+                            .optiscaler_release_tags
+                            .iter()
+                            .any(|tag| tag == configured_tag)
+                        {
+                            let assets =
+                                tool_assets_for_tag("optiscaler", &releases, configured_tag);
+                            let asset = if assets.iter().any(|asset| asset == configured_asset) {
+                                configured_asset.to_string()
+                            } else {
+                                assets.first().cloned().unwrap_or_default()
+                            };
+                            Some((configured_tag.to_string(), asset))
+                        } else {
+                            first_installable_tool_release("optiscaler", &releases)
+                        };
+                        if let Some((tag, asset)) = selected {
+                            self.tool_state.optiscaler_release_assets =
+                                tool_assets_for_tag("optiscaler", &releases, &tag);
+                            config.set("release_tag", serde_json::json!(tag));
+                            config.set("release_asset", serde_json::json!(asset));
+                            let _ = save_tool_settings(&game_id, "optiscaler", &config);
+                        } else {
+                            self.tool_state.optiscaler_release_assets.clear();
+                        }
+                        self.tool_state.optiscaler_releases = releases;
+                        self.refresh_tools_state();
+                        self.tool_state.active_tool_id = Some("optiscaler".to_string());
+                        self.status_message = format!(
+                            "Loaded {} OptiScaler release(s)",
+                            self.tool_state.optiscaler_release_tags.len()
+                        );
+                    }
+                    Err(err) => {
+                        self.status_message = format!("Failed to load OptiScaler releases: {err}");
+                    }
+                }
+            }
+            Message::InstallOptiScalerRelease => {
+                let Some(game_id) = self.current_game_id().map(str::to_string) else {
+                    self.status_message = "Select a game before installing OptiScaler".to_string();
+                    return Task::none();
+                };
+                self.status_message = "Installing OptiScaler release...".to_string();
+                return Task::perform(
+                    install_selected_tool_release(game_id, "optiscaler".to_string()),
+                    Message::OptiScalerReleaseInstalled,
+                );
+            }
+            Message::OptiScalerReleaseInstalled(result) => match result {
+                Ok(message) => {
+                    self.refresh_tools_state();
+                    self.tool_state.active_tool_id = Some("optiscaler".to_string());
+                    self.status_message = message;
+                }
+                Err(err) => {
+                    self.status_message = format!("Failed to install OptiScaler: {err}");
+                }
+            },
+            Message::InstallProtonVersion => {
+                let Some(game_id) = self.current_game_id().map(str::to_string) else {
+                    self.status_message = "Select a game before installing Proton".to_string();
+                    return Task::none();
+                };
+                self.status_message = "Installing Proton with protonup-rs...".to_string();
+                return Task::perform(
+                    install_selected_proton_version(game_id),
+                    Message::ProtonVersionInstalled,
+                );
+            }
+            Message::ProtonVersionInstalled(result) => match result {
+                Ok(message) => {
+                    self.refresh_tools_state();
+                    self.tool_state.active_tool_id = Some("proton".to_string());
+                    self.status_message = message;
+                }
+                Err(err) => {
+                    self.status_message = format!("Failed to install Proton: {err}");
+                }
+            },
+            Message::SelectToolTab(tool_id) => {
+                let should_load_optiscaler = tool_id == "optiscaler"
+                    && self.tool_state.optiscaler_releases.is_empty()
+                    && !self.tool_state.optiscaler_releases_loading;
+                self.tool_state.active_tool_id = Some(tool_id);
+                if should_load_optiscaler {
+                    self.tool_state.optiscaler_releases_loading = true;
+                    self.status_message = "Loading OptiScaler releases...".to_string();
+                    return Task::perform(
+                        load_tool_releases("optiscaler".to_string()),
+                        Message::OptiScalerReleasesLoaded,
+                    );
+                }
+            }
+            Message::UpdateToolSetting {
+                tool_id,
+                key,
+                value,
+            } => {
+                let Some(game_id) = self.current_game_id().map(str::to_string) else {
+                    self.status_message = "Select a game before configuring tools".to_string();
+                    return Task::none();
+                };
+                let Some(tool) = modde_games::tools::resolve_tool(&tool_id) else {
+                    self.status_message = format!("Unknown tool: {tool_id}");
+                    return Task::none();
+                };
+                let context = self.current_tool_game_context();
+                match modde_core::db::ModdeDb::open() {
+                    Ok(db) => {
+                        let mut config = db
+                            .load_tool_config(&game_id, &tool_id)
+                            .ok()
+                            .flatten()
+                            .map_or_else(
+                                || tool.default_config_for(context.as_ref()),
+                                |row| modde_games::tools::ToolConfig {
+                                    tool_id: row.tool_id,
+                                    enabled: row.enabled,
+                                    settings: serde_json::from_str(&row.settings_json)
+                                        .unwrap_or_default(),
+                                },
+                            );
+                        let normalized =
+                            normalize_tool_setting_value(&config.settings, &key, value);
+                        set_nested_tool_setting(&mut config.settings, &key, normalized);
+                        if tool_id == "optiscaler"
+                            && key == "release_tag"
+                            && let Some(tag) = config.get_str("release_tag").map(str::to_string)
+                        {
+                            self.tool_state.optiscaler_release_assets = tool_assets_for_tag(
+                                "optiscaler",
+                                &self.tool_state.optiscaler_releases,
+                                &tag,
+                            );
+                            if let Some(first_asset) =
+                                self.tool_state.optiscaler_release_assets.first().cloned()
+                            {
+                                config.set("release_asset", serde_json::json!(first_asset));
+                            } else {
+                                config.set("release_asset", serde_json::json!(""));
+                            }
+                        }
+                        let settings_json = serde_json::to_string(&config.settings)
+                            .unwrap_or_else(|_| "{}".to_string());
+                        match db.save_tool_config(
+                            &game_id,
+                            &tool_id,
+                            config.enabled,
+                            &settings_json,
+                        ) {
+                            Ok(()) => {
+                                if config.enabled {
+                                    let _ =
+                                        modde_games::launcher::generate_tool_configs(&game_id, &db);
+                                }
+                                self.refresh_tools_state();
+                                self.tool_state.active_tool_id = Some(tool_id);
+                                self.status_message =
+                                    format!("Updated {} setting", tool.display_name());
+                            }
+                            Err(err) => {
+                                self.status_message =
+                                    format!("Failed to update tool setting: {err}");
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        self.status_message = format!("Failed to open tool database: {err}");
+                    }
+                }
+            }
             Message::ToggleTool { tool_id, enabled } => {
                 let Some(game_id) = self.current_game_id().map(str::to_string) else {
                     self.status_message = "Select a game before toggling tools".to_string();
@@ -3614,6 +4327,7 @@ impl Modde {
                     self.status_message = format!("Unknown tool: {tool_id}");
                     return Task::none();
                 };
+                let context = self.current_tool_game_context();
                 match modde_core::db::ModdeDb::open() {
                     Ok(db) => {
                         let settings_json = db
@@ -3622,8 +4336,10 @@ impl Modde {
                             .flatten()
                             .map_or_else(
                                 || {
-                                    serde_json::to_string(&tool.default_config().settings)
-                                        .unwrap_or_else(|_| "{}".to_string())
+                                    serde_json::to_string(
+                                        &tool.default_config_for(context.as_ref()).settings,
+                                    )
+                                    .unwrap_or_else(|_| "{}".to_string())
                                 },
                                 |row| row.settings_json,
                             );
@@ -3660,11 +4376,12 @@ impl Modde {
                     self.status_message = format!("Unknown tool: {id}");
                     return Task::none();
                 };
+                let context = self.current_tool_game_context();
                 match modde_core::db::ModdeDb::open() {
                     Ok(db) => {
                         let row = db.load_tool_config(&game_id, &id).ok().flatten();
                         let mut config = row.map_or_else(
-                            || tool.default_config(),
+                            || tool.default_config_for(context.as_ref()),
                             |row| modde_games::tools::ToolConfig {
                                 tool_id: row.tool_id,
                                 enabled: row.enabled,
@@ -3674,7 +4391,8 @@ impl Modde {
                         );
                         config.enabled = true;
                         config.set("_game_id", serde_json::json!(game_id));
-                        match tool.apply(&game_dir, &config) {
+                        apply_derived_tool_settings(&mut config, context.as_ref());
+                        match tool.apply_for(&game_dir, context.as_ref(), &config) {
                             Ok(applied) => {
                                 let paths: Vec<String> = applied
                                     .files
@@ -3683,6 +4401,16 @@ impl Modde {
                                     .collect();
                                 let settings_json = serde_json::to_string(&config.settings)
                                     .unwrap_or_else(|_| "{}".to_string());
+                                if id == "optiscaler" {
+                                    config.set(
+                                        "managed_manifest",
+                                        modde_games::tools::optiscaler::managed_manifest_json(
+                                            &game_dir, &applied,
+                                        ),
+                                    );
+                                }
+                                let settings_json = serde_json::to_string(&config.settings)
+                                    .unwrap_or(settings_json);
                                 let _ = db.save_tool_config(&game_id, &id, true, &settings_json);
                                 let _ = db.clear_applied_files(&game_id, &id);
                                 let _ = db.save_applied_files(&game_id, &id, &paths);
@@ -3732,6 +4460,155 @@ impl Modde {
                             }
                             Err(err) => {
                                 self.status_message = format!("Failed to revert tool: {err}");
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        self.status_message = format!("Failed to open tool database: {err}");
+                    }
+                }
+            }
+            Message::AdoptOptiScaler => {
+                let Some(game_id) = self.current_game_id().map(str::to_string) else {
+                    self.status_message = "Select a game before adopting OptiScaler".to_string();
+                    return Task::none();
+                };
+                let Some(game_dir) = self.current_game_dir() else {
+                    self.status_message = "Game install path is not configured".to_string();
+                    return Task::none();
+                };
+                match modde_core::db::ModdeDb::open() {
+                    Ok(db) => {
+                        let tool = modde_games::tools::resolve_tool("optiscaler")
+                            .expect("optiscaler tool is registered");
+                        let mut config = db
+                            .load_tool_config(&game_id, "optiscaler")
+                            .ok()
+                            .flatten()
+                            .map_or_else(
+                                || tool.default_config(),
+                                |row| modde_games::tools::ToolConfig {
+                                    tool_id: row.tool_id,
+                                    enabled: row.enabled,
+                                    settings: serde_json::from_str(&row.settings_json)
+                                        .unwrap_or_default(),
+                                },
+                            );
+                        let managed =
+                            modde_games::tools::optiscaler::managed_paths_from_config(&config);
+                        match modde_games::tools::optiscaler::scan_optiscaler_install(
+                            &game_id, &game_dir, &managed,
+                        ) {
+                            Ok(state) => {
+                                let paths = state
+                                    .recognized_files
+                                    .iter()
+                                    .map(|file| state.executable_dir.join(&file.rel_path))
+                                    .map(|path| {
+                                        path.strip_prefix(&game_dir)
+                                            .unwrap_or(&path)
+                                            .to_string_lossy()
+                                            .replace('\\', "/")
+                                    })
+                                    .collect::<Vec<_>>();
+                                let applied = modde_games::tools::AppliedFiles {
+                                    files: paths.iter().map(PathBuf::from).collect(),
+                                };
+                                config.enabled = true;
+                                config.set(
+                                    "managed_manifest",
+                                    modde_games::tools::optiscaler::managed_manifest_json(
+                                        &game_dir, &applied,
+                                    ),
+                                );
+                                let settings_json = serde_json::to_string(&config.settings)
+                                    .unwrap_or_else(|_| "{}".to_string());
+                                let _ = db.save_tool_config(
+                                    &game_id,
+                                    "optiscaler",
+                                    true,
+                                    &settings_json,
+                                );
+                                let _ = db.clear_applied_files(&game_id, "optiscaler");
+                                let _ = db.save_applied_files(&game_id, "optiscaler", &paths);
+                                self.refresh_tools_state();
+                                self.status_message =
+                                    format!("Adopted OptiScaler ({} file(s))", paths.len());
+                            }
+                            Err(err) => {
+                                self.status_message = format!("Failed to scan OptiScaler: {err}");
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        self.status_message = format!("Failed to open tool database: {err}");
+                    }
+                }
+            }
+            Message::RestoreOptiScalerBackup => {
+                let Some(game_id) = self.current_game_id().map(str::to_string) else {
+                    self.status_message = "Select a game before restoring OptiScaler".to_string();
+                    return Task::none();
+                };
+                let Some(game_dir) = self.current_game_dir() else {
+                    self.status_message = "Game install path is not configured".to_string();
+                    return Task::none();
+                };
+                match modde_games::tools::optiscaler::restore_latest_optiscaler_backup(
+                    &game_id, &game_dir,
+                ) {
+                    Ok(path) => {
+                        self.refresh_tools_state();
+                        self.status_message =
+                            format!("Restored OptiScaler backup {}", path.display());
+                    }
+                    Err(err) => {
+                        self.status_message = format!("Failed to restore OptiScaler: {err}");
+                    }
+                }
+            }
+            Message::ResetOptiScalerConfig => {
+                let Some(game_id) = self.current_game_id().map(str::to_string) else {
+                    self.status_message = "Select a game before resetting OptiScaler".to_string();
+                    return Task::none();
+                };
+                match modde_core::db::ModdeDb::open() {
+                    Ok(db) => {
+                        let tool = modde_games::tools::resolve_tool("optiscaler")
+                            .expect("optiscaler tool is registered");
+                        let mut config = db
+                            .load_tool_config(&game_id, "optiscaler")
+                            .ok()
+                            .flatten()
+                            .map_or_else(
+                                || tool.default_config(),
+                                |row| modde_games::tools::ToolConfig {
+                                    tool_id: row.tool_id,
+                                    enabled: row.enabled,
+                                    settings: serde_json::from_str(&row.settings_json)
+                                        .unwrap_or_default(),
+                                },
+                            );
+                        if let serde_json::Value::Object(map) = &mut config.settings {
+                            map.remove("ini_overrides");
+                            map.insert("force_config_reset".to_string(), serde_json::json!(true));
+                        }
+                        let settings_json = serde_json::to_string(&config.settings)
+                            .unwrap_or_else(|_| "{}".to_string());
+                        match db.save_tool_config(
+                            &game_id,
+                            "optiscaler",
+                            config.enabled,
+                            &settings_json,
+                        ) {
+                            Ok(()) => {
+                                self.refresh_tools_state();
+                                self.status_message =
+                                    "Reset OptiScaler config overrides".to_string();
+                            }
+                            Err(err) => {
+                                self.status_message =
+                                    format!("Failed to reset OptiScaler config: {err}");
                             }
                         }
                     }
@@ -3809,6 +4686,7 @@ impl Modde {
 
         let sidebar = crate::views::sidebar::view(
             &self.active_view,
+            &self.collapsed_sidebar_groups,
             &self.profiles,
             &self.active_profile,
             self.experiment_depth,
@@ -4007,7 +4885,7 @@ impl Modde {
             .as_deref()
             .unwrap_or("the selected game");
         let game_label = modde_games::resolve_game_plugin(game_id)
-            .map(|plugin| plugin.display_name())
+            .map(modde_games::GamePlugin::display_name)
             .unwrap_or(game_id);
 
         let mut body = column![
@@ -4192,6 +5070,10 @@ mod tests {
                 FilterCriterion::new(FilterKind::HasNexusId),
             ],
             compact_mod_list: false,
+            collapsed_sidebar_groups: HashSet::from([
+                SidebarGroup::Maintenance,
+                SidebarGroup::General,
+            ]),
         }
     }
 
@@ -4561,6 +5443,161 @@ mod tests {
         if shm_path.exists() {
             std::fs::remove_file(&shm_path).expect("remove isolated test SHM");
         }
+    }
+
+    #[test]
+    fn optiscaler_release_loaded_resets_stale_asset() {
+        let _guard = db_lock();
+        reset_isolated_db();
+        let mut app = test_app();
+        app.selected_game = Some("skyrim-se".to_string());
+
+        let db = modde_core::db::ModdeDb::open().expect("db opens");
+        let settings = serde_json::json!({
+            "release_tag": "v0.9.1",
+            "release_asset": "stale.zip"
+        });
+        db.save_tool_config("skyrim-se", "optiscaler", false, &settings.to_string())
+            .expect("save stale settings");
+
+        let releases = vec![modde_games::tools::ToolReleaseSummary {
+            tag: "v0.9.1".to_string(),
+            name: None,
+            assets: vec![modde_games::tools::ToolReleaseAsset {
+                name: "Optiscaler_0.9.1-final.7z".to_string(),
+                download_url: "https://example.test/optiscaler.7z".to_string(),
+                size: 10,
+            }],
+        }];
+        let _ = app.update(Message::OptiScalerReleasesLoaded(Ok(releases)));
+
+        let row = db
+            .load_tool_config("skyrim-se", "optiscaler")
+            .expect("load tool config")
+            .expect("tool config exists");
+        let saved: serde_json::Value =
+            serde_json::from_str(&row.settings_json).expect("settings json");
+        assert_eq!(saved["release_tag"], "v0.9.1");
+        assert_eq!(saved["release_asset"], "Optiscaler_0.9.1-final.7z");
+        assert_eq!(
+            app.tool_state.optiscaler_release_assets,
+            vec!["Optiscaler_0.9.1-final.7z"]
+        );
+    }
+
+    #[test]
+    fn optiscaler_release_tag_update_resets_asset() {
+        let _guard = db_lock();
+        reset_isolated_db();
+        let mut app = test_app();
+        app.selected_game = Some("skyrim-se".to_string());
+        app.tool_state.optiscaler_releases = vec![
+            modde_games::tools::ToolReleaseSummary {
+                tag: "v0.9.0".to_string(),
+                name: None,
+                assets: vec![modde_games::tools::ToolReleaseAsset {
+                    name: "Optiscaler_0.9.0.7z".to_string(),
+                    download_url: "https://example.test/0.9.0.7z".to_string(),
+                    size: 10,
+                }],
+            },
+            modde_games::tools::ToolReleaseSummary {
+                tag: "v0.9.1".to_string(),
+                name: None,
+                assets: vec![modde_games::tools::ToolReleaseAsset {
+                    name: "Optiscaler_0.9.1.7z".to_string(),
+                    download_url: "https://example.test/0.9.1.7z".to_string(),
+                    size: 11,
+                }],
+            },
+        ];
+
+        let _ = app.update(Message::UpdateToolSetting {
+            tool_id: "optiscaler".to_string(),
+            key: "release_tag".to_string(),
+            value: serde_json::json!("v0.9.1"),
+        });
+
+        let db = modde_core::db::ModdeDb::open().expect("db opens");
+        let row = db
+            .load_tool_config("skyrim-se", "optiscaler")
+            .expect("load tool config")
+            .expect("tool config exists");
+        let saved: serde_json::Value =
+            serde_json::from_str(&row.settings_json).expect("settings json");
+        assert_eq!(saved["release_tag"], "v0.9.1");
+        assert_eq!(saved["release_asset"], "Optiscaler_0.9.1.7z");
+    }
+
+    #[test]
+    fn optiscaler_zip_extraction_flattens_payload() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let archive_path = temp.path().join("optiscaler.zip");
+        let dest = temp.path().join("dest");
+        std::fs::create_dir_all(&dest).expect("dest");
+        {
+            let file = std::fs::File::create(&archive_path).expect("zip file");
+            let mut zip = zip::ZipWriter::new(file);
+            let options = zip::write::SimpleFileOptions::default();
+            zip.start_file("nested/OptiScaler.dll", options)
+                .expect("start dll");
+            std::io::Write::write_all(&mut zip, b"dll").expect("write dll");
+            zip.start_file("nested/OptiScaler.ini", options)
+                .expect("start ini");
+            std::io::Write::write_all(&mut zip, b"ini").expect("write ini");
+            zip.start_file("nested/readme.txt", options)
+                .expect("start txt");
+            std::io::Write::write_all(&mut zip, b"txt").expect("write txt");
+            zip.finish().expect("finish zip");
+        }
+
+        modde_games::tools::optiscaler::extract_optiscaler_archive_flat(&archive_path, &dest)
+            .expect("extract zip");
+        assert!(dest.join("OptiScaler.dll").exists());
+        assert!(dest.join("OptiScaler.ini").exists());
+        assert!(!dest.join("readme.txt").exists());
+    }
+
+    #[test]
+    fn optiscaler_7z_extraction_flattens_payload_when_7z_available() {
+        let sevenz = ["7zz", "7z"].into_iter().find(|bin| {
+            std::process::Command::new(bin)
+                .arg("--help")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .is_ok_and(|status| status.success())
+        });
+        let Some(sevenz) = sevenz else {
+            return;
+        };
+
+        let _guard = db_lock();
+        isolated_data_dir();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let source = temp.path().join("source");
+        let dest = temp.path().join("dest");
+        let archive_path = temp.path().join("optiscaler.7z");
+        std::fs::create_dir_all(source.join("nested")).expect("source");
+        std::fs::create_dir_all(&dest).expect("dest");
+        std::fs::write(source.join("nested/OptiScaler.dll"), b"dll").expect("dll");
+        std::fs::write(source.join("nested/OptiScaler.ini"), b"ini").expect("ini");
+
+        let status = std::process::Command::new(sevenz)
+            .arg("a")
+            .arg("-y")
+            .arg(&archive_path)
+            .arg(source.join("nested"))
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .expect("run 7z");
+        assert!(status.success());
+
+        modde_games::tools::optiscaler::extract_optiscaler_archive_flat(&archive_path, &dest)
+            .expect("extract 7z");
+        assert!(dest.join("OptiScaler.dll").exists());
+        assert!(dest.join("OptiScaler.ini").exists());
     }
 
     /// Build an `EnabledMod` for the refusal-test fixtures. `lock` controls

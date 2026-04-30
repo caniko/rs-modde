@@ -160,8 +160,9 @@ const KNOWN_GAMES: &[KnownGame] = &[
         game_id: "stellar-blade",
         display_name: "Stellar Blade",
         steam_app_id: Some("3489700"),
-        // Steam installs under `steamapps/common/Stellar Blade` — if your
-        // install uses the trademark glyph ("Stellar Blade™"), update this.
+        // Fallback only. Steam manifests are authoritative because the real
+        // install dir is `StellarBlade` while the display name contains a
+        // trademark glyph.
         steam_dir: Some("Stellar Blade"),
         gog_app_id: None,
         epic_app_id: None,
@@ -256,35 +257,194 @@ fn scan_steam_libraries(detected: &mut Vec<DetectedGame>) {
     let libraries = paths::steam_library_folders();
 
     for lib_path in &libraries {
-        let common_dir = lib_path.join("steamapps/common");
-        if !common_dir.is_dir() {
+        scan_steam_library(lib_path, detected);
+    }
+}
+
+fn scan_steam_library(lib_path: &Path, detected: &mut Vec<DetectedGame>) {
+    for steamapps_dir in steamapps_dir_candidates(lib_path) {
+        scan_steam_appmanifests(lib_path, &steamapps_dir, detected);
+        scan_steam_common_fallback(lib_path, &steamapps_dir, detected);
+    }
+}
+
+fn steamapps_dir_candidates(lib_path: &Path) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    push_unique_existing_dir(&mut candidates, lib_path.join("steamapps"));
+    push_unique_existing_dir(&mut candidates, lib_path.to_path_buf());
+    candidates
+}
+
+fn push_unique_existing_dir(paths: &mut Vec<PathBuf>, path: PathBuf) {
+    if path.is_dir() && !paths.iter().any(|p| p == &path) {
+        paths.push(path);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SteamAppManifest {
+    appid: String,
+    name: String,
+    installdir: String,
+}
+
+fn scan_steam_appmanifests(
+    library_path: &Path,
+    steamapps_dir: &Path,
+    detected: &mut Vec<DetectedGame>,
+) {
+    let manifests = match std::fs::read_dir(steamapps_dir) {
+        Ok(entries) => entries,
+        Err(e) => {
+            debug!(error = %e, path = %steamapps_dir.display(), "failed to read Steam library");
+            return;
+        }
+    };
+
+    for entry in manifests.flatten() {
+        let path = entry.path();
+        if !is_steam_appmanifest(&path) {
             continue;
         }
-
-        for game in KNOWN_GAMES {
-            let Some(steam_dir) = game.steam_dir else {
+        let content = match std::fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(e) => {
+                debug!(error = %e, path = %path.display(), "failed to read Steam appmanifest");
                 continue;
-            };
-
-            let install_path = common_dir.join(steam_dir);
-            if install_path.is_dir() {
-                debug!(
-                    game_id = game.game_id,
-                    path = %install_path.display(),
-                    "detected Steam game"
-                );
-                detected.push(DetectedGame {
-                    game_id: game.game_id,
-                    display_name: game.display_name,
-                    install_path,
-                    source: LauncherSource::Steam {
-                        app_id: game.steam_app_id.unwrap_or("unknown").to_string(),
-                        library_path: lib_path.clone(),
-                    },
-                });
             }
+        };
+        let Some(manifest) = parse_steam_appmanifest(&content) else {
+            debug!(path = %path.display(), "failed to parse Steam appmanifest");
+            continue;
+        };
+        let Some(game) = KNOWN_GAMES
+            .iter()
+            .find(|game| game.steam_app_id == Some(manifest.appid.as_str()))
+        else {
+            continue;
+        };
+        let install_path = steamapps_dir.join("common").join(&manifest.installdir);
+        if install_path.is_dir() {
+            push_steam_detected_game(
+                detected,
+                game,
+                install_path,
+                manifest.appid,
+                library_path.to_path_buf(),
+                "detected Steam game from appmanifest",
+            );
+        } else {
+            debug!(
+                game_id = game.game_id,
+                app_id = %manifest.appid,
+                name = %manifest.name,
+                path = %install_path.display(),
+                "Steam appmanifest install path does not exist"
+            );
         }
     }
+}
+
+fn is_steam_appmanifest(path: &Path) -> bool {
+    let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
+    file_name.starts_with("appmanifest_") && file_name.ends_with(".acf")
+}
+
+fn parse_steam_appmanifest(content: &str) -> Option<SteamAppManifest> {
+    let mut appid = None;
+    let mut name = None;
+    let mut installdir = None;
+
+    for line in content.lines() {
+        let Some((key, value)) = parse_vdf_key_value(line) else {
+            continue;
+        };
+        match key {
+            "appid" => appid = Some(value.to_string()),
+            "name" => name = Some(value.to_string()),
+            "installdir" => installdir = Some(value.to_string()),
+            _ => {}
+        }
+    }
+
+    Some(SteamAppManifest {
+        appid: appid?,
+        name: name?,
+        installdir: installdir?,
+    })
+}
+
+fn parse_vdf_key_value(line: &str) -> Option<(&str, &str)> {
+    let line = line.trim();
+    let rest = line.strip_prefix('"')?;
+    let key_end = rest.find('"')?;
+    let key = &rest[..key_end];
+    let rest = rest[key_end + 1..].trim_start();
+    let rest = rest.strip_prefix('"')?;
+    let value_end = rest.find('"')?;
+    Some((key, &rest[..value_end]))
+}
+
+fn scan_steam_common_fallback(
+    library_path: &Path,
+    steamapps_dir: &Path,
+    detected: &mut Vec<DetectedGame>,
+) {
+    let common_dir = steamapps_dir.join("common");
+    if !common_dir.is_dir() {
+        return;
+    }
+
+    for game in KNOWN_GAMES {
+        let Some(steam_dir) = game.steam_dir else {
+            continue;
+        };
+
+        let install_path = common_dir.join(steam_dir);
+        if install_path.is_dir() {
+            push_steam_detected_game(
+                detected,
+                game,
+                install_path,
+                game.steam_app_id.unwrap_or("unknown").to_string(),
+                library_path.to_path_buf(),
+                "detected Steam game from common directory fallback",
+            );
+        }
+    }
+}
+
+fn push_steam_detected_game(
+    detected: &mut Vec<DetectedGame>,
+    game: &KnownGame,
+    install_path: PathBuf,
+    app_id: String,
+    library_path: PathBuf,
+    message: &'static str,
+) {
+    if detected
+        .iter()
+        .any(|detected| detected.game_id == game.game_id && detected.install_path == install_path)
+    {
+        return;
+    }
+
+    debug!(
+        game_id = game.game_id,
+        path = %install_path.display(),
+        message
+    );
+    detected.push(DetectedGame {
+        game_id: game.game_id,
+        display_name: game.display_name,
+        install_path,
+        source: LauncherSource::Steam {
+            app_id,
+            library_path,
+        },
+    });
 }
 
 /// Scan Heroic's installed game databases (GOG, Epic/Legendary, Sideload).
@@ -661,27 +821,111 @@ mod tests {
 
     // ── Steam library scanning ────────────────────────────────────────
 
-    #[test]
-    fn scan_steam_libraries_detects_game_in_common() {
-        let tmp = tempfile::tempdir().unwrap();
-        // Create a fake Steam library with "Cyberpunk 2077" in steamapps/common/
-        let common = tmp.path().join("steamapps/common/Cyberpunk 2077");
-        std::fs::create_dir_all(&common).unwrap();
+    fn write_steam_appmanifest(
+        steamapps_dir: &std::path::Path,
+        appid: &str,
+        name: &str,
+        installdir: &str,
+    ) -> PathBuf {
+        let manifest = format!(
+            r#""AppState"
+{{
+    "appid"        "{appid}"
+    "Universe"        "1"
+    "name"        "{name}"
+    "StateFlags"        "4"
+    "installdir"        "{installdir}"
+}}
+"#
+        );
+        let path = steamapps_dir.join(format!("appmanifest_{appid}.acf"));
+        std::fs::write(&path, manifest).unwrap();
+        path
+    }
 
-        // Temporarily override HOME to point to our temp dir so steam_library_folders works
-        // Instead, we directly test scan_steam_libraries by injecting a mock path.
-        // We can do this by patching the paths module — but since we can't do that easily,
-        // we test via the internal helper by constructing the detection directly.
-        let detected_game = KNOWN_GAMES
-            .iter()
-            .find(|g| g.game_id == "cyberpunk2077")
-            .unwrap();
-        let install_path = common.clone();
-        assert_eq!(install_path.file_name().unwrap(), "Cyberpunk 2077");
-        assert!(install_path.is_dir());
-        // If we had a real Steam library here, scan_steam_libraries would find this.
-        // This is a structural test asserting KNOWN_GAMES has the right steam_dir.
-        assert_eq!(detected_game.steam_dir, Some("Cyberpunk 2077"));
+    #[test]
+    fn parse_steam_appmanifest_reads_required_fields() {
+        let content = r#""AppState"
+{
+    "appid"        "3489700"
+    "Universe"        "1"
+    "name"        "Stellar Blade™"
+    "StateFlags"        "4"
+    "installdir"        "StellarBlade"
+}
+"#;
+
+        let manifest = parse_steam_appmanifest(content).unwrap();
+
+        assert_eq!(
+            manifest,
+            SteamAppManifest {
+                appid: "3489700".to_string(),
+                name: "Stellar Blade™".to_string(),
+                installdir: "StellarBlade".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn scan_steam_library_detects_manifest_installdir_in_standard_library() {
+        let tmp = tempfile::tempdir().unwrap();
+        let steamapps = tmp.path().join("steamapps");
+        let install_path = steamapps.join("common/StellarBlade");
+        std::fs::create_dir_all(&install_path).unwrap();
+        write_steam_appmanifest(&steamapps, "3489700", "Stellar Blade™", "StellarBlade");
+
+        let mut detected = Vec::new();
+        scan_steam_library(tmp.path(), &mut detected);
+
+        assert_eq!(detected.len(), 1);
+        assert_eq!(detected[0].game_id, "stellar-blade");
+        assert_eq!(detected[0].install_path, install_path);
+        assert!(matches!(
+            detected[0].source,
+            LauncherSource::Steam { ref app_id, .. } if app_id == "3489700"
+        ));
+    }
+
+    #[test]
+    fn scan_steam_library_detects_manifest_installdir_in_nested_steamapps_library() {
+        let tmp = tempfile::tempdir().unwrap();
+        let reported_library = tmp.path().join("steamapps");
+        let steamapps = reported_library.join("steamapps");
+        let install_path = steamapps.join("common/StellarBlade");
+        std::fs::create_dir_all(&install_path).unwrap();
+        write_steam_appmanifest(&steamapps, "3489700", "Stellar Blade™", "StellarBlade");
+
+        let mut detected = Vec::new();
+        scan_steam_library(&reported_library, &mut detected);
+
+        assert_eq!(detected.len(), 1);
+        assert_eq!(detected[0].game_id, "stellar-blade");
+        assert_eq!(detected[0].install_path, install_path);
+    }
+
+    #[test]
+    fn scan_steam_library_uses_manifest_installdir_not_known_steam_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let steamapps = tmp.path().join("steamapps");
+        let install_path = steamapps.join("common/StellarBlade");
+        std::fs::create_dir_all(&install_path).unwrap();
+        write_steam_appmanifest(&steamapps, "3489700", "Stellar Blade™", "StellarBlade");
+
+        assert_eq!(
+            KNOWN_GAMES
+                .iter()
+                .find(|g| g.game_id == "stellar-blade")
+                .unwrap()
+                .steam_dir,
+            Some("Stellar Blade")
+        );
+
+        let mut detected = Vec::new();
+        scan_steam_library(tmp.path(), &mut detected);
+
+        assert_eq!(detected.len(), 1);
+        assert_eq!(detected[0].install_path, install_path);
     }
 
     // ── LauncherSource display ────────────────────────────────────────

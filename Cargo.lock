@@ -3827,9 +3827,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "fomod-oxide",
+ "futures",
  "modde-core",
  "open",
  "pretty_assertions",
+ "reqwest",
  "serde",
  "serde_json",
  "serde_yaml_ng",
@@ -3839,6 +3841,8 @@ dependencies = [
  "tokio",
  "tracing",
  "which 8.0.2",
+ "xxhash-rust",
+ "zip",
 ]
 
 [[package]]

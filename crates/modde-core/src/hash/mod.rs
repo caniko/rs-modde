@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::path::Path;
 
 use sha2::{Digest, Sha256};
@@ -75,11 +76,11 @@ pub async fn hash_file_sha256(path: &Path) -> Result<String> {
         hasher.update(&buf[..n]);
     }
 
-    Ok(hasher
-        .finalize()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect())
+    let mut hex = String::with_capacity(64);
+    for byte in hasher.finalize() {
+        write!(&mut hex, "{byte:02x}").expect("writing to String cannot fail");
+    }
+    Ok(hex)
 }
 
 /// Verify a file's SHA-256 matches the expected hex string.

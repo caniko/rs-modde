@@ -13,6 +13,7 @@ pub mod saves;
 pub mod selectable_text;
 pub mod settings;
 pub mod sidebar;
+pub mod tabs;
 pub mod tools;
 pub mod verify;
 pub mod wabbajack;

@@ -35,4 +35,8 @@ content = "Virtual filesystem deployment keeps your game directory clean. Mods a
 [[extra.list]]
 title = "Multi-game support"
 content = "Supports Skyrim SE/AE, Fallout 4, Fallout 76, Starfield, Cyberpunk 2077, and Stellar Blade. Support depth varies by game; Starfield save tracking is not shipped yet."
+
+[[extra.list]]
+title = "Tools and launch integration"
+content = "Manage MangoHud, vkBasalt, GameMode, ReShade, OptiScaler, and Proton settings per game. modde can generate configs, apply tracked tool files, and feed environment variables into launcher wrappers."
 +++

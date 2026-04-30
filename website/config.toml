@@ -2,7 +2,7 @@
 # Local dev: cd website && zola serve
 # Build: nix build .#website
 
-base_url = "https://caniko.codeberg.page/rs-modde"
+base_url = "https://modde.rs"
 title = "modde"
 description = "NixOS-native game mod manager"
 default_language = "en"
@@ -11,6 +11,7 @@ compile_sass = true
 build_search_index = false
 minify_html = false
 generate_feeds = false
+hard_link_static = true
 
 [markdown]
 [markdown.highlighting]

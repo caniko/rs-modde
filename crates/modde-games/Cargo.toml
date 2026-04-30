@@ -21,10 +21,14 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml_ng = { workspace = true }
 tokio = { workspace = true }
+reqwest = { workspace = true }
+zip = { workspace = true }
+futures = { workspace = true }
 tracing = { workspace = true }
 smallvec = { workspace = true }
 which = { workspace = true }
 open = { workspace = true }
+xxhash-rust = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

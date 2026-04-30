@@ -152,6 +152,8 @@ pub fn handle_list(game_id: &str) -> Result<()> {
 pub fn handle_status(game_id: &str) -> Result<()> {
     let db = ModdeDb::open().context("failed to open database")?;
     let stored = db.load_tool_configs(game_id)?;
+    let game_plugin = modde_games::resolve_game_plugin(game_id);
+    let install_dir = game_plugin.and_then(modde_games::GamePlugin::detect_install);
 
     println!("Game: {game_id}\n");
     println!(
@@ -195,6 +197,44 @@ pub fn handle_status(game_id: &str) -> Result<()> {
             status_str,
             avail_str,
         );
+
+        if tool.tool_id() == "optiscaler" {
+            let config = stored
+                .iter()
+                .find(|r| r.tool_id == "optiscaler")
+                .map_or_else(
+                    || tool.default_config(),
+                    |row| modde_games::tools::ToolConfig {
+                        tool_id: row.tool_id.clone(),
+                        enabled: row.enabled,
+                        settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+                    },
+                );
+            let managed = modde_games::tools::optiscaler::managed_paths_from_config(&config);
+            if let Some(install_dir) = &install_dir
+                && let Ok(state) = modde_games::tools::optiscaler::scan_optiscaler_install(
+                    game_id,
+                    install_dir,
+                    &managed,
+                )
+            {
+                println!("  OptiScaler install: {}", state.summary());
+                println!("  Executable dir: {}", state.executable_dir.display());
+                if let Some(path) = &state.config_path {
+                    println!(
+                        "  Config: {} ({} parsed setting(s))",
+                        path.display(),
+                        state.ini_settings.len()
+                    );
+                }
+                if !state.wine_dll_overrides.is_empty() {
+                    println!("  Wine overrides: {}", state.wine_dll_overrides.join(", "));
+                }
+                if let Some(path) = &state.latest_backup {
+                    println!("  Latest backup: {}", path.display());
+                }
+            }
+        }
     }
 
     Ok(())
@@ -349,7 +389,13 @@ pub fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
         None => tool.default_config(),
     };
 
-    let applied = tool.apply(&install_dir, &config)?;
+    let context = modde_games::tools::ToolGameContext::from_parts(
+        game_id,
+        game_plugin.display_name(),
+        Some(install_dir.clone()),
+        None,
+    );
+    let applied = tool.apply_for(&install_dir, Some(&context), &config)?;
 
     if applied.files.is_empty() {
         println!("No files to apply for {}", tool.display_name());
@@ -364,6 +410,15 @@ pub fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
         .collect();
 
     db.save_applied_files(game_id, tool_id, &rel_paths)?;
+    if tool_id == "optiscaler" {
+        let mut updated_config = config.clone();
+        updated_config.set(
+            "managed_manifest",
+            modde_games::tools::optiscaler::managed_manifest_json(&install_dir, &applied),
+        );
+        let settings_json = serde_json::to_string(&updated_config.settings)?;
+        db.save_tool_config(game_id, tool_id, true, &settings_json)?;
+    }
 
     println!(
         "Applied {} ({} files) to {}",
@@ -416,6 +471,99 @@ pub fn handle_revert(tool_id: &str, game_id: &str) -> Result<()> {
     );
 
     Ok(())
+}
+
+/// List releases for a release-backed tool.
+pub async fn handle_releases(tool_id: &str, game_id: &str) -> Result<()> {
+    let tool = modde_games::tools::resolve_tool(tool_id).ok_or_else(|| {
+        anyhow::anyhow!(
+            "unknown tool: '{tool_id}'\nAvailable: {}",
+            modde_games::tools::all_tools()
+                .iter()
+                .map(|t| t.tool_id())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })?;
+    if !tool.supports_releases() {
+        anyhow::bail!("{} does not support release selection", tool.display_name());
+    }
+
+    let db = ModdeDb::open().context("failed to open database")?;
+    let current = load_tool_config_or_default(&db, game_id, tool_id, tool)?;
+    let current_tag = current.get_str("release_tag").unwrap_or("latest");
+    let current_asset = current.get_str("release_asset").unwrap_or("");
+    let releases = tool.list_releases().await?;
+
+    if releases.is_empty() {
+        println!("No releases returned for {}", tool.display_name());
+        return Ok(());
+    }
+
+    println!(
+        "{} releases for {game_id} (selected: {} / {})",
+        tool.display_name(),
+        current_tag,
+        if current_asset.is_empty() {
+            "(no asset)"
+        } else {
+            current_asset
+        }
+    );
+    for release in &releases {
+        let assets = tool.installable_release_assets(release);
+        if assets.is_empty() {
+            println!("  {}: no installable assets", release.tag);
+        } else {
+            println!("  {}: {}", release.tag, assets.join(", "));
+        }
+    }
+    Ok(())
+}
+
+/// Install a specific release asset for a release-backed tool.
+pub async fn handle_install_release(
+    tool_id: &str,
+    game_id: &str,
+    tag: &str,
+    asset: &str,
+) -> Result<()> {
+    let tool = modde_games::tools::resolve_tool(tool_id)
+        .ok_or_else(|| anyhow::anyhow!("unknown tool: '{tool_id}'"))?;
+    if !tool.supports_releases() {
+        anyhow::bail!("{} does not support release selection", tool.display_name());
+    }
+
+    let db = ModdeDb::open().context("failed to open database")?;
+    let config = load_tool_config_or_default(&db, game_id, tool_id, tool)?;
+    let config = tool.install_release(game_id, config, tag, asset).await?;
+    let settings_json = serde_json::to_string(&config.settings)?;
+    db.save_tool_config(game_id, tool_id, config.enabled, &settings_json)?;
+
+    println!(
+        "Installed {} {} ({}) for {}",
+        tool.display_name(),
+        tag,
+        asset,
+        game_id
+    );
+    Ok(())
+}
+
+fn load_tool_config_or_default(
+    db: &ModdeDb,
+    game_id: &str,
+    tool_id: &str,
+    tool: &dyn modde_games::tools::GameTool,
+) -> Result<modde_games::tools::ToolConfig> {
+    Ok(match db.load_tool_config(game_id, tool_id)? {
+        Some(row) => modde_games::tools::ToolConfig {
+            tool_id: row.tool_id,
+            enabled: row.enabled,
+            settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+        },
+        None => tool.default_config(),
+    })
 }
 
 /// Snapshot a directory's file listing (relative paths).

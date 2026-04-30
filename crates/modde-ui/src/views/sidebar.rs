@@ -1,22 +1,141 @@
+use std::collections::HashSet;
+
 use crate::views::selectable_text::text;
 use iced::widget::{button, column, container, image, mouse_area, pick_list, row};
 use iced::{Element, Length, color};
 
 use crate::action_button::{ButtonAction, DescribedButtonExt};
-use crate::app::{Message, View};
+use crate::app::{Message, SidebarGroup, View};
 use crate::views::mod_details::ModDetailsState;
 use crate::views::save_details::SaveDetailsState;
+
+struct NavItem {
+    label: &'static str,
+    target: NavTarget,
+}
+
+struct NavGroup {
+    group: SidebarGroup,
+    items: &'static [NavItem],
+}
+
+#[derive(Clone, Copy)]
+enum NavTarget {
+    ModList,
+    Saves,
+    DataTab,
+    BrowseNexus,
+    Collections,
+    Wabbajack,
+    Downloads,
+    Diagnostics,
+    Tools,
+    Verify,
+    Settings,
+}
+
+impl NavTarget {
+    fn view(self) -> View {
+        match self {
+            NavTarget::ModList => View::ModList,
+            NavTarget::Saves => View::Saves,
+            NavTarget::DataTab => View::DataTab,
+            NavTarget::BrowseNexus => View::BrowseNexus,
+            NavTarget::Collections => View::Collections,
+            NavTarget::Wabbajack => View::WabbajackInstaller(Default::default()),
+            NavTarget::Downloads => View::Downloads,
+            NavTarget::Diagnostics => View::Diagnostics,
+            NavTarget::Tools => View::Tools,
+            NavTarget::Verify => View::Verify,
+            NavTarget::Settings => View::Settings,
+        }
+    }
+}
+
+const GAME_ITEMS: &[NavItem] = &[
+    NavItem {
+        label: "Mod List",
+        target: NavTarget::ModList,
+    },
+    NavItem {
+        label: "Saves",
+        target: NavTarget::Saves,
+    },
+    NavItem {
+        label: "Data Files",
+        target: NavTarget::DataTab,
+    },
+    NavItem {
+        label: "Tools",
+        target: NavTarget::Tools,
+    },
+];
+
+const INSTALL_ITEMS: &[NavItem] = &[
+    NavItem {
+        label: "Browse Nexus",
+        target: NavTarget::BrowseNexus,
+    },
+    NavItem {
+        label: "Collections",
+        target: NavTarget::Collections,
+    },
+    NavItem {
+        label: "Wabbajack",
+        target: NavTarget::Wabbajack,
+    },
+    NavItem {
+        label: "Downloads",
+        target: NavTarget::Downloads,
+    },
+];
+
+const MAINTENANCE_ITEMS: &[NavItem] = &[
+    NavItem {
+        label: "Diagnostics",
+        target: NavTarget::Diagnostics,
+    },
+    NavItem {
+        label: "Verify",
+        target: NavTarget::Verify,
+    },
+];
+
+const GENERAL_ITEMS: &[NavItem] = &[NavItem {
+    label: "Settings",
+    target: NavTarget::Settings,
+}];
+
+const NAV_GROUPS: &[NavGroup] = &[
+    NavGroup {
+        group: SidebarGroup::Game,
+        items: GAME_ITEMS,
+    },
+    NavGroup {
+        group: SidebarGroup::Install,
+        items: INSTALL_ITEMS,
+    },
+    NavGroup {
+        group: SidebarGroup::Maintenance,
+        items: MAINTENANCE_ITEMS,
+    },
+    NavGroup {
+        group: SidebarGroup::General,
+        items: GENERAL_ITEMS,
+    },
+];
 
 /// Render the navigation sidebar.
 pub fn view<'a>(
     active_view: &View,
+    collapsed_groups: &HashSet<SidebarGroup>,
     profiles: &'a [modde_core::profile::ProfileSummary],
     active_profile: &'a Option<String>,
     experiment_depth: usize,
     mod_details: Option<&'a ModDetailsState>,
     save_details: Option<&'a SaveDetailsState>,
 ) -> Element<'a, Message> {
-    let nav_button = |label: &'a str, target: View, current: &View| -> Element<'a, Message> {
+    let nav_button = |label: &'static str, target: View, current: &View| -> Element<'a, Message> {
         let is_active = std::mem::discriminant(&target) == std::mem::discriminant(current);
         let btn = button(text(label).size(14))
             .width(Length::Fill)
@@ -30,24 +149,28 @@ pub fn view<'a>(
         }
     };
 
-    let nav = column![
-        nav_button("Mod List", View::ModList, active_view),
-        nav_button("Saves", View::Saves, active_view),
-        nav_button("Browse Nexus", View::BrowseNexus, active_view),
-        nav_button("Collections", View::Collections, active_view),
-        nav_button(
-            "Wabbajack",
-            View::WabbajackInstaller(Default::default()),
-            active_view,
-        ),
-        nav_button("Downloads", View::Downloads, active_view),
-        nav_button("Data Files", View::DataTab, active_view),
-        nav_button("Diagnostics", View::Diagnostics, active_view),
-        nav_button("Tools", View::Tools, active_view),
-        nav_button("Verify", View::Verify, active_view),
-        nav_button("Settings", View::Settings, active_view),
-    ]
-    .spacing(4);
+    let mut nav = column![].spacing(6);
+    for group in NAV_GROUPS {
+        nav = nav.push(render_group_header(
+            group.group,
+            collapsed_groups.contains(&group.group),
+        ));
+        let contains_active = group
+            .items
+            .iter()
+            .any(|item| same_view_kind(&item.target.view(), active_view));
+        let show_all_items = !collapsed_groups.contains(&group.group);
+        if show_all_items || contains_active {
+            let mut group_items = column![].spacing(4);
+            for item in group.items {
+                let view = item.target.view();
+                if show_all_items || same_view_kind(&view, active_view) {
+                    group_items = group_items.push(nav_button(item.label, view, active_view));
+                }
+            }
+            nav = nav.push(group_items);
+        }
+    }
 
     // ── Profile section ──
     let profile_names: Vec<String> = profiles.iter().map(|p| p.name.clone()).collect();
@@ -151,6 +274,19 @@ pub fn view<'a>(
         iced::widget::rule::vertical(1),
     ]
     .into()
+}
+
+fn same_view_kind(a: &View, b: &View) -> bool {
+    std::mem::discriminant(a) == std::mem::discriminant(b)
+}
+
+fn render_group_header(group: SidebarGroup, collapsed: bool) -> Element<'static, Message> {
+    let icon = if collapsed { ">" } else { "v" };
+    button(row![text(icon).size(12), text(group.label()).size(12)].spacing(6))
+        .style(button::text)
+        .padding([2, 4])
+        .width(Length::Fill)
+        .on_action(ButtonAction::ToggleSidebarGroup(group))
 }
 
 /// Maximum character count for the mod summary text before it is

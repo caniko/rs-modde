@@ -40,5 +40,5 @@ description = "Try mod changes non-destructively with a stackable experiment sys
 
 [[extra.features]]
 title = "Tools & overlays"
-description = "Manage MangoHud, vkBasalt, ReShade, OptiScaler, and GameMode. The UI now loads real tool state and tracked patch files, but executable-management parity with MO2 is still ahead."
+description = "Manage MangoHud, vkBasalt, ReShade, OptiScaler, GameMode, and Proton settings. The UI now loads real tool state and tracked patch files, but executable-management parity with MO2 is still ahead."
 +++

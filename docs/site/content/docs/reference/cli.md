@@ -498,7 +498,7 @@ Enable a tool or overlay.
 modde tool enable <tool_id> --game <id>
 ```
 
-Tool IDs: `mangohud`, `vkbasalt`, `gamemode`, `reshade`, `optiscaler`.
+Tool IDs: `mangohud`, `vkbasalt`, `gamemode`, `reshade`, `optiscaler`, `proton`.
 
 ### `tool disable`
 

@@ -523,7 +523,7 @@ enum ToolAction {
     },
     /// Enable a gaming tool/overlay for a game
     Enable {
-        /// Tool ID (mangohud, vkbasalt, gamemode, reshade, optiscaler)
+        /// Tool ID (mangohud, vkbasalt, gamemode, reshade, optiscaler, proton)
         tool_id: String,
         #[arg(long)]
         game: String,
@@ -558,6 +558,24 @@ enum ToolAction {
         tool_id: String,
         #[arg(long)]
         game: String,
+    },
+    /// List releases for a release-backed tool
+    Releases {
+        /// Tool ID
+        tool_id: String,
+        #[arg(long)]
+        game: String,
+    },
+    /// Install a specific release asset for a release-backed tool
+    InstallRelease {
+        /// Tool ID
+        tool_id: String,
+        #[arg(long)]
+        game: String,
+        #[arg(long)]
+        tag: String,
+        #[arg(long)]
+        asset: String,
     },
 }
 
@@ -866,6 +884,17 @@ fn main() -> Result<()> {
                     game,
                     args,
                 } => commands::tool::handle_run(executable, args, profile, game).await?,
+                ToolAction::Releases { tool_id, game } => {
+                    commands::tool::handle_releases(&tool_id, &game).await?;
+                }
+                ToolAction::InstallRelease {
+                    tool_id,
+                    game,
+                    tag,
+                    asset,
+                } => {
+                    commands::tool::handle_install_release(&tool_id, &game, &tag, &asset).await?;
+                }
                 ToolAction::List { .. }
                 | ToolAction::Status { .. }
                 | ToolAction::Enable { .. }

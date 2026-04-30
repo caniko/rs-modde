@@ -71,7 +71,7 @@ pub fn extract_html_mirror_links(html: &str, base_url: &str, link_id: &str) -> R
             let Some(end) = html[tag..].find('>') else {
                 continue;
             };
-            let anchor = &html[tag..tag + end + 1];
+            let anchor = &html[tag..=(tag + end)];
             if let Some(href) = link_with_id(anchor, link_id) {
                 candidates.push(MirrorCandidate {
                     url: absolutize(&base, &href)?,
@@ -99,7 +99,7 @@ pub fn extract_html_mirror_links(html: &str, base_url: &str, link_id: &str) -> R
 fn link_with_id(fragment: &str, link_id: &str) -> Option<String> {
     for anchor_start in fragment.match_indices("<a").map(|(idx, _)| idx) {
         let end = fragment[anchor_start..].find('>')?;
-        let anchor = &fragment[anchor_start..anchor_start + end + 1];
+        let anchor = &fragment[anchor_start..=(anchor_start + end)];
         if attr_value(anchor, "id").as_deref() == Some(link_id) {
             return attr_value(anchor, "href");
         }

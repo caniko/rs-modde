@@ -12,6 +12,7 @@ use modde_sources::nexus::graphql::{GqlCollectionTile, GqlModTile};
 
 use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::Message;
+use crate::views::tabs::{Tab, tab_bar};
 
 /// Which tab of the browse view is currently active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -132,17 +133,13 @@ pub fn view<'a>(state: &'a NexusBrowseState, game_domain: Option<String>) -> Ele
 }
 
 fn render_tab_bar(active: BrowseTab) -> Element<'static, Message> {
-    let mut bar = row![].spacing(6);
-    for tab in BrowseTab::ALL {
-        let btn = button(text(tab.label()).size(13)).padding([6, 14]);
-        let btn = if tab == active {
-            btn.style(button::primary)
-        } else {
-            btn.style(button::secondary)
-        };
-        bar = bar.push(btn.on_action(ButtonAction::BrowseTabSwitched(tab)));
-    }
-    bar.align_y(Alignment::Center).into()
+    tab_bar(BrowseTab::ALL.map(|tab| {
+        Tab::new(
+            tab.label(),
+            tab == active,
+            ButtonAction::BrowseTabSwitched(tab),
+        )
+    }))
 }
 
 fn mods_grid(mods: &[GqlModTile], game_domain: Option<String>) -> Element<'_, Message> {

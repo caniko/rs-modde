@@ -2,6 +2,9 @@
 
 A NixOS-native game mod manager written in Rust. Provides declarative, reproducible mod management with virtual filesystem deployment, profile management, save versioning, and conflict detection.
 
+Project site: <https://caniko.codeberg.page/rs-modde/>
+Documentation: <https://caniko.codeberg.page/rs-modde/docs/>
+
 ## Supported games
 
 | Game | Current status |
@@ -26,7 +29,7 @@ The canonical status baseline for these claims lives in `docs/capability-matrix.
 - **Nexus-first installs**: Nexus Mods API, `nxm://`, Browse Nexus, Wabbajack modlists, and Nexus Collections are the primary shipped install flows
 - **Additional download backends**: GitHub, Direct, Google Drive, and MEGA backends exist today mainly for Wabbajack/directive installs
 - **Installers**: FOMOD is shipped end to end; BAIN detection/execution exists but still requires missing user-input flow
-- **Gaming tools**: MangoHud, vkBasalt, GameMode, ReShade, and OptiScaler configs/patching are wired into the UI, but MO2-style executable management is still missing
+- **Gaming tools**: MangoHud, vkBasalt, GameMode, ReShade, OptiScaler, and Proton configs/patching are wired into the UI, but MO2-style executable management is still missing
 - **Diagnostics**: CLI and UI diagnostics now use real plugin order plus resolved conflicts instead of placeholder inputs
 - **Reachable advanced views**: Downloads, Data Files, Diagnostics, and Tools are now connected in the UI; some remain `Partial` rather than MO2-complete
 
@@ -60,9 +63,9 @@ modde profile try experimental-build --game skyrim-se   # start experiment
 modde profile rollback experimental-build --game skyrim-se  # revert
 
 # Manage saves
-modde saves capture --game skyrim-se
-modde saves history --game skyrim-se
-modde saves watch --game skyrim-se  # auto-capture on changes
+modde save capture --game skyrim-se --profile my-skyrim
+modde save history --game skyrim-se --profile my-skyrim
+modde save watch --game skyrim-se  # auto-capture on changes
 
 # Analyze conflicts
 modde collisions --profile my-skyrim --game skyrim-se
@@ -171,6 +174,23 @@ imports = [ inputs.modde.homeManagerModules.modde ];
 ## CI
 
 Woodpecker CI on Codeberg runs `cargo fmt --check`, `cargo clippy`, `cargo test --workspace`, and `cargo build --release` on every push and pull request. Pushes to `main` and `rapid` also build and deploy the documentation site and presentation website to Codeberg Pages.
+
+## Website and docs
+
+The presentation site lives in `website/`; the documentation site lives in `docs/site/`.
+
+```bash
+nix build .#website
+nix build .#docs
+nix build .#site
+```
+
+For local editing:
+
+```bash
+cd website && zola serve
+cd docs/site && zola serve
+```
 
 ## Contributing
 

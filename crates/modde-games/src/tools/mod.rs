@@ -1,20 +1,25 @@
 //! Per-game tool/overlay management.
 //!
-//! Each tool (`MangoHud`, vkBasalt, `GameMode`, `ReShade`, `OptiScaler`) implements the
+//! Each tool (`MangoHud`, vkBasalt, `GameMode`, `ReShade`, `OptiScaler`, Proton) implements the
 //! [`GameTool`] trait. Tools are registered via [`all_tools`] and resolved by ID
 //! via [`resolve_tool`], following the same pattern as [`crate::resolve_game_plugin`].
 
 pub mod gamemode;
 pub mod mangohud;
 pub mod optiscaler;
+pub mod proton;
 pub mod reshade;
 pub mod vkbasalt;
 
+use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
+
+use crate::detection::{DetectedGame, LauncherSource};
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -80,6 +85,172 @@ pub struct GeneratedConfig {
     pub content: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolReleaseSummary {
+    pub tag: String,
+    pub name: Option<String>,
+    pub assets: Vec<ToolReleaseAsset>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolReleaseAsset {
+    pub name: String,
+    pub download_url: String,
+    pub size: u64,
+}
+
+pub type ToolReleaseListFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<Vec<ToolReleaseSummary>>> + Send + 'a>>;
+
+pub type ToolReleaseInstallFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<ToolConfig>> + Send + 'a>>;
+
+/// Game metadata available to per-game tools.
+#[derive(Debug, Clone)]
+pub struct ToolGameContext {
+    pub game_id: String,
+    pub display_name: String,
+    pub install_path: Option<PathBuf>,
+    pub launcher_source: Option<LauncherSource>,
+    pub steam_app_id: Option<String>,
+    pub executable_dir: Option<PathBuf>,
+}
+
+impl ToolGameContext {
+    #[must_use]
+    pub fn from_parts(
+        game_id: &str,
+        display_name: impl Into<String>,
+        install_path: Option<PathBuf>,
+        detected: Option<&DetectedGame>,
+    ) -> Self {
+        let plugin = crate::resolve_game_plugin(game_id);
+        let executable_dir = install_path
+            .as_deref()
+            .and_then(|path| plugin.map(|plugin| plugin.executable_dir(path)));
+        let launcher_source = detected.map(|game| game.source.clone());
+        let steam_app_id = launcher_source.as_ref().and_then(|source| match source {
+            LauncherSource::Steam { app_id, .. } => Some(app_id.clone()),
+            LauncherSource::HeroicGog { .. }
+            | LauncherSource::HeroicEpic { .. }
+            | LauncherSource::HeroicSideload { .. } => None,
+        });
+
+        Self {
+            game_id: game_id.to_string(),
+            display_name: display_name.into(),
+            install_path,
+            launcher_source,
+            steam_app_id,
+            executable_dir,
+        }
+    }
+
+    #[must_use]
+    pub fn launcher_label(&self) -> String {
+        self.launcher_source
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or_else(|| "Not detected".to_string())
+    }
+}
+
+/// Declarative field type for rendering per-tool settings in the UI.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ToolSettingKind {
+    Bool,
+    Text,
+    Path,
+    Select { options: Vec<String> },
+    Number { min: f64, max: f64, step: f64 },
+    ReadOnly,
+}
+
+/// One user-facing setting exposed by a [`GameTool`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolSettingSpec {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub description: &'static str,
+    pub kind: ToolSettingKind,
+}
+
+impl ToolSettingSpec {
+    #[must_use]
+    pub fn bool(key: &'static str, label: &'static str, description: &'static str) -> Self {
+        Self {
+            key,
+            label,
+            description,
+            kind: ToolSettingKind::Bool,
+        }
+    }
+
+    #[must_use]
+    pub fn text(key: &'static str, label: &'static str, description: &'static str) -> Self {
+        Self {
+            key,
+            label,
+            description,
+            kind: ToolSettingKind::Text,
+        }
+    }
+
+    #[must_use]
+    pub fn path(key: &'static str, label: &'static str, description: &'static str) -> Self {
+        Self {
+            key,
+            label,
+            description,
+            kind: ToolSettingKind::Path,
+        }
+    }
+
+    #[must_use]
+    pub fn select(
+        key: &'static str,
+        label: &'static str,
+        description: &'static str,
+        options: &[&str],
+    ) -> Self {
+        Self {
+            key,
+            label,
+            description,
+            kind: ToolSettingKind::Select {
+                options: options.iter().map(|option| (*option).to_string()).collect(),
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn number(
+        key: &'static str,
+        label: &'static str,
+        description: &'static str,
+        min: f64,
+        max: f64,
+        step: f64,
+    ) -> Self {
+        Self {
+            key,
+            label,
+            description,
+            kind: ToolSettingKind::Number { min, max, step },
+        }
+    }
+
+    #[must_use]
+    pub fn read_only(key: &'static str, label: &'static str, description: &'static str) -> Self {
+        Self {
+            key,
+            label,
+            description,
+            kind: ToolSettingKind::ReadOnly,
+        }
+    }
+}
+
 /// Per-game tool configuration stored in the database.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolConfig {
@@ -139,11 +310,39 @@ pub trait GameTool: Send + Sync {
     /// Tool category.
     fn category(&self) -> ToolCategory;
 
+    /// Short user-facing description for the tool tab.
+    fn description(&self) -> &'static str {
+        "Game-specific tool integration."
+    }
+
+    /// Declarative settings rendered by the UI.
+    fn settings_schema(&self) -> Vec<ToolSettingSpec> {
+        Vec::new()
+    }
+
+    /// Declarative settings rendered by the UI with game context.
+    fn settings_schema_for(
+        &self,
+        _context: Option<&ToolGameContext>,
+        _config: &ToolConfig,
+    ) -> Vec<ToolSettingSpec> {
+        self.settings_schema()
+    }
+
     /// Check if the tool is installed on the system.
     fn detect_available(&self) -> ToolAvailability;
 
     /// Environment variables to set when launching the game.
     fn env_vars(&self, config: &ToolConfig) -> SmallVec<[(String, String); 4]>;
+
+    /// Environment variables to set when launching the game with game context.
+    fn env_vars_for(
+        &self,
+        _context: Option<&ToolGameContext>,
+        config: &ToolConfig,
+    ) -> SmallVec<[(String, String); 4]> {
+        self.env_vars(config)
+    }
 
     /// Wrapper command to chain before the game (e.g. `gamemoderun`).
     fn wrapper_command(&self, _config: &ToolConfig) -> Option<WrapperEntry> {
@@ -155,10 +354,29 @@ pub trait GameTool: Send + Sync {
         SmallVec::new()
     }
 
+    /// Wine DLL overrides needed with game context.
+    fn wine_dll_overrides_for(
+        &self,
+        _context: Option<&ToolGameContext>,
+        config: &ToolConfig,
+    ) -> SmallVec<[String; 4]> {
+        self.wine_dll_overrides(config)
+    }
+
     /// Apply/install files into the game directory (DLLs, shaders, etc.).
     /// Returns a manifest of files written for revert tracking.
     fn apply(&self, _game_dir: &Path, _config: &ToolConfig) -> Result<AppliedFiles> {
         Ok(AppliedFiles::default())
+    }
+
+    /// Apply/install files with game context.
+    fn apply_for(
+        &self,
+        game_dir: &Path,
+        _context: Option<&ToolGameContext>,
+        config: &ToolConfig,
+    ) -> Result<AppliedFiles> {
+        self.apply(game_dir, config)
     }
 
     /// Revert files previously applied by [`apply`].
@@ -177,19 +395,67 @@ pub trait GameTool: Send + Sync {
         None
     }
 
+    /// Generate a per-game config file with game context.
+    fn generate_config_for(
+        &self,
+        _context: Option<&ToolGameContext>,
+        config: &ToolConfig,
+    ) -> Option<GeneratedConfig> {
+        self.generate_config(config)
+    }
+
     /// Default configuration for a fresh enable.
     fn default_config(&self) -> ToolConfig;
+
+    /// Default configuration for a fresh enable with game context.
+    fn default_config_for(&self, _context: Option<&ToolGameContext>) -> ToolConfig {
+        self.default_config()
+    }
+
+    /// Whether this tool supports explicit per-game release selection.
+    fn supports_releases(&self) -> bool {
+        false
+    }
+
+    /// List upstream releases for release-backed tools.
+    fn list_releases(&self) -> ToolReleaseListFuture<'_> {
+        Box::pin(async {
+            anyhow::bail!("{} does not support release selection", self.display_name())
+        })
+    }
+
+    /// Return installable asset names for a release.
+    fn installable_release_assets(&self, _release: &ToolReleaseSummary) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Install a selected release asset and return the updated per-game config.
+    fn install_release<'a>(
+        &'a self,
+        _game_id: &'a str,
+        _config: ToolConfig,
+        _tag: &'a str,
+        _asset: &'a str,
+    ) -> ToolReleaseInstallFuture<'a> {
+        Box::pin(async {
+            anyhow::bail!(
+                "{} does not support release installation",
+                self.display_name()
+            )
+        })
+    }
 }
 
 // ── Registry ───────────────────────────────────────────────────────────────
 
 /// All registered tools.
-static ALL_TOOLS: [&dyn GameTool; 5] = [
+static ALL_TOOLS: [&dyn GameTool; 6] = [
     &mangohud::MANGOHUD,
     &vkbasalt::VKBASALT,
     &gamemode::GAMEMODE,
     &reshade::RESHADE,
     &optiscaler::OPTISCALER,
+    &proton::PROTON,
 ];
 
 #[must_use]
@@ -219,4 +485,162 @@ pub fn tool_config_dir(game_id: &str) -> PathBuf {
 /// `%PATHEXT%` extensions like `.exe`, `.cmd`, `.bat` automatically).
 pub(crate) fn which(binary: &str) -> Option<PathBuf> {
     which::which(binary).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    #[test]
+    fn every_tool_has_ui_metadata_and_serializable_defaults() {
+        for tool in super::all_tools() {
+            assert!(!tool.description().trim().is_empty(), "{}", tool.tool_id());
+            assert!(
+                !tool.settings_schema().is_empty(),
+                "{} should expose UI settings",
+                tool.tool_id()
+            );
+            serde_json::to_string(&tool.default_config()).expect("default config serializes");
+        }
+    }
+
+    #[test]
+    fn proton_is_registered() {
+        let tool = super::resolve_tool("proton").expect("proton tool should resolve");
+        assert_eq!(tool.display_name(), "Proton");
+    }
+
+    #[test]
+    fn proton_launch_integration_is_exposed() {
+        let tool = super::resolve_tool("proton").expect("proton tool should resolve");
+        let mut config = tool.default_config();
+        config.enabled = true;
+        config.set("extra_env", serde_json::json!("DXVK_ASYNC=1\nPROTON_LOG=1"));
+        config.set("proton_enable_hdr", serde_json::json!(true));
+        config.set("radv_perftest_rt", serde_json::json!(true));
+        config.set("dll_override_mode", serde_json::json!("forced"));
+        config.set("forced_dll_overrides", serde_json::json!("dxgi,winmm"));
+
+        let env = tool.env_vars(&config);
+        assert!(
+            env.iter()
+                .any(|(key, value)| key == "DXVK_ASYNC" && value == "1")
+        );
+        assert!(
+            env.iter()
+                .any(|(key, value)| key == "PROTON_LOG" && value == "1")
+        );
+        assert!(
+            env.iter()
+                .any(|(key, value)| key == "PROTON_ENABLE_HDR" && value == "1")
+        );
+        assert!(
+            env.iter()
+                .any(|(key, value)| key == "RADV_PERFTEST" && value == "rt,emulate_rt")
+        );
+
+        let overrides = tool.wine_dll_overrides(&config);
+        assert!(overrides.iter().any(|value| value == "dxgi"));
+        assert!(overrides.iter().any(|value| value == "winmm"));
+    }
+
+    #[test]
+    fn mangohud_exposes_goverlay_config_keys() {
+        let tool = super::resolve_tool("mangohud").expect("mangohud tool should resolve");
+        let specs = tool.settings_schema();
+        for key in [
+            "custom_text_center",
+            "background_alpha",
+            "fps_limit_method",
+            "gpu_junction_temp",
+            "winesync",
+            "media_player",
+            "upload_logs",
+            "display_server",
+        ] {
+            assert!(
+                specs.iter().any(|spec| spec.key == key),
+                "missing MangoHud key {key}"
+            );
+        }
+
+        let mut config = tool.default_config();
+        config.set("_game_id", serde_json::json!("skyrim-se"));
+        config.set("custom_text_center", serde_json::json!("modde"));
+        config.set("gpu_junction_temp", serde_json::json!(true));
+        let generated = tool.generate_config(&config).expect("generated config");
+        assert!(generated.content.contains("custom_text_center=modde"));
+        assert!(generated.content.contains("gpu_junction_temp"));
+    }
+
+    #[test]
+    fn optiscaler_release_provider_filters_installable_assets() {
+        let tool = super::resolve_tool("optiscaler").expect("optiscaler tool should resolve");
+        assert!(tool.supports_releases());
+        let release = super::ToolReleaseSummary {
+            tag: "v1".to_string(),
+            name: None,
+            assets: vec![
+                super::ToolReleaseAsset {
+                    name: "OptiScaler.7z".to_string(),
+                    download_url: "https://example.test/OptiScaler.7z".to_string(),
+                    size: 1,
+                },
+                super::ToolReleaseAsset {
+                    name: "notes.txt".to_string(),
+                    download_url: "https://example.test/notes.txt".to_string(),
+                    size: 1,
+                },
+            ],
+        };
+        assert_eq!(
+            tool.installable_release_assets(&release),
+            vec!["OptiScaler.7z".to_string()]
+        );
+    }
+
+    #[test]
+    fn tool_context_derives_executable_dir_from_game_plugin() {
+        let root = std::path::PathBuf::from("/tmp/modde-test-cyberpunk");
+        let context =
+            super::ToolGameContext::from_parts("cyberpunk2077", "Cyberpunk 2077", Some(root), None);
+        assert!(
+            context
+                .executable_dir
+                .expect("executable dir")
+                .ends_with("bin/x64")
+        );
+    }
+
+    #[test]
+    fn optiscaler_restore_commands_use_supplied_executable_dir() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let game_dir = tmp.path().join("game");
+        let staging = tmp.path().join("staging");
+        let mod_bin = staging.join("mods/test/bin/x64");
+        fs::create_dir_all(&mod_bin).expect("mod bin");
+        fs::write(mod_bin.join("winmm.dll"), b"dll").expect("dll");
+        let exe_dir = game_dir.join("Binaries/Win64");
+        let commands = super::optiscaler::fgmod_restore_commands_for_executable_dir(
+            &game_dir, &staging, &exe_dir,
+        );
+        assert_eq!(commands.len(), 1);
+        assert!(commands[0].1.ends_with("Binaries/Win64/winmm.dll"));
+    }
+
+    #[test]
+    fn protonup_rs_install_args_are_non_interactive() {
+        let args = super::proton::protonup_rs_install_args("latest", "steam");
+        assert_eq!(
+            args,
+            vec![
+                "--tool",
+                "GEProton",
+                "--version",
+                "latest",
+                "--for",
+                "steam"
+            ]
+        );
+    }
 }

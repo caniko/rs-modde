@@ -838,9 +838,7 @@ fn validate_authored_parts(parts: &[AuthoredFilePart], file_size_bytes: u64) -> 
     }
     if offset != file_size_bytes {
         bail!(
-            "Wabbajack authored-files parts total {} bytes, expected {} bytes",
-            offset,
-            file_size_bytes
+            "Wabbajack authored-files parts total {offset} bytes, expected {file_size_bytes} bytes"
         );
     }
     Ok(())
@@ -1051,11 +1049,10 @@ pub async fn hm_snippet_for_source(
                 format_hm_path_snippet(profile, game, game_dir, &path),
                 Some(path),
             ));
-        } else {
-            let url = resolve_download_target(client, source, CatalogSource::Both).await?;
-            let path = download_wabbajack_file(client, &url, cache_dir).await?;
-            (url, Some(path))
         }
+        let url = resolve_download_target(client, source, CatalogSource::Both).await?;
+        let path = download_wabbajack_file(client, &url, cache_dir).await?;
+        (url, Some(path))
     };
 
     let path = path.as_ref().context("no file available to hash")?;

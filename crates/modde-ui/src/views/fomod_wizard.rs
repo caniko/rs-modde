@@ -255,7 +255,7 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
 
     // Disable Install button if not ready
     let next_btn = button(text(next_label)).on_action_maybe(
-        (!(is_last && !installer.is_ready_to_install())).then_some(ButtonAction::FomodNext),
+        (!is_last || installer.is_ready_to_install()).then_some(ButtonAction::FomodNext),
         "Complete the required FOMOD choices before installing.",
     );
     nav = nav.push(next_btn);

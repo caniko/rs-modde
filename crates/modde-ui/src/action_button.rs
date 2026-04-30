@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::app::{Message, ReorderDirection, View, WabbajackTab};
+use crate::app::{Message, ReorderDirection, SidebarGroup, View, WabbajackTab};
 use crate::views::browse_nexus::BrowseTab;
 use crate::views::selectable_text::text;
 use iced::widget::{Button, container, tooltip};
@@ -15,6 +15,7 @@ pub trait ButtonActionDescription {
 #[derive(Debug, Clone)]
 pub enum ButtonAction {
     SwitchView(View),
+    ToggleSidebarGroup(SidebarGroup),
     DeleteProfile(String),
     OpenNewProfileDialog,
     ForkProfile {
@@ -80,8 +81,15 @@ pub enum ButtonAction {
     CreateStockSnapshot,
     VerifyStockSnapshot,
     RefreshTools,
+    SelectToolTab(String),
     ApplyTool(String),
     RevertTool(String),
+    AdoptOptiScaler,
+    RestoreOptiScalerBackup,
+    ResetOptiScalerConfig,
+    RefreshOptiScalerReleases,
+    InstallOptiScalerRelease,
+    InstallProtonVersion,
     WindowMinimize,
     WindowToggleMaximize,
     WindowClose,
@@ -95,6 +103,9 @@ impl ButtonActionDescription for ButtonAction {
     fn button_description(&self) -> &'static str {
         match self {
             ButtonAction::SwitchView(_) => "Switch the main workspace to this section.",
+            ButtonAction::ToggleSidebarGroup(_) => {
+                "Expand or collapse this sidebar navigation group."
+            }
             ButtonAction::DeleteProfile(_) => {
                 "Delete the active profile and remove it from the profile list."
             }
@@ -218,11 +229,30 @@ impl ButtonActionDescription for ButtonAction {
             ButtonAction::RefreshTools => {
                 "Refresh detected gaming tools and overlay integration status."
             }
+            ButtonAction::SelectToolTab(_) => "Switch to this tool's game-specific settings tab.",
             ButtonAction::ApplyTool(_) => {
                 "Apply this tool's required files or configuration to the game directory."
             }
             ButtonAction::RevertTool(_) => {
                 "Remove this tool's applied files from the game directory."
+            }
+            ButtonAction::AdoptOptiScaler => {
+                "Record the detected OptiScaler files as managed for this game."
+            }
+            ButtonAction::RestoreOptiScalerBackup => {
+                "Restore the latest backed-up OptiScaler files for this game."
+            }
+            ButtonAction::ResetOptiScalerConfig => {
+                "Clear OptiScaler INI overrides so the selected release defaults are used."
+            }
+            ButtonAction::RefreshOptiScalerReleases => {
+                "Load OptiScaler release tags and assets from the official GitHub repository."
+            }
+            ButtonAction::InstallOptiScalerRelease => {
+                "Download and cache the selected OptiScaler release for this game."
+            }
+            ButtonAction::InstallProtonVersion => {
+                "Install the selected GEProton version through protonup-rs."
             }
             ButtonAction::WindowMinimize => "Minimize the modde window.",
             ButtonAction::WindowToggleMaximize => {
@@ -249,6 +279,7 @@ impl From<ButtonAction> for Message {
     fn from(action: ButtonAction) -> Self {
         match action {
             ButtonAction::SwitchView(view) => Message::SwitchView(view),
+            ButtonAction::ToggleSidebarGroup(group) => Message::ToggleSidebarGroup(group),
             ButtonAction::DeleteProfile(name) => Message::DeleteProfile(name),
             ButtonAction::OpenNewProfileDialog => Message::OpenNewProfileDialog,
             ButtonAction::ForkProfile { source, new_name } => {
@@ -314,8 +345,15 @@ impl From<ButtonAction> for Message {
             ButtonAction::CreateStockSnapshot => Message::CreateStockSnapshot,
             ButtonAction::VerifyStockSnapshot => Message::VerifyStockSnapshot,
             ButtonAction::RefreshTools => Message::RefreshTools,
+            ButtonAction::SelectToolTab(tool_id) => Message::SelectToolTab(tool_id),
             ButtonAction::ApplyTool(tool_id) => Message::ApplyTool(tool_id),
             ButtonAction::RevertTool(tool_id) => Message::RevertTool(tool_id),
+            ButtonAction::AdoptOptiScaler => Message::AdoptOptiScaler,
+            ButtonAction::RestoreOptiScalerBackup => Message::RestoreOptiScalerBackup,
+            ButtonAction::ResetOptiScalerConfig => Message::ResetOptiScalerConfig,
+            ButtonAction::RefreshOptiScalerReleases => Message::RefreshOptiScalerReleases,
+            ButtonAction::InstallOptiScalerRelease => Message::InstallOptiScalerRelease,
+            ButtonAction::InstallProtonVersion => Message::InstallProtonVersion,
             ButtonAction::WindowMinimize => Message::WindowMinimize,
             ButtonAction::WindowToggleMaximize => Message::WindowToggleMaximize,
             ButtonAction::WindowClose => Message::WindowClose,
@@ -380,6 +418,7 @@ mod tests {
     fn sample_actions() -> Vec<(&'static str, ButtonAction)> {
         vec![
             ("Mod List", ButtonAction::SwitchView(View::ModList)),
+            ("Game", ButtonAction::ToggleSidebarGroup(SidebarGroup::Game)),
             ("Del", ButtonAction::DeleteProfile("Default".to_string())),
             ("New", ButtonAction::OpenNewProfileDialog),
             (
@@ -472,8 +511,15 @@ mod tests {
             ("Create Snapshot", ButtonAction::CreateStockSnapshot),
             ("Verify Snapshot", ButtonAction::VerifyStockSnapshot),
             ("Refresh", ButtonAction::RefreshTools),
+            ("Tool", ButtonAction::SelectToolTab("mangohud".to_string())),
             ("Apply", ButtonAction::ApplyTool("tool".to_string())),
             ("Revert", ButtonAction::RevertTool("tool".to_string())),
+            ("Adopt OptiScaler", ButtonAction::AdoptOptiScaler),
+            ("Restore OptiScaler", ButtonAction::RestoreOptiScalerBackup),
+            ("Reset OptiScaler", ButtonAction::ResetOptiScalerConfig),
+            ("Releases", ButtonAction::RefreshOptiScalerReleases),
+            ("Install OptiScaler", ButtonAction::InstallOptiScalerRelease),
+            ("Install Proton", ButtonAction::InstallProtonVersion),
             ("-", ButtonAction::WindowMinimize),
             ("Maximize", ButtonAction::WindowToggleMaximize),
             ("Close", ButtonAction::WindowClose),

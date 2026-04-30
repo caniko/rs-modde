@@ -80,12 +80,12 @@
           fileset = lib.fileset.maybeMissing ./docs/site;
         };
         nativeBuildInputs = [pkgs.zola];
-        configurePhase = ''
-          cd docs/site
+        phases = ["buildPhase" "installPhase"];
+        buildPhase = ''
+          cp -r --no-preserve=mode $src/docs/site site
+          cd site
           mkdir -p "themes/${themeName}"
           cp -r ${adidoks}/* "themes/${themeName}"
-        '';
-        buildPhase = ''
           zola build
         '';
         installPhase = ''
@@ -102,8 +102,10 @@
           fileset = lib.fileset.maybeMissing ./website;
         };
         nativeBuildInputs = [pkgs.zola];
+        phases = ["buildPhase" "installPhase"];
         buildPhase = ''
-          cd website
+          cp -r --no-preserve=mode $src/website site
+          cd site
           zola build
         '';
         installPhase = ''
@@ -117,6 +119,7 @@
         cp -r ${website}/* $out/
         mkdir -p $out/docs
         cp -r ${docs}/* $out/docs/
+        printf '%s\n' modde.rs www.modde.rs > $out/.domains
       '';
 
       modde = pkgs.rustPlatform.buildRustPackage {

@@ -27,6 +27,44 @@ impl GameTool for VkBasalt {
         ToolCategory::PostProcess
     }
 
+    fn description(&self) -> &'static str {
+        "Vulkan post-processing layer for CAS sharpening and shader effects."
+    }
+
+    fn settings_schema(&self) -> Vec<super::ToolSettingSpec> {
+        vec![
+            super::ToolSettingSpec::text("toggleKey", "Toggle key", "Key used to toggle vkBasalt."),
+            super::ToolSettingSpec::bool(
+                "enableOnLaunch",
+                "Enable on launch",
+                "Start with vkBasalt effects enabled.",
+            ),
+            super::ToolSettingSpec::text(
+                "effects",
+                "Effects",
+                "Colon or comma separated effect list, such as cas or cas:fxaa.",
+            ),
+            super::ToolSettingSpec::number(
+                "casSharpness",
+                "CAS sharpness",
+                "Contrast Adaptive Sharpening amount.",
+                0.0,
+                1.0,
+                0.05,
+            ),
+            super::ToolSettingSpec::path(
+                "reshadeTexturePath",
+                "ReShade texture path",
+                "Optional ReShade texture directory for vkBasalt.",
+            ),
+            super::ToolSettingSpec::path(
+                "reshadeIncludePath",
+                "ReShade shader path",
+                "Optional ReShade shader include directory for vkBasalt.",
+            ),
+        ]
+    }
+
     fn detect_available(&self) -> ToolAvailability {
         #[cfg(not(target_os = "linux"))]
         {

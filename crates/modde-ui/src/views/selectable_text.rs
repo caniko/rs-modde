@@ -42,21 +42,25 @@ pub fn text(content: impl ToString) -> SelectableText {
 }
 
 impl SelectableText {
+    #[must_use]
     pub fn size(mut self, size: impl Into<Pixels>) -> Self {
         self.format.size = Some(size.into());
         self
     }
 
+    #[must_use]
     pub fn width(mut self, width: impl Into<Length>) -> Self {
         self.format.width = width.into();
         self
     }
 
+    #[must_use]
     pub fn height(mut self, height: impl Into<Length>) -> Self {
         self.format.height = height.into();
         self
     }
 
+    #[must_use]
     pub fn color(mut self, color: impl Into<Color>) -> Self {
         self.color = Some(color.into());
         self
@@ -211,7 +215,7 @@ impl Widget<Message, Theme, Renderer> for SelectableText {
     }
 }
 
-impl<'a> From<SelectableText> for Element<'a, Message> {
+impl From<SelectableText> for Element<'_, Message> {
     fn from(text: SelectableText) -> Self {
         Element::new(text)
     }

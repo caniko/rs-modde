@@ -93,7 +93,7 @@ pub fn wabbajack_game_options(
         .filter_map(|entry| entry.game.as_deref())
         .map(GameOption::from_wabbajack_game)
         .collect();
-    options.sort_by_key(|option| option.to_string());
+    options.sort_by_key(std::string::ToString::to_string);
     options.dedup_by(|a, b| a.value == b.value);
     options
 }
@@ -159,7 +159,7 @@ fn titleize_game_name(game: &str) -> String {
 fn known_wabbajack_game_label(game: &str) -> Option<String> {
     let key: String = game
         .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric())
+        .filter(char::is_ascii_alphanumeric)
         .flat_map(char::to_lowercase)
         .collect();
 

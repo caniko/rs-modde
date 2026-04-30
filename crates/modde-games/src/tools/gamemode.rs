@@ -24,6 +24,18 @@ impl GameTool for GameMode {
         ToolCategory::Performance
     }
 
+    fn description(&self) -> &'static str {
+        "Feral GameMode wrapper that applies system performance tuning while the game runs."
+    }
+
+    fn settings_schema(&self) -> Vec<super::ToolSettingSpec> {
+        vec![super::ToolSettingSpec::read_only(
+            "wrapper",
+            "Wrapper",
+            "Uses gamemoderun before the game executable when enabled.",
+        )]
+    }
+
     fn detect_available(&self) -> ToolAvailability {
         #[cfg(not(target_os = "linux"))]
         {

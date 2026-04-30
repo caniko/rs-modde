@@ -64,7 +64,7 @@ pub fn supported_games() -> SmallVec<[(&'static str, &'static str); 8]> {
 pub fn normalize_wabbajack_game(wj_game: &str) -> Option<&'static str> {
     let key: String = wj_game
         .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric())
+        .filter(char::is_ascii_alphanumeric)
         .flat_map(char::to_lowercase)
         .collect();
 
