@@ -7,14 +7,25 @@ steps:
     image: nixos/nix:latest
     commands:
       - echo 'experimental-features = flakes nix-command' >> /etc/nix/nix.conf
-      - nix build .#modde --out-link result
-      - mkdir -p release
-      - cp result/bin/modde release/
-      - cp result/bin/modde-ui release/ || true
       - export VERSION="${CI_COMMIT_TAG#v}"
-      - tar czf "release/modde-${VERSION}-x86_64-linux.tar.gz" -C release modde modde-ui 2>/dev/null || tar czf "release/modde-${VERSION}-x86_64-linux.tar.gz" -C release modde
-      - cp release/modde "release/modde-${VERSION}-x86_64-linux"
-      - cp release/modde-ui "release/modde-ui-${VERSION}-x86_64-linux" 2>/dev/null || true
+      - test "$CI_COMMIT_TAG" != "$VERSION"
+      - echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+      - test "$(nix eval --raw .#modde.version)" = "$VERSION"
+      - mkdir -p release
+      # Linux binaries
+      - nix build .#modde --out-link linux-result
+      - mkdir -p release/linux-x86_64
+      - cp linux-result/bin/modde release/linux-x86_64/
+      - cp linux-result/bin/modde-ui release/linux-x86_64/
+      - tar czf "release/modde-${VERSION}-x86_64-linux.tar.gz" -C release/linux-x86_64 modde modde-ui
+      - cp release/linux-x86_64/modde "release/modde-${VERSION}-x86_64-linux"
+      - cp release/linux-x86_64/modde-ui "release/modde-ui-${VERSION}-x86_64-linux"
+      # Windows binaries
+      - nix build .#modde-windows --out-link windows-result
+      - mkdir -p release/windows-x86_64
+      - cp windows-result/bin/modde.exe release/windows-x86_64/
+      - cp windows-result/bin/modde-ui.exe release/windows-x86_64/
+      - tar czf "release/modde-${VERSION}-x86_64-windows.tar.gz" -C release/windows-x86_64 modde.exe modde-ui.exe
       # AppImage builds
       - nix build .#appimage-ui --out-link appimage-ui-result
       - cp appimage-ui-result "release/modde-ui-${VERSION}-x86_64.AppImage"
@@ -23,7 +34,7 @@ steps:
       # Flatpak manifest
       - nix build .#flatpak-manifest --out-link flatpak-result
       - cp flatpak-result release/org.codeberg.caniko.modde.json
-      - cd release && sha256sum *.tar.gz *.AppImage *.json modde-*-x86_64-linux > SHA256SUMS.txt 2>/dev/null; true
+      - cd release && sha256sum *.tar.gz *.AppImage *.json modde-*-x86_64-linux modde-ui-*-x86_64-linux > SHA256SUMS.txt
 
   - name: publish-release
     image: woodpeckerci/plugin-release

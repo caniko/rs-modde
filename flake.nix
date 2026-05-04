@@ -49,7 +49,12 @@
       lib = nixpkgs.lib;
 
       toolchain = rs-harbor.lib.mkToolchain {inherit pkgs;};
-      cross = rs-harbor.lib.mkCross {inherit pkgs system;};
+      inherit (toolchain) craneLib;
+      cross = rs-harbor.lib.mkCross {
+        inherit pkgs system;
+        macosSdkStorePath = "/nix/store/9qlj12jazici99ijin0xmzgcp8whbxnn-macosx-sdk-26.1";
+        osxSdkVersion = "26.1";
+      };
 
       # Linux-specific dependencies for the native build
       linuxBuildInputs = lib.optionals pkgs.stdenv.isLinux (with pkgs; [
@@ -122,28 +127,95 @@
         printf '%s\n' modde.rs www.modde.rs > $out/.domains
       '';
 
-      modde = pkgs.rustPlatform.buildRustPackage {
+      nativeBuildInputs = with pkgs; [
+        cmake
+        makeWrapper
+        pkg-config
+      ];
+
+      buildInputs = with pkgs;
+        [
+          openssl
+        ]
+        ++ linuxBuildInputs;
+
+      src = lib.fileset.toSource {
+        root = ./.;
+        fileset = lib.fileset.unions [
+          ./Cargo.lock
+          ./Cargo.toml
+          ./README.md
+          ./crates
+          ./docs/capability-matrix.toml
+          ./docs/mo2-coverage.md
+          ./docs/site/content/docs/games/supported-games.md
+          ./website/templates/comparison.html
+        ];
+      };
+
+      commonArgs = {
         pname = "modde";
         version = "0.1.0";
-        src = ./.;
-        cargoLock.lockFile = ./Cargo.lock;
-
-        nativeBuildInputs = with pkgs; [
-          pkg-config
-        ];
-
-        buildInputs = with pkgs;
-          [
-            openssl
-          ]
-          ++ linuxBuildInputs;
-
-        meta = with pkgs.lib; {
-          description = "Cross-platform game mod manager";
-          license = with licenses; [gpl3Only];
-          platforms = platforms.linux ++ platforms.darwin;
-        };
+        inherit src nativeBuildInputs buildInputs;
+        strictDeps = true;
+        SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+        NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
       };
+
+      cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+      modde = craneLib.buildPackage (commonArgs
+        // {
+          inherit cargoArtifacts;
+
+          postInstall = ''
+            for bin in "$out"/bin/*; do
+              wrapProgram "$bin" \
+                --set-default SSL_CERT_FILE "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" \
+                --set-default NIX_SSL_CERT_FILE "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+            done
+          '';
+
+          meta = with pkgs.lib; {
+            description = "Cross-platform game mod manager";
+            license = with licenses; [gpl3Only];
+            platforms = platforms.linux ++ platforms.darwin;
+          };
+        });
+
+      windowsTarget = "x86_64-pc-windows-gnu";
+      buildPlatformSuffix =
+        lib.strings.toLower pkgs.pkgsBuildHost.stdenv.hostPlatform.rust.cargoEnvVarTarget;
+      windowsBuildInputs = with pkgs.pkgsCross.mingwW64; [
+        openssl
+        windows.pthreads
+      ];
+      windowsNativeBuildInputs = with pkgs; [
+        cmake
+        pkg-config
+        pkgsCross.mingwW64.pkg-config
+        cross.mingwCC
+        cross.mingwBinutils
+      ];
+      windowsArgs =
+        commonArgs
+        // cross.windowsEnv
+        // {
+          pname = "modde-windows";
+          buildInputs = windowsBuildInputs;
+          nativeBuildInputs = windowsNativeBuildInputs;
+          CARGO_BUILD_TARGET = windowsTarget;
+          PKG_CONFIG_ALLOW_CROSS = "1";
+          "CC_${buildPlatformSuffix}" = "cc";
+          "CXX_${buildPlatformSuffix}" = "c++";
+          cargoBuildExtraArgs = "--workspace";
+          doCheck = false;
+        };
+      windowsCargoArtifacts = craneLib.buildDepsOnly windowsArgs;
+      modde-windows = craneLib.buildPackage (windowsArgs
+        // {
+          cargoArtifacts = windowsCargoArtifacts;
+        });
     in {
       packages =
         {
@@ -177,6 +249,7 @@
             program = "${modde}/bin/modde-ui";
             pname = "modde-ui";
           };
+          inherit modde-windows;
         };
 
       checks = let
@@ -306,7 +379,9 @@
           })
           .assertions;
         mutualExclusionFails =
-          if (builtins.elemAt badAssertions 0).assertion then "true" else "false";
+          if (builtins.elemAt badAssertions 0).assertion
+          then "true"
+          else "false";
       in {
         hm-module = pkgs.runCommand "modde-hm-module-check" {} ''
           cat > ready <<'EOF'
@@ -353,18 +428,19 @@
       devShells = rs-harbor.lib.mkDevShells {
         inherit pkgs cross;
         inherit (toolchain) craneLib;
+        pkgConfigDeps = buildInputs;
 
         packages = with pkgs;
           [
-            pkg-config
-            openssl
             just
+            cargo-release
+            toolchain.rustToolchain
             _7zz
             unrar
             zola
-            just
           ]
-          ++ linuxBuildInputs;
+          ++ nativeBuildInputs
+          ++ buildInputs;
 
         extraEnv = lib.optionalAttrs pkgs.stdenv.isLinux {
           LD_LIBRARY_PATH = linuxLdPath;

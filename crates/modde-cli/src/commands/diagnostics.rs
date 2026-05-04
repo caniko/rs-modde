@@ -43,7 +43,7 @@ pub fn handle(game_id: &str, profile_name: Option<String>) -> Result<()> {
         "skyrim-se" | "skyrim-ae" | "fallout4" | "fallout76" => {
             modde_games::bethesda::diagnostics::bethesda_diagnostics()
         }
-        _ => modde_core::diagnostics::DiagnosticEngine::new(),
+        _ => modde_core::diagnostics::base_diagnostics(),
     };
 
     let classifier = modde_games::resolve_collision_classifier(game_id);

@@ -9,6 +9,7 @@ use crate::app::Message;
 pub struct DataTabState {
     pub filter: String,
     pub show_conflicts_only: bool,
+    pub missing_store_mod_count: usize,
 }
 
 /// Render the data tab view showing file-level conflict details.
@@ -49,7 +50,19 @@ pub fn view<'a>(
 
     let file_count = filtered.len();
 
-    let file_rows: Element<Message> = if filtered.is_empty() {
+    let file_rows: Element<Message> = if filtered.is_empty() && state.missing_store_mod_count > 0 {
+        container(
+            text(format!(
+                "{} enabled mod(s) are missing from the store; conflict data is incomplete.",
+                state.missing_store_mod_count
+            ))
+            .size(14),
+        )
+        .padding(20)
+        .width(Length::Fill)
+        .center_x(Length::Fill)
+        .into()
+    } else if filtered.is_empty() {
         container(text("No data files to display.").size(14))
             .padding(20)
             .width(Length::Fill)

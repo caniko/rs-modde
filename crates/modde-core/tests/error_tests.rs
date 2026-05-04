@@ -108,7 +108,7 @@ fn test_toml_de_error_converts() {
 #[test]
 fn test_result_alias_ok() {
     let result: modde_core::Result<i32> = Ok(42);
-    assert_eq!(result.unwrap(), 42);
+    assert!(matches!(result, Ok(42)));
 }
 
 #[test]

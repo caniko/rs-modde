@@ -9,6 +9,7 @@ pub mod fs;
 pub mod hash;
 pub mod installer;
 pub mod instance;
+pub mod ipc;
 pub mod manifest;
 pub mod paths;
 pub mod plugin;

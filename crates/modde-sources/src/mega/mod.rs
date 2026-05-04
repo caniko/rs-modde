@@ -340,9 +340,11 @@ mod tests {
     fn decode_key_xor_inverse() {
         // If first half == second half, XOR yields all zeros
         let mut key_bytes = [0u8; 32];
-        for i in 0..16 {
-            key_bytes[i] = 0xAB;
-            key_bytes[i + 16] = 0xAB;
+        for byte in key_bytes.iter_mut().take(16) {
+            *byte = 0xAB;
+        }
+        for byte in key_bytes.iter_mut().skip(16) {
+            *byte = 0xAB;
         }
         let key_b64 = URL_SAFE_NO_PAD.encode(key_bytes);
         let (aes_key, _iv) = decode_mega_key(&key_b64).unwrap();
@@ -353,8 +355,8 @@ mod tests {
     fn decode_key_xor_all_ones() {
         // first half = 0xFF, second half = 0x00 -> XOR = 0xFF
         let mut key_bytes = [0u8; 32];
-        for i in 0..16 {
-            key_bytes[i] = 0xFF;
+        for byte in key_bytes.iter_mut().take(16) {
+            *byte = 0xFF;
         }
         let key_b64 = URL_SAFE_NO_PAD.encode(key_bytes);
         let (aes_key, _iv) = decode_mega_key(&key_b64).unwrap();
@@ -378,12 +380,12 @@ mod tests {
         let (_aes_key, iv) = decode_mega_key(&key_b64).unwrap();
 
         // First 8 bytes of IV = bytes 16..24 of original
-        for i in 0..8 {
-            assert_eq!(iv[i], (0x10 + i) as u8, "IV byte {i} mismatch");
+        for (i, byte) in iv.iter().enumerate().take(8) {
+            assert_eq!(*byte, (0x10 + i) as u8, "IV byte {i} mismatch");
         }
         // Last 8 bytes of IV must be zero (counter)
-        for i in 8..16 {
-            assert_eq!(iv[i], 0, "IV counter byte {i} should be zero");
+        for (i, byte) in iv.iter().enumerate().skip(8) {
+            assert_eq!(*byte, 0, "IV counter byte {i} should be zero");
         }
     }
 

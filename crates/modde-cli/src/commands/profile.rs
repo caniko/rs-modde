@@ -8,7 +8,7 @@ use modde_core::profile::{
 };
 use modde_core::save::SaveFingerprint;
 
-use super::{compute_fingerprint, resolve_save_dir};
+use super::{compute_fingerprint, resolve_save_dir, supports_save_profiles};
 use crate::ProfileAction;
 
 /// Human-readable byte size (KB/MB/GB) for `lock-info` output.
@@ -89,6 +89,8 @@ pub fn handle(action: ProfileAction) -> Result<()> {
                     info!(profile = %name, "switched to profile");
                     if save_dir.is_some() {
                         println!("Switched to profile: {name} (saves swapped)");
+                    } else if matches!(supports_save_profiles(&game), Ok(false)) {
+                        println!("Switched to profile: {name} (save profiles unsupported)");
                     } else {
                         println!("Switched to profile: {name} (no save directory detected)");
                     }
@@ -135,6 +137,9 @@ pub fn handle(action: ProfileAction) -> Result<()> {
 
             // Compute fingerprint for the current (about-to-be-rolled-back) profile
             let fp = pm.active(&game)?.and_then(|info| {
+                if !supports_save_profiles(&game).ok()? {
+                    return None;
+                }
                 let game_plugin = modde_games::resolve_game_plugin(&game)?;
                 let staging_dir = ProfileManager::staging_dir(&info.profile.name);
                 Some(SaveFingerprint::compute(&info.profile.mods, |mod_id| {

@@ -26,6 +26,7 @@ If the game doesn't fit an existing engine family and isn't worth extracting one
    - Mod directory layout — where do mods go relative to install root?
    - Archive format extensions (`.pak`, `.bsa`, `.archive`, etc.)
    - Executable directory for proxy DLL detection
+   - OptiScaler compatibility data — use `/optiscaler-quirks <game>` to check the OptiScaler wiki. Do not invent or substitute missing compatibility data.
 
 2. **Create or extend the game plugin.** Two paths:
 
@@ -37,6 +38,7 @@ If the game doesn't fit an existing engine family and isn't worth extracting one
    **New module** (bespoke game):
    - Create `crates/modde-games/src/<game>/mod.rs` with `pub struct <Game>;` and `pub static <GAME>: <Game> = <Game>;`
    - Implement `GamePlugin` trait — required: `game_id`, `display_name`, `mod_directory`; override defaults as needed
+   - If the OptiScaler wiki has a community-tested profile for this game, implement `OptiScalerProfiles` and add verified `OptiScalerProfile` entries with source URL, tested version, proxy DLL, Wine overrides, companion-file behavior, INI overrides, and notes. If no verified profile exists, return no profiles.
    - Optionally add `scanner.rs` (`ModScanner`), `collision.rs` (`CollisionClassifier`), `saves.rs` (`SaveTracker`)
    - Add `pub mod <game>;` in `crates/modde-games/src/lib.rs`
 
@@ -56,6 +58,7 @@ If the game doesn't fit an existing engine family and isn't worth extracting one
 7. **Write tests** — create `crates/modde-games/tests/<game>_tests.rs`:
    - `test_<game>_game_id`, `test_<game>_display_name`, `test_<game>_mod_directory`
    - `test_<game>_in_supported_ids`, `test_resolve_game_plugin_<game>`
+   - OptiScaler profile tests if community data exists: resolver returns the profile, OptiScaler defaults/profile application use it, and games without profile data keep generic defaults
    - Scanner tests with `tempfile::TempDir` if scanner exists
    - Wine override tests if proxy DLL detection is implemented
 
@@ -78,11 +81,13 @@ After implementation, review and note any of these gaps in your summary:
 - [ ] **Installer layouts** — does this game have mod formats the installer pipeline doesn't detect? If so, note and suggest a `/modde-installer` follow-up.
 - [ ] **Post-deploy hooks** — does the game need a tool run after deploy (like Cyberpunk's REDmod)? If unimplemented, note it.
 - [ ] **Launcher mapping** — check `crates/modde-games/src/launcher.rs` for any game-specific launch args.
+- [ ] **OptiScaler profiles** — did `/optiscaler-quirks <game>` find a community-tested profile? If yes, note the profile ID and source URL. If no, state that OptiScaler profile data is not shipped for this game.
 
 ## Critical files
 
 - [crates/modde-games/src/lib.rs](crates/modde-games/src/lib.rs) — resolvers + `SUPPORTED_GAME_IDS`
 - [crates/modde-games/src/traits.rs](crates/modde-games/src/traits.rs) — `GamePlugin`, `ModScanner`, `SaveTracker` trait defs
+- [crates/modde-games/src/optiscaler.rs](crates/modde-games/src/optiscaler.rs) — `OptiScalerProfile`, `OptiScalerProfiles`, profile resolver
 - [crates/modde-games/src/detection.rs](crates/modde-games/src/detection.rs) — `KNOWN_GAMES` launcher detection
 - [crates/modde-games/src/bethesda/mod.rs](crates/modde-games/src/bethesda/mod.rs) — data-driven reference (engine family)
 - [crates/modde-games/src/cyberpunk/mod.rs](crates/modde-games/src/cyberpunk/mod.rs) — bespoke reference (unit struct)

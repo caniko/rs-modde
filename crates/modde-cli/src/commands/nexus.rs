@@ -52,22 +52,9 @@ async fn handle_auth() -> Result<()> {
         )
     })?;
 
-    // Store the key at XDG config path
+    auth::write_config_api_key(&api_key).context("failed to write API key to config")?;
+
     let key_path = auth::config_api_key_path();
-    if let Some(parent) = key_path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
-    tokio::fs::write(&key_path, &api_key)
-        .await
-        .context("failed to write API key to config")?;
-
-    // Restrict file permissions to owner-only
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600))?;
-    }
-
     info!(key_path = %key_path.display(), "API key stored");
 
     if source == AuthKeySource::Environment {
@@ -169,7 +156,7 @@ mod tests {
 
     #[test]
     fn auth_rejects_empty_keys() {
-        let err = select_auth_api_key(Some("".into()), Some(" \n".into())).unwrap_err();
+        let err = select_auth_api_key(Some(String::new()), Some(" \n".into())).unwrap_err();
         assert!(format!("{err:#}").contains("API key cannot be empty"));
     }
 }

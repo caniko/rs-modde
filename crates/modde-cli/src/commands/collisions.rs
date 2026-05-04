@@ -26,7 +26,7 @@ pub async fn handle(
 
     let store = paths::store_dir();
 
-    let (conflict_map, origins) =
+    let full_conflict_map =
         collision::build_full_conflict_map(&store, &resolved.order, classifier.as_ref())
             .context("failed to build conflict map")?;
 
@@ -40,10 +40,10 @@ pub async fn handle(
         .unwrap_or_default();
 
     let report = collision::analyze_collisions(
-        &conflict_map,
+        &full_conflict_map.conflict_map,
         &resolved.order,
         &hidden,
-        &origins,
+        &full_conflict_map.origins,
         classifier.as_ref(),
     );
 

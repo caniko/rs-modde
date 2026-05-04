@@ -29,11 +29,14 @@ impl GameTool for GameMode {
     }
 
     fn settings_schema(&self) -> Vec<super::ToolSettingSpec> {
-        vec![super::ToolSettingSpec::read_only(
-            "wrapper",
-            "Wrapper",
-            "Uses gamemoderun before the game executable when enabled.",
-        )]
+        vec![
+            super::ToolSettingSpec::read_only(
+                "wrapper",
+                "Wrapper",
+                "Uses gamemoderun before the game executable when enabled.",
+            )
+            .section("Wrapper"),
+        ]
     }
 
     fn detect_available(&self) -> ToolAvailability {

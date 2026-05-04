@@ -93,56 +93,7 @@ impl DiagnosticRule for Form43Rule {
     }
 }
 
-/// Rule: Check for mods with no files in the store.
-pub struct EmptyModRule;
-
-impl DiagnosticRule for EmptyModRule {
-    fn name(&self) -> &'static str {
-        "empty-mod"
-    }
-
-    fn check(&self, ctx: &DiagContext) -> Vec<Diagnostic> {
-        ctx.profile
-            .mods
-            .iter()
-            .filter(|m| m.enabled)
-            .filter_map(|m| {
-                let mod_dir = ctx.store_dir.join(&m.mod_id);
-                let is_empty = if mod_dir.exists() {
-                    match std::fs::read_dir(&mod_dir) {
-                        Ok(mut entries) => entries.next().is_none(),
-                        Err(_) => true,
-                    }
-                } else {
-                    true
-                };
-
-                if is_empty {
-                    Some(Diagnostic {
-                        severity: Severity::Warning,
-                        title: format!("Empty mod: {}", m.mod_id),
-                        detail: format!(
-                            "Mod '{}' is enabled but has no files in the store directory. \
-                             It may not have been downloaded or extracted correctly.",
-                            m.mod_id
-                        ),
-                        affected_mod: Some(m.mod_id.clone()),
-                        affected_file: Some(mod_dir),
-                        fix: Some(DiagFix {
-                            label: "Re-install mod".to_string(),
-                            description: format!(
-                                "Re-download and install '{}', or disable it if it is no longer needed.",
-                                m.mod_id
-                            ),
-                        }),
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-}
+pub use modde_core::diagnostics::StorePresenceRule as EmptyModRule;
 
 /// Rule: Check if overrides directory has unexpected files.
 pub struct OrphanedOverridesRule;
@@ -186,10 +137,9 @@ impl DiagnosticRule for OrphanedOverridesRule {
 /// Create a pre-configured diagnostics engine with all Bethesda rules.
 #[must_use]
 pub fn bethesda_diagnostics() -> DiagnosticEngine {
-    let mut engine = DiagnosticEngine::new();
+    let mut engine = modde_core::diagnostics::base_diagnostics();
     engine.add_rule(Box::new(MissingMasterRule));
     engine.add_rule(Box::new(Form43Rule));
-    engine.add_rule(Box::new(EmptyModRule));
     engine.add_rule(Box::new(OrphanedOverridesRule));
     engine
 }

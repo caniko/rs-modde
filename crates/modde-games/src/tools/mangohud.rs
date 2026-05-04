@@ -396,6 +396,9 @@ impl GameTool for MangoHud {
             ),
             super::ToolSettingSpec::bool("retro", "Retro", "Enable retro scaling flag."),
         ]);
+        for spec in &mut specs {
+            spec.section = mangohud_setting_section(spec.key);
+        }
         specs
     }
 
@@ -471,5 +474,52 @@ impl GameTool for MangoHud {
         config.set("cpu_stats", serde_json::json!(true));
         config.set("gpu_stats", serde_json::json!(true));
         config
+    }
+}
+
+fn mangohud_setting_section(key: &str) -> &'static str {
+    match key {
+        "position" | "horizontal" | "hud_compact" | "no_display" | "custom_text_center"
+        | "background_alpha" | "round_corners" | "background_color" | "font_size"
+        | "text_color" | "font_file" | "offset_x" | "offset_y" | "toggle_hud" | "table_columns" => {
+            "Layout"
+        }
+        "fps" | "frame_timing" | "frametime" | "show_fps_limit" | "frame_count" | "histogram"
+        | "fps_limit" | "fps_limit_method" | "toggle_fps_limit" | "gl_vsync" | "vsync"
+        | "fps_metrics" | "fps_color" | "fps_color_change" => "FPS and Frame Timing",
+        "cpu_stats" | "cpu_load_change" | "core_load" | "core_bars" | "cpu_mhz" | "cpu_temp"
+        | "cpu_power" | "cpu_efficiency" | "core_type" | "cpu_text" | "cpu_color" => "CPU",
+        "gpu_stats"
+        | "gpu_load_change"
+        | "gpu_core_clock"
+        | "gpu_mem_clock"
+        | "gpu_temp"
+        | "gpu_mem_temp"
+        | "gpu_junction_temp"
+        | "gpu_fan"
+        | "gpu_power"
+        | "gpu_power_limit"
+        | "gpu_efficiency"
+        | "flip_efficiency"
+        | "gpu_voltage"
+        | "throttling_status"
+        | "throttling_status_graph"
+        | "gpu_name"
+        | "vulkan_driver"
+        | "gpu_text"
+        | "gpu_color"
+        | "gpu_list"
+        | "pci_dev" => "GPU",
+        "vram" | "ram" | "io_read" | "io_write" | "procmem" | "proc_vram" | "swap" | "ram_temp"
+        | "vram_color" | "ram_color" | "io_color" | "frametime_color" => "Memory and IO",
+        "wine" | "winesync" | "engine_version" | "engine_short_names" | "gamemode" | "vkbasalt"
+        | "fcat" | "fex_stats" | "fsr" | "hdr" | "present_mode" | "display_server" | "arch"
+        | "resolution" | "refresh_rate" | "time" | "version" | "battery" | "battery_watt"
+        | "battery_time" | "device_battery" | "media_player" | "network" | "wine_color"
+        | "engine_color" | "battery_color" | "media_player_color" => "Compatibility",
+        "output_folder" | "log_duration" | "autostart_log" | "log_interval" | "toggle_logging"
+        | "log_versioning" | "upload_logs" | "exec" => "Logging",
+        "temp_fahrenheit" | "af" | "picmip" | "bicubic" | "trilinear" | "retro" => "Filtering",
+        _ => "General",
     }
 }

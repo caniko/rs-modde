@@ -1,6 +1,9 @@
 use modde_core::scanner::ModFootprint;
-use modde_games::bethesda::scanner::{FALLOUT4_SCANNER, SKYRIM_SCANNER, STARFIELD_SCANNER};
-use modde_games::traits::ModScanner;
+use modde_games::bethesda::scanner::{
+    FALLOUT4_SCANNER, FALLOUT76_SCANNER, SKYRIM_SCANNER, STARFIELD_SCANNER,
+};
+use modde_games::traits::{ModScanner, ModSource, ScanContext};
+use tempfile::TempDir;
 
 // ── BethesdaScanner: mod_id_footprint inverse ───────────────────────
 
@@ -30,6 +33,42 @@ fn test_fallout4_footprint_round_trip() {
     assert_eq!(
         fp,
         ModFootprint::File("unofficialfallout4patch.esp".to_string())
+    );
+}
+
+#[test]
+fn test_fallout76_scanner_detects_data_ba2_files() {
+    let td = TempDir::new().unwrap();
+    let data_dir = td.path().join("Data");
+    std::fs::create_dir_all(&data_dir).unwrap();
+    std::fs::write(data_dir.join("BetterInventory.ba2"), b"").unwrap();
+    std::fs::write(data_dir.join("SeventySix - 00UpdateMain.ba2"), b"").unwrap();
+    std::fs::write(data_dir.join("readme.txt"), b"").unwrap();
+
+    let mods = FALLOUT76_SCANNER
+        .scan_filesystem(&ScanContext {
+            install_dir: td.path(),
+        })
+        .unwrap();
+
+    assert_eq!(mods.len(), 1);
+    assert_eq!(mods[0].mod_id, "archive/BetterInventory");
+    assert_eq!(mods[0].display_name, "BetterInventory");
+    assert_eq!(mods[0].files[0].rel_path, "Data/BetterInventory.ba2");
+    match &mods[0].source {
+        ModSource::Filesystem { location } => assert_eq!(location, "Data"),
+        ModSource::Archive { .. } => panic!("expected filesystem source"),
+    }
+}
+
+#[test]
+fn test_fallout76_scanner_footprint_round_trip() {
+    let fp = FALLOUT76_SCANNER
+        .mod_id_footprint("archive/BetterInventory")
+        .unwrap();
+    assert_eq!(
+        fp,
+        ModFootprint::File("data/betterinventory.ba2".to_string())
     );
 }
 

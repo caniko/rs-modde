@@ -12,6 +12,12 @@ categories.workspace = true
 [lints]
 workspace = true
 
+[package.metadata.release]
+pre-release-replacements = [
+    { file = "../../modde.spec", search = "^Version:\\s+.*$", replace = "Version:        {{version}}", exactly = 1 },
+    { file = "../../flake.nix", search = "version = \"[0-9]+\\.[0-9]+\\.[0-9]+\";", replace = "version = \"{{version}}\";", exactly = 3 },
+]
+
 [[bin]]
 name = "modde"
 path = "src/main.rs"

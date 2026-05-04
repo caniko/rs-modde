@@ -9,7 +9,7 @@ use crate::installer::{InstallMethod, InstallPlan, InstallStatus, StagedFile};
 use crate::profile::{EnabledMod, LoadOrderLock, LockReason, Profile, ProfileSource};
 use crate::resolver::{GameId, LoadOrderRule, ModId};
 
-const CURRENT_SCHEMA_VERSION: u32 = 8;
+const CURRENT_SCHEMA_VERSION: u32 = 10;
 
 const SCHEMA_V1: &str = "
 PRAGMA journal_mode = WAL;
@@ -173,6 +173,58 @@ CREATE TABLE IF NOT EXISTS installed_mod_files (
 CREATE INDEX IF NOT EXISTS idx_imf_profile_mod ON installed_mod_files(profile_id, mod_id);
 CREATE INDEX IF NOT EXISTS idx_imf_merge_group ON installed_mod_files(merge_group)
     WHERE merge_group IS NOT NULL;
+";
+
+// Schema V9 adds MO2-style executable definitions. These are distinct
+// from `game_tools`: tools model optional overlays/config patchers, while
+// executables model named launch targets such as xEdit, BodySlide, Nemesis,
+// or a game-specific helper with persistent args/environment/output routing.
+const SCHEMA_V9: &str = "
+CREATE TABLE IF NOT EXISTS executable_configs (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id             TEXT NOT NULL,
+    name                TEXT NOT NULL,
+    executable_path     TEXT NOT NULL,
+    arguments           TEXT NOT NULL DEFAULT '[]',
+    working_dir         TEXT,
+    environment         TEXT NOT NULL DEFAULT '{}',
+    wine_dll_overrides  TEXT,
+    output_mod          TEXT NOT NULL DEFAULT '__overwrite__',
+    enabled             INTEGER NOT NULL DEFAULT 1,
+    updated_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(game_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_executable_configs_game ON executable_configs(game_id);
+";
+
+// Schema V10 adds a generalized DAG of game tool settings. `game_tools`
+// remains the current-state table; each mutation also appends a node and an
+// edge from the previous current node, allowing restore operations to branch.
+const SCHEMA_V10: &str = "
+CREATE TABLE IF NOT EXISTS tool_setting_nodes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    node_id     TEXT NOT NULL UNIQUE,
+    game_id     TEXT NOT NULL,
+    tool_id     TEXT NOT NULL,
+    enabled     INTEGER NOT NULL,
+    settings    TEXT NOT NULL,
+    reason      TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS tool_setting_edges (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    parent_node_id  TEXT NOT NULL,
+    child_node_id   TEXT NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(parent_node_id, child_node_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tool_setting_nodes_tool
+    ON tool_setting_nodes(game_id, tool_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_tool_setting_edges_child
+    ON tool_setting_edges(child_node_id);
 ";
 
 /// Summary view of a profile (without loading all mods).
@@ -376,6 +428,25 @@ impl ModdeDb {
                 from = version.max(7),
                 to = 8,
                 "database schema migrated to V8"
+            );
+        }
+
+        if version < 9 {
+            self.conn.execute_batch(SCHEMA_V9)?;
+            info!(
+                from = version.max(8),
+                to = 9,
+                "database schema migrated to V9"
+            );
+        }
+
+        if version < 10 {
+            self.conn.execute_batch(SCHEMA_V10)?;
+            self.add_column_if_missing("game_tools", "current_node_id", "TEXT")?;
+            info!(
+                from = version.max(9),
+                to = 10,
+                "database schema migrated to V10"
             );
         }
 
@@ -1608,6 +1679,28 @@ pub fn decode_install_method(raw: Option<&str>) -> Result<Option<InstallMethod>>
     }
 }
 
+fn new_tool_setting_node_id(game_id: &str, tool_id: &str) -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_nanos());
+    let game = sanitize_node_id_part(game_id);
+    let tool = sanitize_node_id_part(tool_id);
+    format!("tool-{game}-{tool}-{nanos}-{}", std::process::id())
+}
+
+fn sanitize_node_id_part(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect()
+}
+
 // ── Tool config types (re-exported from modde_games::tools) ──────────
 
 /// Per-game tool configuration stored in the database.
@@ -1621,11 +1714,45 @@ pub struct ToolConfigRow {
     pub settings_json: String,
 }
 
+/// One versioned tool settings node in the per-tool DAG.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolSettingHistoryNode {
+    pub node_id: String,
+    pub game_id: String,
+    pub tool_id: String,
+    pub enabled: bool,
+    pub settings_json: String,
+    pub reason: String,
+    pub created_at: String,
+    pub is_current: bool,
+}
+
+/// One parent-child edge in the per-tool settings DAG.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolSettingHistoryEdge {
+    pub parent_node_id: String,
+    pub child_node_id: String,
+}
+
 /// A file applied by a tool to a game directory.
 #[derive(Debug, Clone)]
 pub struct ToolAppliedFileRow {
     pub tool_id: String,
     pub rel_path: String,
+}
+
+/// A named executable launch target for a game.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutableConfigRow {
+    pub game_id: String,
+    pub name: String,
+    pub executable_path: PathBuf,
+    pub arguments_json: String,
+    pub working_dir: Option<PathBuf>,
+    pub environment_json: String,
+    pub wine_dll_overrides: Option<String>,
+    pub output_mod: String,
+    pub enabled: bool,
 }
 
 impl ModdeDb {
@@ -1639,16 +1766,147 @@ impl ModdeDb {
         enabled: bool,
         settings_json: &str,
     ) -> Result<()> {
+        self.save_tool_config_with_reason(game_id, tool_id, enabled, settings_json, "update")
+    }
+
+    /// Save a tool configuration and append a history node.
+    pub fn save_tool_config_with_reason(
+        &self,
+        game_id: &str,
+        tool_id: &str,
+        enabled: bool,
+        settings_json: &str,
+        reason: &str,
+    ) -> Result<()> {
+        let parent_node_id = self.current_tool_setting_node_id(game_id, tool_id)?;
+        let node_id = new_tool_setting_node_id(game_id, tool_id);
+        let reason = if reason.trim().is_empty() {
+            "update"
+        } else {
+            reason.trim()
+        };
+
         self.conn.execute(
-            "INSERT INTO game_tools (game_id, tool_id, enabled, settings, updated_at)
-             VALUES (?1, ?2, ?3, ?4, datetime('now'))
+            "INSERT INTO tool_setting_nodes (node_id, game_id, tool_id, enabled, settings, reason)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                node_id,
+                game_id,
+                tool_id,
+                i32::from(enabled),
+                settings_json,
+                reason,
+            ],
+        )?;
+        if let Some(parent_node_id) = parent_node_id {
+            self.conn.execute(
+                "INSERT OR IGNORE INTO tool_setting_edges (parent_node_id, child_node_id)
+                 VALUES (?1, ?2)",
+                params![parent_node_id, node_id],
+            )?;
+        }
+        self.conn.execute(
+            "INSERT INTO game_tools (game_id, tool_id, enabled, settings, updated_at, current_node_id)
+             VALUES (?1, ?2, ?3, ?4, datetime('now'), ?5)
              ON CONFLICT(game_id, tool_id) DO UPDATE SET
                  enabled = excluded.enabled,
                  settings = excluded.settings,
-                 updated_at = excluded.updated_at",
-            params![game_id, tool_id, i32::from(enabled), settings_json],
+                 updated_at = excluded.updated_at,
+                 current_node_id = excluded.current_node_id",
+            params![game_id, tool_id, i32::from(enabled), settings_json, node_id],
         )?;
         Ok(())
+    }
+
+    /// Load recent settings history nodes for a tool.
+    pub fn list_tool_setting_history(
+        &self,
+        game_id: &str,
+        tool_id: &str,
+        limit: usize,
+    ) -> Result<Vec<ToolSettingHistoryNode>> {
+        let current_node_id = self.current_tool_setting_node_id(game_id, tool_id)?;
+        let mut stmt = self.conn.prepare(
+            "SELECT node_id, game_id, tool_id, enabled, settings, reason, created_at
+             FROM tool_setting_nodes
+             WHERE game_id = ?1 AND tool_id = ?2
+             ORDER BY id DESC
+             LIMIT ?3",
+        )?;
+
+        let rows = stmt
+            .query_map(params![game_id, tool_id, limit as i64], |row| {
+                let node_id: String = row.get(0)?;
+                Ok(ToolSettingHistoryNode {
+                    is_current: current_node_id.as_deref() == Some(node_id.as_str()),
+                    node_id,
+                    game_id: row.get(1)?,
+                    tool_id: row.get(2)?,
+                    enabled: row.get::<_, i32>(3)? != 0,
+                    settings_json: row.get(4)?,
+                    reason: row.get(5)?,
+                    created_at: row.get(6)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(rows)
+    }
+
+    /// Load DAG edges for a tool's recorded settings history.
+    pub fn list_tool_setting_edges(
+        &self,
+        game_id: &str,
+        tool_id: &str,
+    ) -> Result<Vec<ToolSettingHistoryEdge>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT e.parent_node_id, e.child_node_id
+             FROM tool_setting_edges e
+             JOIN tool_setting_nodes child ON child.node_id = e.child_node_id
+             WHERE child.game_id = ?1 AND child.tool_id = ?2
+             ORDER BY e.id",
+        )?;
+        let rows = stmt
+            .query_map(params![game_id, tool_id], |row| {
+                Ok(ToolSettingHistoryEdge {
+                    parent_node_id: row.get(0)?,
+                    child_node_id: row.get(1)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(rows)
+    }
+
+    /// Restore a settings node by appending a new child node with copied state.
+    pub fn restore_tool_setting_node(
+        &self,
+        game_id: &str,
+        tool_id: &str,
+        node_id: &str,
+    ) -> Result<()> {
+        let (enabled, settings_json): (bool, String) = self.conn.query_row(
+            "SELECT enabled, settings FROM tool_setting_nodes
+             WHERE game_id = ?1 AND tool_id = ?2 AND node_id = ?3",
+            params![game_id, tool_id, node_id],
+            |row| Ok((row.get::<_, i32>(0)? != 0, row.get(1)?)),
+        )?;
+        let reason = format!("restore:{node_id}");
+        self.save_tool_config_with_reason(game_id, tool_id, enabled, &settings_json, &reason)
+    }
+
+    fn current_tool_setting_node_id(&self, game_id: &str, tool_id: &str) -> Result<Option<String>> {
+        let result = self.conn.query_row(
+            "SELECT current_node_id FROM game_tools WHERE game_id = ?1 AND tool_id = ?2",
+            params![game_id, tool_id],
+            |row| row.get(0),
+        );
+
+        match result {
+            Ok(node_id) => Ok(node_id),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
     }
 
     /// Load all tool configurations for a game.
@@ -1733,6 +1991,107 @@ impl ModdeDb {
         )?;
         Ok(())
     }
+
+    // ── Executable Config CRUD ───────────────────────────────────
+
+    /// Save or update a named executable for a game.
+    pub fn save_executable_config(&self, executable: &ExecutableConfigRow) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO executable_configs (
+                game_id, name, executable_path, arguments, working_dir,
+                environment, wine_dll_overrides, output_mod, enabled, updated_at
+             )
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'))
+             ON CONFLICT(game_id, name) DO UPDATE SET
+                executable_path = excluded.executable_path,
+                arguments = excluded.arguments,
+                working_dir = excluded.working_dir,
+                environment = excluded.environment,
+                wine_dll_overrides = excluded.wine_dll_overrides,
+                output_mod = excluded.output_mod,
+                enabled = excluded.enabled,
+                updated_at = excluded.updated_at",
+            params![
+                executable.game_id,
+                executable.name,
+                executable.executable_path.to_string_lossy().as_ref(),
+                executable.arguments_json,
+                executable
+                    .working_dir
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().to_string()),
+                executable.environment_json,
+                executable.wine_dll_overrides,
+                executable.output_mod,
+                i32::from(executable.enabled),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Load every executable configured for a game, ordered by display name.
+    pub fn load_executable_configs(&self, game_id: &str) -> Result<Vec<ExecutableConfigRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT game_id, name, executable_path, arguments, working_dir,
+                    environment, wine_dll_overrides, output_mod, enabled
+             FROM executable_configs
+             WHERE game_id = ?1
+             ORDER BY name COLLATE NOCASE",
+        )?;
+
+        let rows = stmt
+            .query_map(params![game_id], executable_from_row)?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(rows)
+    }
+
+    /// Load a single named executable for a game.
+    pub fn load_executable_config(
+        &self,
+        game_id: &str,
+        name: &str,
+    ) -> Result<Option<ExecutableConfigRow>> {
+        let result = self.conn.query_row(
+            "SELECT game_id, name, executable_path, arguments, working_dir,
+                    environment, wine_dll_overrides, output_mod, enabled
+             FROM executable_configs
+             WHERE game_id = ?1 AND name = ?2",
+            params![game_id, name],
+            executable_from_row,
+        );
+
+        match result {
+            Ok(row) => Ok(Some(row)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Delete a named executable for a game. Returns whether a row was removed.
+    pub fn delete_executable_config(&self, game_id: &str, name: &str) -> Result<bool> {
+        let affected = self.conn.execute(
+            "DELETE FROM executable_configs WHERE game_id = ?1 AND name = ?2",
+            params![game_id, name],
+        )?;
+        Ok(affected > 0)
+    }
+}
+
+fn executable_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ExecutableConfigRow> {
+    let executable_path: String = row.get(2)?;
+    let working_dir: Option<String> = row.get(4)?;
+    Ok(ExecutableConfigRow {
+        game_id: row.get(0)?,
+        name: row.get(1)?,
+        executable_path: PathBuf::from(executable_path),
+        arguments_json: row.get(3)?,
+        working_dir: working_dir.map(PathBuf::from),
+        environment_json: row.get(5)?,
+        wine_dll_overrides: row.get(6)?,
+        output_mod: row.get(7)?,
+        enabled: row.get::<_, i32>(8)? != 0,
+    })
 }
 
 #[cfg(test)]
@@ -2028,5 +2387,37 @@ mod tests {
             .create_profile(&sample_profile("test", "skyrim-se"))
             .unwrap_err();
         assert!(matches!(err, CoreError::Database(_)));
+    }
+
+    #[test]
+    fn executable_config_roundtrip() {
+        let db = test_db();
+        let row = ExecutableConfigRow {
+            game_id: "skyrim-se".to_string(),
+            name: "xEdit".to_string(),
+            executable_path: PathBuf::from("/tools/SSEEdit.exe"),
+            arguments_json: serde_json::json!(["-IKnowWhatImDoing"]).to_string(),
+            working_dir: Some(PathBuf::from("/games/Skyrim Special Edition")),
+            environment_json: serde_json::json!({"WINESYNC": "1"}).to_string(),
+            wine_dll_overrides: Some("dinput8=n,b".to_string()),
+            output_mod: "xedit-output".to_string(),
+            enabled: true,
+        };
+
+        db.save_executable_config(&row).unwrap();
+        let loaded = db
+            .load_executable_config("skyrim-se", "xEdit")
+            .unwrap()
+            .unwrap();
+        assert_eq!(loaded, row);
+
+        let all = db.load_executable_configs("skyrim-se").unwrap();
+        assert_eq!(all.len(), 1);
+        assert!(db.delete_executable_config("skyrim-se", "xEdit").unwrap());
+        assert!(
+            db.load_executable_config("skyrim-se", "xEdit")
+                .unwrap()
+                .is_none()
+        );
     }
 }

@@ -122,6 +122,43 @@ pub trait CollisionClassifier: Send + Sync {
 /// Tracks per-file origin information alongside the conflict map.
 pub type OriginMap = HashMap<String, HashMap<ModId, FileOrigin>>;
 
+const MISSING_STORE_DIR_SAMPLE_LIMIT: usize = 10;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct MissingStoreDirsSummary {
+    pub missing_mod_count: usize,
+    pub missing_mod_sample: Vec<String>,
+    pub omitted_missing_mod_count: usize,
+}
+
+#[derive(Debug)]
+pub struct FullConflictMap {
+    pub conflict_map: ConflictMap,
+    pub origins: OriginMap,
+    pub missing_mods: Vec<ModId>,
+}
+
+pub fn summarize_missing_store_dirs(missing_mods: &[ModId]) -> Option<MissingStoreDirsSummary> {
+    if missing_mods.is_empty() {
+        return None;
+    }
+
+    let missing_mod_sample = missing_mods
+        .iter()
+        .take(MISSING_STORE_DIR_SAMPLE_LIMIT)
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    let missing_mod_count = missing_mods.len();
+    let omitted_missing_mod_count =
+        missing_mod_count.saturating_sub(MISSING_STORE_DIR_SAMPLE_LIMIT);
+
+    Some(MissingStoreDirsSummary {
+        missing_mod_count,
+        missing_mod_sample,
+        omitted_missing_mod_count,
+    })
+}
+
 /// Build a [`ConflictMap`] that includes both loose files and archive contents.
 ///
 /// For each mod in `resolved_order`, walks its store directory for loose files,
@@ -133,15 +170,16 @@ pub fn build_full_conflict_map(
     store: &Path,
     resolved_order: &[ModId],
     classifier: &dyn CollisionClassifier,
-) -> Result<(ConflictMap, OriginMap)> {
+) -> Result<FullConflictMap> {
     let archive_exts: HashSet<&str> = classifier.archive_extensions().iter().copied().collect();
     let mut conflict_map = ConflictMap::default();
     let mut origins: OriginMap = HashMap::new();
+    let mut missing_mods = Vec::new();
 
     for mod_id in resolved_order {
         let mod_dir = store.join(mod_id.as_str());
         if !mod_dir.exists() {
-            warn!(%mod_id, "mod directory not found in store, skipping");
+            missing_mods.push(mod_id.clone());
             continue;
         }
 
@@ -187,7 +225,21 @@ pub fn build_full_conflict_map(
         }
     }
 
-    Ok((conflict_map, origins))
+    if let Some(summary) = summarize_missing_store_dirs(&missing_mods) {
+        debug!(
+            store = %store.display(),
+            missing_mod_count = summary.missing_mod_count,
+            missing_mod_sample = ?summary.missing_mod_sample,
+            omitted_missing_mod_count = summary.omitted_missing_mod_count,
+            "mod directories not found in store, skipping"
+        );
+    }
+
+    Ok(FullConflictMap {
+        conflict_map,
+        origins,
+        missing_mods,
+    })
 }
 
 // ── Collision analyser ──────────────────────────────────────────────
@@ -407,6 +459,69 @@ mod tests {
 
     fn mod_id(s: &str) -> ModId {
         ModId::from(s)
+    }
+
+    #[test]
+    fn missing_store_dirs_summary_is_none_for_empty_input() {
+        assert_eq!(summarize_missing_store_dirs(&[]), None);
+    }
+
+    #[test]
+    fn missing_store_dirs_summary_reports_all_entries_within_sample_limit() {
+        let missing_mods = vec![mod_id("mod_a"), mod_id("mod_b")];
+
+        assert_eq!(
+            summarize_missing_store_dirs(&missing_mods),
+            Some(MissingStoreDirsSummary {
+                missing_mod_count: 2,
+                missing_mod_sample: vec!["mod_a".to_string(), "mod_b".to_string()],
+                omitted_missing_mod_count: 0,
+            })
+        );
+    }
+
+    #[test]
+    fn missing_store_dirs_summary_bounds_sample_and_counts_omitted_entries() {
+        let missing_mods = (0..12)
+            .map(|idx| mod_id(&format!("mod_{idx}")))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            summarize_missing_store_dirs(&missing_mods),
+            Some(MissingStoreDirsSummary {
+                missing_mod_count: 12,
+                missing_mod_sample: (0..10).map(|idx| format!("mod_{idx}")).collect(),
+                omitted_missing_mod_count: 2,
+            })
+        );
+    }
+
+    #[test]
+    fn build_full_conflict_map_skips_missing_store_dirs() {
+        let store = tempfile::tempdir().unwrap();
+        let present = store.path().join("mod_present");
+        std::fs::create_dir_all(present.join("textures")).unwrap();
+        std::fs::write(present.join("textures/sky.dds"), b"sky").unwrap();
+
+        let order = vec![mod_id("mod_missing"), mod_id("mod_present")];
+        let result = build_full_conflict_map(store.path(), &order, &TestClassifier).unwrap();
+
+        assert_eq!(result.missing_mods, vec![mod_id("mod_missing")]);
+        assert_eq!(result.conflict_map.files.len(), 1);
+        assert!(result.conflict_map.files.contains_key("textures/sky.dds"));
+        assert!(
+            !result
+                .conflict_map
+                .files
+                .values()
+                .any(|mods| { mods.iter().any(|mod_id| mod_id.as_str() == "mod_missing") })
+        );
+        assert!(
+            !result
+                .origins
+                .values()
+                .any(|mods| { mods.keys().any(|mod_id| mod_id.as_str() == "mod_missing") })
+        );
     }
 
     #[test]

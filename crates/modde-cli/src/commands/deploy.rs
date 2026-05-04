@@ -5,7 +5,9 @@ use anyhow::{Context, Result};
 use tracing::{info, warn};
 
 use modde_core::collision;
-use modde_core::fs::walk_files_relative;
+use modde_core::db::decode_install_method;
+use modde_core::fs::{symlink_async, walk_files_relative};
+use modde_core::installer::InstallMethod;
 use modde_core::paths;
 use modde_core::profile::{ProfileManager, ProfileSource};
 use modde_core::resolver::{self, ConflictMap, ModId};
@@ -36,7 +38,9 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
         )
     })?;
 
-    let game_mod_dir = game_plugin.mod_directory(&install_dir);
+    let game_mod_dir = game_plugin
+        .mod_root(&install_dir)
+        .context("failed to resolve game mod root")?;
     info!(
         game = game_plugin.display_name(),
         install_dir = %install_dir.display(),
@@ -84,13 +88,13 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     // Build archive-aware conflict map using the collision system.
     let classifier = modde_games::resolve_collision_classifier(&profile.game_id);
 
-    let (conflict_map, _origins) = if let Some(ref cls) = classifier {
+    let conflict_map = if let Some(ref cls) = classifier {
         collision::build_full_conflict_map(&store, &resolved.order, cls.as_ref())
             .context("failed to build conflict map")?
+            .conflict_map
     } else {
         // Fallback: build a loose-files-only conflict map (no classifier available).
         let mut cm = ConflictMap::default();
-        let origins = collision::OriginMap::new();
         for mod_id in &resolved.order {
             let mod_dir = store.join(mod_id.as_str());
             if !mod_dir.exists() {
@@ -102,16 +106,17 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
                 }
             }
         }
-        (cm, origins)
+        cm
     };
 
     // Walk store files for the symlink farm (still needs absolute paths).
     let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
     let mut conflict_count: usize = 0;
+    let mut missing_mods = Vec::new();
     for mod_id in &resolved.order {
         let mod_dir_path = store.join(mod_id.as_str());
         if !mod_dir_path.exists() {
-            warn!(%mod_id, "mod directory not found in store, skipping");
+            missing_mods.push(mod_id.clone());
             continue;
         }
         let files = walk_files_relative(&mod_dir_path)
@@ -124,6 +129,15 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
             }
         }
         mod_files.insert(mod_id.clone(), files);
+    }
+    if let Some(summary) = collision::summarize_missing_store_dirs(&missing_mods) {
+        warn!(
+            store = %store.display(),
+            missing_mod_count = summary.missing_mod_count,
+            missing_mod_sample = ?summary.missing_mod_sample,
+            omitted_missing_mod_count = summary.omitted_missing_mod_count,
+            "mod directories not found in store, skipping"
+        );
     }
 
     let conflicts = conflict_map.conflicts();
@@ -178,7 +192,7 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
 
     // Delegate final deployment to the game plugin (handles game-specific deploy strategy)
     game_plugin
-        .deploy(&farm.staging_dir, &game_mod_dir)
+        .deploy_to_install(&farm.staging_dir, &install_dir)
         .context("game plugin deploy failed")?;
 
     game_plugin
@@ -221,6 +235,8 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
         }
     }
 
+    let alt_routed = deploy_alt_target_mods(&profile, game_plugin, &install_dir, &store).await?;
+
     println!("Deployed profile: {name}");
     println!(
         "  Game: {} ({})",
@@ -231,8 +247,92 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     println!("  Mod dir: {}", game_mod_dir.display());
     println!("  Total files: {total_files}");
     println!("  Conflicts resolved: {conflict_count}");
+    if alt_routed > 0 {
+        println!("  Alt-target files: {alt_routed}");
+    }
 
     Ok(())
+}
+
+/// Deploy mods whose [`InstallMethod`] routes them to a plugin-supplied
+/// alternate root (e.g. UE4's per-user `Saved/Config/Windows`).
+///
+/// Runs *after* the main symlink farm so an alt-target mod can never
+/// shadow normal game-root mods. Each alt-target mod is symlinked
+/// directly from its store dir into the resolved root: load-order
+/// conflict resolution is intentionally bypassed for these mods —
+/// their files are usually whole-file replacements (e.g. `Engine.ini`)
+/// where last-mod-wins is the right semantics anyway, and trying to
+/// run them through the farm would require teaching the farm about
+/// multiple deploy roots.
+async fn deploy_alt_target_mods(
+    profile: &modde_core::profile::Profile,
+    plugin: &dyn modde_games::GamePlugin,
+    install_dir: &std::path::Path,
+    store: &std::path::Path,
+) -> Result<usize> {
+    let mut linked = 0usize;
+
+    for em in &profile.mods {
+        if !em.enabled {
+            continue;
+        }
+        let Some(raw) = em.install_method.as_deref() else {
+            continue;
+        };
+        let method = match decode_install_method(Some(raw)) {
+            Ok(Some(m)) => m,
+            Ok(None) => continue,
+            Err(e) => {
+                warn!(mod_id = %em.mod_id, error = %e, "failed to decode install_method");
+                continue;
+            }
+        };
+        let target_id = match &method {
+            InstallMethod::UserConfigOverlay { target_id } => target_id.as_str(),
+            _ => continue,
+        };
+
+        let Some(target_root) = plugin.resolve_deploy_target(target_id, install_dir) else {
+            warn!(
+                mod_id = %em.mod_id,
+                %target_id,
+                "alt deploy target unresolved (Wine prefix may not exist yet); \
+                 launch the game once via Steam/Proton, then re-deploy."
+            );
+            continue;
+        };
+
+        let mod_dir = store.join(&em.mod_id);
+        if !mod_dir.exists() {
+            warn!(mod_id = %em.mod_id, "store dir missing, skipping alt-target deploy");
+            continue;
+        }
+
+        tokio::fs::create_dir_all(&target_root).await?;
+
+        let files = walk_files_relative(&mod_dir)
+            .with_context(|| format!("failed to walk store dir for mod {}", em.mod_id))?;
+        for (rel_path, abs_src) in &files {
+            let dst = target_root.join(rel_path);
+            if let Some(parent) = dst.parent() {
+                tokio::fs::create_dir_all(parent).await?;
+            }
+            if dst.symlink_metadata().is_ok() {
+                tokio::fs::remove_file(&dst).await?;
+            }
+            symlink_async(abs_src, &dst).await?;
+            linked += 1;
+        }
+        info!(
+            mod_id = %em.mod_id,
+            target = %target_root.display(),
+            files = files.len(),
+            "deployed mod to alt target"
+        );
+    }
+
+    Ok(linked)
 }
 
 // Re-export deploy_mo2_to_game for use in this module's Wabbajack path.

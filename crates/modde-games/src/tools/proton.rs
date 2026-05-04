@@ -12,6 +12,7 @@ use smallvec::SmallVec;
 use super::{GameTool, ToolAvailability, ToolCategory, ToolConfig, ToolGameContext, which};
 
 pub static PROTON: Proton = Proton;
+const GE_PROTON_REPO: &str = "GloriousEggroll/proton-ge-custom";
 
 pub struct Proton;
 
@@ -42,7 +43,7 @@ impl GameTool for Proton {
         _context: Option<&ToolGameContext>,
         _config: &ToolConfig,
     ) -> Vec<super::ToolSettingSpec> {
-        vec![
+        let mut specs = vec![
             super::ToolSettingSpec::select(
                 "version_mode",
                 "Version mode",
@@ -204,7 +205,11 @@ impl GameTool for Proton {
                 "Where Proton-specific wrapper integration should appear in the launch chain.",
                 &["after-modde", "before-tools"],
             ),
-        ]
+        ];
+        for spec in &mut specs {
+            spec.section = proton_setting_section(spec.key);
+        }
+        specs
     }
 
     fn detect_available(&self) -> ToolAvailability {
@@ -321,6 +326,17 @@ const GOVERLAY_ENV_TOGGLES: &[(&str, &str, &str)] = &[
     ("enable_mesa_antilag", "ENABLE_LAYER_MESA_ANTI_LAG", "1"),
 ];
 
+fn proton_setting_section(key: &str) -> &'static str {
+    match key {
+        "version_mode" | "selected_version" | "install_target" => "Runner",
+        "derived_launcher" | "derived_steam_app_id" => "Detected Game",
+        "prefix_path_override" | "extra_env" => "Environment",
+        "dll_override_mode" | "forced_dll_overrides" => "DLL Overrides",
+        "wrapper_order" => "Wrapper",
+        _ => "Compatibility Toggles",
+    }
+}
+
 #[must_use]
 pub fn detect_protonup_rs() -> Option<PathBuf> {
     which("protonup-rs")
@@ -335,6 +351,7 @@ pub fn compatibilitytools_dirs() -> Vec<PathBuf> {
         dirs.push(home.join(".local/share/Steam/compatibilitytools.d"));
         dirs.push(home.join(".var/app/com.valvesoftware.Steam/data/Steam/compatibilitytools.d"));
     }
+    dirs.retain(|d| d.is_dir());
     dirs
 }
 
@@ -365,15 +382,35 @@ pub fn installed_ge_proton_versions() -> Vec<String> {
 
 #[must_use]
 pub fn proton_version_options() -> Vec<String> {
-    let mut options = vec!["latest".to_string()];
-    options.extend(installed_ge_proton_versions());
-    options.sort();
-    options.dedup();
-    if let Some(idx) = options.iter().position(|value| value == "latest") {
-        options.remove(idx);
-    }
-    options.insert(0, "latest".to_string());
-    options
+    merge_proton_version_options(std::iter::empty(), installed_ge_proton_versions())
+}
+
+#[must_use]
+pub fn is_ge_proton_version(value: &str) -> bool {
+    let trimmed = value.trim();
+    !trimmed.is_empty() && (trimmed.starts_with("GE-Proton") || trimmed.starts_with("Proton-GE"))
+}
+
+#[must_use]
+pub fn merge_proton_version_options<C, I>(catalog_versions: C, installed_versions: I) -> Vec<String>
+where
+    C: IntoIterator<Item = String>,
+    I: IntoIterator<Item = String>,
+{
+    super::release::prepend_latest_dedup(catalog_versions.into_iter().chain(installed_versions))
+}
+
+pub async fn list_ge_proton_versions() -> anyhow::Result<Vec<String>> {
+    let releases = super::release::list_github_releases(GE_PROTON_REPO).await?;
+    let catalog_versions = releases
+        .into_iter()
+        .map(|release| release.tag)
+        .filter(|tag| is_ge_proton_version(tag))
+        .collect::<Vec<_>>();
+    Ok(merge_proton_version_options(
+        catalog_versions,
+        installed_ge_proton_versions(),
+    ))
 }
 
 #[must_use]

@@ -33,17 +33,20 @@ impl GameTool for VkBasalt {
 
     fn settings_schema(&self) -> Vec<super::ToolSettingSpec> {
         vec![
-            super::ToolSettingSpec::text("toggleKey", "Toggle key", "Key used to toggle vkBasalt."),
+            super::ToolSettingSpec::text("toggleKey", "Toggle key", "Key used to toggle vkBasalt.")
+                .section("Activation"),
             super::ToolSettingSpec::bool(
                 "enableOnLaunch",
                 "Enable on launch",
                 "Start with vkBasalt effects enabled.",
-            ),
+            )
+            .section("Activation"),
             super::ToolSettingSpec::text(
                 "effects",
                 "Effects",
                 "Colon or comma separated effect list, such as cas or cas:fxaa.",
-            ),
+            )
+            .section("Effects"),
             super::ToolSettingSpec::number(
                 "casSharpness",
                 "CAS sharpness",
@@ -51,17 +54,20 @@ impl GameTool for VkBasalt {
                 0.0,
                 1.0,
                 0.05,
-            ),
+            )
+            .section("Effects"),
             super::ToolSettingSpec::path(
                 "reshadeTexturePath",
                 "ReShade texture path",
                 "Optional ReShade texture directory for vkBasalt.",
-            ),
+            )
+            .section("ReShade Paths"),
             super::ToolSettingSpec::path(
                 "reshadeIncludePath",
                 "ReShade shader path",
                 "Optional ReShade shader include directory for vkBasalt.",
-            ),
+            )
+            .section("ReShade Paths"),
         ]
     }
 

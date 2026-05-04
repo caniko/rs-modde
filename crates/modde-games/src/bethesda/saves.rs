@@ -1,6 +1,6 @@
 //! Bethesda game save detection and classification.
 //!
-//! Covers Skyrim SE/AE, Fallout 4, and Fallout 76 (partially).
+//! Covers Skyrim SE/AE, Fallout 4, Fallout 76 (partially), and Starfield.
 //!
 //! # Binary header format
 //!
@@ -25,6 +25,7 @@ use std::time::SystemTime;
 use anyhow::Result;
 use smallvec::SmallVec;
 
+use crate::save_patterns::{CaptureSummary, PatternSaveTracker, PrefixSaveRule};
 use crate::traits::{DetectedSave, SaveTracker};
 
 // ── Magic constants ───────────────────────────────────────────────────────────
@@ -55,6 +56,35 @@ pub static FALLOUT4_SAVE_TRACKER: BethesdaSaveTracker = BethesdaSaveTracker {
 pub static FALLOUT76_SAVE_TRACKER: BethesdaSaveTracker = BethesdaSaveTracker {
     magic: MAGIC_FALLOUT76,
     is_fo76: true,
+};
+
+const STARFIELD_SAVE_PREFIXES: &[PrefixSaveRule] = &[
+    PrefixSaveRule {
+        prefix: "Autosave",
+        category: "auto",
+    },
+    PrefixSaveRule {
+        prefix: "Quicksave",
+        category: "quick",
+    },
+    PrefixSaveRule {
+        prefix: "Exitsave",
+        category: "exit",
+    },
+    PrefixSaveRule {
+        prefix: "Save",
+        category: "manual",
+    },
+];
+
+pub static STARFIELD_SAVE_TRACKER: PatternSaveTracker = PatternSaveTracker {
+    prefix_rules: STARFIELD_SAVE_PREFIXES,
+    file_extensions: &["sfs"],
+    default_category: "manual",
+    recursive: false,
+    exclude_patterns: &[],
+    label_extractor: starfield_save_label,
+    summary: CaptureSummary::ByCategory,
 };
 
 // ── SaveTracker impl ──────────────────────────────────────────────────────────
@@ -93,6 +123,11 @@ impl SaveTracker for BethesdaSaveTracker {
                 .metadata()
                 .and_then(|m| m.modified())
                 .unwrap_or(SystemTime::UNIX_EPOCH);
+            let stem = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+            let category = classify_slot_name(stem);
 
             // Parse header to extract save number and character name
             let header = if let Ok(h) = read_save_header(&path, self.magic) {
@@ -104,9 +139,7 @@ impl SaveTracker for BethesdaSaveTracker {
                     .map_or_else(|| path.clone(), std::path::PathBuf::from);
                 saves.push(DetectedSave {
                     rel_path: rel,
-                    category: classify_slot_name(
-                        path.file_stem().and_then(|s| s.to_str()).unwrap_or(""),
-                    ),
+                    category,
                     label: None,
                     modified,
                 });
@@ -117,8 +150,6 @@ impl SaveTracker for BethesdaSaveTracker {
                 "{} — Save {}",
                 header.player_name, header.save_number
             ));
-            let category =
-                classify_slot_name(path.file_stem().and_then(|s| s.to_str()).unwrap_or(""));
             let rel = path
                 .file_name()
                 .map_or_else(|| path.clone(), std::path::PathBuf::from);
@@ -259,10 +290,26 @@ fn parse_label(label: Option<&str>) -> (String, u32) {
         return ("Unknown".to_string(), 0);
     };
     if let Some((name_part, slot_part)) = label.split_once(" — Save ") {
-        let slot = slot_part.parse().unwrap_or(0);
-        return (name_part.to_string(), slot);
+        match slot_part.parse() {
+            Ok(slot) => return (name_part.to_string(), slot),
+            Err(_) => {
+                tracing::warn!(
+                    raw_slot = slot_part,
+                    label,
+                    "bethesda saves: failed to parse save slot number; treating as 0"
+                );
+                return (format!("{name_part} — Save {slot_part}"), 0);
+            }
+        }
     }
     (label.to_string(), 0)
+}
+
+fn starfield_save_label(path: &Path, rel_name: &str) -> Option<String> {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(std::string::ToString::to_string)
+        .or_else(|| Some(rel_name.to_string()))
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -315,6 +362,20 @@ mod tests {
     fn parse_label_no_separator() {
         let (name, slot) = parse_label(Some("Just a name"));
         assert_eq!(name, "Just a name");
+        assert_eq!(slot, 0);
+    }
+
+    #[test]
+    fn parse_label_unparseable_slot_preserves_raw_text() {
+        let (name, slot) = parse_label(Some("Lydia — Save abc"));
+        assert_eq!(name, "Lydia — Save abc");
+        assert_eq!(slot, 0);
+    }
+
+    #[test]
+    fn parse_label_empty_slot_preserves_raw_text() {
+        let (name, slot) = parse_label(Some("Lydia — Save "));
+        assert_eq!(name, "Lydia — Save ");
         assert_eq!(slot, 0);
     }
 

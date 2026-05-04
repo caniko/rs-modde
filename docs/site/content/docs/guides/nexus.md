@@ -12,10 +12,12 @@ modde integrates with [Nexus Mods](https://www.nexusmods.com/) for browsing, dow
 
 modde checks for API credentials in this order:
 
-1. `NEXUS_API_KEY` environment variable
-2. System keyring (secret-service D-Bus)
-3. `NEXUS_API_KEY_FILE` environment variable (path to a file containing the key)
-4. `~/.config/modde/nexus_api_key` file
+1. OAuth token
+2. `~/.config/modde/nexus_api_key` file
+3. `NEXUS_API_KEY` environment variable
+4. System keyring (secret-service D-Bus)
+5. `NEXUS_API_KEY_FILE` environment variable (path to a file containing the key)
+6. Legacy `settings.toml` key
 
 ### Saving your API key
 

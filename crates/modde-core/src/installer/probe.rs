@@ -29,6 +29,14 @@ pub struct InstallProbe {
     /// for this game (e.g. top-level `Data/` for Bethesda). Runs as the
     /// last fallback before [`InstallMethod::Unknown`].
     pub recognizes_bare: Box<dyn Fn(&Path) -> bool + Send + Sync>,
+
+    /// Plugin-supplied id of a `DeployTargetKind::UserConfig` root, if
+    /// this game advertises one. The analyzer falls back to a
+    /// [`InstallMethod::UserConfigOverlay`] keyed on this id when the
+    /// archive contains only config-shaped files. `None` means the
+    /// game has no user-config target — config-only archives will go
+    /// straight to `Unknown`.
+    pub user_config_target: Option<&'static str>,
 }
 
 impl InstallProbe {
@@ -41,7 +49,16 @@ impl InstallProbe {
         Self {
             analyze: Box::new(analyze),
             recognizes_bare: Box::new(recognizes_bare),
+            user_config_target: None,
         }
+    }
+
+    /// Builder: attach a user-config target id. The analyzer will
+    /// route config-only archives to `UserConfigOverlay { target_id }`.
+    #[must_use]
+    pub fn with_user_config_target(mut self, target_id: &'static str) -> Self {
+        self.user_config_target = Some(target_id);
+        self
     }
 
     /// A probe that never claims anything game-specific. Used by tests of
@@ -52,6 +69,7 @@ impl InstallProbe {
         Self {
             analyze: Box::new(|_| None),
             recognizes_bare: Box::new(|_| false),
+            user_config_target: None,
         }
     }
 }

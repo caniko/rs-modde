@@ -6,12 +6,17 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
+use std::sync::{LazyLock, RwLock};
 
 use anyhow::{Context, Result};
 use serde_json::Value;
 use tracing::{debug, info, warn};
 
+use crate::registry::{GameRegistration, launcher_games};
 use modde_core::paths;
+
+static DETECTION_CACHE: LazyLock<RwLock<Option<Vec<DetectedGame>>>> =
+    LazyLock::new(|| RwLock::new(None));
 
 /// A game installation detected by scanning launcher libraries.
 #[derive(Debug, Clone)]
@@ -96,79 +101,6 @@ impl std::fmt::Display for LauncherSource {
     }
 }
 
-/// Known game identifiers for matching against launcher databases.
-///
-/// Each entry maps a modde `game_id` to the IDs used by various launchers.
-struct KnownGame {
-    game_id: &'static str,
-    display_name: &'static str,
-    /// Steam app ID (None if not on Steam).
-    steam_app_id: Option<&'static str>,
-    /// Steam directory name under `steamapps/common/`.
-    steam_dir: Option<&'static str>,
-    /// GOG app ID for Heroic (None if not on GOG).
-    gog_app_id: Option<&'static str>,
-    /// Epic/Legendary app name (None if not on Epic).
-    epic_app_id: Option<&'static str>,
-}
-
-/// Registry of all known games and their launcher identifiers.
-const KNOWN_GAMES: &[KnownGame] = &[
-    KnownGame {
-        game_id: "skyrim-se",
-        display_name: "The Elder Scrolls V: Skyrim Special Edition",
-        steam_app_id: Some("489830"),
-        steam_dir: Some("Skyrim Special Edition"),
-        gog_app_id: None,
-        epic_app_id: None,
-    },
-    // AE shares the same Steam dir as SE — detected as skyrim-se by default.
-    // Users can override to skyrim-ae in settings.
-    KnownGame {
-        game_id: "fallout4",
-        display_name: "Fallout 4",
-        steam_app_id: Some("377160"),
-        steam_dir: Some("Fallout 4"),
-        gog_app_id: Some("1998527297"),
-        epic_app_id: None,
-    },
-    KnownGame {
-        game_id: "fallout76",
-        display_name: "Fallout 76",
-        steam_app_id: Some("1151340"),
-        steam_dir: Some("Fallout76"),
-        gog_app_id: None,
-        epic_app_id: None,
-    },
-    KnownGame {
-        game_id: "starfield",
-        display_name: "Starfield",
-        steam_app_id: Some("1716740"),
-        steam_dir: Some("Starfield"),
-        gog_app_id: None,
-        epic_app_id: None,
-    },
-    KnownGame {
-        game_id: "cyberpunk2077",
-        display_name: "Cyberpunk 2077",
-        steam_app_id: Some("1091500"),
-        steam_dir: Some("Cyberpunk 2077"),
-        gog_app_id: Some("1423049311"),
-        epic_app_id: Some("Ginger"),
-    },
-    KnownGame {
-        game_id: "stellar-blade",
-        display_name: "Stellar Blade",
-        steam_app_id: Some("3489700"),
-        // Fallback only. Steam manifests are authoritative because the real
-        // install dir is `StellarBlade` while the display name contains a
-        // trademark glyph.
-        steam_dir: Some("Stellar Blade"),
-        gog_app_id: None,
-        epic_app_id: None,
-    },
-];
-
 /// Detect the Heroic Games Launcher binary.
 ///
 /// - Linux: checks flatpak first, then native binary on `$PATH`
@@ -229,11 +161,11 @@ fn heroic_command() -> Option<(String, Vec<String>)> {
 
 /// Find a detected game by its modde `game_id`.
 ///
-/// Convenience wrapper around [`scan_installed_games`] that returns the first
-/// match. Used by both CLI and UI to resolve the launcher for a game.
+/// Convenience wrapper that returns the first match from the latest detection
+/// scan, performing one if no cached result exists yet.
 #[must_use]
 pub fn find_detected_game(game_id: &str) -> Option<DetectedGame> {
-    scan_installed_games()
+    cached_installed_games()
         .into_iter()
         .find(|g| g.game_id == game_id)
 }
@@ -249,7 +181,25 @@ pub fn scan_installed_games() -> Vec<DetectedGame> {
     scan_steam_libraries(&mut detected);
     scan_heroic_stores(&mut detected);
 
+    update_detection_cache(&detected);
+
     detected
+}
+
+fn cached_installed_games() -> Vec<DetectedGame> {
+    if let Ok(cache) = DETECTION_CACHE.read()
+        && let Some(detected) = cache.as_ref()
+    {
+        return detected.clone();
+    }
+
+    scan_installed_games()
+}
+
+fn update_detection_cache(detected: &[DetectedGame]) {
+    if let Ok(mut cache) = DETECTION_CACHE.write() {
+        *cache = Some(detected.to_vec());
+    }
 }
 
 /// Scan all Steam library folders for known games.
@@ -317,9 +267,8 @@ fn scan_steam_appmanifests(
             debug!(path = %path.display(), "failed to parse Steam appmanifest");
             continue;
         };
-        let Some(game) = KNOWN_GAMES
-            .iter()
-            .find(|game| game.steam_app_id == Some(manifest.appid.as_str()))
+        let Some(game) = launcher_games()
+            .find(|game| game.launcher.steam_app_id == Some(manifest.appid.as_str()))
         else {
             continue;
         };
@@ -397,8 +346,8 @@ fn scan_steam_common_fallback(
         return;
     }
 
-    for game in KNOWN_GAMES {
-        let Some(steam_dir) = game.steam_dir else {
+    for game in launcher_games() {
+        let Some(steam_dir) = game.launcher.steam_dir else {
             continue;
         };
 
@@ -408,7 +357,7 @@ fn scan_steam_common_fallback(
                 detected,
                 game,
                 install_path,
-                game.steam_app_id.unwrap_or("unknown").to_string(),
+                game.launcher.steam_app_id.unwrap_or("unknown").to_string(),
                 library_path.to_path_buf(),
                 "detected Steam game from common directory fallback",
             );
@@ -418,7 +367,7 @@ fn scan_steam_common_fallback(
 
 fn push_steam_detected_game(
     detected: &mut Vec<DetectedGame>,
-    game: &KnownGame,
+    game: &GameRegistration,
     install_path: PathBuf,
     app_id: String,
     library_path: PathBuf,
@@ -457,9 +406,8 @@ fn scan_heroic_stores(detected: &mut Vec<DetectedGame>) {
     scan_heroic_store_file(
         &heroic_dir.join("gog_store/installed.json"),
         |app_id| {
-            KNOWN_GAMES
-                .iter()
-                .find(|g| g.gog_app_id == Some(app_id))
+            launcher_games()
+                .find(|g| g.launcher.heroic_gog_app_id == Some(app_id))
                 .map(|g| (g, HeroicStoreKind::Gog))
         },
         detected,
@@ -469,9 +417,8 @@ fn scan_heroic_stores(detected: &mut Vec<DetectedGame>) {
     scan_heroic_store_file(
         &heroic_dir.join("legendary_store/installed.json"),
         |app_id| {
-            KNOWN_GAMES
-                .iter()
-                .find(|g| g.epic_app_id == Some(app_id))
+            launcher_games()
+                .find(|g| g.launcher.heroic_epic_app_id == Some(app_id))
                 .map(|g| (g, HeroicStoreKind::Epic))
         },
         detected,
@@ -490,11 +437,14 @@ enum HeroicStoreKind {
 /// Parse a Heroic `installed.json` and match entries against known games.
 fn scan_heroic_store_file(
     path: &Path,
-    matcher: impl Fn(&str) -> Option<(&KnownGame, HeroicStoreKind)>,
+    matcher: impl Fn(&str) -> Option<(&'static GameRegistration, HeroicStoreKind)>,
     detected: &mut Vec<DetectedGame>,
 ) {
     let data = match std::fs::read_to_string(path) {
         Ok(d) => d,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return;
+        }
         Err(e) => {
             debug!(error = %e, path = %path.display(), "failed to read Heroic store file");
             return;
@@ -536,10 +486,18 @@ fn scan_heroic_store_file(
             );
             let source = match kind {
                 HeroicStoreKind::Gog => LauncherSource::HeroicGog {
-                    app_id: game.gog_app_id.unwrap_or(app_name).to_string(),
+                    app_id: game
+                        .launcher
+                        .heroic_gog_app_id
+                        .unwrap_or(app_name)
+                        .to_string(),
                 },
                 HeroicStoreKind::Epic => LauncherSource::HeroicEpic {
-                    app_id: game.epic_app_id.unwrap_or(app_name).to_string(),
+                    app_id: game
+                        .launcher
+                        .heroic_epic_app_id
+                        .unwrap_or(app_name)
+                        .to_string(),
                 },
             };
             detected.push(DetectedGame {
@@ -556,6 +514,9 @@ fn scan_heroic_store_file(
 fn scan_heroic_sideload(path: &Path, detected: &mut Vec<DetectedGame>) {
     let data = match std::fs::read_to_string(path) {
         Ok(d) => d,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return;
+        }
         Err(e) => {
             debug!(error = %e, path = %path.display(), "failed to read Heroic sideload file");
             return;
@@ -594,8 +555,9 @@ fn scan_heroic_sideload(path: &Path, detected: &mut Vec<DetectedGame>) {
             .and_then(|n| n.to_str())
             .unwrap_or("");
 
-        for game in KNOWN_GAMES {
+        for game in launcher_games() {
             let matches = game
+                .launcher
                 .steam_dir
                 .is_some_and(|sd| sd.eq_ignore_ascii_case(dir_name));
 
@@ -634,8 +596,9 @@ pub fn find_game_install(game_id: &str) -> Option<PathBuf> {
         return Some(path.clone());
     }
 
-    // Scan all launchers
-    scan_installed_games()
+    // Use the latest scan when available to avoid repeatedly scanning every
+    // launcher while the UI resolves supported games one by one.
+    cached_installed_games()
         .into_iter()
         .find(|g| g.game_id == game_id)
         .map(|g| g.install_path)
@@ -676,9 +639,8 @@ mod tests {
         scan_heroic_store_file(
             &store_file,
             |app_id| {
-                KNOWN_GAMES
-                    .iter()
-                    .find(|g| g.gog_app_id == Some(app_id))
+                launcher_games()
+                    .find(|g| g.launcher.heroic_gog_app_id == Some(app_id))
                     .map(|g| (g, HeroicStoreKind::Gog))
             },
             &mut detected,
@@ -709,9 +671,8 @@ mod tests {
         scan_heroic_store_file(
             &store_file,
             |app_id| {
-                KNOWN_GAMES
-                    .iter()
-                    .find(|g| g.gog_app_id == Some(app_id))
+                launcher_games()
+                    .find(|g| g.launcher.heroic_gog_app_id == Some(app_id))
                     .map(|g| (g, HeroicStoreKind::Gog))
             },
             &mut detected,
@@ -731,9 +692,8 @@ mod tests {
         scan_heroic_store_file(
             &store_file,
             |app_id| {
-                KNOWN_GAMES
-                    .iter()
-                    .find(|g| g.gog_app_id == Some(app_id))
+                launcher_games()
+                    .find(|g| g.launcher.heroic_gog_app_id == Some(app_id))
                     .map(|g| (g, HeroicStoreKind::Gog))
             },
             &mut detected,
@@ -815,6 +775,18 @@ mod tests {
 
         let mut detected = Vec::new();
         scan_heroic_sideload(&store_file, &mut detected);
+
+        assert_eq!(detected.len(), 0);
+    }
+
+    #[test]
+    fn scan_heroic_sideload_missing_file_is_no_op() {
+        let mut detected = Vec::new();
+
+        scan_heroic_sideload(
+            std::path::Path::new("/nonexistent/installed.json"),
+            &mut detected,
+        );
 
         assert_eq!(detected.len(), 0);
     }
@@ -913,10 +885,10 @@ mod tests {
         write_steam_appmanifest(&steamapps, "3489700", "Stellar Blade™", "StellarBlade");
 
         assert_eq!(
-            KNOWN_GAMES
-                .iter()
+            launcher_games()
                 .find(|g| g.game_id == "stellar-blade")
                 .unwrap()
+                .launcher
                 .steam_dir,
             Some("Stellar Blade")
         );
@@ -963,29 +935,29 @@ mod tests {
         assert_eq!(src.to_string(), "Heroic/Sideload (custom_app)");
     }
 
-    // ── KNOWN_GAMES integrity ─────────────────────────────────────────
+    // ── Registry integrity ────────────────────────────────────────────
 
     #[test]
-    fn known_games_ids_are_unique() {
-        let ids: Vec<_> = KNOWN_GAMES.iter().map(|g| g.game_id).collect();
+    fn launcher_game_ids_are_unique() {
+        let ids: Vec<_> = launcher_games().map(|g| g.game_id).collect();
         let deduped: std::collections::HashSet<_> = ids.iter().collect();
         assert_eq!(
             ids.len(),
             deduped.len(),
-            "KNOWN_GAMES has duplicate game_ids"
+            "launcher registry has duplicate game_ids"
         );
     }
 
     #[test]
-    fn known_games_includes_supported_games() {
+    fn launcher_registry_includes_detectable_supported_games() {
         use crate::SUPPORTED_GAME_IDS;
         for &game_id in SUPPORTED_GAME_IDS.iter().filter(|g| **g != "skyrim-ae")
         // AE intentionally shares SE's steam dir
         {
             if ["skyrim-se", "fallout4", "cyberpunk2077"].contains(&game_id) {
                 assert!(
-                    KNOWN_GAMES.iter().any(|g| g.game_id == game_id),
-                    "KNOWN_GAMES missing {game_id}"
+                    launcher_games().any(|g| g.game_id == game_id),
+                    "launcher registry missing {game_id}"
                 );
             }
         }

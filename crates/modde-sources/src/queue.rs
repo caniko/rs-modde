@@ -1,6 +1,8 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use crate::meta::DownloadMeta;
+use anyhow::{Context, Result};
+
+use crate::meta::{DownloadMeta, meta_path};
 
 /// State machine for a single download task.
 #[derive(Debug, Clone, PartialEq)]
@@ -65,6 +67,8 @@ impl DownloadQueue {
     ) -> usize {
         let id = self.next_id;
         self.next_id += 1;
+        let mut meta = meta;
+        meta.expected_hash = expected_hash.or(meta.expected_hash);
         self.tasks.push(DownloadTask {
             id,
             url,
@@ -74,6 +78,56 @@ impl DownloadQueue {
             meta,
         });
         id
+    }
+
+    /// Rebuild a queue from persisted `.meta` sidecars in a download directory.
+    ///
+    /// Active downloads are restored as paused because no transport is running
+    /// after process startup. Complete entries are restored only when the
+    /// downloaded file still exists.
+    pub fn load_from_sidecars(download_dir: &Path, max_concurrent: usize) -> Result<Self> {
+        let mut queue = Self::new(max_concurrent);
+        if !download_dir.exists() {
+            return Ok(queue);
+        }
+
+        let mut sidecars = std::fs::read_dir(download_dir)
+            .with_context(|| format!("reading {}", download_dir.display()))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        sidecars.sort_by_key(std::fs::DirEntry::path);
+
+        for entry in sidecars {
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("meta") {
+                continue;
+            }
+            let meta = DownloadMeta::load(&path)?;
+            let Some(dest) = download_path_from_meta_path(&path) else {
+                continue;
+            };
+            let state = state_from_meta(&meta, &dest);
+            let id = queue.next_id;
+            queue.next_id += 1;
+            queue.tasks.push(DownloadTask {
+                id,
+                url: meta.url.clone(),
+                dest,
+                expected_hash: meta.expected_hash,
+                state,
+                meta,
+            });
+        }
+
+        Ok(queue)
+    }
+
+    /// Persist every task's `.meta` sidecar beside its destination file.
+    pub fn save_sidecars(&mut self) -> Result<()> {
+        for task in &mut self.tasks {
+            sync_meta_from_state(task);
+            task.meta.save(&meta_path(&task.dest))?;
+        }
+        Ok(())
     }
 
     /// Pause an active download. No-op if the task is not `Active`.
@@ -88,6 +142,7 @@ impl DownloadQueue {
                 bytes_downloaded,
                 total_bytes,
             };
+            sync_meta_from_state(task);
         }
     }
 
@@ -97,6 +152,7 @@ impl DownloadQueue {
             && matches!(task.state, DownloadState::Paused { .. })
         {
             task.state = DownloadState::Queued;
+            sync_meta_from_state(task);
         }
     }
 
@@ -142,6 +198,7 @@ impl DownloadQueue {
             bytes_downloaded: 0,
             total_bytes: None,
         };
+        sync_meta_from_state(&mut self.tasks[idx]);
         Some(&mut self.tasks[idx])
     }
 
@@ -173,6 +230,69 @@ impl DownloadQueue {
     pub fn is_empty(&self) -> bool {
         self.tasks.is_empty()
     }
+}
+
+fn sync_meta_from_state(task: &mut DownloadTask) {
+    task.meta.expected_hash = task.expected_hash.or(task.meta.expected_hash);
+    match &task.state {
+        DownloadState::Queued => {
+            task.meta.status = "queued".to_string();
+        }
+        DownloadState::Active {
+            bytes_downloaded,
+            total_bytes,
+        } => {
+            task.meta.status = "downloading".to_string();
+            task.meta.bytes_downloaded = *bytes_downloaded;
+            task.meta.total_bytes = *total_bytes;
+        }
+        DownloadState::Paused {
+            bytes_downloaded,
+            total_bytes,
+        } => {
+            task.meta.status = "paused".to_string();
+            task.meta.bytes_downloaded = *bytes_downloaded;
+            task.meta.total_bytes = *total_bytes;
+        }
+        DownloadState::Complete { hash, .. } => {
+            task.meta.status = "complete".to_string();
+            task.meta.expected_hash = Some(*hash);
+            if let Ok(metadata) = std::fs::metadata(&task.dest) {
+                task.meta.bytes_downloaded = metadata.len();
+                task.meta.total_bytes = Some(metadata.len());
+            }
+        }
+        DownloadState::Failed { error } => {
+            task.meta.status = format!("failed: {error}");
+        }
+    }
+}
+
+fn state_from_meta(meta: &DownloadMeta, dest: &Path) -> DownloadState {
+    if meta.status == "complete" && dest.exists() {
+        return DownloadState::Complete {
+            path: dest.to_path_buf(),
+            hash: meta.expected_hash.unwrap_or_default(),
+        };
+    }
+    if meta.status == "paused" || meta.status == "downloading" {
+        return DownloadState::Paused {
+            bytes_downloaded: meta.bytes_downloaded,
+            total_bytes: meta.total_bytes,
+        };
+    }
+    if let Some(error) = meta.status.strip_prefix("failed: ") {
+        return DownloadState::Failed {
+            error: error.to_string(),
+        };
+    }
+    DownloadState::Queued
+}
+
+fn download_path_from_meta_path(path: &Path) -> Option<PathBuf> {
+    let file_name = path.file_name()?.to_str()?;
+    let download_name = file_name.strip_suffix(".meta")?;
+    Some(path.with_file_name(download_name))
 }
 
 #[cfg(test)]
@@ -275,5 +395,38 @@ mod tests {
         assert_eq!(q.len(), 1);
         assert!(q.get(id0).is_none());
         assert!(q.get(id1).is_some());
+    }
+
+    #[test]
+    fn test_queue_sidecar_roundtrip_restores_active_as_paused() {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("mod.zip");
+        std::fs::write(&dest, b"partial").unwrap();
+        let mut queue = DownloadQueue::new(2);
+        let id = queue.enqueue(
+            "https://example.com/mod.zip".into(),
+            dest.clone(),
+            Some(123),
+            test_meta(),
+        );
+        queue.get_mut(id).unwrap().state = DownloadState::Active {
+            bytes_downloaded: 7,
+            total_bytes: Some(100),
+        };
+
+        queue.save_sidecars().unwrap();
+        let restored = DownloadQueue::load_from_sidecars(dir.path(), 2).unwrap();
+        let task = restored.all().first().unwrap();
+
+        assert_eq!(task.url, "https://example.com/mod.zip");
+        assert_eq!(task.dest, dest);
+        assert_eq!(task.expected_hash, Some(123));
+        assert!(matches!(
+            task.state,
+            DownloadState::Paused {
+                bytes_downloaded: 7,
+                total_bytes: Some(100)
+            }
+        ));
     }
 }

@@ -1,8 +1,9 @@
 use std::path::Path;
 
+use modde_core::collision::CollisionSeverity;
 use modde_games::traits::ContentCategory;
-use modde_games::ue4::STELLAR_BLADE;
 use modde_games::ue4::scanner::{STELLAR_BLADE_SCANNER, Ue4Scanner};
+use modde_games::ue4::{STELLAR_BLADE, Ue4Game};
 use modde_games::{GamePlugin, ModScanner, ModSource, SUPPORTED_GAME_IDS, ScanContext};
 use tempfile::TempDir;
 
@@ -24,8 +25,33 @@ fn test_stellar_blade_steam_app_id_u32() {
 }
 
 #[test]
-fn test_stellar_blade_nexus_domain_none() {
-    assert_eq!(STELLAR_BLADE.nexus_game_domain(), None);
+fn test_stellar_blade_nexus_domain_set() {
+    assert_eq!(STELLAR_BLADE.nexus_game_domain(), Some("stellarblade"));
+}
+
+#[test]
+fn test_stellar_blade_advertises_user_config_target() {
+    use modde_games::DeployTargetKind;
+
+    let targets = STELLAR_BLADE.deploy_targets();
+    let cfg = targets
+        .iter()
+        .find(|t| t.kind == DeployTargetKind::UserConfig)
+        .expect("stellar blade should advertise a UserConfig deploy target");
+    assert_eq!(cfg.id, "ue4-saved-config");
+}
+
+#[test]
+fn test_stellar_blade_save_profiles_enabled() {
+    assert!(STELLAR_BLADE.supports_save_profiles());
+}
+
+#[test]
+fn test_ue4_game_can_opt_into_save_profiles() {
+    const TEST_UE4: Ue4Game =
+        Ue4Game::new("test-ue4", "Test UE4", "1", "Test", None).with_save_profiles(true);
+
+    assert!(TEST_UE4.supports_save_profiles());
 }
 
 // ── GamePlugin: paths ───────────────────────────────────────────────
@@ -97,6 +123,34 @@ fn test_stellar_blade_classify_extension_lua_script() {
 #[test]
 fn test_stellar_blade_archive_extensions() {
     assert_eq!(STELLAR_BLADE.archive_extensions(), &["pak", "ucas", "utoc"]);
+}
+
+// ── Save tracking ──────────────────────────────────────────────────
+
+#[test]
+fn test_stellar_blade_save_tracker_detects_nested_sav_files() {
+    let td = TempDir::new().unwrap();
+    let save_root = td.path().join("SaveGames");
+    write_empty(&save_root.join("76561198000000000/StellarBladeSave00.sav"));
+    write_empty(&save_root.join("StellarBladeSave01.sav"));
+    write_empty(&save_root.join("76561198000000000/readme.txt"));
+
+    let tracker = modde_games::resolve_save_tracker("stellar-blade").unwrap();
+    let saves = tracker.detect_saves(&save_root).unwrap();
+    let mut paths: Vec<_> = saves
+        .iter()
+        .map(|save| save.rel_path.to_string_lossy().replace('\\', "/"))
+        .collect();
+    paths.sort();
+
+    assert_eq!(
+        paths,
+        vec![
+            "76561198000000000/StellarBladeSave00.sav".to_string(),
+            "StellarBladeSave01.sav".to_string(),
+        ]
+    );
+    assert!(saves.iter().all(|save| save.category == "manual"));
 }
 
 // ── Wine DLL overrides (install dir) ────────────────────────────────
@@ -311,6 +365,30 @@ fn test_resolve_game_plugin_stellar_blade() {
 #[test]
 fn test_resolve_mod_scanner_stellar_blade() {
     assert!(modde_games::resolve_mod_scanner("stellar-blade").is_some());
+}
+
+#[test]
+fn test_resolve_save_tracker_stellar_blade() {
+    assert!(modde_games::resolve_save_tracker("stellar-blade").is_some());
+}
+
+#[test]
+fn test_resolve_collision_classifier_stellar_blade() {
+    let classifier = modde_games::resolve_collision_classifier("stellar-blade")
+        .expect("stellar-blade should expose collision classification");
+    assert_eq!(
+        classifier.classify_severity("SB/Content/Paks/~mods/Foo_P.pak"),
+        CollisionSeverity::Dangerous
+    );
+    assert_eq!(
+        classifier.classify_severity("SB/Content/Paks/~mods/settings.ini"),
+        CollisionSeverity::Config
+    );
+    assert_eq!(
+        classifier.classify_severity("SB/Content/Paks/~mods/icon.dds"),
+        CollisionSeverity::Cosmetic
+    );
+    assert_eq!(classifier.archive_extensions(), &["pak", "ucas", "utoc"]);
 }
 
 // ── Ue4Scanner is reusable for a future UE4 game ────────────────────

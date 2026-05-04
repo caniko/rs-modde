@@ -21,7 +21,7 @@ save_tracking = "Partial"
 [games.starfield]
 display_name = "Starfield"
 overall = "Partial"
-save_tracking = "Not shipped"
+save_tracking = "Done"
 
 [games.cyberpunk2077]
 display_name = "Cyberpunk 2077"
@@ -31,7 +31,42 @@ save_tracking = "Done"
 [games."stellar-blade"]
 display_name = "Stellar Blade"
 overall = "Partial"
-save_tracking = "Not shipped"
+save_tracking = "Done"
+
+[games."baldurs-gate3"]
+display_name = "Baldur's Gate 3"
+overall = "Partial"
+save_tracking = "Done"
+
+[games."stardew-valley"]
+display_name = "Stardew Valley"
+overall = "Partial"
+save_tracking = "Done"
+
+[games."fallout-new-vegas"]
+display_name = "Fallout: New Vegas"
+overall = "Partial"
+save_tracking = "Done"
+
+[games.oblivion]
+display_name = "The Elder Scrolls IV: Oblivion"
+overall = "Partial"
+save_tracking = "Done"
+
+[games."oblivion-remastered"]
+display_name = "The Elder Scrolls IV: Oblivion Remastered"
+overall = "Partial"
+save_tracking = "Done"
+
+[games.bannerlord]
+display_name = "Mount & Blade II: Bannerlord"
+overall = "Partial"
+save_tracking = "Done"
+
+[games.witcher3]
+display_name = "The Witcher 3: Wild Hunt"
+overall = "Partial"
+save_tracking = "Done"
 
 [features.instance_switching]
 label = "Instance switching"
@@ -63,4 +98,4 @@ status = "Not shipped"
 
 [features.starfield_save_tracking]
 label = "Starfield save tracking"
-status = "Not shipped"
+status = "Done"

@@ -1,4 +1,5 @@
 use crate::action_button::{ButtonAction, DescribedButtonExt};
+use crate::semantics;
 use crate::views::selectable_text::text;
 use iced::widget::{button, column, row};
 use iced::{Alignment, Element, Length, color};
@@ -7,6 +8,7 @@ pub struct Tab {
     pub label: String,
     pub active: bool,
     pub action: ButtonAction,
+    pub test_id: Option<String>,
 }
 
 impl Tab {
@@ -15,7 +17,13 @@ impl Tab {
             label: label.into(),
             active,
             action,
+            test_id: None,
         }
+    }
+
+    pub fn test_id(mut self, test_id: impl Into<String>) -> Self {
+        self.test_id = Some(test_id.into());
+        self
     }
 }
 
@@ -32,6 +40,11 @@ pub fn tab_bar(tabs: impl IntoIterator<Item = Tab>) -> Element<'static, crate::a
                 btn.described_disabled("This tab is already open.")
             } else {
                 btn.on_action(tab.action)
+            };
+            let tab_button = if let Some(test_id) = tab.test_id {
+                semantics::test_id(test_id, tab_button)
+            } else {
+                tab_button
             };
             let indicator = if tab.active {
                 text("━━━━").size(10).color(color!(0x8AB4FF))

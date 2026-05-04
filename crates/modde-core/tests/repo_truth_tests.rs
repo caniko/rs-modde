@@ -56,7 +56,7 @@ fn capability_matrix_captures_the_expected_baseline() {
         .get("starfield")
         .expect("Starfield entry should exist");
     assert_eq!(starfield.overall, "Partial");
-    assert_eq!(starfield.save_tracking, "Not shipped");
+    assert_eq!(starfield.save_tracking, "Done");
 
     let downloads = matrix
         .features
@@ -127,7 +127,7 @@ fn public_docs_match_capability_matrix_for_critical_statuses() {
     );
     assert_contains(
         &comparison,
-        "<tr><td>Starfield + generic game story</td><td><span class=\"badge low\">Not shipped</span></td>",
+        "<tr><td>Starfield save tracking</td><td><span class=\"badge high\">Done</span></td>",
         "website comparison table",
     );
 }

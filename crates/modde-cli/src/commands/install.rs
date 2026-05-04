@@ -660,7 +660,12 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
         // Resolve the game plugin to build a probe. Games we don't
         // recognize yet still install through the generic pipeline,
         // just without game-specific hints.
+        // Probe lookup tries the modde `game_id` first (in case the
+        // caller passed one through), then falls back to the Nexus
+        // domain — Nexus URLs carry the domain (e.g. "stellarblade"),
+        // which doesn't match `game_id` (e.g. "stellar-blade").
         let probe = modde_games::resolve_game_plugin(&game_domain)
+            .or_else(|| modde_games::resolve_game_plugin_by_nexus_domain(&game_domain))
             .map_or_else(installer::InstallProbe::noop, modde_games::game_probe);
 
         let mut plan = installer::analyze(&staging_root, &probe, source_hash)

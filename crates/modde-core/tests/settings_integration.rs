@@ -37,8 +37,10 @@ fn settings_round_trip_preserves_all_fields() {
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("settings.toml");
 
-    let mut original = AppSettings::default();
-    original.nexus_api_key = "abc123".into();
+    let mut original = AppSettings {
+        nexus_api_key: "abc123".into(),
+        ..AppSettings::default()
+    };
     original.set_game_path("cyberpunk2077", PathBuf::from("/games/cp2077"));
     original.set_game_path("skyrim-se", PathBuf::from("/games/skyrim"));
     original.selected_game = Some("cyberpunk2077".into());
@@ -186,8 +188,10 @@ fn ui_init_settings_already_has_game_does_not_override() {
     pm.create(&make_profile("3077", "cyberpunk2077")).unwrap();
     pm.create(&make_profile("skyrim", "skyrim-se")).unwrap();
 
-    let mut settings = AppSettings::default();
-    settings.selected_game = Some("skyrim-se".into());
+    let mut settings = AppSettings {
+        selected_game: Some("skyrim-se".into()),
+        ..AppSettings::default()
+    };
 
     let (profiles, selected) = simulate_ui_init(&pm, &mut settings);
 

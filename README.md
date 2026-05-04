@@ -11,10 +11,10 @@ Documentation: <https://caniko.codeberg.page/rs-modde/docs/>
 |------|----------------|
 | Skyrim SE/AE | `Done`: plugins, VFS, LOOT sorting, diagnostics, save tracking |
 | Fallout 4 | `Done`: plugins, VFS, LOOT sorting, diagnostics, save tracking |
-| Fallout 76 | `Partial`: plugins and VFS; saves are effectively server-side |
-| Starfield | `Partial`: plugins and VFS; save tracking is not shipped yet |
+| Fallout 76 | `Partial`: plugins, VFS, BA2 scanning; saves are effectively server-side |
+| Starfield | `Partial`: plugins, VFS, diagnostics, save tracking |
 | Cyberpunk 2077 | `Done`: REDmod, CET, TweakXL, scripts, conflict detection |
-| Stellar Blade | `Partial`: UE4/UE5-style deployment and scanning |
+| Stellar Blade | `Partial`: UE4/UE5-style deployment, scanning, conflicts, save tracking |
 
 Games are auto-detected via Steam (Proton) and Heroic (GOG, Epic) launchers.
 The canonical status baseline for these claims lives in `docs/capability-matrix.toml`.
@@ -169,11 +169,13 @@ imports = [ inputs.modde.homeManagerModules.modde ];
 | Linux (NixOS) | Primary target, fully supported |
 | Linux (other) | Supported via Cargo or Nix |
 | macOS | Experimental (builds but untested) |
-| Windows | Not supported |
+| Windows | Experimental (release artifacts are built but untested) |
 
 ## CI
 
-Woodpecker CI on Codeberg runs `cargo fmt --check`, `cargo clippy`, `cargo test --workspace`, and `cargo build --release` on every push and pull request. Pushes to `main` and `rapid` also build and deploy the documentation site and presentation website to Codeberg Pages.
+Woodpecker CI on Codeberg runs `cargo fmt --check`, `cargo clippy`, `cargo test --workspace`, and `cargo build --release` on every push and pull request. Pushes to `trunk` also build and deploy the documentation site and presentation website to Codeberg Pages.
+
+Tag releases are managed with `cargo-release`. Run `just release-dry X.Y.Z` to preview a workspace release, then `just release X.Y.Z` to publish all workspace crates to crates.io and push the `vX.Y.Z` tag. Release tags build and publish Linux and Windows CLI/GUI artifacts; macOS artifacts are intentionally not shipped yet.
 
 ## Website and docs
 

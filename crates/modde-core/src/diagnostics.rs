@@ -48,6 +48,7 @@ pub struct ProfileAnalysis {
     pub resolved_order: Vec<ModId>,
     pub conflict_map: ConflictMap,
     pub collision_report: Option<CollisionReport>,
+    pub missing_store_mods: Vec<ModId>,
 }
 
 /// Build real conflict and collision state for a profile.
@@ -58,29 +59,36 @@ pub fn analyze_profile_state(
     classifier: Option<&dyn crate::collision::CollisionClassifier>,
 ) -> Result<ProfileAnalysis> {
     let resolved_order = crate::resolver::resolve(profile)?.order;
+    let missing_store_mods = resolved_order
+        .iter()
+        .filter(|mod_id| !store_dir.join(mod_id.as_str()).exists())
+        .cloned()
+        .collect::<Vec<_>>();
 
     let Some(classifier) = classifier else {
         return Ok(ProfileAnalysis {
             resolved_order,
             conflict_map: ConflictMap::default(),
             collision_report: None,
+            missing_store_mods,
         });
     };
 
-    let (conflict_map, origins) =
+    let full_conflict_map =
         crate::collision::build_full_conflict_map(store_dir, &resolved_order, classifier)?;
     let collision_report = crate::collision::analyze_collisions(
-        &conflict_map,
+        &full_conflict_map.conflict_map,
         &resolved_order,
         hidden,
-        &origins,
+        &full_conflict_map.origins,
         classifier,
     );
 
     Ok(ProfileAnalysis {
         resolved_order,
-        conflict_map,
+        conflict_map: full_conflict_map.conflict_map,
         collision_report: Some(collision_report),
+        missing_store_mods: full_conflict_map.missing_mods,
     })
 }
 
@@ -107,6 +115,59 @@ pub fn run_profile_diagnostics(
     };
 
     Ok((engine.run_all(&ctx), analysis))
+}
+
+// ── Shared diagnostic rules ─────────────────────────────────────────
+
+/// Warn about enabled mods whose store directory is missing or empty.
+pub struct StorePresenceRule;
+
+impl DiagnosticRule for StorePresenceRule {
+    fn name(&self) -> &'static str {
+        "store-presence"
+    }
+
+    fn check(&self, ctx: &DiagContext) -> Vec<Diagnostic> {
+        ctx.profile
+            .mods
+            .iter()
+            .filter(|m| m.enabled)
+            .filter_map(|m| {
+                let mod_dir = ctx.store_dir.join(&m.mod_id);
+                let is_empty = if mod_dir.exists() {
+                    match std::fs::read_dir(&mod_dir) {
+                        Ok(mut entries) => entries.next().is_none(),
+                        Err(_) => true,
+                    }
+                } else {
+                    true
+                };
+
+                if is_empty {
+                    Some(Diagnostic {
+                        severity: Severity::Warning,
+                        title: format!("Empty mod: {}", m.mod_id),
+                        detail: format!(
+                            "Mod '{}' is enabled but has no files in the store directory. \
+                             It may not have been downloaded or extracted correctly.",
+                            m.mod_id
+                        ),
+                        affected_mod: Some(m.mod_id.clone()),
+                        affected_file: Some(mod_dir),
+                        fix: Some(DiagFix {
+                            label: "Re-install mod".to_string(),
+                            description: format!(
+                                "Re-download and install '{}', or disable it if it is no longer needed.",
+                                m.mod_id
+                            ),
+                        }),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
 }
 
 // ── Collision-aware diagnostic rules ────────────────────────────────
@@ -233,11 +294,20 @@ impl Default for DiagnosticEngine {
     }
 }
 
+/// Create diagnostics shared by every supported game.
+#[must_use]
+pub fn base_diagnostics() -> DiagnosticEngine {
+    let mut engine = DiagnosticEngine::new();
+    engine.add_rule(Box::new(StorePresenceRule));
+    engine
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::profile::{Profile, ProfileSource};
-    use crate::resolver::{ConflictMap, GameId};
+    use crate::collision::{CollisionClassifier, CollisionSeverity};
+    use crate::profile::{EnabledMod, Profile, ProfileSource};
+    use crate::resolver::{ConflictMap, GameId, ModId};
     use smallvec::smallvec;
     use std::path::PathBuf;
 
@@ -245,6 +315,22 @@ mod tests {
     struct MockRule {
         name: &'static str,
         diagnostics: Vec<Diagnostic>,
+    }
+
+    struct TestClassifier;
+
+    impl CollisionClassifier for TestClassifier {
+        fn index_archive(&self, _archive_path: &Path) -> Result<Vec<(String, u64)>> {
+            Ok(Vec::new())
+        }
+
+        fn classify_severity(&self, _file_path: &str) -> CollisionSeverity {
+            CollisionSeverity::Unknown
+        }
+
+        fn archive_extensions(&self) -> &[&str] {
+            &[]
+        }
     }
 
     impl DiagnosticRule for MockRule {
@@ -272,6 +358,144 @@ mod tests {
         let store = tempfile::tempdir().unwrap();
         let staging = tempfile::tempdir().unwrap();
         (profile, conflict_map, store, staging)
+    }
+
+    fn enabled_mod(id: &str) -> EnabledMod {
+        EnabledMod {
+            mod_id: id.to_string(),
+            enabled: true,
+            version: None,
+            fomod_config: None,
+            ..Default::default()
+        }
+    }
+
+    fn disabled_mod(id: &str) -> EnabledMod {
+        EnabledMod {
+            enabled: false,
+            ..enabled_mod(id)
+        }
+    }
+
+    #[test]
+    fn store_presence_rule_reports_missing_and_empty_enabled_mods_only() {
+        let store = tempfile::tempdir().unwrap();
+        let staging = tempfile::tempdir().unwrap();
+        let overrides = tempfile::tempdir().unwrap();
+
+        let with_files = store.path().join("mod-with-files");
+        std::fs::create_dir_all(with_files.join("textures")).unwrap();
+        std::fs::write(with_files.join("textures/sky.dds"), b"sky").unwrap();
+        std::fs::create_dir_all(store.path().join("mod-empty")).unwrap();
+
+        let profile = Profile {
+            id: None,
+            name: "test".to_string(),
+            game_id: GameId::from("cyberpunk2077"),
+            source: ProfileSource::Manual,
+            mods: vec![
+                enabled_mod("mod-with-files"),
+                enabled_mod("mod-empty"),
+                enabled_mod("mod-missing"),
+                disabled_mod("mod-disabled-missing"),
+            ],
+            overrides: overrides.path().to_path_buf(),
+            load_order_rules: smallvec![],
+            load_order_lock: None,
+        };
+        let conflict_map = ConflictMap::default();
+        let ctx = DiagContext {
+            game_id: "cyberpunk2077",
+            profile: &profile,
+            active_plugins: &[],
+            conflict_map: &conflict_map,
+            collision_report: None,
+            store_dir: store.path(),
+            staging_dir: staging.path(),
+        };
+
+        let diagnostics = StorePresenceRule.check(&ctx);
+
+        assert_eq!(diagnostics.len(), 2);
+        assert!(diagnostics.iter().all(|d| d.severity == Severity::Warning));
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.affected_mod.as_deref() == Some("mod-empty"))
+        );
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.affected_mod.as_deref() == Some("mod-missing"))
+        );
+        assert!(!diagnostics.iter().any(|d| {
+            matches!(
+                d.affected_mod.as_deref(),
+                Some("mod-with-files" | "mod-disabled-missing")
+            )
+        }));
+    }
+
+    #[test]
+    fn base_diagnostics_includes_store_presence_rule() {
+        let store = tempfile::tempdir().unwrap();
+        let staging = tempfile::tempdir().unwrap();
+        let overrides = tempfile::tempdir().unwrap();
+        let profile = Profile {
+            id: None,
+            name: "test".to_string(),
+            game_id: GameId::from("cyberpunk2077"),
+            source: ProfileSource::Manual,
+            mods: vec![enabled_mod("mod-missing")],
+            overrides: overrides.path().to_path_buf(),
+            load_order_rules: smallvec![],
+            load_order_lock: None,
+        };
+        let conflict_map = ConflictMap::default();
+        let ctx = DiagContext {
+            game_id: "cyberpunk2077",
+            profile: &profile,
+            active_plugins: &[],
+            conflict_map: &conflict_map,
+            collision_report: None,
+            store_dir: store.path(),
+            staging_dir: staging.path(),
+        };
+
+        let results = base_diagnostics().run_all(&ctx);
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].affected_mod.as_deref(), Some("mod-missing"));
+    }
+
+    #[test]
+    fn analyze_profile_state_reports_missing_store_mods() {
+        let store = tempfile::tempdir().unwrap();
+        let overrides = tempfile::tempdir().unwrap();
+        let with_files = store.path().join("mod-with-files");
+        std::fs::create_dir_all(with_files.join("textures")).unwrap();
+        std::fs::write(with_files.join("textures/sky.dds"), b"sky").unwrap();
+
+        let profile = Profile {
+            id: None,
+            name: "test".to_string(),
+            game_id: GameId::from("cyberpunk2077"),
+            source: ProfileSource::Manual,
+            mods: vec![enabled_mod("mod-with-files"), enabled_mod("mod-missing")],
+            overrides: overrides.path().to_path_buf(),
+            load_order_rules: smallvec![],
+            load_order_lock: None,
+        };
+        let hidden = std::collections::HashSet::new();
+
+        let analysis =
+            analyze_profile_state(&profile, store.path(), &hidden, Some(&TestClassifier)).unwrap();
+
+        assert_eq!(
+            analysis.missing_store_mods,
+            vec![ModId::from("mod-missing")]
+        );
+        assert!(analysis.conflict_map.files.contains_key("textures/sky.dds"));
     }
 
     #[test]

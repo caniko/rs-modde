@@ -119,6 +119,42 @@ impl ModSafety {
     }
 }
 
+/// Classes of filesystem roots a [`GamePlugin`] can advertise as
+/// deployment destinations *outside* the game install dir.
+///
+/// New variants extend the installer's routing without requiring it to
+/// know per-engine path conventions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeployTargetKind {
+    /// Per-user config files the engine reads at startup. Examples:
+    /// UE4/UE5 `<Project>/Saved/Config/Windows/Engine.ini`, Bethesda
+    /// `Documents/My Games/<Game>/*.ini`, Larian's
+    /// `AppData/Local/<Game>/Player.ini`. Files in this target are
+    /// usually whole-file replacements keyed by filename.
+    UserConfig,
+    /// Per-user save directory. Reserved for save-replacing mods (rare
+    /// but real, e.g. shipped 100% completion saves).
+    UserSaves,
+    /// Anything the plugin wants to expose that doesn't fit the above.
+    /// The installer just routes files to the resolved path; semantics
+    /// are entirely the plugin's.
+    Custom,
+}
+
+/// A named alternate deployment root advertised by a [`GamePlugin`].
+///
+/// The installer pipeline keys mods to a target by `id`; the plugin
+/// resolves `id` → real path at deploy time via
+/// [`GamePlugin::resolve_deploy_target`]. Resolution is deferred so
+/// plugins can incorporate runtime context (Wine prefix, Steam
+/// `compatdata`, XDG dirs) without baking a path into a static.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeployTarget {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub kind: DeployTargetKind,
+}
+
 /// Trait implemented by each supported game.
 pub trait GamePlugin: Send + Sync {
     /// Unique game identifier (e.g. "skyrim-se").
@@ -136,10 +172,30 @@ pub trait GamePlugin: Send + Sync {
     /// Return the mod directory relative to the install path.
     fn mod_directory(&self, install: &Path) -> PathBuf;
 
+    /// Resolve the actual deployment root for enabled mods.
+    ///
+    /// Most supported games use a directory under the install root, so the
+    /// default delegates to [`GamePlugin::mod_directory`]. Games whose mod
+    /// loader reads from a user-data path (for example Proton AppData) can
+    /// override this without breaking existing install-relative callers.
+    fn mod_root(&self, install: &Path) -> Result<PathBuf> {
+        Ok(self.mod_directory(install))
+    }
+
     /// Deploy staged mods into the game's mod directory.
     /// Default: recursive symlink farm via `modde_core::fs::deploy_symlinks`.
     fn deploy(&self, staging: &Path, target: &Path) -> Result<()> {
         modde_core::fs::deploy_symlinks(staging, target)
+    }
+
+    /// Deploy staged mods using the game install root as context.
+    ///
+    /// The default resolves [`GamePlugin::mod_root`] and delegates to
+    /// [`GamePlugin::deploy`]. Games that stage multi-root overlays can
+    /// override this to deploy to several install-relative destinations.
+    fn deploy_to_install(&self, staging: &Path, install: &Path) -> Result<()> {
+        let target = self.mod_root(install)?;
+        self.deploy(staging, &target)
     }
 
     /// Run any post-deployment steps (e.g. `REDmod` deploy).
@@ -150,6 +206,35 @@ pub trait GamePlugin: Send + Sync {
     /// Return the save directory for this game, if known.
     fn save_directory(&self) -> Option<PathBuf> {
         None
+    }
+
+    /// Alternate deployment roots this game exposes to the installer
+    /// (e.g. user-config dirs for INI tweak packs). Default: none, in
+    /// which case the installer only ever stages into the game install
+    /// dir. The order is significant: when the analyzer needs to pick
+    /// a default target for a given [`DeployTargetKind`] it takes the
+    /// first one of that kind.
+    fn deploy_targets(&self) -> &'static [DeployTarget] {
+        &[]
+    }
+
+    /// Resolve a [`DeployTarget::id`] this plugin advertises to a real
+    /// filesystem path, using the live `install` dir for any path that
+    /// must be derived from it (e.g. Steam `compatdata` adjacent to
+    /// `steamapps/common/<game>`). Returns `None` if the target id is
+    /// unknown to this plugin or the path cannot be resolved on this
+    /// system (e.g. the Wine prefix doesn't exist yet).
+    fn resolve_deploy_target(&self, _id: &str, _install: &Path) -> Option<PathBuf> {
+        None
+    }
+
+    /// Whether this game participates in modde's per-profile save layer.
+    ///
+    /// Disabled games still support normal profile/mod management, but modde
+    /// must not swap saves, compute save fingerprints, or expose save commands
+    /// for them.
+    fn supports_save_profiles(&self) -> bool {
+        false
     }
 
     /// Classify whether a mod is save-breaking based on its installed content.

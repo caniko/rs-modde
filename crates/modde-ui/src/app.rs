@@ -1,9 +1,10 @@
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use crate::views::selectable_text::text;
 use iced::widget::{button, column, container, mouse_area, opaque, row, stack, text_input};
-use iced::{Element, Length, Subscription, Task, Theme, keyboard, window};
+use iced::{Element, Length, Task, Theme, window};
 use smallvec::SmallVec;
 
 use modde_core::filter::{FilterCriterion, FilterKind, FilterMode};
@@ -14,15 +15,52 @@ use modde_core::settings::AppSettings;
 
 use crate::action_button::{ButtonAction, DescribedButtonExt};
 
+pub type ToolOptionCatalog = HashMap<String, Vec<String>>;
+
+const BUTTON_HOVER_TOAST_DELAY: Duration = Duration::from_secs(2);
+
+fn tool_option_key(tool_id: &str, setting_key: &str) -> String {
+    format!("{tool_id}.{setting_key}")
+}
+
+fn set_tool_options(
+    catalog: &mut ToolOptionCatalog,
+    tool_id: &str,
+    setting_key: &str,
+    options: Vec<String>,
+) {
+    catalog.insert(tool_option_key(tool_id, setting_key), options);
+}
+
+fn tool_options<'a>(
+    catalog: &'a ToolOptionCatalog,
+    tool_id: &str,
+    setting_key: &str,
+) -> Option<&'a Vec<String>> {
+    catalog.get(&tool_option_key(tool_id, setting_key))
+}
+
 /// Settings view state — consumed by the settings view.
 #[derive(Debug, Clone, Default)]
 pub struct SettingsState {
-    pub nexus_api_key: String,
-    pub game_path: Option<PathBuf>,
+    pub nexus_api_key_draft: String,
+    pub nexus_api_key_visible: bool,
+    pub nexus_api_key_source: Option<modde_sources::nexus::auth::ApiKeySource>,
+    pub nexus_config_key_exists: bool,
+    pub game_install_paths: Vec<SettingsGameInstall>,
     pub download_dir: Option<PathBuf>,
+    pub effective_download_dir: PathBuf,
     pub has_stock_snapshot: bool,
     pub theme_name: String,
     pub nexus_status: Option<NexusAuthStatus>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SettingsGameInstall {
+    pub game_id: String,
+    pub display_name: String,
+    pub source: String,
+    pub path: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -32,6 +70,18 @@ pub enum NexusAuthStatus {
     Invalid(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ButtonHoverToast {
+    pub id: u64,
+    pub description: &'static str,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ButtonHoverToastState {
+    pub pending: Option<ButtonHoverToast>,
+    pub visible: Option<ButtonHoverToast>,
+}
+
 /// Top-level application state.
 #[allow(clippy::struct_excessive_bools)]
 pub struct Modde {
@@ -39,6 +89,8 @@ pub struct Modde {
     pub active_profile: Option<String>,
     pub profiles: Vec<modde_core::profile::ProfileSummary>,
     pub status_message: String,
+    pub button_hover_toast: ButtonHoverToastState,
+    pub pending_tools_load_status_message: Option<String>,
     pub settings: AppSettings,
     pub collection_search: String,
     pub collections: Vec<CollectionManifest>,
@@ -69,7 +121,10 @@ pub struct Modde {
     pub selected_save_details: Option<crate::views::save_details::SaveDetailsState>,
     pub experiment_depth: usize,
     pub nexus_status: Option<NexusAuthStatus>,
-    pub verify: VerifyState,
+    pub nexus_api_key_draft: String,
+    pub nexus_api_key_visible: bool,
+    pub nexus_api_key_source: Option<modde_sources::nexus::auth::ApiKeySource>,
+    pub nexus_config_key_exists: bool,
     pub new_profile_name: String,
     pub new_profile_dialog_open: bool,
     pub game_path_dialog_open: bool,
@@ -100,30 +155,6 @@ pub struct Modde {
     pub compact_mod_list: bool,
     /// Sidebar groups the user has collapsed for this session.
     pub collapsed_sidebar_groups: HashSet<SidebarGroup>,
-}
-
-#[derive(Debug, Clone)]
-pub struct VerifyResults {
-    pub missing_mods: SmallVec<[String; 8]>,
-    pub hash_mismatches: Vec<(PathBuf, String, String)>,
-    pub broken_symlinks: SmallVec<[PathBuf; 8]>,
-    pub ok_count: usize,
-}
-
-/// Compile-time–friendly state machine for the verification pipeline.
-///
-/// Replaces the previous `verify_running: bool` + `verify_results: Option<VerifyResults>`
-/// pair, which could represent invalid states (e.g. `running = false, results = None`
-/// after a failed run vs. before any run). This enum makes every state explicit.
-#[derive(Debug, Clone, Default)]
-pub enum VerifyState {
-    /// No verification has been requested.
-    #[default]
-    Idle,
-    /// Verification is in progress.
-    Running,
-    /// Verification completed with results.
-    Complete(VerifyResults),
 }
 
 fn load_hidden_files(
@@ -190,6 +221,56 @@ fn detected_game_ids(
     }
 
     detected
+}
+
+fn settings_game_install_paths(
+    settings: &AppSettings,
+    detected_games: Vec<modde_games::detection::DetectedGame>,
+) -> Vec<SettingsGameInstall> {
+    let mut seen = HashSet::new();
+    let mut installs = Vec::new();
+
+    for detected in detected_games {
+        let game_id = detected.game_id.to_string();
+        let path = detected.install_path;
+        if !seen.insert((game_id.clone(), path.clone())) {
+            continue;
+        }
+        installs.push(SettingsGameInstall {
+            game_id,
+            display_name: detected.display_name.to_string(),
+            source: detected.source.to_string(),
+            path,
+        });
+    }
+
+    for game_path in &settings.game_paths {
+        if !game_path.path.is_dir() {
+            continue;
+        }
+        let game_id = game_path.game_id.to_string();
+        let path = game_path.path.clone();
+        if !seen.insert((game_id.clone(), path.clone())) {
+            continue;
+        }
+        let display_name = modde_games::resolve_game_plugin(&game_id)
+            .map(|plugin| plugin.display_name().to_string())
+            .unwrap_or_else(|| game_id.clone());
+        installs.push(SettingsGameInstall {
+            game_id,
+            display_name,
+            source: "Configured".to_string(),
+            path,
+        });
+    }
+
+    installs.sort_by(|a, b| {
+        a.display_name
+            .cmp(&b.display_name)
+            .then_with(|| a.path.cmp(&b.path))
+            .then_with(|| a.source.cmp(&b.source))
+    });
+    installs
 }
 
 fn build_conflict_rows(
@@ -267,7 +348,7 @@ fn normalize_tool_setting_value(
     key: &str,
     value: serde_json::Value,
 ) -> serde_json::Value {
-    if settings.get(key).is_some_and(serde_json::Value::is_array)
+    if get_tool_setting_value(settings, key).is_some_and(serde_json::Value::is_array)
         && let Some(raw) = value.as_str()
     {
         return serde_json::Value::Array(
@@ -282,24 +363,128 @@ fn normalize_tool_setting_value(
     value
 }
 
+fn normalize_tool_settings_for_specs(
+    settings: &serde_json::Value,
+    specs: &[modde_games::tools::ToolSettingSpec],
+) -> serde_json::Value {
+    let mut normalized = settings.clone();
+    for spec in specs {
+        let Some(value) = get_tool_setting_value(&normalized, spec.key).cloned() else {
+            continue;
+        };
+        let value = normalize_tool_setting_for_kind(value, &spec.kind);
+        set_nested_tool_setting(&mut normalized, spec.key, value);
+    }
+    normalized
+}
+
+fn normalize_tool_setting_for_kind(
+    value: serde_json::Value,
+    kind: &modde_games::tools::ToolSettingKind,
+) -> serde_json::Value {
+    match kind {
+        modde_games::tools::ToolSettingKind::Bool => value
+            .as_bool()
+            .or_else(|| value.as_str().and_then(parse_bool_setting))
+            .map_or(value, |value| serde_json::json!(value)),
+        modde_games::tools::ToolSettingKind::TriStateBool => {
+            if value
+                .as_str()
+                .is_some_and(|value| value.eq_ignore_ascii_case("auto"))
+            {
+                serde_json::json!("auto")
+            } else {
+                value
+                    .as_bool()
+                    .or_else(|| value.as_str().and_then(parse_bool_setting))
+                    .map_or(value, |value| serde_json::json!(value))
+            }
+        }
+        modde_games::tools::ToolSettingKind::Number { .. } => value
+            .as_f64()
+            .or_else(|| value.as_str().and_then(|value| value.trim().parse().ok()))
+            .map_or(value, |value| serde_json::json!(value)),
+        _ => value,
+    }
+}
+
+fn parse_bool_setting(value: &str) -> Option<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "true" | "1" | "yes" | "on" => Some(true),
+        "false" | "0" | "no" | "off" => Some(false),
+        _ => None,
+    }
+}
+
+fn get_tool_setting_value<'a>(
+    settings: &'a serde_json::Value,
+    key: &str,
+) -> Option<&'a serde_json::Value> {
+    settings
+        .get(key)
+        .or_else(|| get_nested_tool_setting(settings, key))
+        .or_else(|| get_legacy_flat_child_tool_setting(settings, key))
+}
+
+fn get_nested_tool_setting<'a>(
+    settings: &'a serde_json::Value,
+    key: &str,
+) -> Option<&'a serde_json::Value> {
+    let mut current = settings;
+    for part in key.split('.') {
+        current = current.as_object()?.get(part)?;
+    }
+    Some(current)
+}
+
+fn get_legacy_flat_child_tool_setting<'a>(
+    settings: &'a serde_json::Value,
+    key: &str,
+) -> Option<&'a serde_json::Value> {
+    let (root, child) = key.split_once('.')?;
+    settings.as_object()?.get(root)?.as_object()?.get(child)
+}
+
 fn set_nested_tool_setting(settings: &mut serde_json::Value, key: &str, value: serde_json::Value) {
-    if let Some((root, child)) = key.split_once('.') {
+    if !key.contains('.') {
         if !settings.is_object() {
             *settings = serde_json::json!({});
         }
-        let object = settings.as_object_mut().expect("settings object");
-        let root_value = object
-            .entry(root.to_string())
-            .or_insert_with(|| serde_json::json!({}));
-        if !root_value.is_object() {
-            *root_value = serde_json::json!({});
-        }
-        root_value
-            .as_object_mut()
-            .expect("nested object")
-            .insert(child.to_string(), value);
-    } else if let serde_json::Value::Object(map) = settings {
+        let map = settings.as_object_mut().expect("settings object");
         map.insert(key.to_string(), value);
+        return;
+    }
+
+    if !settings.is_object() {
+        *settings = serde_json::json!({});
+    }
+    if let Some(map) = settings.as_object_mut() {
+        map.remove(key);
+    }
+
+    let mut current = settings;
+    let parts: Vec<&str> = key.split('.').collect();
+    for (index, part) in parts.iter().enumerate() {
+        let object = current.as_object_mut().expect("settings object");
+        if index == parts.len() - 1 {
+            object.insert((*part).to_string(), value);
+            return;
+        }
+
+        if index == 0 && parts.len() > 2 {
+            object
+                .entry((*part).to_string())
+                .or_insert_with(|| serde_json::json!({}))
+                .as_object_mut()
+                .map(|root| root.remove(&parts[1..].join(".")));
+        }
+
+        current = object
+            .entry((*part).to_string())
+            .or_insert_with(|| serde_json::json!({}));
+        if !current.is_object() {
+            *current = serde_json::json!({});
+        }
     }
 }
 
@@ -322,6 +507,27 @@ fn apply_derived_tool_settings(
             config.set("derived_steam_app_id", serde_json::json!(app_id));
         }
     }
+}
+
+fn tool_apply_signature(settings: &serde_json::Value) -> serde_json::Value {
+    let mut signature = settings.clone();
+    if let Some(map) = signature.as_object_mut() {
+        map.remove("_game_id");
+        map.remove("_last_applied_settings");
+        map.remove("managed_manifest");
+    }
+    signature
+}
+
+fn tool_apply_is_pending(
+    config: &modde_games::tools::ToolConfig,
+    applied_files: &[String],
+) -> bool {
+    if applied_files.is_empty() {
+        return true;
+    }
+    let current = tool_apply_signature(&config.settings);
+    config.settings.get("_last_applied_settings") != Some(&current)
 }
 
 fn format_tool_availability(availability: &modde_games::tools::ToolAvailability) -> String {
@@ -364,28 +570,19 @@ fn build_tool_derived_facts(
 fn patch_tool_setting_options(
     tool_id: &str,
     specs: &mut [modde_games::tools::ToolSettingSpec],
-    optiscaler_tags: &[String],
-    optiscaler_assets: &[String],
-    proton_versions: &[String],
+    option_catalog: &ToolOptionCatalog,
 ) {
     for spec in specs {
-        match (tool_id, spec.key) {
-            ("optiscaler", "release_tag") if !optiscaler_tags.is_empty() => {
-                spec.kind = modde_games::tools::ToolSettingKind::Select {
-                    options: optiscaler_tags.to_vec(),
-                };
-            }
-            ("optiscaler", "release_asset") if !optiscaler_assets.is_empty() => {
-                spec.kind = modde_games::tools::ToolSettingKind::Select {
-                    options: optiscaler_assets.to_vec(),
-                };
-            }
-            ("proton", "selected_version") if !proton_versions.is_empty() => {
-                spec.kind = modde_games::tools::ToolSettingKind::Select {
-                    options: proton_versions.to_vec(),
-                };
-            }
-            _ => {}
+        if let Some(options) = tool_options(option_catalog, tool_id, spec.key)
+            && !options.is_empty()
+        {
+            spec.kind = modde_games::tools::ToolSettingKind::Select {
+                options: options
+                    .iter()
+                    .cloned()
+                    .map(modde_games::tools::ToolSelectOption::value_label)
+                    .collect(),
+            };
         }
     }
 }
@@ -411,16 +608,86 @@ fn tool_assets_for_tag(
         .unwrap_or_default()
 }
 
-fn first_installable_tool_release(
-    tool_id: &str,
+fn optiscaler_release_tags_for_config(
     releases: &[modde_games::tools::ToolReleaseSummary],
+    config: &modde_games::tools::ToolConfig,
+) -> Vec<String> {
+    releases
+        .iter()
+        .filter(|release| {
+            modde_games::tools::optiscaler::optiscaler_release_matches_config(release, config)
+                && !installable_tool_assets("optiscaler", release).is_empty()
+        })
+        .map(|release| release.tag.clone())
+        .collect()
+}
+
+fn first_optiscaler_release_for_config(
+    releases: &[modde_games::tools::ToolReleaseSummary],
+    config: &modde_games::tools::ToolConfig,
 ) -> Option<(String, String)> {
     releases.iter().find_map(|release| {
-        installable_tool_assets(tool_id, release)
-            .into_iter()
-            .next()
-            .map(|asset| (release.tag.clone(), asset))
+        modde_games::tools::optiscaler::optiscaler_release_matches_config(release, config)
+            .then(|| {
+                installable_tool_assets("optiscaler", release)
+                    .into_iter()
+                    .next()
+                    .map(|asset| (release.tag.clone(), asset))
+            })
+            .flatten()
     })
+}
+
+fn sync_optiscaler_release_options(
+    option_catalog: &mut ToolOptionCatalog,
+    releases: &[modde_games::tools::ToolReleaseSummary],
+    config: &mut modde_games::tools::ToolConfig,
+) -> Option<(String, String)> {
+    if !matches!(
+        config.get_str("source_mode"),
+        Some("github_release" | "goverlay_builds")
+    ) {
+        set_tool_options(option_catalog, "optiscaler", "release_tag", Vec::new());
+        set_tool_options(option_catalog, "optiscaler", "release_asset", Vec::new());
+        config.set("release_tag", serde_json::json!(""));
+        config.set("release_asset", serde_json::json!(""));
+        return None;
+    }
+    let _ = modde_games::tools::optiscaler::normalize_optiscaler_release_config(config);
+    let release_tags = optiscaler_release_tags_for_config(releases, config);
+    set_tool_options(
+        option_catalog,
+        "optiscaler",
+        "release_tag",
+        release_tags.clone(),
+    );
+    let configured_tag = config.get_str("release_tag").unwrap_or("");
+    let configured_asset = config.get_str("release_asset").unwrap_or("");
+    let selected = if release_tags.iter().any(|tag| tag == configured_tag) {
+        let assets = tool_assets_for_tag("optiscaler", releases, configured_tag);
+        let asset = if assets.iter().any(|asset| asset == configured_asset) {
+            configured_asset.to_string()
+        } else {
+            assets.first().cloned().unwrap_or_default()
+        };
+        Some((configured_tag.to_string(), asset))
+    } else {
+        first_optiscaler_release_for_config(releases, config)
+    };
+    if let Some((tag, asset)) = &selected {
+        set_tool_options(
+            option_catalog,
+            "optiscaler",
+            "release_asset",
+            tool_assets_for_tag("optiscaler", releases, tag),
+        );
+        config.set("release_tag", serde_json::json!(tag));
+        config.set("release_asset", serde_json::json!(asset));
+    } else {
+        set_tool_options(option_catalog, "optiscaler", "release_asset", Vec::new());
+        config.set("release_asset", serde_json::json!(""));
+    }
+    selected
 }
 
 fn current_tool_config(
@@ -435,11 +702,15 @@ fn current_tool_config(
     else {
         return Ok(tool.default_config());
     };
-    Ok(modde_games::tools::ToolConfig {
+    let mut config = modde_games::tools::ToolConfig {
         tool_id: row.tool_id,
         enabled: row.enabled,
         settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
-    })
+    };
+    if tool_id == "optiscaler" {
+        let _ = modde_games::tools::optiscaler::normalize_optiscaler_release_config(&mut config);
+    }
+    Ok(config)
 }
 
 fn save_tool_settings(
@@ -447,9 +718,18 @@ fn save_tool_settings(
     tool_id: &str,
     config: &modde_games::tools::ToolConfig,
 ) -> Result<(), String> {
+    save_tool_settings_with_reason(game_id, tool_id, config, "ui:update")
+}
+
+fn save_tool_settings_with_reason(
+    game_id: &str,
+    tool_id: &str,
+    config: &modde_games::tools::ToolConfig,
+    reason: &str,
+) -> Result<(), String> {
     let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
     let settings_json = serde_json::to_string(&config.settings).map_err(|err| err.to_string())?;
-    db.save_tool_config(game_id, tool_id, config.enabled, &settings_json)
+    db.save_tool_config_with_reason(game_id, tool_id, config.enabled, &settings_json, reason)
         .map_err(|err| err.to_string())
 }
 
@@ -465,6 +745,12 @@ async fn load_tool_releases(
         ));
     }
     tool.list_releases().await.map_err(|err| err.to_string())
+}
+
+async fn load_proton_versions() -> Result<Vec<String>, String> {
+    modde_games::tools::proton::list_ge_proton_versions()
+        .await
+        .map_err(|err| err.to_string())
 }
 
 async fn install_selected_tool_release(game_id: String, tool_id: String) -> Result<String, String> {
@@ -516,15 +802,681 @@ async fn install_selected_proton_version(game_id: String) -> Result<String, Stri
     Ok(format!("Installed GEProton {version} for {target}"))
 }
 
+async fn load_tools_state(request: ToolLoadRequest) -> Result<ToolLoadSnapshot, String> {
+    tokio::task::spawn_blocking(move || load_tools_state_blocking(request))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+async fn load_executables_for_game(game_id: String) -> Result<Vec<ExecutableUiEntry>, String> {
+    tokio::task::spawn_blocking(move || {
+        let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
+        db.load_executable_configs(&game_id)
+            .map_err(|err| err.to_string())
+            .map(|rows| rows.into_iter().map(ExecutableUiEntry::from_row).collect())
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+fn load_tools_state_blocking(request: ToolLoadRequest) -> Result<ToolLoadSnapshot, String> {
+    let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
+    let detected = modde_games::detection::find_detected_game(&request.game_id);
+    let game_dir = request.configured_game_dir.clone().or_else(|| {
+        detected
+            .as_ref()
+            .map(|detected| detected.install_path.clone())
+            .or_else(|| {
+                modde_games::resolve_game_plugin(&request.game_id)
+                    .and_then(modde_games::GamePlugin::detect_install)
+            })
+    });
+    let context = Some(modde_games::tools::ToolGameContext::from_parts(
+        &request.game_id,
+        request.display_name.clone(),
+        game_dir.clone(),
+        detected.as_ref(),
+    ));
+    let game_dir_configured = game_dir.is_some();
+    let mut option_catalog = request.tool_option_catalog.clone();
+    if tool_options(&option_catalog, "proton", "selected_version").is_none() {
+        set_tool_options(
+            &mut option_catalog,
+            "proton",
+            "selected_version",
+            modde_games::tools::proton::proton_version_options(),
+        );
+    }
+    if !request.optiscaler_releases.is_empty()
+        && let Ok(mut config) = current_tool_config(&request.game_id, "optiscaler")
+    {
+        sync_optiscaler_release_options(
+            &mut option_catalog,
+            &request.optiscaler_releases,
+            &mut config,
+        );
+    }
+
+    let entries = modde_games::tools::all_tools()
+        .iter()
+        .map(|tool| {
+            build_tool_ui_entry(
+                &db,
+                &request.game_id,
+                game_dir.as_deref(),
+                context.as_ref(),
+                *tool,
+                &option_catalog,
+            )
+        })
+        .collect::<Vec<_>>();
+    let active_tool_id = request
+        .previous_active_tool_id
+        .filter(|active| entries.iter().any(|entry| entry.tool_id == *active))
+        .or_else(|| entries.first().map(|entry| entry.tool_id.clone()));
+    let executables = db
+        .load_executable_configs(&request.game_id)
+        .map_err(|err| err.to_string())?
+        .into_iter()
+        .map(ExecutableUiEntry::from_row)
+        .collect();
+
+    Ok(ToolLoadSnapshot {
+        entries,
+        active_tool_id,
+        game_label: Some(request.display_name),
+        game_dir_configured,
+        tool_option_catalog: option_catalog,
+        executables,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_tool_ui_entry(
+    db: &modde_core::db::ModdeDb,
+    game_id: &str,
+    game_dir: Option<&std::path::Path>,
+    context: Option<&modde_games::tools::ToolGameContext>,
+    tool: &'static dyn modde_games::tools::GameTool,
+    option_catalog: &ToolOptionCatalog,
+) -> ToolUiEntry {
+    let row = db.load_tool_config(game_id, tool.tool_id()).ok().flatten();
+    let availability = tool.detect_available();
+    let applied_files = db
+        .load_applied_files(game_id, tool.tool_id())
+        .unwrap_or_default();
+    let status_message = match &availability {
+        modde_games::tools::ToolAvailability::Available {
+            version: Some(version),
+        } => Some(format!("Detected {version}")),
+        modde_games::tools::ToolAvailability::NotInstalled { install_hint } => {
+            Some(install_hint.clone())
+        }
+        modde_games::tools::ToolAvailability::Available { version: None } => None,
+    };
+    let availability_text = format_tool_availability(&availability);
+    let mut config = row.as_ref().map_or_else(
+        || tool.default_config_for(context),
+        |row| modde_games::tools::ToolConfig {
+            tool_id: row.tool_id.clone(),
+            enabled: row.enabled,
+            settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+        },
+    );
+    let release_config_normalized = tool.tool_id() == "optiscaler"
+        && modde_games::tools::optiscaler::normalize_optiscaler_release_config(&mut config);
+    let mut setting_specs = tool.settings_schema_for(context, &config);
+    let normalized_settings = normalize_tool_settings_for_specs(&config.settings, &setting_specs);
+    if release_config_normalized || normalized_settings != config.settings {
+        config.settings = normalized_settings;
+        if let Ok(settings_json) = serde_json::to_string(&config.settings) {
+            let _ = db.save_tool_config(game_id, tool.tool_id(), config.enabled, &settings_json);
+        }
+        setting_specs = tool.settings_schema_for(context, &config);
+    }
+    config.set("_game_id", serde_json::json!(game_id));
+    apply_derived_tool_settings(&mut config, context);
+    let mut apply_pending = tool_apply_is_pending(&config, &applied_files);
+    let mut apply_missing_inputs = Vec::new();
+    let generated_config_path = tool
+        .generate_config_for(context, &config)
+        .map(|generated| generated.path.display().to_string());
+    let env_preview = tool.env_vars_for(context, &config).into_iter().collect();
+    let dll_overrides = tool
+        .wine_dll_overrides_for(context, &config)
+        .into_iter()
+        .collect();
+    let wrapper_preview = tool
+        .wrapper_command(&config)
+        .map(|wrapper| {
+            if wrapper.args.is_empty() {
+                vec![wrapper.exe]
+            } else {
+                vec![format!("{} {}", wrapper.exe, wrapper.args)]
+            }
+        })
+        .unwrap_or_default();
+    patch_tool_setting_options(tool.tool_id(), &mut setting_specs, option_catalog);
+    let mut derived_facts = build_tool_derived_facts(context);
+    if matches!(tool.tool_id(), "reshade" | "optiscaler")
+        && let Some(game_dir) = game_dir
+    {
+        match tool.preview_apply_for(game_dir, context, &config) {
+            Ok(preview) => {
+                let has_changes = preview.has_changes();
+                apply_missing_inputs = preview.missing_inputs.clone();
+                apply_pending = apply_missing_inputs.is_empty() && has_changes;
+                let summary = if !apply_missing_inputs.is_empty() {
+                    format!("missing input: {}", apply_missing_inputs.join("; "))
+                } else if has_changes {
+                    format!(
+                        "{} changed / {} unchanged",
+                        preview.changed_files.len(),
+                        preview.unchanged_files.len()
+                    )
+                } else {
+                    format!("no changes ({} file(s))", preview.planned_files.len())
+                };
+                derived_facts.push(("Apply preview".to_string(), summary));
+            }
+            Err(err) => {
+                derived_facts.push(("Apply preview".to_string(), format!("failed: {err}")));
+            }
+        }
+    }
+    let (optiscaler_state, optiscaler_latest_backup, optiscaler_detected_files) =
+        if tool.tool_id() == "optiscaler" {
+            let managed = modde_games::tools::optiscaler::managed_paths_from_config(&config);
+            if let Some(game_dir) = game_dir {
+                if let Ok(state) = modde_games::tools::optiscaler::scan_optiscaler_install(
+                    game_id, game_dir, &managed,
+                ) {
+                    if !matches!(
+                    state.status,
+                    modde_games::tools::optiscaler::OptiScalerInstallStatus::Managed
+                        | modde_games::tools::optiscaler::OptiScalerInstallStatus::PartiallyManaged
+                ) {
+                        apply_pending = true;
+                    }
+                    derived_facts.push(("OptiScaler state".to_string(), state.summary()));
+                    if let Some(path) = &state.config_path {
+                        derived_facts.push((
+                            "OptiScaler config".to_string(),
+                            format!(
+                                "{} ({} setting(s))",
+                                path.display(),
+                                state.ini_settings.len()
+                            ),
+                        ));
+                    }
+                    if let Some(path) = &state.latest_backup {
+                        derived_facts
+                            .push(("OptiScaler backup".to_string(), path.display().to_string()));
+                    }
+                    (
+                        Some(state.summary()),
+                        state.latest_backup.map(|path| path.display().to_string()),
+                        state.recognized_files.len(),
+                    )
+                } else {
+                    (None, None, 0)
+                }
+            } else {
+                (None, None, 0)
+            }
+        } else {
+            (None, None, 0)
+        };
+    let setting_history = db
+        .list_tool_setting_history(game_id, tool.tool_id(), 8)
+        .unwrap_or_default()
+        .into_iter()
+        .map(ToolHistoryUiEntry::from_node)
+        .collect();
+
+    ToolUiEntry {
+        tool_id: tool.tool_id().to_string(),
+        display_name: tool.display_name().to_string(),
+        description: tool.description().to_string(),
+        category: tool.category().to_string(),
+        available: availability.is_available(),
+        availability_text,
+        enabled: config.enabled,
+        settings: config.settings.clone(),
+        setting_specs,
+        generated_config_path,
+        applied_files,
+        has_file_patching: matches!(tool.tool_id(), "reshade" | "optiscaler"),
+        release_support: ToolReleaseSupport::from_supports_releases(tool.supports_releases()),
+        status_message,
+        env_preview,
+        dll_overrides,
+        wrapper_preview,
+        derived_facts,
+        optiscaler_state,
+        optiscaler_latest_backup,
+        optiscaler_detected_files,
+        apply_pending,
+        apply_missing_inputs,
+        setting_history,
+    }
+}
+
+async fn apply_tool_for_game(
+    game_id: String,
+    game_dir: PathBuf,
+    tool_id: String,
+    context: Option<modde_games::tools::ToolGameContext>,
+) -> Result<ToolApplyResult, String> {
+    let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
+    let tool = modde_games::tools::resolve_tool(&tool_id)
+        .ok_or_else(|| format!("Unknown tool: {tool_id}"))?;
+    let row = db
+        .load_tool_config(&game_id, &tool_id)
+        .map_err(|err| err.to_string())?;
+    let mut config = row.map_or_else(
+        || tool.default_config_for(context.as_ref()),
+        |row| modde_games::tools::ToolConfig {
+            tool_id: row.tool_id,
+            enabled: row.enabled,
+            settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+        },
+    );
+    config.enabled = true;
+    config.set("_game_id", serde_json::json!(game_id));
+    apply_derived_tool_settings(&mut config, context.as_ref());
+    if tool_id == "optiscaler" {
+        modde_games::tools::optiscaler::apply_game_defaults(&mut config, context.as_ref());
+    }
+
+    let applied = tool
+        .apply_for(&game_dir, context.as_ref(), &config)
+        .map_err(|err| err.to_string())?;
+    let paths = applied
+        .files
+        .iter()
+        .map(|path| path.to_string_lossy().replace('\\', "/"))
+        .collect::<Vec<_>>();
+    let validation_message = if tool_id == "optiscaler" {
+        validate_optiscaler_apply(&game_id, &game_dir, &config, &applied)?;
+        Some("validated managed install".to_string())
+    } else {
+        None
+    };
+
+    if tool_id == "optiscaler" {
+        config.set(
+            "managed_manifest",
+            modde_games::tools::optiscaler::managed_manifest_json(&game_dir, &applied),
+        );
+    }
+    let apply_signature = tool_apply_signature(&config.settings);
+    config.set("_last_applied_settings", apply_signature);
+    let settings_json = serde_json::to_string(&config.settings).map_err(|err| err.to_string())?;
+    db.save_tool_config_with_reason(&game_id, &tool_id, true, &settings_json, "ui:apply")
+        .map_err(|err| err.to_string())?;
+    db.clear_applied_files(&game_id, &tool_id)
+        .map_err(|err| err.to_string())?;
+    db.save_applied_files(&game_id, &tool_id, &paths)
+        .map_err(|err| err.to_string())?;
+    modde_games::launcher::generate_tool_configs(&game_id, &db).map_err(|err| err.to_string())?;
+
+    Ok(ToolApplyResult {
+        display_name: tool.display_name().to_string(),
+        applied_file_count: paths.len(),
+        validation_message,
+    })
+}
+
+async fn revert_tool_for_game(
+    game_id: String,
+    game_dir: PathBuf,
+    tool_id: String,
+) -> Result<ToolRevertResult, String> {
+    let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
+    let tool = modde_games::tools::resolve_tool(&tool_id)
+        .ok_or_else(|| format!("Unknown tool: {tool_id}"))?;
+    let applied_paths = db
+        .load_applied_files(&game_id, &tool_id)
+        .map_err(|err| err.to_string())?;
+    let applied = modde_games::tools::AppliedFiles {
+        files: applied_paths.iter().map(PathBuf::from).collect(),
+    };
+    tool.revert(&game_dir, &applied)
+        .map_err(|err| err.to_string())?;
+    db.clear_applied_files(&game_id, &tool_id)
+        .map_err(|err| err.to_string())?;
+    modde_games::launcher::generate_tool_configs(&game_id, &db).map_err(|err| err.to_string())?;
+    Ok(ToolRevertResult {
+        display_name: tool.display_name().to_string(),
+    })
+}
+
+async fn deactivate_optiscaler_for_game(
+    game_id: String,
+    game_dir: PathBuf,
+) -> Result<ToolRevertResult, String> {
+    let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
+    let tool = modde_games::tools::resolve_tool("optiscaler")
+        .ok_or_else(|| "OptiScaler tool is not registered".to_string())?;
+    let applied_paths = db
+        .load_applied_files(&game_id, "optiscaler")
+        .map_err(|err| err.to_string())?;
+    if !applied_paths.is_empty() {
+        let applied = modde_games::tools::AppliedFiles {
+            files: applied_paths.iter().map(PathBuf::from).collect(),
+        };
+        tool.revert(&game_dir, &applied)
+            .map_err(|err| err.to_string())?;
+        db.clear_applied_files(&game_id, "optiscaler")
+            .map_err(|err| err.to_string())?;
+    }
+
+    let settings_json = db
+        .load_tool_config(&game_id, "optiscaler")
+        .map_err(|err| err.to_string())?
+        .map_or_else(|| "{}".to_string(), |row| row.settings_json);
+    db.save_tool_config_with_reason(
+        &game_id,
+        "optiscaler",
+        false,
+        &settings_json,
+        "ui:deactivate",
+    )
+    .map_err(|err| err.to_string())?;
+    modde_games::launcher::generate_tool_configs(&game_id, &db).map_err(|err| err.to_string())?;
+
+    Ok(ToolRevertResult {
+        display_name: tool.display_name().to_string(),
+    })
+}
+
+async fn restore_tool_settings_for_game(
+    game_id: String,
+    tool_id: String,
+    node_id: String,
+) -> Result<String, String> {
+    let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
+    db.restore_tool_setting_node(&game_id, &tool_id, &node_id)
+        .map_err(|err| err.to_string())?;
+    modde_games::launcher::generate_tool_configs(&game_id, &db).map_err(|err| err.to_string())?;
+    let display_name = modde_games::tools::resolve_tool(&tool_id)
+        .map_or_else(|| tool_id.clone(), |tool| tool.display_name().to_string());
+    Ok(format!("Restored {display_name} settings version"))
+}
+
+async fn save_executable_for_game(
+    row: modde_core::db::ExecutableConfigRow,
+) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
+        let name = row.name.clone();
+        let game_id = row.game_id.clone();
+        db.save_executable_config(&row)
+            .map_err(|err| err.to_string())?;
+        Ok(format!("Saved executable '{name}' for {game_id}"))
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+async fn remove_executable_for_game(game_id: String, name: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
+        if db
+            .delete_executable_config(&game_id, &name)
+            .map_err(|err| err.to_string())?
+        {
+            Ok(format!("Removed executable '{name}'"))
+        } else {
+            Err(format!(
+                "No executable named '{name}' is configured for {game_id}"
+            ))
+        }
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+async fn run_saved_executable_for_game(
+    game_id: String,
+    name: String,
+    profile_name: Option<String>,
+) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
+        let row = db
+            .load_executable_config(&game_id, &name)
+            .map_err(|err| err.to_string())?
+            .ok_or_else(|| format!("No executable named '{name}' is configured for {game_id}"))?;
+        run_executable_row(row, profile_name)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+fn run_executable_row(
+    row: modde_core::db::ExecutableConfigRow,
+    profile_name: Option<String>,
+) -> Result<String, String> {
+    let pm = ProfileManager::open().map_err(|err| err.to_string())?;
+    let profile = if let Some(profile_name) = profile_name {
+        pm.load(&profile_name, Some(&row.game_id))
+            .map_err(|err| err.to_string())?
+    } else {
+        let summaries = pm.list().map_err(|err| err.to_string())?;
+        let first = summaries
+            .iter()
+            .find(|profile| profile.game_id.as_str() == row.game_id)
+            .ok_or_else(|| format!("No profile found for {}", row.game_id))?;
+        pm.load(&first.name, Some(&row.game_id))
+            .map_err(|err| err.to_string())?
+    };
+    let game_plugin = modde_games::resolve_game_plugin(&profile.game_id)
+        .ok_or_else(|| format!("Unsupported game: {}", profile.game_id))?;
+    let install_dir = game_plugin.detect_install().ok_or_else(|| {
+        format!(
+            "Could not detect install directory for {}",
+            game_plugin.display_name()
+        )
+    })?;
+    let mod_dir = game_plugin
+        .mod_root(&install_dir)
+        .map_err(|err| err.to_string())?;
+    let before = snapshot_dir_for_executable(&mod_dir)?;
+    let args: Vec<String> = serde_json::from_str(&row.arguments_json)
+        .map_err(|err| format!("Stored arguments are invalid JSON: {err}"))?;
+    let environment: HashMap<String, String> = serde_json::from_str(&row.environment_json)
+        .map_err(|err| format!("Stored environment is invalid JSON: {err}"))?;
+    let working_dir = row.working_dir.as_ref().unwrap_or(&install_dir);
+    let mut command = std::process::Command::new(&row.executable_path);
+    command.args(args).current_dir(working_dir);
+    for (key, value) in environment {
+        command.env(key, value);
+    }
+    if let Some(overrides) = &row.wine_dll_overrides {
+        command.env("WINEDLLOVERRIDES", overrides);
+    }
+    let status = command
+        .status()
+        .map_err(|err| format!("Failed to execute {}: {err}", row.executable_path.display()))?;
+    let after = snapshot_dir_for_executable(&mod_dir)?;
+    let new_files = after.difference(&before).cloned().collect::<Vec<_>>();
+    if !new_files.is_empty() {
+        let output_dir = modde_core::paths::store_dir().join(&row.output_mod);
+        std::fs::create_dir_all(&output_dir).map_err(|err| err.to_string())?;
+        for rel_path in &new_files {
+            let src = mod_dir.join(rel_path);
+            let dst = output_dir.join(rel_path);
+            if let Some(parent) = dst.parent() {
+                std::fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+            }
+            std::fs::rename(&src, &dst)
+                .or_else(|_| {
+                    std::fs::copy(&src, &dst)?;
+                    std::fs::remove_file(&src)
+                })
+                .map_err(|err| format!("Failed to move {rel_path} to output mod: {err}"))?;
+        }
+    }
+    let suffix = if status.success() {
+        String::new()
+    } else {
+        format!("; process exited with status {status}")
+    };
+    Ok(format!(
+        "Ran '{}' and captured {} file(s) to {}{}",
+        row.name,
+        new_files.len(),
+        row.output_mod,
+        suffix
+    ))
+}
+
+fn snapshot_dir_for_executable(dir: &Path) -> Result<HashSet<String>, String> {
+    if !dir.exists() {
+        return Ok(HashSet::new());
+    }
+    modde_core::fs::walk_files_relative(dir)
+        .map(|files| files.into_iter().map(|(rel, _)| rel).collect())
+        .map_err(|err| err.to_string())
+}
+
+pub fn parse_executable_environment(input: &str) -> Result<HashMap<String, String>, String> {
+    let mut env = HashMap::new();
+    for (idx, line) in input.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            return Err(format!("Environment line {} must be KEY=VALUE", idx + 1));
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            return Err(format!("Environment line {} has an empty key", idx + 1));
+        }
+        env.insert(key.to_string(), value.trim().to_string());
+    }
+    Ok(env)
+}
+
+fn executable_draft_to_row(
+    game_id: &str,
+    draft: &ExecutableDraft,
+) -> Result<modde_core::db::ExecutableConfigRow, String> {
+    let name = draft.name.trim();
+    if name.is_empty() {
+        return Err("Executable name is required".to_string());
+    }
+    let executable_path = draft.executable_path.trim();
+    if executable_path.is_empty() {
+        return Err("Executable path is required".to_string());
+    }
+    let output_mod = if draft.output_mod.trim().is_empty() {
+        "__overwrite__"
+    } else {
+        draft.output_mod.trim()
+    };
+    let args = draft
+        .arguments
+        .split_whitespace()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    let env = parse_executable_environment(&draft.environment)?;
+    Ok(modde_core::db::ExecutableConfigRow {
+        game_id: game_id.to_string(),
+        name: name.to_string(),
+        executable_path: PathBuf::from(executable_path),
+        arguments_json: serde_json::to_string(&args).map_err(|err| err.to_string())?,
+        working_dir: (!draft.working_dir.trim().is_empty())
+            .then(|| PathBuf::from(draft.working_dir.trim())),
+        environment_json: serde_json::to_string(&env).map_err(|err| err.to_string())?,
+        wine_dll_overrides: (!draft.wine_dll_overrides.trim().is_empty())
+            .then(|| draft.wine_dll_overrides.trim().to_string()),
+        output_mod: output_mod.to_string(),
+        enabled: true,
+    })
+}
+
+fn validate_optiscaler_apply(
+    game_id: &str,
+    game_dir: &std::path::Path,
+    config: &modde_games::tools::ToolConfig,
+    applied: &modde_games::tools::AppliedFiles,
+) -> Result<(), String> {
+    let managed_paths = applied
+        .files
+        .iter()
+        .map(|path| {
+            path.to_string_lossy()
+                .replace('\\', "/")
+                .to_ascii_lowercase()
+        })
+        .collect::<BTreeSet<_>>();
+    let state =
+        modde_games::tools::optiscaler::scan_optiscaler_install(game_id, game_dir, &managed_paths)
+            .map_err(|err| err.to_string())?;
+    if !matches!(
+        state.status,
+        modde_games::tools::optiscaler::OptiScalerInstallStatus::Managed
+            | modde_games::tools::optiscaler::OptiScalerInstallStatus::PartiallyManaged
+    ) {
+        return Err(format!(
+            "OptiScaler validation failed: install is {} after apply",
+            state.status
+        ));
+    }
+    let proxy_dll = config
+        .get_str("proxy_dll")
+        .or_else(|| config.get_str("dll_name"))
+        .unwrap_or("dxgi.dll");
+    if !state
+        .proxy_dlls
+        .iter()
+        .any(|dll| dll.eq_ignore_ascii_case(proxy_dll))
+    {
+        return Err(format!(
+            "OptiScaler validation failed: missing configured proxy DLL {proxy_dll}"
+        ));
+    }
+    if state.config_path.is_none() {
+        return Err("OptiScaler validation failed: missing OptiScaler.ini".to_string());
+    }
+    Ok(())
+}
+
 impl Modde {
     pub fn settings_state(&self) -> SettingsState {
         SettingsState {
-            nexus_api_key: self.settings.nexus_api_key.clone(),
-            game_path: self.settings.game_paths.first().map(|gp| gp.path.clone()),
+            nexus_api_key_draft: self.nexus_api_key_draft.clone(),
+            nexus_api_key_visible: self.nexus_api_key_visible,
+            nexus_api_key_source: self.nexus_api_key_source.clone(),
+            nexus_config_key_exists: self.nexus_config_key_exists,
+            game_install_paths: settings_game_install_paths(
+                &self.settings,
+                modde_games::scan_installed_games(),
+            ),
             download_dir: self.settings.download_dir.clone(),
+            effective_download_dir: self
+                .settings
+                .download_dir
+                .clone()
+                .unwrap_or_else(modde_core::paths::downloads_dir),
             has_stock_snapshot: self.stock_snapshot_exists,
             theme_name: self.theme_name.clone(),
             nexus_status: self.nexus_status.clone(),
+        }
+    }
+
+    fn refresh_nexus_api_key_state(&mut self) {
+        self.nexus_config_key_exists = modde_sources::nexus::auth::config_api_key_exists();
+        if let Ok(loaded) = modde_sources::nexus::auth::load_api_key_with_source() {
+            self.nexus_api_key_draft = loaded.key;
+            self.nexus_api_key_source = Some(loaded.source);
+        } else {
+            self.nexus_api_key_draft.clear();
+            self.nexus_api_key_source = None;
         }
     }
 
@@ -569,9 +1521,30 @@ impl Modde {
         self.save_snapshots.clear();
         self.current_fingerprint = None;
         self.experiment_depth = 0;
-        self.verify = VerifyState::Idle;
         self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Idle;
         self.data_tab_conflicts.clear();
+        self.data_tab_state.missing_store_mod_count = 0;
+    }
+
+    fn game_supports_save_profiles(game_id: &str) -> bool {
+        modde_games::resolve_game_plugin(game_id)
+            .is_some_and(modde_games::GamePlugin::supports_save_profiles)
+    }
+
+    fn current_game_supports_save_profiles(&self) -> bool {
+        self.loaded_profile
+            .as_ref()
+            .map(|p| p.game_id.as_str())
+            .or(self.selected_game.as_deref())
+            .is_some_and(Self::game_supports_save_profiles)
+    }
+
+    fn resolve_save_dir(game_id: &str) -> Option<PathBuf> {
+        let plugin = modde_games::resolve_game_plugin(game_id)?;
+        plugin
+            .supports_save_profiles()
+            .then(|| plugin.save_directory())
+            .flatten()
     }
 
     fn reload_profile(&mut self) {
@@ -591,12 +1564,17 @@ impl Modde {
                     self.current_fingerprint = {
                         let game_id = profile.game_id.as_str();
                         let staging_dir = ProfileManager::staging_dir(&profile.name);
-                        modde_games::resolve_game_plugin(game_id).map(|plugin| {
-                            modde_core::save::SaveFingerprint::compute(&profile.mods, |mod_id| {
-                                let mod_path = staging_dir.join(mod_id);
-                                plugin.classify_mod(&mod_path).affects_saves()
+                        modde_games::resolve_game_plugin(game_id)
+                            .filter(|plugin| plugin.supports_save_profiles())
+                            .map(|plugin| {
+                                modde_core::save::SaveFingerprint::compute(
+                                    &profile.mods,
+                                    |mod_id| {
+                                        let mod_path = staging_dir.join(mod_id);
+                                        plugin.classify_mod(&mod_path).affects_saves()
+                                    },
+                                )
                             })
-                        })
                     };
 
                     self.loaded_profile = Some(profile);
@@ -673,6 +1651,7 @@ impl Modde {
         self.previous_game_before_path_dialog = None;
         self.game_path_dialog_error = None;
         self.switch_game_context(&game_id);
+        self.sync_browse_game_to_current(true);
         self.save_settings();
         self.status_message = format!("Active game set to {game_id}");
     }
@@ -717,11 +1696,13 @@ impl Modde {
     fn refresh_data_tab_conflicts(&mut self) {
         let Some(profile) = self.loaded_profile.as_ref() else {
             self.data_tab_conflicts.clear();
+            self.data_tab_state.missing_store_mod_count = 0;
             return;
         };
 
         let Ok(pm) = ProfileManager::open() else {
             self.data_tab_conflicts.clear();
+            self.data_tab_state.missing_store_mod_count = 0;
             return;
         };
 
@@ -735,10 +1716,12 @@ impl Modde {
             classifier.as_deref(),
         ) {
             Ok(analysis) => {
+                self.data_tab_state.missing_store_mod_count = analysis.missing_store_mods.len();
                 self.data_tab_conflicts = build_conflict_rows(&analysis, &hidden);
             }
             Err(err) => {
                 self.data_tab_conflicts.clear();
+                self.data_tab_state.missing_store_mod_count = 0;
                 self.status_message = format!("Failed to load data tab: {err}");
             }
         }
@@ -747,23 +1730,28 @@ impl Modde {
     fn run_diagnostics_now(&mut self) {
         let Some(profile) = self.loaded_profile.clone() else {
             self.status_message = "Select a profile before running diagnostics".to_string();
-            self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Idle;
+            self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Error(
+                "Select a profile before running diagnostics.".to_string(),
+            );
             return;
         };
 
         let Ok(pm) = ProfileManager::open() else {
             self.status_message = "Failed to open profile database".to_string();
-            self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Idle;
+            self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Error(
+                "Failed to open profile database.".to_string(),
+            );
             return;
         };
 
         let hidden = load_hidden_files(&pm, &profile);
         let active_plugins = load_active_plugins(&pm, &profile);
+        let integrity = Self::verify_staging_integrity(&ProfileManager::staging_dir(&profile.name));
         let engine = match profile.game_id.as_str() {
             "skyrim-se" | "skyrim-ae" | "fallout4" | "fallout76" => {
                 modde_games::bethesda::diagnostics::bethesda_diagnostics()
             }
-            _ => modde_core::diagnostics::DiagnosticEngine::new(),
+            _ => modde_core::diagnostics::base_diagnostics(),
         };
         let classifier = modde_games::resolve_collision_classifier(profile.game_id.as_str());
 
@@ -778,27 +1766,149 @@ impl Modde {
             &engine,
         ) {
             Ok((diagnostics, analysis)) => {
+                self.data_tab_state.missing_store_mod_count = analysis.missing_store_mods.len();
                 self.data_tab_conflicts = build_conflict_rows(&analysis, &hidden);
                 let entries: Vec<_> = diagnostics.iter().map(format_diagnostic_entry).collect();
-                let count = entries.len();
-                self.diagnostics_state =
-                    crate::views::diagnostics::DiagnosticsState::Complete(entries);
-                self.status_message = if count == 0 {
+                let diagnostic_count = entries.len();
+                let broken_count = integrity.broken_symlinks.len();
+                self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Complete(
+                    crate::views::diagnostics::DiagnosticsReport {
+                        profile_name: profile.name.clone(),
+                        game_id: profile.game_id.to_string(),
+                        entries,
+                        integrity,
+                    },
+                );
+                self.status_message = if diagnostic_count == 0 && broken_count == 0 {
                     "Diagnostics complete: no issues found".to_string()
                 } else {
-                    format!("Diagnostics complete: {count} issue(s)")
+                    format!(
+                        "Diagnostics complete: {diagnostic_count} issue(s), {broken_count} broken symlink(s)"
+                    )
                 };
             }
             Err(err) => {
-                self.diagnostics_state =
-                    crate::views::diagnostics::DiagnosticsState::Complete(vec![
-                        crate::views::diagnostics::DiagnosticEntry {
-                            severity: crate::views::diagnostics::DiagnosticSeverity::Error,
-                            message: format!("Diagnostics failed: {err}"),
-                        },
-                    ]);
+                self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Error(
+                    format!("Diagnostics failed: {err}"),
+                );
                 self.status_message = format!("Diagnostics failed: {err}");
             }
+        }
+    }
+
+    fn verify_staging_integrity(
+        staging_dir: &std::path::Path,
+    ) -> crate::views::diagnostics::IntegritySummary {
+        let mut results = crate::views::diagnostics::IntegritySummary::default();
+        if !staging_dir.exists() {
+            return results;
+        }
+
+        fn walk(dir: &std::path::Path, results: &mut crate::views::diagnostics::IntegritySummary) {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        walk(&path, results);
+                    } else if path.is_symlink() {
+                        match std::fs::read_link(&path) {
+                            Ok(target) if target.exists() => {
+                                results.ok_count += 1;
+                            }
+                            _ => results.broken_symlinks.push(path),
+                        }
+                    } else {
+                        results.ok_count += 1;
+                    }
+                }
+            }
+        }
+
+        walk(staging_dir, &mut results);
+        results
+    }
+
+    fn start_tools_load(&mut self) -> Task<Message> {
+        let Some(request) = self.tool_load_request() else {
+            self.tool_state.entries.clear();
+            self.tool_state.active_tool_id = None;
+            self.tool_state.game_label = None;
+            self.tool_state.game_dir_configured = false;
+            self.tool_state.loading = false;
+            self.tool_state.load_error = None;
+            self.status_message = "Select a game before loading tools".to_string();
+            return Task::none();
+        };
+        self.tool_state.load_generation = self.tool_state.load_generation.wrapping_add(1);
+        let generation = self.tool_state.load_generation;
+        self.tool_state.loading = true;
+        self.tool_state.load_error = None;
+        Task::perform(load_tools_state(request), move |result| {
+            Message::ToolsLoaded { generation, result }
+        })
+    }
+
+    fn tool_load_request(&self) -> Option<ToolLoadRequest> {
+        let game_id = self.current_game_id()?.to_string();
+        let display_name = self
+            .available_games
+            .iter()
+            .find(|(id, _)| id == &game_id)
+            .map(|(_, name)| name.clone())
+            .unwrap_or_else(|| game_id.clone());
+        Some(ToolLoadRequest {
+            game_id,
+            display_name,
+            configured_game_dir: self.settings.game_path(self.current_game_id()?).cloned(),
+            optiscaler_releases: self.tool_state.optiscaler_releases.clone(),
+            tool_option_catalog: self.tool_state.tool_option_catalog.clone(),
+            previous_active_tool_id: self.tool_state.active_tool_id.clone(),
+        })
+    }
+
+    fn apply_tool_snapshot(&mut self, snapshot: ToolLoadSnapshot) {
+        self.tool_state.entries = snapshot.entries;
+        self.tool_state.active_tool_id = snapshot.active_tool_id;
+        self.tool_state.game_label = snapshot.game_label;
+        self.tool_state.game_dir_configured = snapshot.game_dir_configured;
+        self.tool_state.tool_option_catalog = snapshot.tool_option_catalog;
+        self.tool_state.executables = snapshot.executables;
+        self.tool_state.loading = false;
+        self.tool_state.load_error = None;
+    }
+
+    fn start_executables_load(&mut self) -> Task<Message> {
+        let Some(game_id) = self.current_game_id().map(str::to_string) else {
+            self.tool_state.executables.clear();
+            self.tool_state.game_label = None;
+            self.tool_state.executables_loading = false;
+            self.tool_state.executables_load_error = None;
+            self.status_message = "Select a game before loading executables".to_string();
+            return Task::none();
+        };
+        self.tool_state.game_label = self
+            .available_games
+            .iter()
+            .find(|(id, _)| id == &game_id)
+            .map(|(_, name)| name.clone())
+            .or_else(|| Some(game_id.clone()));
+        self.tool_state.executables_load_generation =
+            self.tool_state.executables_load_generation.wrapping_add(1);
+        let generation = self.tool_state.executables_load_generation;
+        self.tool_state.executables_loading = true;
+        self.tool_state.executables_load_error = None;
+        Task::perform(load_executables_for_game(game_id), move |result| {
+            Message::ExecutablesLoaded { generation, result }
+        })
+    }
+
+    fn refresh_executables_or_tools(&mut self) -> Task<Message> {
+        if matches!(self.active_view, View::Executables) {
+            self.start_executables_load()
+        } else if self.tool_load_request().is_some() {
+            self.start_tools_load()
+        } else {
+            Task::none()
         }
     }
 
@@ -824,21 +1934,29 @@ impl Modde {
             .map(|(_, name)| name.clone())
             .or_else(|| Some(game_id.clone()));
         self.tool_state.game_dir_configured = self.current_game_dir().is_some();
-        self.tool_state.proton_versions = modde_games::tools::proton::proton_version_options();
+        if tool_options(
+            &self.tool_state.tool_option_catalog,
+            "proton",
+            "selected_version",
+        )
+        .is_none()
+        {
+            set_tool_options(
+                &mut self.tool_state.tool_option_catalog,
+                "proton",
+                "selected_version",
+                modde_games::tools::proton::proton_version_options(),
+            );
+        }
         if !self.tool_state.optiscaler_releases.is_empty()
             && let Ok(config) = current_tool_config(&game_id, "optiscaler")
         {
-            self.tool_state.optiscaler_release_tags = self
-                .tool_state
-                .optiscaler_releases
-                .iter()
-                .filter(|release| !installable_tool_assets("optiscaler", release).is_empty())
-                .map(|release| release.tag.clone())
-                .collect();
-            if let Some(tag) = config.get_str("release_tag") {
-                self.tool_state.optiscaler_release_assets =
-                    tool_assets_for_tag("optiscaler", &self.tool_state.optiscaler_releases, tag);
-            }
+            let mut config = config;
+            sync_optiscaler_release_options(
+                &mut self.tool_state.tool_option_catalog,
+                &self.tool_state.optiscaler_releases,
+                &mut config,
+            );
         }
         let context = self.current_tool_game_context();
 
@@ -860,16 +1978,33 @@ impl Modde {
                     modde_games::tools::ToolAvailability::Available { version: None } => None,
                 };
                 let availability_text = format_tool_availability(&availability);
-                let mut config = row.map_or_else(
+                let mut config = row.as_ref().map_or_else(
                     || tool.default_config_for(context.as_ref()),
                     |row| modde_games::tools::ToolConfig {
-                        tool_id: row.tool_id,
+                        tool_id: row.tool_id.clone(),
                         enabled: row.enabled,
                         settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
                     },
                 );
+                let mut setting_specs = tool.settings_schema_for(context.as_ref(), &config);
+                let normalized_settings =
+                    normalize_tool_settings_for_specs(&config.settings, &setting_specs);
+                if normalized_settings != config.settings {
+                    config.settings = normalized_settings;
+                    if let Ok(settings_json) = serde_json::to_string(&config.settings) {
+                        let _ = db.save_tool_config(
+                            &game_id,
+                            tool.tool_id(),
+                            config.enabled,
+                            &settings_json,
+                        );
+                    }
+                    setting_specs = tool.settings_schema_for(context.as_ref(), &config);
+                }
                 config.set("_game_id", serde_json::json!(game_id));
                 apply_derived_tool_settings(&mut config, context.as_ref());
+                let mut apply_pending = tool_apply_is_pending(&config, &applied_files);
+                let mut apply_missing_inputs = Vec::new();
                 let generated_config_path = tool
                     .generate_config_for(context.as_ref(), &config)
                     .map(|generated| generated.path.display().to_string());
@@ -891,15 +2026,40 @@ impl Modde {
                         }
                     })
                     .unwrap_or_default();
-                let mut setting_specs = tool.settings_schema_for(context.as_ref(), &config);
                 patch_tool_setting_options(
                     tool.tool_id(),
                     &mut setting_specs,
-                    &self.tool_state.optiscaler_release_tags,
-                    &self.tool_state.optiscaler_release_assets,
-                    &self.tool_state.proton_versions,
+                    &self.tool_state.tool_option_catalog,
                 );
                 let mut derived_facts = build_tool_derived_facts(context.as_ref());
+                if matches!(tool.tool_id(), "reshade" | "optiscaler")
+                    && let Some(game_dir) = self.current_game_dir()
+                {
+                    match tool.preview_apply_for(&game_dir, context.as_ref(), &config) {
+                        Ok(preview) => {
+                            let has_changes = preview.has_changes();
+                            apply_missing_inputs = preview.missing_inputs.clone();
+                            apply_pending =
+                                apply_missing_inputs.is_empty() && has_changes;
+                            let summary = if !apply_missing_inputs.is_empty() {
+                                format!("missing input: {}", apply_missing_inputs.join("; "))
+                            } else if has_changes {
+                                format!(
+                                    "{} changed / {} unchanged",
+                                    preview.changed_files.len(),
+                                    preview.unchanged_files.len()
+                                )
+                            } else {
+                                format!("no changes ({} file(s))", preview.planned_files.len())
+                            };
+                            derived_facts.push(("Apply preview".to_string(), summary));
+                        }
+                        Err(err) => {
+                            derived_facts
+                                .push(("Apply preview".to_string(), format!("failed: {err}")));
+                        }
+                    }
+                }
                 let (optiscaler_state, optiscaler_latest_backup, optiscaler_detected_files) =
                     if tool.tool_id() == "optiscaler" {
                         let managed =
@@ -910,6 +2070,13 @@ impl Modde {
                                     &game_id, &game_dir, &managed,
                                 )
                             {
+                                if !matches!(
+                                    state.status,
+                                    modde_games::tools::optiscaler::OptiScalerInstallStatus::Managed
+                                        | modde_games::tools::optiscaler::OptiScalerInstallStatus::PartiallyManaged
+                                ) {
+                                    apply_pending = true;
+                                }
                                 derived_facts
                                     .push(("OptiScaler state".to_string(), state.summary()));
                                 if let Some(path) = &state.config_path {
@@ -942,6 +2109,12 @@ impl Modde {
                     } else {
                         (None, None, 0)
                     };
+                let setting_history = db
+                    .list_tool_setting_history(&game_id, tool.tool_id(), 8)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(ToolHistoryUiEntry::from_node)
+                    .collect();
 
                 ToolUiEntry {
                     tool_id: tool.tool_id().to_string(),
@@ -967,6 +2140,9 @@ impl Modde {
                     optiscaler_state,
                     optiscaler_latest_backup,
                     optiscaler_detected_files,
+                    apply_pending,
+                    apply_missing_inputs,
+                    setting_history,
                 }
             })
             .collect();
@@ -1069,9 +2245,65 @@ impl Modde {
             .as_ref()
             .map(|p| p.game_id.to_string())
             .or_else(|| self.selected_game.clone())?;
-        modde_games::resolve_game_plugin(&game_id)
-            .and_then(|p| p.nexus_game_domain())
+        Self::nexus_domain_for_game(&game_id)
+    }
+
+    fn nexus_domain_for_game(game_id: &str) -> Option<String> {
+        let game = modde_games::resolve_game(game_id)?;
+        game.nexus_game_id?;
+        game.nexus_domain.map(str::to_string)
+    }
+
+    fn first_supported_nexus_game(&self) -> Option<String> {
+        self.available_games
+            .iter()
+            .map(|(id, _)| id)
+            .find(|id| Self::nexus_domain_for_game(id).is_some())
+            .cloned()
+    }
+
+    fn default_browse_game_id(&self) -> Option<String> {
+        self.current_game_id()
+            .filter(|game_id| Self::nexus_domain_for_game(game_id).is_some())
             .map(str::to_string)
+            .or_else(|| self.first_supported_nexus_game())
+    }
+
+    fn browse_game_nexus_domain(&self) -> Option<String> {
+        self.browse_nexus
+            .selected_game_id
+            .as_deref()
+            .and_then(Self::nexus_domain_for_game)
+    }
+
+    fn clear_browse_results(&mut self) {
+        self.browse_nexus.mods.clear();
+        self.browse_nexus.collections.clear();
+        self.browse_nexus.error = None;
+        self.browse_nexus.install_status = None;
+    }
+
+    fn sync_browse_game_to_current(&mut self, force: bool) {
+        let selected_is_supported = self
+            .browse_nexus
+            .selected_game_id
+            .as_deref()
+            .is_some_and(|game_id| Self::nexus_domain_for_game(game_id).is_some());
+        if !force && selected_is_supported {
+            return;
+        }
+        let next = self.default_browse_game_id();
+        if self.browse_nexus.selected_game_id != next {
+            self.browse_nexus.selected_game_id = next;
+            self.clear_browse_results();
+        }
+    }
+
+    fn initialize_wabbajack_game_filter(&self, state: &mut WabbajackInstallerState) {
+        if state.game_filter_user_edited || state.game_filter.is_some() {
+            return;
+        }
+        state.game_filter = self.current_game_id().map(str::to_string);
     }
 
     /// Kick off an async feed load for the Browse Nexus view. Picks
@@ -1169,11 +2401,16 @@ async fn run_browse_install(game_domain: String, mod_id: u64) -> Result<String, 
         .await
         .map_err(|e| e.to_string())?;
 
-    // Build a probe from whichever game plugin is registered.
-    let probe = modde_games::resolve_game_plugin(&game_domain).map_or_else(
-        modde_core::installer::InstallProbe::noop,
-        modde_games::game_probe,
-    );
+    // Build a probe from whichever game plugin is registered. Try the
+    // modde `game_id` first, then the Nexus domain — Nexus URLs carry
+    // the domain (e.g. "stellarblade") which doesn't match `game_id`
+    // (e.g. "stellar-blade").
+    let probe = modde_games::resolve_game_plugin(&game_domain)
+        .or_else(|| modde_games::resolve_game_plugin_by_nexus_domain(&game_domain))
+        .map_or_else(
+            modde_core::installer::InstallProbe::noop,
+            modde_games::game_probe,
+        );
 
     let outcome = modde_sources::nexus::install::install_single_mod(
         &client,
@@ -1406,18 +2643,17 @@ pub enum View {
     FOMODWizard(FOMODWizardState),
     Settings,
     Saves,
-    Verify,
     Downloads,
     DataTab,
     Diagnostics,
     Tools,
+    Executables,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SidebarGroup {
     Game,
     Install,
-    Maintenance,
     General,
 }
 
@@ -1427,26 +2663,125 @@ impl SidebarGroup {
         match self {
             SidebarGroup::Game => "Game",
             SidebarGroup::Install => "Install",
-            SidebarGroup::Maintenance => "Maintenance",
             SidebarGroup::General => "General",
         }
     }
 }
 
 #[derive(Debug, Clone, Default)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ToolState {
     pub entries: Vec<ToolUiEntry>,
     pub active_tool_id: Option<String>,
     pub game_label: Option<String>,
     pub game_dir_configured: bool,
+    pub loading: bool,
+    pub load_error: Option<String>,
+    pub load_generation: u64,
+    pub show_advanced_settings: bool,
+    pub active_operations: HashSet<String>,
+    pub tool_option_catalog: ToolOptionCatalog,
     pub optiscaler_releases: Vec<modde_games::tools::ToolReleaseSummary>,
-    pub optiscaler_release_tags: Vec<String>,
-    pub optiscaler_release_assets: Vec<String>,
     pub optiscaler_releases_loading: bool,
-    pub proton_versions: Vec<String>,
+    pub proton_versions_loading: bool,
+    pub executables: Vec<ExecutableUiEntry>,
+    pub executables_loading: bool,
+    pub executables_load_error: Option<String>,
+    pub executables_load_generation: u64,
+    pub executable_draft: ExecutableDraft,
+    pub executable_editor_open: bool,
+    pub executable_error: Option<String>,
+    pub active_executable_operations: HashSet<String>,
+}
+
+impl ToolState {
+    #[must_use]
+    pub fn is_tool_busy(&self, tool_id: &str) -> bool {
+        self.active_operations.contains(tool_id)
+    }
+
+    #[must_use]
+    pub fn is_executable_busy(&self, name: &str) -> bool {
+        self.active_executable_operations.contains(name)
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExecutableUiEntry {
+    pub name: String,
+    pub executable_path: String,
+    pub arguments: String,
+    pub working_dir: String,
+    pub environment: String,
+    pub wine_dll_overrides: String,
+    pub output_mod: String,
+    pub enabled: bool,
+}
+
+impl ExecutableUiEntry {
+    fn from_row(row: modde_core::db::ExecutableConfigRow) -> Self {
+        let args = serde_json::from_str::<Vec<String>>(&row.arguments_json).unwrap_or_default();
+        let env = serde_json::from_str::<HashMap<String, String>>(&row.environment_json)
+            .unwrap_or_default();
+        let mut env_lines = env
+            .into_iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect::<Vec<_>>();
+        env_lines.sort();
+        Self {
+            name: row.name,
+            executable_path: row.executable_path.display().to_string(),
+            arguments: args.join(" "),
+            working_dir: row
+                .working_dir
+                .map(|path| path.display().to_string())
+                .unwrap_or_default(),
+            environment: env_lines.join("\n"),
+            wine_dll_overrides: row.wine_dll_overrides.unwrap_or_default(),
+            output_mod: row.output_mod,
+            enabled: row.enabled,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutableDraft {
+    pub name: String,
+    pub executable_path: String,
+    pub arguments: String,
+    pub working_dir: String,
+    pub environment: String,
+    pub wine_dll_overrides: String,
+    pub output_mod: String,
+}
+
+impl Default for ExecutableDraft {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            executable_path: String::new(),
+            arguments: String::new(),
+            working_dir: String::new(),
+            environment: String::new(),
+            wine_dll_overrides: String::new(),
+            output_mod: "__overwrite__".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutableDraftField {
+    Name,
+    Path,
+    Arguments,
+    WorkingDir,
+    Environment,
+    WineDllOverrides,
+    OutputMod,
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ToolUiEntry {
     pub tool_id: String,
     pub display_name: String,
@@ -1469,6 +2804,40 @@ pub struct ToolUiEntry {
     pub optiscaler_state: Option<String>,
     pub optiscaler_latest_backup: Option<String>,
     pub optiscaler_detected_files: usize,
+    pub apply_pending: bool,
+    pub apply_missing_inputs: Vec<String>,
+    pub setting_history: Vec<ToolHistoryUiEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolHistoryUiEntry {
+    pub node_id: String,
+    pub label: String,
+    pub reason: String,
+    pub enabled: bool,
+    pub is_current: bool,
+}
+
+impl ToolHistoryUiEntry {
+    fn from_node(node: modde_core::db::ToolSettingHistoryNode) -> Self {
+        let short_id = node.node_id.chars().take(18).collect::<String>();
+        let state = if node.enabled { "enabled" } else { "disabled" };
+        Self {
+            node_id: node.node_id,
+            label: format!("{} - {state}", node.created_at),
+            reason: node.reason,
+            enabled: node.enabled,
+            is_current: node.is_current,
+        }
+        .with_short_id(short_id)
+    }
+
+    fn with_short_id(mut self, short_id: String) -> Self {
+        if !short_id.is_empty() {
+            self.label = format!("{} ({short_id})", self.label);
+        }
+        self
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1493,6 +2862,38 @@ impl ToolReleaseSupport {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ToolApplyResult {
+    pub display_name: String,
+    pub applied_file_count: usize,
+    pub validation_message: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ToolRevertResult {
+    pub display_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ToolLoadSnapshot {
+    pub entries: Vec<ToolUiEntry>,
+    pub active_tool_id: Option<String>,
+    pub game_label: Option<String>,
+    pub game_dir_configured: bool,
+    pub tool_option_catalog: ToolOptionCatalog,
+    pub executables: Vec<ExecutableUiEntry>,
+}
+
+#[derive(Debug, Clone)]
+struct ToolLoadRequest {
+    game_id: String,
+    display_name: String,
+    configured_game_dir: Option<PathBuf>,
+    optiscaler_releases: Vec<modde_games::tools::ToolReleaseSummary>,
+    tool_option_catalog: ToolOptionCatalog,
+    previous_active_tool_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Default)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct WabbajackInstallerState {
@@ -1502,6 +2903,7 @@ pub struct WabbajackInstallerState {
     pub error: Option<String>,
     pub search: String,
     pub game_filter: Option<String>,
+    pub game_filter_user_edited: bool,
     pub official_only: bool,
     pub include_nsfw: bool,
     pub include_down: bool,
@@ -1765,6 +3167,10 @@ impl FOMODWizardState {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    /// External process (typically the CLI) notified the GUI that the
+    /// profile DB has changed. Triggers a profile reload.
+    ExternalRefresh,
+
     // Navigation
     SwitchView(View),
     ToggleSidebarGroup(SidebarGroup),
@@ -1868,6 +3274,8 @@ pub enum Message {
     /// Switch the active browse tab. Fires a task to load the feed
     /// for the new tab if its contents are empty.
     BrowseTabSwitched(crate::views::browse_nexus::BrowseTab),
+    /// Switch the Nexus browser to a different supported game.
+    BrowseGameChanged(Option<String>),
     /// Live search box keystroke.
     BrowseSearchChanged(String),
     /// Submit the search (Enter pressed). Runs the appropriate query
@@ -1953,7 +3361,10 @@ pub enum Message {
     },
 
     // Settings
-    SetNexusApiKey(String),
+    SetNexusApiKeyDraft(String),
+    ToggleNexusApiKeyVisibility,
+    ReplaceNexusApiKey,
+    RemoveNexusConfigKey,
     SetGamePath {
         game_id: String,
         path: PathBuf,
@@ -1981,10 +3392,6 @@ pub enum Message {
     RestoreSaveSnapshot(String),
     SelectSaveSnapshot(String),
 
-    // Verification
-    RunVerify,
-    VerifyComplete(VerifyResults),
-
     // Mod list – category separators
     ToggleSeparator(Option<i64>),
 
@@ -1996,7 +3403,18 @@ pub enum Message {
     RunDiagnostics,
 
     // Tools
+    LoadTools,
+    ToolsLoaded {
+        generation: u64,
+        result: Result<ToolLoadSnapshot, String>,
+    },
     RefreshTools,
+    LoadExecutables,
+    RefreshExecutables,
+    ExecutablesLoaded {
+        generation: u64,
+        result: Result<Vec<ExecutableUiEntry>, String>,
+    },
     SelectToolTab(String),
     UpdateToolSetting {
         tool_id: String,
@@ -2007,17 +3425,61 @@ pub enum Message {
         tool_id: String,
         enabled: bool,
     },
+    ToggleToolAdvancedSettings,
     ApplyTool(String),
     RevertTool(String),
+    ActivateOptiScaler,
+    DeactivateOptiScaler,
     AdoptOptiScaler,
     RestoreOptiScalerBackup,
     ResetOptiScalerConfig,
+    RestoreToolSettings {
+        tool_id: String,
+        node_id: String,
+    },
+    ToolSettingsRestored {
+        tool_id: String,
+        result: Result<String, String>,
+    },
     RefreshOptiScalerReleases,
     OptiScalerReleasesLoaded(Result<Vec<modde_games::tools::ToolReleaseSummary>, String>),
     InstallOptiScalerRelease,
     OptiScalerReleaseInstalled(Result<String, String>),
+    RefreshProtonVersions,
+    ProtonVersionsLoaded(Result<Vec<String>, String>),
     InstallProtonVersion,
     ProtonVersionInstalled(Result<String, String>),
+    ToolApplied {
+        tool_id: String,
+        result: Result<ToolApplyResult, String>,
+    },
+    ToolReverted {
+        tool_id: String,
+        result: Result<ToolRevertResult, String>,
+    },
+    UpdateExecutableDraft {
+        field: ExecutableDraftField,
+        value: String,
+    },
+    OpenExecutableEditor,
+    ClearExecutableDraft,
+    EditExecutable(String),
+    SaveExecutable,
+    ExecutableSaved(Result<String, String>),
+    RemoveExecutable(String),
+    ExecutableRemoved {
+        name: String,
+        result: Result<String, String>,
+    },
+    RunExecutable(String),
+    ExecutableRunComplete {
+        name: String,
+        result: Result<String, String>,
+    },
+    BrowseExecutablePath,
+    ExecutablePathSelected(Option<PathBuf>),
+    BrowseExecutableWorkingDir,
+    ExecutableWorkingDirSelected(Option<PathBuf>),
 
     // Downloads
     PauseDownload(usize),
@@ -2060,6 +3522,18 @@ pub enum Message {
     ClearFilters,
     ToggleCompactModList,
 
+    // Button hover help
+    ButtonHoverStarted {
+        id: u64,
+        description: &'static str,
+    },
+    ButtonHoverElapsed {
+        id: u64,
+    },
+    ButtonHoverEnded {
+        id: u64,
+    },
+
     // Misc
     Noop,
 }
@@ -2091,6 +3565,8 @@ impl Modde {
             active_profile: None,
             profiles: Vec::new(),
             status_message: "Ready".to_string(),
+            button_hover_toast: ButtonHoverToastState::default(),
+            pending_tools_load_status_message: None,
             settings,
             collection_search: String::new(),
             collections: Vec::new(),
@@ -2116,7 +3592,10 @@ impl Modde {
             selected_save_details: None,
             experiment_depth: 0,
             nexus_status: None,
-            verify: VerifyState::Idle,
+            nexus_api_key_draft: String::new(),
+            nexus_api_key_visible: false,
+            nexus_api_key_source: None,
+            nexus_config_key_exists: false,
             new_profile_name: String::new(),
             new_profile_dialog_open: false,
             game_path_dialog_open: false,
@@ -2142,11 +3621,9 @@ impl Modde {
                 FilterCriterion::new(FilterKind::HasNexusId),
             ],
             compact_mod_list: false,
-            collapsed_sidebar_groups: HashSet::from([
-                SidebarGroup::Maintenance,
-                SidebarGroup::General,
-            ]),
+            collapsed_sidebar_groups: HashSet::from([SidebarGroup::General]),
         };
+        app.refresh_nexus_api_key_state();
 
         // Auto-detect: if no game is selected but profiles exist, pick the first profile's game
         if app.selected_game.is_none()
@@ -2169,10 +3646,27 @@ impl Modde {
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            // External process pushed a refresh signal (CLI install,
+            // update apply, uninstall, …). Re-read the profile from
+            // the shared sqlite DB so the user sees the change without
+            // restarting or switching profiles.
+            Message::ExternalRefresh => {
+                self.reload_profile();
+                self.status_message = "Refreshed from external change".to_string();
+            }
+
             // ── Navigation ───────────────────────────────────────
             Message::SwitchView(view) => match view {
                 View::Saves => {
                     self.active_view = View::Saves;
+                    if !self.current_game_supports_save_profiles() {
+                        self.save_snapshots.clear();
+                        self.selected_save_details = None;
+                        self.current_fingerprint = None;
+                        self.status_message =
+                            "Save profiles are not supported for this game".to_string();
+                        return Task::none();
+                    }
                     return self.update(Message::LoadSaveHistory);
                 }
                 View::DataTab => {
@@ -2181,14 +3675,28 @@ impl Modde {
                 }
                 View::Tools => {
                     self.active_view = View::Tools;
-                    self.refresh_tools_state();
+                    return self.update(Message::LoadTools);
+                }
+                View::Executables => {
+                    self.active_view = View::Executables;
+                    return self.update(Message::LoadExecutables);
+                }
+                View::Diagnostics => {
+                    self.active_view = View::Diagnostics;
+                    return self.update(Message::RunDiagnostics);
                 }
                 View::WabbajackInstaller(state) => {
+                    let mut state = state;
+                    self.initialize_wabbajack_game_filter(&mut state);
                     let should_load = state.entries.is_empty();
                     self.active_view = View::WabbajackInstaller(state);
                     if should_load {
                         return self.update(Message::LoadWabbajackCatalog);
                     }
+                }
+                View::BrowseNexus => {
+                    self.active_view = View::BrowseNexus;
+                    self.sync_browse_game_to_current(false);
                 }
                 other => {
                     self.active_view = other;
@@ -2202,8 +3710,12 @@ impl Modde {
             Message::SwitchProfile(name) => {
                 self.active_profile = Some(name);
                 self.reload_profile();
+                self.sync_browse_game_to_current(true);
                 self.selected_save_details = None;
                 self.status_message = "Profile switched".to_string();
+                if matches!(self.active_view, View::Diagnostics) {
+                    return self.update(Message::RunDiagnostics);
+                }
             }
             Message::CreateProfile { name, game_id } => {
                 let name = name.trim().to_string();
@@ -2945,10 +4457,9 @@ impl Modde {
                                     game_plugin.detect_install().ok_or_else(|| {
                                         format!("could not detect install for {game_id}")
                                     })?;
-                                let mod_dir = game_plugin.mod_directory(&install_path);
                                 let staging_dir = ProfileManager::staging_dir(&profile.name);
                                 game_plugin
-                                    .deploy(&staging_dir, &mod_dir)
+                                    .deploy_to_install(&staging_dir, &install_path)
                                     .map_err(|e| e.to_string())?;
                                 game_plugin
                                     .post_deploy(&install_path)
@@ -3090,21 +4601,34 @@ impl Modde {
 
             // ── Browse Nexus (Phase 6) ───────────────────────────
             Message::BrowseTabSwitched(tab) => {
+                self.sync_browse_game_to_current(false);
                 self.browse_nexus.active_tab = tab;
                 self.browse_nexus.error = None;
-                let domain = match self.current_game_nexus_domain() {
+                let domain = match self.browse_game_nexus_domain() {
                     Some(d) => d,
                     None => return Task::none(),
                 };
                 return self.spawn_browse_load(tab, domain, self.browse_nexus.search_query.clone());
             }
+            Message::BrowseGameChanged(game_id) => {
+                self.browse_nexus.selected_game_id = game_id;
+                self.clear_browse_results();
+                let domain = match self.browse_game_nexus_domain() {
+                    Some(d) => d,
+                    None => return Task::none(),
+                };
+                let tab = self.browse_nexus.active_tab;
+                let query = self.browse_nexus.search_query.clone();
+                return self.spawn_browse_load(tab, domain, query);
+            }
             Message::BrowseSearchChanged(query) => {
                 self.browse_nexus.search_query = query;
             }
             Message::BrowseSearchSubmit => {
+                self.sync_browse_game_to_current(false);
                 self.browse_nexus.active_tab = crate::views::browse_nexus::BrowseTab::Search;
                 self.browse_nexus.error = None;
-                let domain = match self.current_game_nexus_domain() {
+                let domain = match self.browse_game_nexus_domain() {
                     Some(d) => d,
                     None => return Task::none(),
                 };
@@ -3241,6 +4765,7 @@ impl Modde {
             Message::WabbajackGameFilterChanged(value) => {
                 if let View::WabbajackInstaller(ref mut state) = self.active_view {
                     state.game_filter = value;
+                    state.game_filter_user_edited = true;
                 }
             }
             Message::WabbajackToggleOfficialOnly(value) => {
@@ -3731,10 +5256,38 @@ impl Modde {
             }
 
             // ── Settings ─────────────────────────────────────────
-            Message::SetNexusApiKey(key) => {
-                self.settings.nexus_api_key = key;
-                self.status_message = "Nexus API key updated".to_string();
-                self.save_settings();
+            Message::SetNexusApiKeyDraft(key) => {
+                self.nexus_api_key_draft = key;
+                self.nexus_status = None;
+            }
+            Message::ToggleNexusApiKeyVisibility => {
+                self.nexus_api_key_visible = !self.nexus_api_key_visible;
+            }
+            Message::ReplaceNexusApiKey => {
+                match modde_sources::nexus::auth::write_config_api_key(&self.nexus_api_key_draft) {
+                    Ok(()) => {
+                        self.refresh_nexus_api_key_state();
+                        self.status_message = "Nexus API key saved to modde config".to_string();
+                        self.nexus_status = None;
+                    }
+                    Err(e) => {
+                        self.status_message = format!("Nexus key not saved: {e}");
+                        self.nexus_status = Some(NexusAuthStatus::Invalid(e.to_string()));
+                    }
+                }
+            }
+            Message::RemoveNexusConfigKey => {
+                match modde_sources::nexus::auth::delete_config_api_key() {
+                    Ok(()) => {
+                        self.refresh_nexus_api_key_state();
+                        self.status_message = "Removed modde Nexus API key config".to_string();
+                        self.nexus_status = None;
+                    }
+                    Err(e) => {
+                        self.status_message = format!("Failed to remove modde Nexus key: {e}");
+                        self.nexus_status = Some(NexusAuthStatus::Invalid(e.to_string()));
+                    }
+                }
             }
             Message::SetGamePath { game_id, path } => {
                 let path_exists = path.is_dir();
@@ -3793,7 +5346,7 @@ impl Modde {
             }
             Message::ValidateNexusKey => {
                 self.nexus_status = Some(NexusAuthStatus::Checking);
-                let api_key = self.settings.nexus_api_key.clone();
+                let api_key = self.nexus_api_key_draft.trim().to_string();
                 return Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || -> Result<(String, bool), String> {
@@ -3915,8 +5468,7 @@ impl Modde {
                     let name = profile_name.clone();
                     match ProfileManager::open() {
                         Ok(pm) => {
-                            let save_dir = modde_games::resolve_game_plugin(&game_id)
-                                .and_then(modde_games::GamePlugin::save_directory);
+                            let save_dir = Self::resolve_save_dir(&game_id);
                             match pm.try_profile(&name, &game_id, save_dir.as_deref()) {
                                 Ok(()) => {
                                     self.experiment_depth += 1;
@@ -3937,8 +5489,7 @@ impl Modde {
                     let game_id = profile.game_id.clone();
                     match ProfileManager::open() {
                         Ok(pm) => {
-                            let save_dir = modde_games::resolve_game_plugin(&game_id)
-                                .and_then(modde_games::GamePlugin::save_directory);
+                            let save_dir = Self::resolve_save_dir(&game_id);
                             match pm.rollback(&game_id, save_dir.as_deref()) {
                                 Ok(prev_name) => {
                                     self.active_profile = Some(prev_name.clone());
@@ -3973,6 +5524,13 @@ impl Modde {
                 self.selected_save_details = None;
                 if let Some(ref profile) = self.loaded_profile {
                     let game_id = profile.game_id.clone();
+                    if !Self::game_supports_save_profiles(&game_id) {
+                        self.save_snapshots.clear();
+                        self.current_fingerprint = None;
+                        self.status_message =
+                            "Save profiles are not supported for this game".to_string();
+                        return Task::none();
+                    }
                     let profile_name = profile.name.clone();
                     match modde_core::save::SaveManager::history(&game_id, &profile_name, 20) {
                         Ok(history) => self.save_snapshots = history,
@@ -4012,8 +5570,7 @@ impl Modde {
                 if let Some(ref profile) = self.loaded_profile {
                     let game_id = profile.game_id.clone();
                     let profile_name = profile.name.clone();
-                    let save_dir = modde_games::resolve_game_plugin(&game_id)
-                        .and_then(modde_games::GamePlugin::save_directory);
+                    let save_dir = Self::resolve_save_dir(&game_id);
                     if let Some(save_dir) = save_dir {
                         match modde_core::save::SaveManager::restore(
                             &game_id,
@@ -4026,73 +5583,14 @@ impl Modde {
                             }
                             Err(e) => self.status_message = format!("Restore failed: {e}"),
                         }
-                    } else {
+                    } else if Self::game_supports_save_profiles(&game_id) {
                         self.status_message =
                             "Cannot detect save directory for this game".to_string();
+                    } else {
+                        self.status_message =
+                            "Save profiles are not supported for this game".to_string();
                     }
                 }
-            }
-
-            // ── Verification ─────────────────────────────────────
-            Message::RunVerify => {
-                self.verify = VerifyState::Running;
-                self.status_message = "Running verification...".to_string();
-                if let Some(ref profile) = self.loaded_profile {
-                    let profile_name = profile.name.clone();
-                    let staging_dir = ProfileManager::staging_dir(&profile_name);
-                    return Task::perform(
-                        async move {
-                            tokio::task::spawn_blocking(move || -> VerifyResults {
-                                let mut results = VerifyResults {
-                                    missing_mods: SmallVec::new(),
-                                    hash_mismatches: Vec::new(),
-                                    broken_symlinks: SmallVec::new(),
-                                    ok_count: 0,
-                                };
-                                if !staging_dir.exists() {
-                                    return results;
-                                }
-                                fn walk(dir: &std::path::Path, results: &mut VerifyResults) {
-                                    if let Ok(entries) = std::fs::read_dir(dir) {
-                                        for entry in entries.flatten() {
-                                            let path = entry.path();
-                                            if path.is_dir() {
-                                                walk(&path, results);
-                                            } else if path.is_symlink() {
-                                                match std::fs::read_link(&path) {
-                                                    Ok(target) if target.exists() => {
-                                                        results.ok_count += 1;
-                                                    }
-                                                    _ => results.broken_symlinks.push(path),
-                                                }
-                                            } else {
-                                                results.ok_count += 1;
-                                            }
-                                        }
-                                    }
-                                }
-                                walk(&staging_dir, &mut results);
-                                results
-                            })
-                            .await
-                            .unwrap_or(VerifyResults {
-                                missing_mods: SmallVec::new(),
-                                hash_mismatches: Vec::new(),
-                                broken_symlinks: SmallVec::new(),
-                                ok_count: 0,
-                            })
-                        },
-                        Message::VerifyComplete,
-                    );
-                }
-                self.verify = VerifyState::Idle;
-            }
-            Message::VerifyComplete(results) => {
-                let ok = results.ok_count;
-                let broken = results.broken_symlinks.len();
-                self.status_message = format!("Verify: {ok} OK, {broken} broken symlink(s)");
-                self.verify = VerifyState::Complete(results);
-                self.active_view = View::Verify;
             }
 
             Message::DataTabFilterChanged(f) => {
@@ -4106,13 +5604,64 @@ impl Modde {
                 self.status_message = "Running diagnostics...".to_string();
                 self.run_diagnostics_now();
             }
+            Message::LoadTools => {
+                self.status_message = "Loading tools...".to_string();
+                return self.start_tools_load();
+            }
             Message::RefreshTools => {
-                self.refresh_tools_state();
-                self.status_message = if self.tool_state.entries.is_empty() {
-                    "No tool state available for the current game".to_string()
-                } else {
-                    format!("Loaded {} tool(s)", self.tool_state.entries.len())
-                };
+                self.status_message = "Loading tools...".to_string();
+                return self.start_tools_load();
+            }
+            Message::LoadExecutables => {
+                self.status_message = "Loading executables...".to_string();
+                return self.start_executables_load();
+            }
+            Message::RefreshExecutables => {
+                self.status_message = "Loading executables...".to_string();
+                return self.start_executables_load();
+            }
+            Message::ToolsLoaded { generation, result } => {
+                if generation != self.tool_state.load_generation {
+                    return Task::none();
+                }
+                self.tool_state.loading = false;
+                match result {
+                    Ok(snapshot) => {
+                        let count = snapshot.entries.len();
+                        self.apply_tool_snapshot(snapshot);
+                        self.status_message =
+                            if let Some(status) = self.pending_tools_load_status_message.take() {
+                                status
+                            } else if count == 0 {
+                                "No tool state available for the current game".to_string()
+                            } else {
+                                format!("Loaded {count} tool(s)")
+                            };
+                    }
+                    Err(err) => {
+                        self.pending_tools_load_status_message = None;
+                        self.tool_state.load_error = Some(err.clone());
+                        self.status_message = format!("Failed to load tools: {err}");
+                    }
+                }
+            }
+            Message::ExecutablesLoaded { generation, result } => {
+                if generation != self.tool_state.executables_load_generation {
+                    return Task::none();
+                }
+                self.tool_state.executables_loading = false;
+                match result {
+                    Ok(executables) => {
+                        let count = executables.len();
+                        self.tool_state.executables = executables;
+                        self.tool_state.executables_load_error = None;
+                        self.status_message = format!("Loaded {count} executable(s)");
+                    }
+                    Err(err) => {
+                        self.tool_state.executables_load_error = Some(err.clone());
+                        self.status_message = format!("Failed to load executables: {err}");
+                    }
+                }
             }
             Message::RefreshOptiScalerReleases => {
                 self.tool_state.optiscaler_releases_loading = true;
@@ -4136,48 +5685,23 @@ impl Modde {
                                 "Failed to load OptiScaler configuration".to_string();
                             return Task::none();
                         };
-                        self.tool_state.optiscaler_release_tags = releases
-                            .iter()
-                            .filter(|release| {
-                                !installable_tool_assets("optiscaler", release).is_empty()
-                            })
-                            .map(|release| release.tag.clone())
-                            .collect();
-                        let configured_tag = config.get_str("release_tag").unwrap_or("");
-                        let configured_asset = config.get_str("release_asset").unwrap_or("");
-                        let selected = if self
-                            .tool_state
-                            .optiscaler_release_tags
-                            .iter()
-                            .any(|tag| tag == configured_tag)
-                        {
-                            let assets =
-                                tool_assets_for_tag("optiscaler", &releases, configured_tag);
-                            let asset = if assets.iter().any(|asset| asset == configured_asset) {
-                                configured_asset.to_string()
-                            } else {
-                                assets.first().cloned().unwrap_or_default()
-                            };
-                            Some((configured_tag.to_string(), asset))
-                        } else {
-                            first_installable_tool_release("optiscaler", &releases)
-                        };
+                        let selected = sync_optiscaler_release_options(
+                            &mut self.tool_state.tool_option_catalog,
+                            &releases,
+                            &mut config,
+                        );
                         if let Some((tag, asset)) = selected {
-                            self.tool_state.optiscaler_release_assets =
-                                tool_assets_for_tag("optiscaler", &releases, &tag);
                             config.set("release_tag", serde_json::json!(tag));
                             config.set("release_asset", serde_json::json!(asset));
                             let _ = save_tool_settings(&game_id, "optiscaler", &config);
-                        } else {
-                            self.tool_state.optiscaler_release_assets.clear();
                         }
                         self.tool_state.optiscaler_releases = releases;
-                        self.refresh_tools_state();
                         self.tool_state.active_tool_id = Some("optiscaler".to_string());
                         self.status_message = format!(
                             "Loaded {} OptiScaler release(s)",
-                            self.tool_state.optiscaler_release_tags.len()
+                            self.tool_state.optiscaler_releases.len()
                         );
+                        return self.start_tools_load();
                     }
                     Err(err) => {
                         self.status_message = format!("Failed to load OptiScaler releases: {err}");
@@ -4197,14 +5721,62 @@ impl Modde {
             }
             Message::OptiScalerReleaseInstalled(result) => match result {
                 Ok(message) => {
-                    self.refresh_tools_state();
                     self.tool_state.active_tool_id = Some("optiscaler".to_string());
                     self.status_message = message;
+                    return self.start_tools_load();
                 }
                 Err(err) => {
                     self.status_message = format!("Failed to install OptiScaler: {err}");
                 }
             },
+            Message::RefreshProtonVersions => {
+                self.tool_state.proton_versions_loading = true;
+                self.status_message = "Loading Proton versions...".to_string();
+                return Task::perform(load_proton_versions(), Message::ProtonVersionsLoaded);
+            }
+            Message::ProtonVersionsLoaded(result) => {
+                self.tool_state.proton_versions_loading = false;
+                match result {
+                    Ok(versions) => {
+                        let Some(game_id) = self.current_game_id().map(str::to_string) else {
+                            self.status_message =
+                                "Select a game before loading Proton versions".to_string();
+                            return Task::none();
+                        };
+                        let versions = if versions.is_empty() {
+                            modde_games::tools::proton::proton_version_options()
+                        } else {
+                            versions
+                        };
+                        set_tool_options(
+                            &mut self.tool_state.tool_option_catalog,
+                            "proton",
+                            "selected_version",
+                            versions.clone(),
+                        );
+                        set_tool_options(
+                            &mut self.tool_state.tool_option_catalog,
+                            "proton",
+                            "_catalog_loaded",
+                            vec!["true".to_string()],
+                        );
+                        if let Ok(mut config) = current_tool_config(&game_id, "proton") {
+                            let selected = config.get_str("selected_version").unwrap_or("latest");
+                            if !versions.iter().any(|version| version == selected) {
+                                config.set("selected_version", serde_json::json!("latest"));
+                                let _ = save_tool_settings(&game_id, "proton", &config);
+                            }
+                        }
+                        self.tool_state.active_tool_id = Some("proton".to_string());
+                        self.status_message =
+                            format!("Loaded {} Proton version option(s)", versions.len());
+                        return self.start_tools_load();
+                    }
+                    Err(err) => {
+                        self.status_message = format!("Failed to load Proton versions: {err}");
+                    }
+                }
+            }
             Message::InstallProtonVersion => {
                 let Some(game_id) = self.current_game_id().map(str::to_string) else {
                     self.status_message = "Select a game before installing Proton".to_string();
@@ -4218,9 +5790,9 @@ impl Modde {
             }
             Message::ProtonVersionInstalled(result) => match result {
                 Ok(message) => {
-                    self.refresh_tools_state();
                     self.tool_state.active_tool_id = Some("proton".to_string());
                     self.status_message = message;
+                    return self.start_tools_load();
                 }
                 Err(err) => {
                     self.status_message = format!("Failed to install Proton: {err}");
@@ -4230,6 +5802,14 @@ impl Modde {
                 let should_load_optiscaler = tool_id == "optiscaler"
                     && self.tool_state.optiscaler_releases.is_empty()
                     && !self.tool_state.optiscaler_releases_loading;
+                let should_load_proton = tool_id == "proton"
+                    && !self.tool_state.proton_versions_loading
+                    && tool_options(
+                        &self.tool_state.tool_option_catalog,
+                        "proton",
+                        "_catalog_loaded",
+                    )
+                    .is_none();
                 self.tool_state.active_tool_id = Some(tool_id);
                 if should_load_optiscaler {
                     self.tool_state.optiscaler_releases_loading = true;
@@ -4238,6 +5818,11 @@ impl Modde {
                         load_tool_releases("optiscaler".to_string()),
                         Message::OptiScalerReleasesLoaded,
                     );
+                }
+                if should_load_proton {
+                    self.tool_state.proton_versions_loading = true;
+                    self.status_message = "Loading Proton versions...".to_string();
+                    return Task::perform(load_proton_versions(), Message::ProtonVersionsLoaded);
                 }
             }
             Message::UpdateToolSetting {
@@ -4269,43 +5854,89 @@ impl Modde {
                                         .unwrap_or_default(),
                                 },
                             );
+                        if tool_id == "optiscaler" {
+                            let _ =
+                                modde_games::tools::optiscaler::normalize_optiscaler_release_config(
+                                    &mut config,
+                                );
+                        }
+                        let setting_specs = tool.settings_schema_for(context.as_ref(), &config);
                         let normalized =
-                            normalize_tool_setting_value(&config.settings, &key, value);
+                            if let Some(spec) = setting_specs.iter().find(|spec| spec.key == key) {
+                                normalize_tool_setting_value(
+                                    &config.settings,
+                                    &key,
+                                    normalize_tool_setting_for_kind(value, &spec.kind),
+                                )
+                            } else {
+                                normalize_tool_setting_value(&config.settings, &key, value)
+                            };
                         set_nested_tool_setting(&mut config.settings, &key, normalized);
+                        if tool_id == "optiscaler"
+                            && key == "optiscaler_profile"
+                            && let Some(profile_id) =
+                                config.get_str("optiscaler_profile").map(str::to_string)
+                        {
+                            modde_games::tools::optiscaler::apply_profile_by_id(
+                                &mut config,
+                                &game_id,
+                                &profile_id,
+                            );
+                        }
                         if tool_id == "optiscaler"
                             && key == "release_tag"
                             && let Some(tag) = config.get_str("release_tag").map(str::to_string)
                         {
-                            self.tool_state.optiscaler_release_assets = tool_assets_for_tag(
-                                "optiscaler",
-                                &self.tool_state.optiscaler_releases,
-                                &tag,
-                            );
-                            if let Some(first_asset) =
-                                self.tool_state.optiscaler_release_assets.first().cloned()
+                            if let Some(channel) =
+                                modde_games::tools::optiscaler::optiscaler_goverlay_channel_for_tag(
+                                    &tag,
+                                )
                             {
-                                config.set("release_asset", serde_json::json!(first_asset));
+                                config.set("source_mode", serde_json::json!("goverlay_builds"));
+                                config.set("goverlay_channel", serde_json::json!(channel));
                             } else {
+                                config.set("source_mode", serde_json::json!("github_release"));
+                            }
+                        }
+                        if tool_id == "optiscaler"
+                            && matches!(
+                                key.as_str(),
+                                "source_mode" | "goverlay_channel" | "release_tag"
+                            )
+                        {
+                            if key == "source_mode" || key == "goverlay_channel" {
+                                if config.get_str("source_mode") == Some("goverlay_builds")
+                                    && config.get_str("goverlay_channel").is_none()
+                                {
+                                    config.set("goverlay_channel", serde_json::json!("edge"));
+                                }
+                                config.set("release_tag", serde_json::json!(""));
                                 config.set("release_asset", serde_json::json!(""));
                             }
+                            sync_optiscaler_release_options(
+                                &mut self.tool_state.tool_option_catalog,
+                                &self.tool_state.optiscaler_releases,
+                                &mut config,
+                            );
                         }
                         let settings_json = serde_json::to_string(&config.settings)
                             .unwrap_or_else(|_| "{}".to_string());
-                        match db.save_tool_config(
+                        match db.save_tool_config_with_reason(
                             &game_id,
                             &tool_id,
                             config.enabled,
                             &settings_json,
+                            &format!("ui:set:{key}"),
                         ) {
                             Ok(()) => {
                                 if config.enabled {
                                     let _ =
                                         modde_games::launcher::generate_tool_configs(&game_id, &db);
                                 }
-                                self.refresh_tools_state();
                                 self.tool_state.active_tool_id = Some(tool_id);
                                 self.status_message =
                                     format!("Updated {} setting", tool.display_name());
+                                return self.start_tools_load();
                             }
                             Err(err) => {
                                 self.status_message =
@@ -4343,15 +5974,21 @@ impl Modde {
                                 },
                                 |row| row.settings_json,
                             );
-                        match db.save_tool_config(&game_id, &tool_id, enabled, &settings_json) {
+                        match db.save_tool_config_with_reason(
+                            &game_id,
+                            &tool_id,
+                            enabled,
+                            &settings_json,
+                            if enabled { "ui:enable" } else { "ui:disable" },
+                        ) {
                             Ok(()) => {
                                 let _ = modde_games::launcher::generate_tool_configs(&game_id, &db);
-                                self.refresh_tools_state();
                                 self.status_message = format!(
                                     "{} {}",
                                     tool.display_name(),
                                     if enabled { "enabled" } else { "disabled" }
                                 );
+                                return self.start_tools_load();
                             }
                             Err(err) => {
                                 self.status_message = format!("Failed to update tool state: {err}");
@@ -4363,7 +6000,91 @@ impl Modde {
                     }
                 }
             }
+            Message::ToggleToolAdvancedSettings => {
+                self.tool_state.show_advanced_settings = !self.tool_state.show_advanced_settings;
+            }
+            Message::ActivateOptiScaler => {
+                let id = "optiscaler".to_string();
+                if self.tool_state.is_tool_busy(&id) {
+                    self.status_message = "OptiScaler operation already in progress".to_string();
+                    return Task::none();
+                }
+                let Some(game_id) = self.current_game_id().map(str::to_string) else {
+                    self.status_message = "Select a game before activating OptiScaler".to_string();
+                    return Task::none();
+                };
+                let Some(game_dir) = self.current_game_dir() else {
+                    self.status_message = "Game install path is not configured".to_string();
+                    return Task::none();
+                };
+                let context = self.current_tool_game_context();
+                self.tool_state.active_operations.insert(id.clone());
+                self.status_message = "Activating OptiScaler...".to_string();
+                return Task::perform(
+                    apply_tool_for_game(game_id, game_dir, id.clone(), context),
+                    move |result| Message::ToolApplied {
+                        tool_id: id.clone(),
+                        result,
+                    },
+                );
+            }
+            Message::DeactivateOptiScaler => {
+                let id = "optiscaler".to_string();
+                if self.tool_state.is_tool_busy(&id) {
+                    self.status_message = "OptiScaler operation already in progress".to_string();
+                    return Task::none();
+                }
+                let Some(game_id) = self.current_game_id().map(str::to_string) else {
+                    self.status_message =
+                        "Select a game before deactivating OptiScaler".to_string();
+                    return Task::none();
+                };
+                let Some(game_dir) = self.current_game_dir() else {
+                    self.status_message = "Game install path is not configured".to_string();
+                    return Task::none();
+                };
+                self.tool_state.active_operations.insert(id.clone());
+                self.status_message = "Deactivating OptiScaler...".to_string();
+                return Task::perform(
+                    deactivate_optiscaler_for_game(game_id, game_dir),
+                    move |result| Message::ToolReverted {
+                        tool_id: id.clone(),
+                        result,
+                    },
+                );
+            }
+            Message::RestoreToolSettings { tool_id, node_id } => {
+                let Some(game_id) = self.current_game_id().map(str::to_string) else {
+                    self.status_message =
+                        "Select a game before restoring tool settings".to_string();
+                    return Task::none();
+                };
+                self.status_message = "Restoring tool settings...".to_string();
+                return Task::perform(
+                    restore_tool_settings_for_game(game_id, tool_id.clone(), node_id),
+                    move |result| Message::ToolSettingsRestored {
+                        tool_id: tool_id.clone(),
+                        result,
+                    },
+                );
+            }
+            Message::ToolSettingsRestored { tool_id, result } => match result {
+                Ok(message) => {
+                    self.tool_state.active_tool_id = Some(tool_id);
+                    self.status_message = message;
+                    if self.tool_load_request().is_some() {
+                        return self.start_tools_load();
+                    }
+                }
+                Err(err) => {
+                    self.status_message = format!("Failed to restore tool settings: {err}");
+                }
+            },
             Message::ApplyTool(id) => {
+                if self.tool_state.is_tool_busy(&id) {
+                    self.status_message = format!("{id} operation already in progress");
+                    return Task::none();
+                }
                 let Some(game_id) = self.current_game_id().map(str::to_string) else {
                     self.status_message = "Select a game before applying tools".to_string();
                     return Task::none();
@@ -4377,62 +6098,21 @@ impl Modde {
                     return Task::none();
                 };
                 let context = self.current_tool_game_context();
-                match modde_core::db::ModdeDb::open() {
-                    Ok(db) => {
-                        let row = db.load_tool_config(&game_id, &id).ok().flatten();
-                        let mut config = row.map_or_else(
-                            || tool.default_config_for(context.as_ref()),
-                            |row| modde_games::tools::ToolConfig {
-                                tool_id: row.tool_id,
-                                enabled: row.enabled,
-                                settings: serde_json::from_str(&row.settings_json)
-                                    .unwrap_or_default(),
-                            },
-                        );
-                        config.enabled = true;
-                        config.set("_game_id", serde_json::json!(game_id));
-                        apply_derived_tool_settings(&mut config, context.as_ref());
-                        match tool.apply_for(&game_dir, context.as_ref(), &config) {
-                            Ok(applied) => {
-                                let paths: Vec<String> = applied
-                                    .files
-                                    .iter()
-                                    .map(|path| path.to_string_lossy().replace('\\', "/"))
-                                    .collect();
-                                let settings_json = serde_json::to_string(&config.settings)
-                                    .unwrap_or_else(|_| "{}".to_string());
-                                if id == "optiscaler" {
-                                    config.set(
-                                        "managed_manifest",
-                                        modde_games::tools::optiscaler::managed_manifest_json(
-                                            &game_dir, &applied,
-                                        ),
-                                    );
-                                }
-                                let settings_json = serde_json::to_string(&config.settings)
-                                    .unwrap_or(settings_json);
-                                let _ = db.save_tool_config(&game_id, &id, true, &settings_json);
-                                let _ = db.clear_applied_files(&game_id, &id);
-                                let _ = db.save_applied_files(&game_id, &id, &paths);
-                                let _ = modde_games::launcher::generate_tool_configs(&game_id, &db);
-                                self.refresh_tools_state();
-                                self.status_message = format!(
-                                    "Applied {} ({} file(s))",
-                                    tool.display_name(),
-                                    paths.len()
-                                );
-                            }
-                            Err(err) => {
-                                self.status_message = format!("Failed to apply tool: {err}");
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        self.status_message = format!("Failed to open tool database: {err}");
-                    }
-                }
+                self.tool_state.active_operations.insert(id.clone());
+                self.status_message = format!("Applying {}...", tool.display_name());
+                return Task::perform(
+                    apply_tool_for_game(game_id, game_dir, id.clone(), context),
+                    move |result| Message::ToolApplied {
+                        tool_id: id.clone(),
+                        result,
+                    },
+                );
             }
             Message::RevertTool(id) => {
+                if self.tool_state.is_tool_busy(&id) {
+                    self.status_message = format!("{id} operation already in progress");
+                    return Task::none();
+                }
                 let Some(game_id) = self.current_game_id().map(str::to_string) else {
                     self.status_message = "Select a game before reverting tools".to_string();
                     return Task::none();
@@ -4445,27 +6125,237 @@ impl Modde {
                     self.status_message = format!("Unknown tool: {id}");
                     return Task::none();
                 };
-                match modde_core::db::ModdeDb::open() {
-                    Ok(db) => {
-                        let applied_paths =
-                            db.load_applied_files(&game_id, &id).unwrap_or_default();
-                        let applied = modde_games::tools::AppliedFiles {
-                            files: applied_paths.iter().map(PathBuf::from).collect(),
-                        };
-                        match tool.revert(&game_dir, &applied) {
-                            Ok(()) => {
-                                let _ = db.clear_applied_files(&game_id, &id);
-                                self.refresh_tools_state();
-                                self.status_message = format!("Reverted {}", tool.display_name());
-                            }
-                            Err(err) => {
-                                self.status_message = format!("Failed to revert tool: {err}");
-                            }
+                self.tool_state.active_operations.insert(id.clone());
+                self.status_message = format!("Reverting {}...", tool.display_name());
+                return Task::perform(
+                    revert_tool_for_game(game_id, game_dir, id.clone()),
+                    move |result| Message::ToolReverted {
+                        tool_id: id.clone(),
+                        result,
+                    },
+                );
+            }
+            Message::ToolApplied { tool_id, result } => {
+                self.tool_state.active_operations.remove(&tool_id);
+                match result {
+                    Ok(result) => {
+                        self.tool_state.active_tool_id = Some(tool_id);
+                        let validation = result
+                            .validation_message
+                            .map(|message| format!("; {message}"))
+                            .unwrap_or_default();
+                        self.status_message = format!(
+                            "Applied {} ({} file(s)){validation}",
+                            result.display_name, result.applied_file_count
+                        );
+                        if self.tool_load_request().is_some() {
+                            return self.start_tools_load();
                         }
                     }
                     Err(err) => {
-                        self.status_message = format!("Failed to open tool database: {err}");
+                        self.status_message = format!("Failed to apply tool: {err}");
                     }
+                }
+            }
+            Message::ToolReverted { tool_id, result } => {
+                self.tool_state.active_operations.remove(&tool_id);
+                match result {
+                    Ok(result) => {
+                        self.tool_state.active_tool_id = Some(tool_id);
+                        self.status_message = format!("Reverted {}", result.display_name);
+                        if self.tool_load_request().is_some() {
+                            return self.start_tools_load();
+                        }
+                    }
+                    Err(err) => {
+                        self.status_message = format!("Failed to revert tool: {err}");
+                    }
+                }
+            }
+            Message::UpdateExecutableDraft { field, value } => {
+                self.tool_state.executable_editor_open = true;
+                match field {
+                    ExecutableDraftField::Name => self.tool_state.executable_draft.name = value,
+                    ExecutableDraftField::Path => {
+                        self.tool_state.executable_draft.executable_path = value;
+                    }
+                    ExecutableDraftField::Arguments => {
+                        self.tool_state.executable_draft.arguments = value;
+                    }
+                    ExecutableDraftField::WorkingDir => {
+                        self.tool_state.executable_draft.working_dir = value;
+                    }
+                    ExecutableDraftField::Environment => {
+                        self.tool_state.executable_draft.environment = value;
+                    }
+                    ExecutableDraftField::WineDllOverrides => {
+                        self.tool_state.executable_draft.wine_dll_overrides = value;
+                    }
+                    ExecutableDraftField::OutputMod => {
+                        self.tool_state.executable_draft.output_mod = value;
+                    }
+                }
+                self.tool_state.executable_error = None;
+            }
+            Message::OpenExecutableEditor => {
+                self.tool_state.executable_draft = ExecutableDraft::default();
+                self.tool_state.executable_editor_open = true;
+                self.tool_state.executable_error = None;
+            }
+            Message::ClearExecutableDraft => {
+                self.tool_state.executable_draft = ExecutableDraft::default();
+                self.tool_state.executable_editor_open = false;
+                self.tool_state.executable_error = None;
+            }
+            Message::EditExecutable(name) => {
+                if let Some(entry) = self
+                    .tool_state
+                    .executables
+                    .iter()
+                    .find(|entry| entry.name == name)
+                    .cloned()
+                {
+                    self.tool_state.executable_draft = ExecutableDraft {
+                        name: entry.name,
+                        executable_path: entry.executable_path,
+                        arguments: entry.arguments,
+                        working_dir: entry.working_dir,
+                        environment: entry.environment,
+                        wine_dll_overrides: entry.wine_dll_overrides,
+                        output_mod: entry.output_mod,
+                    };
+                    self.tool_state.executable_editor_open = true;
+                    self.tool_state.executable_error = None;
+                }
+            }
+            Message::SaveExecutable => {
+                let Some(game_id) = self.current_game_id().map(str::to_string) else {
+                    self.status_message = "Select a game before saving executables".to_string();
+                    return Task::none();
+                };
+                let row = match executable_draft_to_row(&game_id, &self.tool_state.executable_draft)
+                {
+                    Ok(row) => row,
+                    Err(err) => {
+                        self.tool_state.executable_error = Some(err.clone());
+                        self.status_message = format!("Executable not saved: {err}");
+                        return Task::none();
+                    }
+                };
+                self.status_message = format!("Saving executable '{}'...", row.name);
+                return Task::perform(save_executable_for_game(row), Message::ExecutableSaved);
+            }
+            Message::ExecutableSaved(result) => match result {
+                Ok(message) => {
+                    self.status_message = message;
+                    self.tool_state.executable_error = None;
+                    self.tool_state.executable_draft = ExecutableDraft::default();
+                    self.tool_state.executable_editor_open = false;
+                    return self.refresh_executables_or_tools();
+                }
+                Err(err) => {
+                    self.tool_state.executable_error = Some(err.clone());
+                    self.status_message = format!("Executable not saved: {err}");
+                }
+            },
+            Message::RemoveExecutable(name) => {
+                let Some(game_id) = self.current_game_id().map(str::to_string) else {
+                    self.status_message = "Select a game before removing executables".to_string();
+                    return Task::none();
+                };
+                self.tool_state
+                    .active_executable_operations
+                    .insert(name.clone());
+                return Task::perform(
+                    remove_executable_for_game(game_id, name.clone()),
+                    move |result| Message::ExecutableRemoved {
+                        name: name.clone(),
+                        result,
+                    },
+                );
+            }
+            Message::ExecutableRemoved { name, result } => {
+                self.tool_state.active_executable_operations.remove(&name);
+                match result {
+                    Ok(message) => {
+                        self.status_message = message;
+                        return self.refresh_executables_or_tools();
+                    }
+                    Err(err) => {
+                        self.tool_state.executable_error = Some(err.clone());
+                        self.status_message = format!("Executable not removed: {err}");
+                    }
+                }
+            }
+            Message::RunExecutable(name) => {
+                if self.tool_state.is_executable_busy(&name) {
+                    self.status_message = format!("Executable '{name}' is already running");
+                    return Task::none();
+                }
+                let Some(game_id) = self.current_game_id().map(str::to_string) else {
+                    self.status_message = "Select a game before running executables".to_string();
+                    return Task::none();
+                };
+                self.tool_state
+                    .active_executable_operations
+                    .insert(name.clone());
+                self.status_message = format!("Running executable '{name}'...");
+                let profile = self.active_profile.clone();
+                return Task::perform(
+                    run_saved_executable_for_game(game_id, name.clone(), profile),
+                    move |result| Message::ExecutableRunComplete {
+                        name: name.clone(),
+                        result,
+                    },
+                );
+            }
+            Message::ExecutableRunComplete { name, result } => {
+                self.tool_state.active_executable_operations.remove(&name);
+                match result {
+                    Ok(message) => {
+                        self.status_message = message;
+                        return self.refresh_executables_or_tools();
+                    }
+                    Err(err) => {
+                        self.tool_state.executable_error = Some(err.clone());
+                        self.status_message = format!("Executable failed: {err}");
+                    }
+                }
+            }
+            Message::BrowseExecutablePath => {
+                return Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Select executable")
+                            .pick_file()
+                            .await
+                            .map(|handle| handle.path().to_path_buf())
+                    },
+                    Message::ExecutablePathSelected,
+                );
+            }
+            Message::ExecutablePathSelected(path) => {
+                if let Some(path) = path {
+                    self.tool_state.executable_draft.executable_path = path.display().to_string();
+                    self.tool_state.executable_editor_open = true;
+                }
+            }
+            Message::BrowseExecutableWorkingDir => {
+                return Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Select working directory")
+                            .pick_folder()
+                            .await
+                            .map(|handle| handle.path().to_path_buf())
+                    },
+                    Message::ExecutableWorkingDirSelected,
+                );
+            }
+            Message::ExecutableWorkingDirSelected(path) => {
+                if let Some(path) = path {
+                    self.tool_state.executable_draft.working_dir = path.display().to_string();
+                    self.tool_state.executable_editor_open = true;
                 }
             }
             Message::AdoptOptiScaler => {
@@ -4481,12 +6371,13 @@ impl Modde {
                     Ok(db) => {
                         let tool = modde_games::tools::resolve_tool("optiscaler")
                             .expect("optiscaler tool is registered");
+                        let context = self.current_tool_game_context();
                         let mut config = db
                             .load_tool_config(&game_id, "optiscaler")
                             .ok()
                             .flatten()
                             .map_or_else(
-                                || tool.default_config(),
+                                || tool.default_config_for(context.as_ref()),
                                 |row| modde_games::tools::ToolConfig {
                                     tool_id: row.tool_id,
                                     enabled: row.enabled,
@@ -4494,6 +6385,10 @@ impl Modde {
                                         .unwrap_or_default(),
                                 },
                             );
+                        modde_games::tools::optiscaler::apply_game_defaults(
+                            &mut config,
+                            context.as_ref(),
+                        );
                         let managed =
                             modde_games::tools::optiscaler::managed_paths_from_config(&config);
                         match modde_games::tools::optiscaler::scan_optiscaler_install(
@@ -4531,9 +6426,12 @@ impl Modde {
                                 );
                                 let _ = db.clear_applied_files(&game_id, "optiscaler");
                                 let _ = db.save_applied_files(&game_id, "optiscaler", &paths);
-                                self.refresh_tools_state();
+                                self.tool_state.active_tool_id = Some("optiscaler".to_string());
                                 self.status_message =
                                     format!("Adopted OptiScaler ({} file(s))", paths.len());
+                                self.pending_tools_load_status_message =
+                                    Some(self.status_message.clone());
+                                return self.start_tools_load();
                             }
                             Err(err) => {
                                 self.status_message = format!("Failed to scan OptiScaler: {err}");
@@ -4558,9 +6456,11 @@ impl Modde {
                     &game_id, &game_dir,
                 ) {
                     Ok(path) => {
-                        self.refresh_tools_state();
+                        self.tool_state.active_tool_id = Some("optiscaler".to_string());
                         self.status_message =
                             format!("Restored OptiScaler backup {}", path.display());
+                        self.pending_tools_load_status_message = Some(self.status_message.clone());
+                        return self.start_tools_load();
                     }
                     Err(err) => {
                         self.status_message = format!("Failed to restore OptiScaler: {err}");
@@ -4602,9 +6502,12 @@ impl Modde {
                             &settings_json,
                         ) {
                             Ok(()) => {
-                                self.refresh_tools_state();
+                                self.tool_state.active_tool_id = Some("optiscaler".to_string());
                                 self.status_message =
                                     "Reset OptiScaler config overrides".to_string();
+                                self.pending_tools_load_status_message =
+                                    Some(self.status_message.clone());
+                                return self.start_tools_load();
                             }
                             Err(err) => {
                                 self.status_message =
@@ -4667,6 +6570,43 @@ impl Modde {
                 }
             }
 
+            Message::ButtonHoverStarted { id, description } => {
+                self.button_hover_toast.pending = Some(ButtonHoverToast { id, description });
+                self.button_hover_toast.visible = None;
+                return Task::perform(
+                    async move {
+                        tokio::time::sleep(BUTTON_HOVER_TOAST_DELAY).await;
+                        id
+                    },
+                    |id| Message::ButtonHoverElapsed { id },
+                );
+            }
+            Message::ButtonHoverElapsed { id } => {
+                if self
+                    .button_hover_toast
+                    .pending
+                    .is_some_and(|toast| toast.id == id)
+                {
+                    self.button_hover_toast.visible = self.button_hover_toast.pending;
+                }
+            }
+            Message::ButtonHoverEnded { id } => {
+                if self
+                    .button_hover_toast
+                    .pending
+                    .is_some_and(|toast| toast.id == id)
+                {
+                    self.button_hover_toast.pending = None;
+                }
+                if self
+                    .button_hover_toast
+                    .visible
+                    .is_some_and(|toast| toast.id == id)
+                {
+                    self.button_hover_toast.visible = None;
+                }
+            }
+
             Message::Noop => {}
         }
         Task::none()
@@ -4683,6 +6623,7 @@ impl Modde {
             } else {
                 (self.selected_mod_details.as_ref(), None)
             };
+        let save_profiles_supported = self.current_game_supports_save_profiles();
 
         let sidebar = crate::views::sidebar::view(
             &self.active_view,
@@ -4690,6 +6631,7 @@ impl Modde {
             &self.profiles,
             &self.active_profile,
             self.experiment_depth,
+            save_profiles_supported,
             mod_details_for_sidebar,
             save_details_for_sidebar,
         );
@@ -4721,12 +6663,12 @@ impl Modde {
                 &self.active_downloads,
             ),
             View::BrowseNexus => {
-                // Resolve the game domain here so the view can render
-                // an empty state when no profile/game is loaded yet.
-                // Pass by value so the Element's lifetime isn't tied
-                // to this local string.
-                let domain = self.current_game_nexus_domain();
-                crate::views::browse_nexus::view(&self.browse_nexus, domain)
+                let domain = self.browse_game_nexus_domain();
+                crate::views::browse_nexus::view(
+                    &self.browse_nexus,
+                    self.available_games.as_slice(),
+                    domain,
+                )
             }
             View::FOMODWizard(_) => crate::views::fomod_wizard::view(self),
             View::Settings => crate::views::settings::view(settings_state),
@@ -4734,16 +6676,17 @@ impl Modde {
                 state,
                 &self.wabbajack_manifest,
                 self.available_games.as_slice(),
+                self.current_game_id(),
             ),
             View::Saves => crate::views::saves::view(
                 &self.save_snapshots,
                 self.loaded_profile.as_ref().map(|p| p.name.as_str()),
                 self.current_fingerprint.as_ref(),
+                save_profiles_supported,
                 self.selected_save_details
                     .as_ref()
                     .map(|d| d.commit_id.as_str()),
             ),
-            View::Verify => crate::views::verify::view(&self.verify),
             View::Downloads => {
                 let tasks = self.downloads_view_tasks();
                 crate::views::downloads::view(&tasks)
@@ -4753,6 +6696,7 @@ impl Modde {
             }
             View::Diagnostics => crate::views::diagnostics::view(&self.diagnostics_state),
             View::Tools => crate::views::tools::view(&self.tool_state),
+            View::Executables => crate::views::executables::view(&self.tool_state),
         };
 
         // ── Custom title bar ──
@@ -4823,6 +6767,34 @@ impl Modde {
             .height(Length::Fill)
             .into();
 
+        let toast_layer: Element<Message> = if let Some(toast) = self.button_hover_toast.visible {
+            let toast_content: Element<Message> = container(text(toast.description).size(12))
+                .padding([8, 12])
+                .width(Length::Shrink)
+                .style(container::rounded_box)
+                .into();
+            container(
+                column![
+                    iced::widget::Space::new().height(Length::Fill),
+                    row![
+                        iced::widget::Space::new().width(Length::Fill),
+                        toast_content
+                    ]
+                ]
+                .padding(16),
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
+        } else {
+            container(iced::widget::Space::new())
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        };
+
+        base = stack([base, toast_layer]).into();
+
         if self.new_profile_dialog_open {
             base = stack([base, self.new_profile_dialog()]).into();
         }
@@ -4830,7 +6802,7 @@ impl Modde {
             base = stack([base, self.game_path_dialog()]).into();
         }
 
-        base
+        crate::shortcut_layer::shortcut_layer(base).into()
     }
 
     fn new_profile_dialog(&self) -> Element<'_, Message> {
@@ -4942,26 +6914,96 @@ impl Modde {
         }
     }
 
-    /// Route widget-ignored keyboard events through the shortcuts
-    /// module. `keyboard::listen()` yields only events that no focused
-    /// widget consumed — so text inputs keep their keys while global
-    /// shortcuts fire on unhandled presses. The closure must be
-    /// non-capturing (a `Subscription::filter_map` constraint), so it
-    /// calls only free functions and cannot read `&self`.
-    fn subscription(&self) -> Subscription<Message> {
-        keyboard::listen().filter_map(|event| match event {
-            keyboard::Event::KeyPressed { key, modifiers, .. } => {
-                let action = crate::shortcuts::match_shortcut(&key, modifiers)?;
-                shortcut_action_to_message(action)
-            }
-            _ => None,
-        })
+    /// Subscribe to external refresh signals from the CLI.
+    ///
+    /// We bind a Unix domain socket at [`modde_core::ipc::socket_path`]
+    /// and emit a [`Message::ExternalRefresh`] for every connection
+    /// received. The socket is cleaned up on startup (in case a
+    /// previous GUI crashed without unlinking) and on each new bind.
+    /// While idle, the listener costs nothing — accept() just blocks
+    /// in the kernel.
+    fn subscription(&self) -> iced::Subscription<Message> {
+        iced::Subscription::run(external_refresh_stream)
     }
 }
 
-/// Map a matched shortcut action string to the corresponding
-/// `Message`. Returns `None` for actions whose handlers aren't wired
-/// yet — those shortcuts still register in `all_shortcuts()` for
+fn external_refresh_stream() -> impl iced::futures::Stream<Item = Message> {
+    use iced::futures::SinkExt as _;
+    use tokio::io::AsyncReadExt as _;
+
+    iced::stream::channel(8, async move |mut output| {
+        // Per-process socket path: `modde-${euid}-${pid}.sock`. Each
+        // GUI gets its own; the CLI fan-outs to every matching file
+        // in `$XDG_RUNTIME_DIR`, so multi-window installs all see
+        // every change.
+        let path = modde_core::ipc::gui_socket_path();
+        // Pid collisions are essentially impossible inside a single
+        // boot, but be defensive: if a previous run of *this exact
+        // pid* (rare; happens with pid wraparound on long-uptime
+        // systems) left a node behind, unlink it.
+        let _ = std::fs::remove_file(&path);
+
+        let listener = match tokio::net::UnixListener::bind(&path) {
+            Ok(l) => l,
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    socket = %path.display(),
+                    "could not bind refresh socket; CLI → GUI live updates disabled \
+                     for this window"
+                );
+                return;
+            }
+        };
+
+        // Best-effort cleanup at process exit so the CLI's GC pass
+        // doesn't have to do it. Held in a guard captured by the
+        // listening task: dropped when the subscription stream is
+        // torn down (window close / app shutdown), which unlinks
+        // the socket. If the process panics the file leaks, but the
+        // CLI side GCs unreachable sockets on every notify pass.
+        let _guard = SocketGuard::new(path.clone());
+
+        tracing::info!(socket = %path.display(), "listening for CLI refresh signals");
+
+        loop {
+            let (mut stream, _addr) = match listener.accept().await {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!(error = %e, "accept failed; restarting listen loop");
+                    continue;
+                }
+            };
+            // Drain whatever the peer sent so the kernel buffer is
+            // freed; we don't actually parse the payload — the
+            // existence of the connection is the signal.
+            let mut buf = [0u8; 64];
+            let _ = stream.read(&mut buf).await;
+            if output.send(Message::ExternalRefresh).await.is_err() {
+                // Application is shutting down.
+                break;
+            }
+        }
+    })
+}
+
+/// Drop guard that unlinks a Unix socket when the listening task ends.
+struct SocketGuard {
+    path: std::path::PathBuf,
+}
+
+impl SocketGuard {
+    fn new(path: std::path::PathBuf) -> Self {
+        Self { path }
+    }
+}
+
+impl Drop for SocketGuard {
+    fn drop(&mut self) {
+        modde_core::ipc::cleanup_socket(&self.path);
+    }
+}
+
 /// Max thumbnail dimensions — matches the sidebar image slot
 /// (~166 px wide, 96 px tall).  We decode the fetched bytes, scale
 /// down with a Lanczos3 filter, and hand the smaller RGBA buffer to
@@ -4985,9 +7027,12 @@ fn resize_thumbnail_bytes(raw: &[u8]) -> iced::widget::image::Handle {
     iced::widget::image::Handle::from_rgba(w, h, rgba.into_raw())
 }
 
+/// Map a matched shortcut action string to the corresponding
+/// `Message`. Returns `None` for actions whose handlers aren't wired
+/// yet — those shortcuts still register in `all_shortcuts()` for
 /// help-text purposes but produce no messages until their handlers
 /// exist (most need state-aware lookups or new `Message` variants).
-fn shortcut_action_to_message(action: &str) -> Option<Message> {
+pub(crate) fn shortcut_action_to_message(action: &str) -> Option<Message> {
     match action {
         "deploy" => Some(Message::Deploy),
         "dismiss_modal" => Some(Message::CancelNewProfileDialog),
@@ -5008,6 +7053,11 @@ pub fn run() -> iced::Result {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use iced_test::Selector;
+    use iced_test::core::widget::Operation;
+    use iced_test::core::{Event, Font, Point, Settings, Size, mouse};
+    use iced_test::selector;
+    use iced_test::selector::Bounded;
     use std::path::PathBuf;
 
     fn test_app() -> Modde {
@@ -5016,6 +7066,8 @@ mod tests {
             active_profile: None,
             profiles: Vec::new(),
             status_message: "Ready".to_string(),
+            button_hover_toast: ButtonHoverToastState::default(),
+            pending_tools_load_status_message: None,
             settings: AppSettings::default(),
             collection_search: String::new(),
             collections: Vec::new(),
@@ -5041,17 +7093,21 @@ mod tests {
             selected_save_details: None,
             experiment_depth: 0,
             nexus_status: None,
-            verify: VerifyState::Idle,
+            nexus_api_key_draft: String::new(),
+            nexus_api_key_visible: false,
+            nexus_api_key_source: None,
+            nexus_config_key_exists: false,
             new_profile_name: String::new(),
             new_profile_dialog_open: false,
             game_path_dialog_open: false,
             pending_game_path_game_id: None,
             previous_game_before_path_dialog: None,
             game_path_dialog_error: None,
-            available_games: smallvec::smallvec![(
-                "skyrim-se".to_string(),
-                "Skyrim SE".to_string()
-            )],
+            available_games: smallvec::smallvec![
+                ("skyrim-se".to_string(), "Skyrim SE".to_string()),
+                ("fallout4".to_string(), "Fallout 4".to_string()),
+                ("stellar-blade".to_string(), "Stellar Blade".to_string()),
+            ],
             detected_games: HashSet::new(),
             selected_game: None,
             stock_snapshot_exists: false,
@@ -5070,11 +7126,334 @@ mod tests {
                 FilterCriterion::new(FilterKind::HasNexusId),
             ],
             compact_mod_list: false,
-            collapsed_sidebar_groups: HashSet::from([
-                SidebarGroup::Maintenance,
-                SidebarGroup::General,
+            collapsed_sidebar_groups: HashSet::from([SidebarGroup::General]),
+        }
+    }
+
+    fn by_test_id(test_id: &str) -> impl iced_test::Selector<Output = iced_test::selector::Target> {
+        selector::id(crate::semantics::widget_id(test_id.to_string()))
+    }
+
+    struct AppUiHarness {
+        app: Modde,
+        renderer: iced_test::renderer::Renderer,
+        cache: iced_test::runtime::user_interface::Cache,
+        size: Size,
+        cursor: mouse::Cursor,
+    }
+
+    impl AppUiHarness {
+        fn new(app: Modde, size: Size) -> Self {
+            use iced_test::core::renderer::Headless;
+
+            let settings = Settings::default();
+            let default_font = match settings.default_font {
+                Font::DEFAULT => Font::with_name("Fira Sans"),
+                font => font,
+            };
+            let renderer = iced_test::futures::futures::executor::block_on(
+                iced_test::renderer::Renderer::new(default_font, settings.default_text_size, None),
+            )
+            .expect("create headless renderer");
+
+            Self {
+                app,
+                renderer,
+                cache: iced_test::runtime::user_interface::Cache::new(),
+                size,
+                cursor: mouse::Cursor::Unavailable,
+            }
+        }
+
+        fn rebuild(&mut self) {
+            let cache = std::mem::take(&mut self.cache);
+            let ui = iced_test::runtime::UserInterface::build(
+                self.app.view(),
+                self.size,
+                cache,
+                &mut self.renderer,
+            );
+            self.cache = ui.into_cache();
+        }
+
+        fn find<S>(&mut self, selector: S) -> S::Output
+        where
+            S: Selector + Send,
+            S::Output: Clone + Send,
+        {
+            let description = selector.description();
+            let cache = std::mem::take(&mut self.cache);
+            let mut ui = iced_test::runtime::UserInterface::build(
+                self.app.view(),
+                self.size,
+                cache,
+                &mut self.renderer,
+            );
+            let mut operation = selector.find();
+
+            ui.operate(
+                &self.renderer,
+                &mut iced_test::core::widget::operation::black_box(&mut operation),
+            );
+            let output = match operation.finish() {
+                iced_test::core::widget::operation::Outcome::Some(output) => {
+                    output.unwrap_or_else(|| panic!("selector should find target: {description}"))
+                }
+                _ => panic!("selector should find target: {description}"),
+            };
+
+            self.cache = ui.into_cache();
+            output
+        }
+
+        fn point_at(&mut self, position: Point) {
+            self.cursor = mouse::Cursor::Available(position);
+        }
+
+        fn move_cursor_to(&mut self, position: Point) {
+            self.point_at(position);
+            self.simulate([Event::Mouse(mouse::Event::CursorMoved { position })]);
+        }
+
+        fn simulate(&mut self, events: impl IntoIterator<Item = Event>) {
+            let events = events.into_iter().collect::<Vec<_>>();
+            let cache = std::mem::take(&mut self.cache);
+            let mut ui = iced_test::runtime::UserInterface::build(
+                self.app.view(),
+                self.size,
+                cache,
+                &mut self.renderer,
+            );
+            let mut messages = Vec::new();
+            let _ = ui.update(
+                &events,
+                self.cursor,
+                &mut self.renderer,
+                &mut iced_test::core::clipboard::Null,
+                &mut messages,
+            );
+            self.cache = ui.into_cache();
+
+            for message in messages {
+                let _ = self.app.update(message);
+            }
+        }
+
+        fn click<S>(&mut self, selector: S)
+        where
+            S: Selector + Send,
+            S::Output: iced_test::selector::Bounded + Clone + Send,
+        {
+            let target = self.find(selector);
+            let bounds = target
+                .visible_bounds()
+                .expect("click target should be visible");
+
+            self.point_at(bounds.center());
+            self.simulate(iced_test::simulator::click());
+        }
+
+        fn update_app(&mut self, message: Message) {
+            let _ = self.app.update(message);
+            self.rebuild();
+        }
+    }
+
+    fn test_tool_ui_entry(tool_id: &str) -> ToolUiEntry {
+        ToolUiEntry {
+            tool_id: tool_id.to_string(),
+            display_name: tool_id.to_string(),
+            description: "test tool".to_string(),
+            category: "test".to_string(),
+            available: true,
+            availability_text: "available".to_string(),
+            enabled: false,
+            settings: serde_json::json!({}),
+            setting_specs: Vec::new(),
+            generated_config_path: None,
+            applied_files: Vec::new(),
+            has_file_patching: false,
+            release_support: ToolReleaseSupport::None,
+            status_message: None,
+            env_preview: Vec::new(),
+            dll_overrides: Vec::new(),
+            wrapper_preview: Vec::new(),
+            derived_facts: Vec::new(),
+            optiscaler_state: None,
+            optiscaler_latest_backup: None,
+            optiscaler_detected_files: 0,
+            apply_pending: false,
+            apply_missing_inputs: Vec::new(),
+            setting_history: Vec::new(),
+        }
+    }
+
+    fn test_tool_load_snapshot(entries: Vec<ToolUiEntry>) -> ToolLoadSnapshot {
+        ToolLoadSnapshot {
+            entries,
+            active_tool_id: Some("reshade".to_string()),
+            game_label: Some("Skyrim SE".to_string()),
+            game_dir_configured: true,
+            executables: Vec::new(),
+            tool_option_catalog: HashMap::from([
+                (
+                    "proton.selected_version".to_string(),
+                    vec!["latest".to_string()],
+                ),
+                (
+                    "optiscaler.release_tag".to_string(),
+                    vec!["v1.0.0".to_string()],
+                ),
+                (
+                    "optiscaler.release_asset".to_string(),
+                    vec!["OptiScaler.zip".to_string()],
+                ),
             ]),
         }
+    }
+
+    fn scroll_heavy_tools_app() -> Modde {
+        let mut app = test_app();
+        app.active_view = View::Tools;
+        app.tool_state = scroll_heavy_optiscaler_state();
+        app
+    }
+
+    fn scroll_heavy_optiscaler_state() -> ToolState {
+        let mut entry = test_tool_ui_entry("optiscaler");
+        let mut settings = serde_json::Map::new();
+        let mut setting_specs = Vec::new();
+
+        for index in 0..40 {
+            let key = Box::leak(format!("stress_setting_{index}").into_boxed_str());
+            let label = Box::leak(format!("Stress setting {index}").into_boxed_str());
+            let description = Box::leak(
+                format!("Long setting row used to make the tool panel scroll {index}.")
+                    .into_boxed_str(),
+            );
+
+            settings.insert(key.to_string(), serde_json::json!(false));
+            setting_specs.push(modde_games::tools::ToolSettingSpec::bool(
+                key,
+                label,
+                description,
+            ));
+        }
+
+        entry.display_name = "OptiScaler".to_string();
+        entry.description = "Upscaling injection".to_string();
+        entry.category = "Graphics".to_string();
+        entry.available = true;
+        entry.availability_text = "available".to_string();
+        entry.enabled = true;
+        entry.settings = serde_json::Value::Object(settings);
+        entry.setting_specs = setting_specs;
+        entry.applied_files = vec!["dxgi.dll".to_string(), "OptiScaler.ini".to_string()];
+        entry.has_file_patching = true;
+        entry.release_support = ToolReleaseSupport::Supported;
+        entry.optiscaler_state = Some(
+            "partially managed; version goverlay-edge_edge-0.9.12.0323; proxy d3d12.dll"
+                .to_string(),
+        );
+        entry.optiscaler_latest_backup = Some("/tmp/optiscaler-backup".to_string());
+        entry.optiscaler_detected_files = 3;
+        entry.apply_pending = true;
+
+        let mut state = ToolState {
+            active_tool_id: Some("optiscaler".to_string()),
+            game_label: Some("Stellar Blade".to_string()),
+            game_dir_configured: true,
+            show_advanced_settings: true,
+            entries: vec![entry],
+            ..Default::default()
+        };
+        state.tool_option_catalog.insert(
+            "optiscaler.release_tag".to_string(),
+            vec!["v0.9.1".to_string()],
+        );
+        state.tool_option_catalog.insert(
+            "optiscaler.release_asset".to_string(),
+            vec!["Optiscaler_0.9.1-final.7z".to_string()],
+        );
+        state
+    }
+
+    fn scroll_y(target: iced_test::selector::Target) -> f32 {
+        match target {
+            iced_test::selector::Target::Scrollable { translation, .. } => translation.y,
+            other => panic!("expected scrollable target, got {other:?}"),
+        }
+    }
+
+    fn scroll_tools_panel_down(harness: &mut AppUiHarness) -> f32 {
+        let scrollable = harness.find(by_test_id("tools.optiscaler.scroll"));
+        let bounds = scrollable
+            .visible_bounds()
+            .expect("tools scrollable should be visible");
+        harness.point_at(bounds.center());
+        harness.simulate([Event::Mouse(mouse::Event::WheelScrolled {
+            delta: mouse::ScrollDelta::Pixels { x: 0.0, y: -900.0 },
+        })]);
+
+        let scrolled_y = scroll_y(harness.find(by_test_id("tools.optiscaler.scroll")));
+        assert!(
+            scrolled_y.abs() > 1.0,
+            "test setup must scroll the Tools panel before checking stability; got translation {scrolled_y}",
+        );
+        scrolled_y
+    }
+
+    fn scroll_until_visible(
+        harness: &mut AppUiHarness,
+        test_id: &str,
+    ) -> (iced_test::selector::Target, f32) {
+        let scrollable = harness.find(by_test_id("tools.optiscaler.scroll"));
+        let bounds = scrollable
+            .visible_bounds()
+            .expect("tools scrollable should be visible");
+        harness.point_at(bounds.center());
+
+        for _ in 0..16 {
+            let target = harness.find(by_test_id(test_id));
+            let scroll_y = scroll_y(harness.find(by_test_id("tools.optiscaler.scroll")));
+            if target.visible_bounds().is_some() {
+                assert!(
+                    scroll_y.abs() > 1.0,
+                    "test target {test_id} must be reached after scrolling"
+                );
+                return (target, scroll_y);
+            }
+
+            harness.simulate([Event::Mouse(mouse::Event::WheelScrolled {
+                delta: mouse::ScrollDelta::Pixels { x: 0.0, y: -700.0 },
+            })]);
+        }
+
+        panic!("target {test_id} did not become visible after scrolling");
+    }
+
+    fn assert_scroll_y_unchanged(harness: &mut AppUiHarness, before: f32) {
+        let after = scroll_y(harness.find(by_test_id("tools.optiscaler.scroll")));
+        assert!(
+            (after - before).abs() <= 0.5,
+            "Tools scroll position changed: before={before}, after={after}",
+        );
+    }
+
+    #[test]
+    fn executable_environment_parser_accepts_key_value_lines() {
+        let parsed = parse_executable_environment("WINESYNC=1\nDXVK_LOG_LEVEL=none").unwrap();
+        assert_eq!(parsed.get("WINESYNC").map(String::as_str), Some("1"));
+        assert_eq!(
+            parsed.get("DXVK_LOG_LEVEL").map(String::as_str),
+            Some("none")
+        );
+    }
+
+    #[test]
+    fn executable_environment_parser_rejects_invalid_line() {
+        let err = parse_executable_environment("WINESYNC").unwrap_err();
+        assert!(err.contains("KEY=VALUE"));
     }
 
     #[test]
@@ -5086,7 +7465,10 @@ mod tests {
         assert_eq!(app.theme_name, "Dark");
         assert!(app.fomod_installer.is_none());
         assert_eq!(app.experiment_depth, 0);
-        assert!(matches!(app.verify, VerifyState::Idle));
+        assert!(matches!(
+            app.diagnostics_state,
+            crate::views::diagnostics::DiagnosticsState::Idle
+        ));
     }
 
     #[test]
@@ -5110,10 +7492,312 @@ mod tests {
     }
 
     #[test]
-    fn test_switch_view_verify() {
+    fn switch_view_tools_starts_async_load() {
         let mut app = test_app();
-        let _ = app.update(Message::SwitchView(View::Verify));
-        assert!(matches!(app.active_view, View::Verify));
+        app.selected_game = Some("skyrim-se".to_string());
+        app.tool_state.entries = vec![test_tool_ui_entry("stale")];
+
+        let _ = app.update(Message::SwitchView(View::Tools));
+
+        assert!(matches!(app.active_view, View::Tools));
+        assert!(app.tool_state.loading);
+        assert_eq!(app.tool_state.load_generation, 1);
+        assert_eq!(app.tool_state.entries[0].tool_id, "stale");
+        assert_eq!(app.status_message, "Loading tools...");
+    }
+
+    #[test]
+    fn refresh_tools_starts_async_load_without_clearing_entries() {
+        let mut app = test_app();
+        app.selected_game = Some("skyrim-se".to_string());
+        app.tool_state.entries = vec![test_tool_ui_entry("stale")];
+
+        let _ = app.update(Message::RefreshTools);
+
+        assert!(app.tool_state.loading);
+        assert_eq!(app.tool_state.load_generation, 1);
+        assert_eq!(app.tool_state.entries[0].tool_id, "stale");
+        assert_eq!(app.status_message, "Loading tools...");
+    }
+
+    #[test]
+    fn tools_loaded_success_replaces_entries_and_clears_loading() {
+        let mut app = test_app();
+        app.tool_state.loading = true;
+        app.tool_state.load_generation = 7;
+        app.tool_state.entries = vec![test_tool_ui_entry("old")];
+
+        let _ = app.update(Message::ToolsLoaded {
+            generation: 7,
+            result: Ok(test_tool_load_snapshot(vec![test_tool_ui_entry("reshade")])),
+        });
+
+        assert!(!app.tool_state.loading);
+        assert!(app.tool_state.load_error.is_none());
+        assert_eq!(app.tool_state.entries.len(), 1);
+        assert_eq!(app.tool_state.entries[0].tool_id, "reshade");
+        assert_eq!(app.tool_state.active_tool_id.as_deref(), Some("reshade"));
+        assert_eq!(
+            app.tool_state
+                .tool_option_catalog
+                .get("proton.selected_version"),
+            Some(&vec!["latest".to_string()])
+        );
+        assert_eq!(app.status_message, "Loaded 1 tool(s)");
+    }
+
+    #[test]
+    fn tools_loaded_failure_preserves_entries_and_records_error() {
+        let mut app = test_app();
+        app.tool_state.loading = true;
+        app.tool_state.load_generation = 3;
+        app.tool_state.entries = vec![test_tool_ui_entry("old")];
+
+        let _ = app.update(Message::ToolsLoaded {
+            generation: 3,
+            result: Err("scan failed".to_string()),
+        });
+
+        assert!(!app.tool_state.loading);
+        assert_eq!(app.tool_state.entries[0].tool_id, "old");
+        assert_eq!(app.tool_state.load_error.as_deref(), Some("scan failed"));
+        assert_eq!(app.status_message, "Failed to load tools: scan failed");
+    }
+
+    #[test]
+    fn stale_tools_loaded_result_is_ignored() {
+        let mut app = test_app();
+        app.tool_state.loading = true;
+        app.tool_state.load_generation = 2;
+        app.tool_state.entries = vec![test_tool_ui_entry("old")];
+
+        let _ = app.update(Message::ToolsLoaded {
+            generation: 1,
+            result: Ok(test_tool_load_snapshot(vec![test_tool_ui_entry("reshade")])),
+        });
+
+        assert!(app.tool_state.loading);
+        assert_eq!(app.tool_state.entries[0].tool_id, "old");
+        assert!(app.tool_state.load_error.is_none());
+        assert_eq!(app.status_message, "Ready");
+    }
+
+    #[test]
+    fn tools_loaded_success_preserves_pending_optiscaler_feedback() {
+        let mut app = test_app();
+        app.tool_state.loading = true;
+        app.tool_state.load_generation = 7;
+        app.pending_tools_load_status_message =
+            Some("Reset OptiScaler config overrides".to_string());
+
+        let _ = app.update(Message::ToolsLoaded {
+            generation: 7,
+            result: Ok(test_tool_load_snapshot(vec![test_tool_ui_entry(
+                "optiscaler",
+            )])),
+        });
+
+        assert!(!app.tool_state.loading);
+        assert_eq!(app.status_message, "Reset OptiScaler config overrides");
+        assert!(app.pending_tools_load_status_message.is_none());
+    }
+
+    #[test]
+    fn tools_loaded_failure_clears_pending_optiscaler_feedback() {
+        let mut app = test_app();
+        app.tool_state.loading = true;
+        app.tool_state.load_generation = 7;
+        app.pending_tools_load_status_message = Some("Adopted OptiScaler (3 file(s))".to_string());
+
+        let _ = app.update(Message::ToolsLoaded {
+            generation: 7,
+            result: Err("scan failed".to_string()),
+        });
+
+        assert_eq!(app.status_message, "Failed to load tools: scan failed");
+        assert!(app.pending_tools_load_status_message.is_none());
+    }
+
+    #[test]
+    fn button_hover_start_creates_pending_state() {
+        let mut app = test_app();
+
+        let _ = app.update(Message::ButtonHoverStarted {
+            id: 11,
+            description: "Create a profile.",
+        });
+
+        assert_eq!(
+            app.button_hover_toast.pending,
+            Some(ButtonHoverToast {
+                id: 11,
+                description: "Create a profile.",
+            })
+        );
+        assert!(app.button_hover_toast.visible.is_none());
+    }
+
+    #[test]
+    fn matching_button_hover_elapsed_makes_toast_visible() {
+        let mut app = test_app();
+        let _ = app.update(Message::ButtonHoverStarted {
+            id: 11,
+            description: "Create a profile.",
+        });
+
+        let _ = app.update(Message::ButtonHoverElapsed { id: 11 });
+
+        assert_eq!(
+            app.button_hover_toast.visible,
+            app.button_hover_toast.pending
+        );
+    }
+
+    #[test]
+    fn stale_button_hover_elapsed_is_ignored() {
+        let mut app = test_app();
+        let _ = app.update(Message::ButtonHoverStarted {
+            id: 11,
+            description: "Create a profile.",
+        });
+
+        let _ = app.update(Message::ButtonHoverElapsed { id: 10 });
+
+        assert!(app.button_hover_toast.visible.is_none());
+    }
+
+    #[test]
+    fn button_hover_exit_before_delay_suppresses_toast() {
+        let mut app = test_app();
+        let _ = app.update(Message::ButtonHoverStarted {
+            id: 11,
+            description: "Create a profile.",
+        });
+
+        let _ = app.update(Message::ButtonHoverEnded { id: 11 });
+        let _ = app.update(Message::ButtonHoverElapsed { id: 11 });
+
+        assert!(app.button_hover_toast.pending.is_none());
+        assert!(app.button_hover_toast.visible.is_none());
+    }
+
+    #[test]
+    fn button_hover_exit_after_display_clears_toast() {
+        let mut app = test_app();
+        let _ = app.update(Message::ButtonHoverStarted {
+            id: 11,
+            description: "Create a profile.",
+        });
+        let _ = app.update(Message::ButtonHoverElapsed { id: 11 });
+
+        let _ = app.update(Message::ButtonHoverEnded { id: 11 });
+
+        assert!(app.button_hover_toast.pending.is_none());
+        assert!(app.button_hover_toast.visible.is_none());
+    }
+
+    #[test]
+    fn tools_hover_toast_does_not_reset_scroll_position() {
+        let mut harness = AppUiHarness::new(scroll_heavy_tools_app(), Size::new(900.0, 420.0));
+        harness.rebuild();
+        let before = scroll_tools_panel_down(&mut harness);
+
+        harness.update_app(Message::ButtonHoverStarted {
+            id: 99,
+            description: "Clear OptiScaler INI overrides so the selected release defaults are used.",
+        });
+        harness.update_app(Message::ButtonHoverElapsed { id: 99 });
+        harness.find("Clear OptiScaler INI overrides so the selected release defaults are used.");
+
+        assert_scroll_y_unchanged(&mut harness, before);
+    }
+
+    #[test]
+    fn tools_actual_button_hover_toast_does_not_reset_scroll_position() {
+        let mut harness = AppUiHarness::new(scroll_heavy_tools_app(), Size::new(900.0, 420.0));
+        harness.rebuild();
+        let (target, before) = scroll_until_visible(&mut harness, "tools.optiscaler.reset_config");
+        let center = target
+            .visible_bounds()
+            .expect("reset config should be visible after scrolling")
+            .center();
+
+        harness.move_cursor_to(center);
+        let pending = harness
+            .app
+            .button_hover_toast
+            .pending
+            .expect("hovering the described button should start hover toast state");
+        assert_eq!(
+            pending.description,
+            "Clear OptiScaler INI overrides so the selected release defaults are used."
+        );
+
+        harness.update_app(Message::ButtonHoverElapsed { id: pending.id });
+        harness.find("Clear OptiScaler INI overrides so the selected release defaults are used.");
+
+        assert_scroll_y_unchanged(&mut harness, before);
+    }
+
+    #[test]
+    fn tools_described_button_click_does_not_reset_scroll_position() {
+        let mut harness = AppUiHarness::new(scroll_heavy_tools_app(), Size::new(900.0, 420.0));
+        harness.rebuild();
+        let before = scroll_tools_panel_down(&mut harness);
+
+        harness.click(by_test_id("tools.optiscaler.apply"));
+
+        assert_scroll_y_unchanged(&mut harness, before);
+    }
+
+    #[test]
+    fn tools_optiscaler_state_button_click_does_not_reset_scroll_position() {
+        let mut harness = AppUiHarness::new(scroll_heavy_tools_app(), Size::new(900.0, 420.0));
+        harness.rebuild();
+        let (_, before) = scroll_until_visible(&mut harness, "tools.optiscaler.reset_config");
+
+        harness.click(by_test_id("tools.optiscaler.reset_config"));
+
+        assert_scroll_y_unchanged(&mut harness, before);
+    }
+
+    #[test]
+    fn test_switch_view_saves_unsupported_game_does_not_load_save_state() {
+        let mut app = test_app();
+        app.selected_game = Some("not-a-game".to_string());
+        app.save_snapshots = vec![SaveSnapshot {
+            id: "abc123".to_string(),
+            message: "capture".to_string(),
+            timestamp: 0,
+            file_count: 1,
+            fingerprint: None,
+            profile_name: None,
+            character_name: None,
+            save_label: None,
+            category: None,
+        }];
+        app.current_fingerprint = Some(modde_core::save::SaveFingerprint::empty());
+
+        let _ = app.update(Message::SwitchView(View::Saves));
+
+        assert!(matches!(app.active_view, View::Saves));
+        assert!(app.save_snapshots.is_empty());
+        assert!(app.current_fingerprint.is_none());
+        assert_eq!(
+            app.status_message,
+            "Save profiles are not supported for this game"
+        );
+    }
+
+    #[test]
+    fn test_switch_view_diagnostics_requires_profile() {
+        let mut app = test_app();
+        let _ = app.update(Message::SwitchView(View::Diagnostics));
+        assert!(matches!(app.active_view, View::Diagnostics));
+        assert!(matches!(
+            app.diagnostics_state,
+            crate::views::diagnostics::DiagnosticsState::Error(_)
+        ));
     }
 
     #[test]
@@ -5122,6 +7806,101 @@ mod tests {
         let _ = app.update(Message::SwitchProfile("test-profile".to_string()));
         assert_eq!(app.active_profile.as_deref(), Some("test-profile"));
         assert_eq!(app.status_message, "Profile switched");
+    }
+
+    #[test]
+    fn browse_nexus_defaults_to_loaded_profile_before_selected_game() {
+        let mut app = test_app();
+        app.selected_game = Some("fallout4".to_string());
+        app.loaded_profile = Some(profile_for_game("browse-profile", "skyrim-se", vec![]));
+
+        app.sync_browse_game_to_current(true);
+
+        assert_eq!(
+            app.browse_nexus.selected_game_id.as_deref(),
+            Some("skyrim-se")
+        );
+    }
+
+    #[test]
+    fn browse_nexus_game_change_clears_results_and_starts_load() {
+        let mut app = test_app();
+        app.browse_nexus.selected_game_id = Some("skyrim-se".to_string());
+        app.browse_nexus.mods = vec![modde_sources::nexus::graphql::GqlModTile {
+            mod_id: 1,
+            name: "SkyUI".to_string(),
+            summary: None,
+            version: None,
+            author: None,
+            picture_url: None,
+            thumbnail_url: None,
+            endorsements: None,
+            downloads: None,
+            uploaded_at: None,
+            game_domain: Some("skyrimspecialedition".to_string()),
+        }];
+        app.browse_nexus.error = Some("stale".to_string());
+        app.browse_nexus.install_status = Some("stale install".to_string());
+
+        let _ = app.update(Message::BrowseGameChanged(Some("fallout4".to_string())));
+
+        assert_eq!(
+            app.browse_nexus.selected_game_id.as_deref(),
+            Some("fallout4")
+        );
+        assert!(app.browse_nexus.mods.is_empty());
+        assert!(app.browse_nexus.collections.is_empty());
+        assert!(app.browse_nexus.error.is_none());
+        assert!(app.browse_nexus.install_status.is_none());
+        assert!(app.browse_nexus.loading);
+    }
+
+    #[test]
+    fn browse_nexus_excludes_games_without_verified_numeric_id() {
+        assert_eq!(
+            Modde::nexus_domain_for_game("baldurs-gate3"),
+            None,
+            "new games with unverified Nexus numeric IDs should not be browse targets yet"
+        );
+        assert_eq!(
+            Modde::nexus_domain_for_game("skyrim-se").as_deref(),
+            Some("skyrimspecialedition")
+        );
+    }
+
+    #[test]
+    fn wabbajack_defaults_to_current_game_on_enter() {
+        let mut app = test_app();
+        app.selected_game = Some("fallout4".to_string());
+
+        let _ = app.update(Message::SwitchView(View::WabbajackInstaller(
+            WabbajackInstallerState::default(),
+        )));
+
+        let View::WabbajackInstaller(state) = app.active_view else {
+            panic!("expected Wabbajack installer view");
+        };
+        assert_eq!(state.game_filter.as_deref(), Some("fallout4"));
+        assert!(!state.game_filter_user_edited);
+    }
+
+    #[test]
+    fn wabbajack_keeps_user_selected_all_games_on_enter() {
+        let mut app = test_app();
+        app.selected_game = Some("fallout4".to_string());
+        let state = WabbajackInstallerState {
+            game_filter: None,
+            game_filter_user_edited: true,
+            ..Default::default()
+        };
+
+        let _ = app.update(Message::SwitchView(View::WabbajackInstaller(state)));
+
+        let View::WabbajackInstaller(state) = app.active_view else {
+            panic!("expected Wabbajack installer view");
+        };
+        assert!(state.game_filter.is_none());
+        assert!(state.game_filter_user_edited);
     }
 
     #[test]
@@ -5153,10 +7932,19 @@ mod tests {
     }
 
     #[test]
-    fn test_set_nexus_api_key() {
+    fn test_set_nexus_api_key_draft() {
         let mut app = test_app();
-        let _ = app.update(Message::SetNexusApiKey("abc123".to_string()));
-        assert_eq!(app.settings.nexus_api_key, "abc123");
+        let _ = app.update(Message::SetNexusApiKeyDraft("abc123".to_string()));
+        assert_eq!(app.nexus_api_key_draft, "abc123");
+        assert!(app.settings.nexus_api_key.is_empty());
+    }
+
+    #[test]
+    fn test_toggle_nexus_api_key_visibility() {
+        let mut app = test_app();
+        assert!(!app.nexus_api_key_visible);
+        let _ = app.update(Message::ToggleNexusApiKeyVisibility);
+        assert!(app.nexus_api_key_visible);
     }
 
     #[test]
@@ -5310,26 +8098,399 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_complete() {
-        let mut app = test_app();
-        let results = VerifyResults {
-            missing_mods: SmallVec::new(),
-            hash_mismatches: vec![],
-            broken_symlinks: smallvec::smallvec![PathBuf::from("/broken")],
-            ok_count: 42,
-        };
-        let _ = app.update(Message::VerifyComplete(results));
-        assert!(matches!(app.active_view, View::Verify));
-        assert!(matches!(app.verify, VerifyState::Complete(_)));
-        assert!(app.status_message.contains("42 OK"));
-    }
-
-    #[test]
     fn test_noop() {
         let mut app = test_app();
         let old = app.status_message.clone();
         let _ = app.update(Message::Noop);
         assert_eq!(app.status_message, old);
+    }
+
+    #[test]
+    fn nested_tool_setting_round_trips_dotted_path() {
+        let mut settings = serde_json::json!({
+            "ini_overrides": {
+                "Menu.Scale": "1.0"
+            }
+        });
+
+        set_nested_tool_setting(
+            &mut settings,
+            "ini_overrides.Menu.Scale",
+            serde_json::json!(1.3),
+        );
+
+        assert_eq!(
+            get_tool_setting_value(&settings, "ini_overrides.Menu.Scale"),
+            Some(&serde_json::json!(1.3))
+        );
+        assert!(
+            settings
+                .get("ini_overrides")
+                .and_then(serde_json::Value::as_object)
+                .is_some_and(|map| !map.contains_key("Menu.Scale"))
+        );
+    }
+
+    #[test]
+    fn normalizes_legacy_boolean_and_numeric_tool_settings() {
+        let settings = serde_json::json!({
+            "enabled_flag": "yes",
+            "amount": "1.25"
+        });
+        let specs = vec![
+            modde_games::tools::ToolSettingSpec::bool("enabled_flag", "Enabled", ""),
+            modde_games::tools::ToolSettingSpec::number("amount", "Amount", "", 0.0, 2.0, 0.05),
+        ];
+
+        let normalized = normalize_tool_settings_for_specs(&settings, &specs);
+
+        assert_eq!(
+            normalized.get("enabled_flag"),
+            Some(&serde_json::json!(true))
+        );
+        assert_eq!(normalized.get("amount"), Some(&serde_json::json!(1.25)));
+    }
+
+    #[test]
+    fn normalizes_nested_legacy_boolean_and_preserves_tri_state_auto() {
+        let settings = serde_json::json!({
+            "ini_overrides": {
+                "FSR.Fsr4Update": "0",
+                "Spoofing": {
+                    "Dxgi": "auto"
+                }
+            }
+        });
+        let specs = vec![
+            modde_games::tools::ToolSettingSpec::tri_state_bool(
+                "ini_overrides.FSR.Fsr4Update",
+                "FSR4 update",
+                "",
+            ),
+            modde_games::tools::ToolSettingSpec::tri_state_bool(
+                "ini_overrides.Spoofing.Dxgi",
+                "DXGI",
+                "",
+            ),
+        ];
+
+        let normalized = normalize_tool_settings_for_specs(&settings, &specs);
+
+        assert_eq!(
+            get_tool_setting_value(&normalized, "ini_overrides.FSR.Fsr4Update"),
+            Some(&serde_json::json!(false))
+        );
+        assert_eq!(
+            get_tool_setting_value(&normalized, "ini_overrides.Spoofing.Dxgi"),
+            Some(&serde_json::json!("auto"))
+        );
+    }
+
+    #[test]
+    fn labeled_select_setting_preserves_raw_value() {
+        let settings = serde_json::json!({
+            "ini_overrides": {
+                "fakenvapi": {
+                    "force_reflex": "2"
+                },
+                "Menu": {
+                    "ShortcutKey": "INSERT"
+                },
+                "FSR": {
+                    "UpscalerIndex": "0",
+                    "FGIndex": "1"
+                }
+            }
+        });
+        let specs = vec![
+            modde_games::tools::ToolSettingSpec::labeled_select(
+                "ini_overrides.fakenvapi.force_reflex",
+                "Force Reflex",
+                "",
+                &[
+                    ("0", "0 - Follow in-game setting"),
+                    ("1", "1 - Force disable"),
+                    ("2", "2 - Force enable"),
+                ],
+            ),
+            modde_games::tools::ToolSettingSpec::labeled_select(
+                "ini_overrides.Menu.ShortcutKey",
+                "Menu shortcut",
+                "",
+                &[("auto", "Auto"), ("INSERT", "Insert")],
+            ),
+            modde_games::tools::ToolSettingSpec::labeled_select(
+                "ini_overrides.FSR.UpscalerIndex",
+                "FSR upscaler backend",
+                "",
+                &[
+                    ("auto", "Auto"),
+                    ("0", "0 - FSR 4.0.2"),
+                    ("1", "1 - FSR 3.1.5"),
+                    ("2", "2 - FSR 2.3.4"),
+                ],
+            ),
+            modde_games::tools::ToolSettingSpec::labeled_select(
+                "ini_overrides.FSR.FGIndex",
+                "FSR frame generation backend",
+                "",
+                &[
+                    ("auto", "Auto"),
+                    ("0", "0 - FSR 4.0.0"),
+                    ("1", "1 - FSR 3.1.6"),
+                ],
+            ),
+        ];
+
+        let normalized = normalize_tool_settings_for_specs(&settings, &specs);
+
+        assert_eq!(
+            get_tool_setting_value(&normalized, "ini_overrides.fakenvapi.force_reflex"),
+            Some(&serde_json::json!("2"))
+        );
+        assert_eq!(
+            get_tool_setting_value(&normalized, "ini_overrides.Menu.ShortcutKey"),
+            Some(&serde_json::json!("INSERT"))
+        );
+        assert_eq!(
+            get_tool_setting_value(&normalized, "ini_overrides.FSR.UpscalerIndex"),
+            Some(&serde_json::json!("0"))
+        );
+        assert_eq!(
+            get_tool_setting_value(&normalized, "ini_overrides.FSR.FGIndex"),
+            Some(&serde_json::json!("1"))
+        );
+    }
+
+    #[test]
+    fn tool_apply_signature_ignores_internal_apply_state() {
+        let settings = serde_json::json!({
+            "source_mode": "local_dir",
+            "_game_id": "stellar-blade",
+            "_last_applied_settings": { "old": true },
+            "managed_manifest": [{ "path": "dxgi.dll" }]
+        });
+
+        assert_eq!(
+            tool_apply_signature(&settings),
+            serde_json::json!({ "source_mode": "local_dir" })
+        );
+        assert!(tool_apply_is_pending(
+            &modde_games::tools::ToolConfig {
+                tool_id: "optiscaler".to_string(),
+                enabled: true,
+                settings,
+            },
+            &["dxgi.dll".to_string()]
+        ));
+    }
+
+    #[test]
+    fn apply_tool_marks_tool_busy_immediately() {
+        let temp = tempfile::tempdir().expect("game dir");
+        let mut app = test_app();
+        app.selected_game = Some("skyrim-se".to_string());
+        app.settings
+            .set_game_path("skyrim-se", temp.path().to_path_buf());
+
+        let _ = app.update(Message::ApplyTool("optiscaler".to_string()));
+
+        assert!(app.tool_state.is_tool_busy("optiscaler"));
+        assert_eq!(app.status_message, "Applying OptiScaler...");
+    }
+
+    #[test]
+    fn optiscaler_activate_marks_tool_busy_immediately() {
+        let temp = tempfile::tempdir().expect("game dir");
+        let mut app = test_app();
+        app.selected_game = Some("skyrim-se".to_string());
+        app.settings
+            .set_game_path("skyrim-se", temp.path().to_path_buf());
+
+        let _ = app.update(Message::ActivateOptiScaler);
+
+        assert!(app.tool_state.is_tool_busy("optiscaler"));
+        assert_eq!(app.status_message, "Activating OptiScaler...");
+    }
+
+    #[test]
+    fn optiscaler_deactivate_marks_tool_busy_immediately() {
+        let temp = tempfile::tempdir().expect("game dir");
+        let mut app = test_app();
+        app.selected_game = Some("skyrim-se".to_string());
+        app.settings
+            .set_game_path("skyrim-se", temp.path().to_path_buf());
+
+        let _ = app.update(Message::DeactivateOptiScaler);
+
+        assert!(app.tool_state.is_tool_busy("optiscaler"));
+        assert_eq!(app.status_message, "Deactivating OptiScaler...");
+    }
+
+    #[test]
+    fn tool_apply_failure_clears_busy_state() {
+        let mut app = test_app();
+        app.tool_state
+            .active_operations
+            .insert("optiscaler".to_string());
+
+        let _ = app.update(Message::ToolApplied {
+            tool_id: "optiscaler".to_string(),
+            result: Err("validation failed".to_string()),
+        });
+
+        assert!(!app.tool_state.is_tool_busy("optiscaler"));
+        assert_eq!(
+            app.status_message,
+            "Failed to apply tool: validation failed"
+        );
+    }
+
+    #[test]
+    fn tool_apply_success_clears_busy_state_and_preserves_active_tab() {
+        let mut app = test_app();
+        app.tool_state
+            .active_operations
+            .insert("optiscaler".to_string());
+
+        let _ = app.update(Message::ToolApplied {
+            tool_id: "optiscaler".to_string(),
+            result: Ok(ToolApplyResult {
+                display_name: "OptiScaler".to_string(),
+                applied_file_count: 2,
+                validation_message: Some("validated managed install".to_string()),
+            }),
+        });
+
+        assert!(!app.tool_state.is_tool_busy("optiscaler"));
+        assert_eq!(app.tool_state.active_tool_id.as_deref(), Some("optiscaler"));
+        assert_eq!(
+            app.status_message,
+            "Applied OptiScaler (2 file(s)); validated managed install"
+        );
+    }
+
+    #[test]
+    fn tool_settings_restore_success_preserves_active_tab() {
+        let mut app = test_app();
+
+        let _ = app.update(Message::ToolSettingsRestored {
+            tool_id: "mangohud".to_string(),
+            result: Ok("Restored MangoHud settings version".to_string()),
+        });
+
+        assert_eq!(app.tool_state.active_tool_id.as_deref(), Some("mangohud"));
+        assert_eq!(app.status_message, "Restored MangoHud settings version");
+    }
+
+    #[test]
+    fn optiscaler_apply_validation_accepts_core_files() {
+        let temp = tempfile::tempdir().expect("game dir");
+        std::fs::write(temp.path().join("dxgi.dll"), b"optiscaler").expect("proxy");
+        std::fs::write(temp.path().join("OptiScaler.ini"), b"[FSR]\n").expect("ini");
+        let mut config = modde_games::tools::ToolConfig::new("optiscaler");
+        config.set("proxy_dll", serde_json::json!("dxgi.dll"));
+        let applied = modde_games::tools::AppliedFiles {
+            files: vec![PathBuf::from("dxgi.dll"), PathBuf::from("OptiScaler.ini")],
+        };
+
+        validate_optiscaler_apply("test-game", temp.path(), &config, &applied)
+            .expect("validation should pass");
+    }
+
+    #[test]
+    fn optiscaler_apply_validation_rejects_missing_proxy() {
+        let temp = tempfile::tempdir().expect("game dir");
+        std::fs::write(temp.path().join("OptiScaler.ini"), b"[FSR]\n").expect("ini");
+        let mut config = modde_games::tools::ToolConfig::new("optiscaler");
+        config.set("proxy_dll", serde_json::json!("dxgi.dll"));
+        let applied = modde_games::tools::AppliedFiles {
+            files: vec![PathBuf::from("OptiScaler.ini")],
+        };
+
+        let err = validate_optiscaler_apply("test-game", temp.path(), &config, &applied)
+            .expect_err("missing proxy should fail");
+        assert!(err.contains("missing configured proxy DLL dxgi.dll"));
+    }
+
+    #[test]
+    fn optiscaler_apply_validation_rejects_missing_ini() {
+        let temp = tempfile::tempdir().expect("game dir");
+        std::fs::write(temp.path().join("dxgi.dll"), b"optiscaler").expect("proxy");
+        let mut config = modde_games::tools::ToolConfig::new("optiscaler");
+        config.set("proxy_dll", serde_json::json!("dxgi.dll"));
+        let applied = modde_games::tools::AppliedFiles {
+            files: vec![PathBuf::from("dxgi.dll")],
+        };
+
+        let err = validate_optiscaler_apply("test-game", temp.path(), &config, &applied)
+            .expect_err("missing ini should fail");
+        assert!(err.contains("missing OptiScaler.ini"));
+    }
+
+    #[test]
+    fn optiscaler_apply_preserves_stellar_blade_selected_release() {
+        let _guard = db_lock();
+        reset_isolated_db();
+        let game_dir = tempfile::tempdir().expect("game dir");
+        let tag = "official:v0.9.11";
+        let asset = "OptiScaler_0.9.11.7z";
+
+        let cache_dir = modde_games::tools::optiscaler::cached_release_dir(tag);
+        std::fs::create_dir_all(&cache_dir).expect("create OptiScaler cache dir");
+        std::fs::write(cache_dir.join("OptiScaler.dll"), b"dll").expect("cached dll");
+        std::fs::write(cache_dir.join("OptiScaler.ini"), b"[FSR]\n").expect("cached ini");
+        let optipatcher = modde_games::tools::optiscaler::cached_optipatcher_asi();
+        std::fs::create_dir_all(optipatcher.parent().expect("optipatcher cache parent"))
+            .expect("create OptiPatcher cache dir");
+        std::fs::write(&optipatcher, b"asi").expect("cached OptiPatcher");
+
+        let mut config = modde_games::tools::ToolConfig::new("optiscaler");
+        config.set("optiscaler_profile", serde_json::json!("community-dxgi"));
+        config.set("source_mode", serde_json::json!("github_release"));
+        config.set("release_tag", serde_json::json!(tag));
+        config.set("release_asset", serde_json::json!(asset));
+        config.set("proxy_dll", serde_json::json!("dxgi.dll"));
+        config.set("copy_companion_files", serde_json::json!(true));
+        config.set("enable_optipatcher", serde_json::json!(false));
+        let db = modde_core::db::ModdeDb::open().expect("db opens");
+        db.save_tool_config(
+            "stellar-blade",
+            "optiscaler",
+            false,
+            &serde_json::to_string(&config.settings).expect("settings json"),
+        )
+        .expect("save selected OptiScaler release");
+
+        let context = modde_games::tools::ToolGameContext::from_parts(
+            "stellar-blade",
+            "Stellar Blade",
+            Some(game_dir.path().to_path_buf()),
+            None,
+        );
+        let result = tokio::runtime::Runtime::new()
+            .expect("tokio runtime")
+            .block_on(apply_tool_for_game(
+                "stellar-blade".to_string(),
+                game_dir.path().to_path_buf(),
+                "optiscaler".to_string(),
+                Some(context),
+            ))
+            .expect("apply OptiScaler");
+
+        assert_eq!(result.applied_file_count, 2);
+        let row = db
+            .load_tool_config("stellar-blade", "optiscaler")
+            .expect("load tool config")
+            .expect("tool config exists");
+        let saved: serde_json::Value =
+            serde_json::from_str(&row.settings_json).expect("settings json");
+        assert_eq!(saved["optiscaler_profile"], "community-dxgi");
+        assert_eq!(saved["source_mode"], "github_release");
+        assert_eq!(saved["release_tag"], tag);
+        assert_eq!(saved["release_asset"], asset);
+        assert_eq!(saved["proxy_dll"], "dxgi.dll");
+        assert_eq!(saved["enable_optipatcher"], false);
     }
 
     #[test]
@@ -5352,6 +8513,24 @@ mod tests {
             shortcut_action_to_message("dismiss_modal"),
             Some(Message::CancelNewProfileDialog)
         ));
+    }
+
+    #[test]
+    fn shortcuts_layer_maps_uncaptured_escape() {
+        let app = test_app();
+        let mut ui = iced_test::simulator::simulator(app.view());
+
+        ui.tap_key(iced::keyboard::Key::Named(
+            iced::keyboard::key::Named::Escape,
+        ));
+
+        let messages: Vec<_> = ui.into_messages().collect();
+        assert!(
+            messages
+                .iter()
+                .any(|message| matches!(message, Message::CancelNewProfileDialog)),
+            "uncaptured Escape should emit CancelNewProfileDialog, got: {messages:?}",
+        );
     }
 
     #[test]
@@ -5445,6 +8624,23 @@ mod tests {
         }
     }
 
+    fn optiscaler_release(
+        tag: &str,
+        asset: &str,
+        published_at: Option<&str>,
+    ) -> modde_games::tools::ToolReleaseSummary {
+        modde_games::tools::ToolReleaseSummary {
+            tag: tag.to_string(),
+            name: None,
+            published_at: published_at.map(str::to_string),
+            assets: vec![modde_games::tools::ToolReleaseAsset {
+                name: asset.to_string(),
+                download_url: format!("https://example.test/{asset}"),
+                size: 10,
+            }],
+        }
+    }
+
     #[test]
     fn optiscaler_release_loaded_resets_stale_asset() {
         let _guard = db_lock();
@@ -5454,15 +8650,16 @@ mod tests {
 
         let db = modde_core::db::ModdeDb::open().expect("db opens");
         let settings = serde_json::json!({
-            "release_tag": "v0.9.1",
+            "release_tag": "official:v0.9.1",
             "release_asset": "stale.zip"
         });
         db.save_tool_config("skyrim-se", "optiscaler", false, &settings.to_string())
             .expect("save stale settings");
 
         let releases = vec![modde_games::tools::ToolReleaseSummary {
-            tag: "v0.9.1".to_string(),
+            tag: "official:v0.9.1".to_string(),
             name: None,
+            published_at: None,
             assets: vec![modde_games::tools::ToolReleaseAsset {
                 name: "Optiscaler_0.9.1-final.7z".to_string(),
                 download_url: "https://example.test/optiscaler.7z".to_string(),
@@ -5477,11 +8674,13 @@ mod tests {
             .expect("tool config exists");
         let saved: serde_json::Value =
             serde_json::from_str(&row.settings_json).expect("settings json");
-        assert_eq!(saved["release_tag"], "v0.9.1");
+        assert_eq!(saved["release_tag"], "official:v0.9.1");
         assert_eq!(saved["release_asset"], "Optiscaler_0.9.1-final.7z");
         assert_eq!(
-            app.tool_state.optiscaler_release_assets,
-            vec!["Optiscaler_0.9.1-final.7z"]
+            app.tool_state
+                .tool_option_catalog
+                .get("optiscaler.release_asset"),
+            Some(&vec!["Optiscaler_0.9.1-final.7z".to_string()])
         );
     }
 
@@ -5493,8 +8692,9 @@ mod tests {
         app.selected_game = Some("skyrim-se".to_string());
         app.tool_state.optiscaler_releases = vec![
             modde_games::tools::ToolReleaseSummary {
-                tag: "v0.9.0".to_string(),
+                tag: "official:v0.9.0".to_string(),
                 name: None,
+                published_at: None,
                 assets: vec![modde_games::tools::ToolReleaseAsset {
                     name: "Optiscaler_0.9.0.7z".to_string(),
                     download_url: "https://example.test/0.9.0.7z".to_string(),
@@ -5502,8 +8702,9 @@ mod tests {
                 }],
             },
             modde_games::tools::ToolReleaseSummary {
-                tag: "v0.9.1".to_string(),
+                tag: "official:v0.9.1".to_string(),
                 name: None,
+                published_at: None,
                 assets: vec![modde_games::tools::ToolReleaseAsset {
                     name: "Optiscaler_0.9.1.7z".to_string(),
                     download_url: "https://example.test/0.9.1.7z".to_string(),
@@ -5515,7 +8716,7 @@ mod tests {
         let _ = app.update(Message::UpdateToolSetting {
             tool_id: "optiscaler".to_string(),
             key: "release_tag".to_string(),
-            value: serde_json::json!("v0.9.1"),
+            value: serde_json::json!("official:v0.9.1"),
         });
 
         let db = modde_core::db::ModdeDb::open().expect("db opens");
@@ -5525,8 +8726,146 @@ mod tests {
             .expect("tool config exists");
         let saved: serde_json::Value =
             serde_json::from_str(&row.settings_json).expect("settings json");
-        assert_eq!(saved["release_tag"], "v0.9.1");
+        assert_eq!(saved["release_tag"], "official:v0.9.1");
         assert_eq!(saved["release_asset"], "Optiscaler_0.9.1.7z");
+    }
+
+    #[test]
+    fn optiscaler_official_source_filters_out_goverlay_releases() {
+        let _guard = db_lock();
+        reset_isolated_db();
+        let mut app = test_app();
+        app.selected_game = Some("skyrim-se".to_string());
+
+        let db = modde_core::db::ModdeDb::open().expect("db opens");
+        let settings = serde_json::json!({
+            "source_mode": "github_release",
+            "release_tag": "official:v0.9.1",
+            "release_asset": "Optiscaler_0.9.1.7z"
+        });
+        db.save_tool_config("skyrim-se", "optiscaler", false, &settings.to_string())
+            .expect("save settings");
+
+        let _ = app.update(Message::OptiScalerReleasesLoaded(Ok(vec![
+            optiscaler_release("official:v0.9.1", "Optiscaler_0.9.1.7z", None),
+            optiscaler_release(
+                "goverlay-edge:edge-0.9.12.0323",
+                "optiscaler-edge.7z",
+                Some("2026-03-24T00:18:25Z"),
+            ),
+        ])));
+
+        assert_eq!(
+            app.tool_state
+                .tool_option_catalog
+                .get("optiscaler.release_tag"),
+            Some(&vec!["official:v0.9.1".to_string()])
+        );
+    }
+
+    #[test]
+    fn optiscaler_goverlay_source_filters_by_channel_and_resets_selection() {
+        let _guard = db_lock();
+        reset_isolated_db();
+        let mut app = test_app();
+        app.selected_game = Some("skyrim-se".to_string());
+        app.tool_state.optiscaler_releases = vec![
+            optiscaler_release(
+                "goverlay-edge:edge-0.9.12.0323",
+                "optiscaler-edge.7z",
+                Some("2026-03-24T00:18:25Z"),
+            ),
+            optiscaler_release(
+                "goverlay-master:master-3ce61922",
+                "OptiScaler_master_3ce61922.7z",
+                Some("2026-05-01T04:43:25Z"),
+            ),
+        ];
+
+        let _ = app.update(Message::UpdateToolSetting {
+            tool_id: "optiscaler".to_string(),
+            key: "source_mode".to_string(),
+            value: serde_json::json!("goverlay_builds"),
+        });
+
+        let db = modde_core::db::ModdeDb::open().expect("db opens");
+        let row = db
+            .load_tool_config("skyrim-se", "optiscaler")
+            .expect("load tool config")
+            .expect("tool config exists");
+        let saved: serde_json::Value =
+            serde_json::from_str(&row.settings_json).expect("settings json");
+        assert_eq!(saved["source_mode"], "goverlay_builds");
+        assert_eq!(saved["goverlay_channel"], "edge");
+        assert_eq!(saved["release_tag"], "goverlay-edge:edge-0.9.12.0323");
+        assert_eq!(saved["release_asset"], "optiscaler-edge.7z");
+        assert_eq!(
+            app.tool_state
+                .tool_option_catalog
+                .get("optiscaler.release_tag"),
+            Some(&vec!["goverlay-edge:edge-0.9.12.0323".to_string()])
+        );
+
+        let _ = app.update(Message::UpdateToolSetting {
+            tool_id: "optiscaler".to_string(),
+            key: "goverlay_channel".to_string(),
+            value: serde_json::json!("master"),
+        });
+        let row = db
+            .load_tool_config("skyrim-se", "optiscaler")
+            .expect("load tool config")
+            .expect("tool config exists");
+        let saved: serde_json::Value =
+            serde_json::from_str(&row.settings_json).expect("settings json");
+        assert_eq!(saved["goverlay_channel"], "master");
+        assert_eq!(saved["release_tag"], "goverlay-master:master-3ce61922");
+        assert_eq!(saved["release_asset"], "OptiScaler_master_3ce61922.7z");
+    }
+
+    #[test]
+    fn proton_versions_loaded_populates_selected_version_options() {
+        let _guard = db_lock();
+        reset_isolated_db();
+        let mut app = test_app();
+        app.selected_game = Some("skyrim-se".to_string());
+
+        let _ = app.update(Message::ProtonVersionsLoaded(Ok(vec![
+            "latest".to_string(),
+            "GE-Proton10-34".to_string(),
+        ])));
+
+        assert_eq!(
+            app.tool_state
+                .tool_option_catalog
+                .get("proton.selected_version"),
+            Some(&vec!["latest".to_string(), "GE-Proton10-34".to_string()])
+        );
+    }
+
+    #[test]
+    fn proton_versions_loaded_resets_stale_selected_version() {
+        let _guard = db_lock();
+        reset_isolated_db();
+        let mut app = test_app();
+        app.selected_game = Some("skyrim-se".to_string());
+
+        let db = modde_core::db::ModdeDb::open().expect("db opens");
+        let settings = serde_json::json!({ "selected_version": "GE-Proton9-stale" });
+        db.save_tool_config("skyrim-se", "proton", false, &settings.to_string())
+            .expect("save stale settings");
+
+        let _ = app.update(Message::ProtonVersionsLoaded(Ok(vec![
+            "latest".to_string(),
+            "GE-Proton10-34".to_string(),
+        ])));
+
+        let row = db
+            .load_tool_config("skyrim-se", "proton")
+            .expect("load tool config")
+            .expect("tool config exists");
+        let saved: serde_json::Value =
+            serde_json::from_str(&row.settings_json).expect("settings json");
+        assert_eq!(saved["selected_version"], "latest");
     }
 
     #[test]
@@ -5545,6 +8884,15 @@ mod tests {
             zip.start_file("nested/OptiScaler.ini", options)
                 .expect("start ini");
             std::io::Write::write_all(&mut zip, b"ini").expect("write ini");
+            zip.start_file(
+                "nested/FSR4_LATEST/amd_fidelityfx_upscaler_dx12.dll",
+                options,
+            )
+            .expect("start fp8");
+            std::io::Write::write_all(&mut zip, b"fp8").expect("write fp8");
+            zip.start_file("nested/FSR4_INT8/amd_fidelityfx_upscaler_dx12.dll", options)
+                .expect("start int8");
+            std::io::Write::write_all(&mut zip, b"int8").expect("write int8");
             zip.start_file("nested/readme.txt", options)
                 .expect("start txt");
             std::io::Write::write_all(&mut zip, b"txt").expect("write txt");
@@ -5555,6 +8903,14 @@ mod tests {
             .expect("extract zip");
         assert!(dest.join("OptiScaler.dll").exists());
         assert!(dest.join("OptiScaler.ini").exists());
+        assert_eq!(
+            std::fs::read(dest.join("FSR4_LATEST/amd_fidelityfx_upscaler_dx12.dll")).expect("fp8"),
+            b"fp8"
+        );
+        assert_eq!(
+            std::fs::read(dest.join("FSR4_INT8/amd_fidelityfx_upscaler_dx12.dll")).expect("int8"),
+            b"int8"
+        );
         assert!(!dest.join("readme.txt").exists());
     }
 

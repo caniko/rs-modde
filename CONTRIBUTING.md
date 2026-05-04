@@ -30,6 +30,12 @@ cargo clippy --workspace
 
 # Format check
 cargo fmt --all -- --check
+
+# Run the GUI directly with development logging
+just gui
+
+# Override GUI logging when needed
+RUST_LOG=modde_ui=trace,modde_core=debug just gui
 ```
 
 ### Project Structure

@@ -18,6 +18,7 @@ pub fn view<'a>(
     state: &'a WabbajackInstallerState,
     manifest: &'a Option<WabbajackManifest>,
     _available_games: &'a [(String, String)],
+    current_game_id: Option<&'a str>,
 ) -> Element<'a, Message> {
     let title_bar = row![
         text("Wabbajack Explorer").size(20),
@@ -48,7 +49,9 @@ pub fn view<'a>(
 
     let manifest = manifest.as_ref();
     let content = match state.tab {
-        WabbajackTab::Catalog | WabbajackTab::AuthoredFiles => explorer_tab(state, manifest),
+        WabbajackTab::Catalog | WabbajackTab::AuthoredFiles => {
+            explorer_tab(state, manifest, current_game_id)
+        }
         WabbajackTab::Manual => manual_tab(state, manifest),
     };
 
@@ -63,6 +66,7 @@ pub fn view<'a>(
 fn explorer_tab<'a>(
     state: &'a WabbajackInstallerState,
     manifest: Option<&'a WabbajackManifest>,
+    current_game_id: Option<&'a str>,
 ) -> Element<'a, Message> {
     let source = match state.tab {
         WabbajackTab::Catalog => CatalogEntrySource::Official,
@@ -71,6 +75,12 @@ fn explorer_tab<'a>(
     };
 
     let mut games: Vec<GameOption> = wabbajack_game_options(&state.entries, &source);
+    if let Some(game_id) = current_game_id
+        && !games.iter().any(|option| option.value == game_id)
+    {
+        games.push(GameOption::from_game_id(game_id.to_string()));
+        games.sort_by_key(std::string::ToString::to_string);
+    }
     games.insert(0, GameOption::new("", "All games"));
     let selected_game = state
         .game_filter

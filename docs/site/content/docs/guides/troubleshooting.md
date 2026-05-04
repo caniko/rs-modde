@@ -70,7 +70,7 @@ If invalid, re-authenticate:
 modde nexus auth
 ```
 
-**API key lookup order**: `NEXUS_API_KEY` env var, system keyring, `NEXUS_API_KEY_FILE` env var, `~/.config/modde/nexus_api_key` file.
+**API key lookup order**: OAuth token, `~/.config/modde/nexus_api_key`, `NEXUS_API_KEY` env var, system keyring, `NEXUS_API_KEY_FILE` env var, legacy `settings.toml` key.
 
 **CDN downloads require Premium**: Free Nexus accounts cannot generate CDN download links. You'll see an error if you try to download without Premium.
 

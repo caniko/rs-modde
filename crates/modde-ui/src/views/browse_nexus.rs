@@ -12,6 +12,7 @@ use modde_sources::nexus::graphql::{GqlCollectionTile, GqlModTile};
 
 use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::Message;
+use crate::views::game_picker::{game_pick_list, nexus_game_options};
 use crate::views::tabs::{Tab, tab_bar};
 
 /// Which tab of the browse view is currently active.
@@ -46,6 +47,7 @@ impl BrowseTab {
 #[derive(Debug, Clone)]
 pub struct NexusBrowseState {
     pub active_tab: BrowseTab,
+    pub selected_game_id: Option<String>,
     pub search_query: String,
     pub loading: bool,
     pub error: Option<String>,
@@ -60,6 +62,7 @@ impl Default for NexusBrowseState {
     fn default() -> Self {
         Self {
             active_tab: BrowseTab::Top,
+            selected_game_id: None,
             search_query: String::new(),
             loading: false,
             error: None,
@@ -70,15 +73,29 @@ impl Default for NexusBrowseState {
     }
 }
 
-/// Render the browse view. `game_domain` is the currently-loaded
-/// profile's Nexus domain (`None` → show an empty state and disable
-/// the install button). Taken by value so the inner buttons can
-/// clone it into their message payloads without tying the returned
-/// `Element`'s lifetime to a local borrow.
-pub fn view<'a>(state: &'a NexusBrowseState, game_domain: Option<String>) -> Element<'a, Message> {
+/// Render the browse view. `game_domain` is the selected Nexus browse
+/// game's domain (`None` → show an empty state and disable the install
+/// button). Taken by value so the inner buttons can clone it into their
+/// message payloads without tying the returned `Element`'s lifetime to a
+/// local borrow.
+pub fn view<'a>(
+    state: &'a NexusBrowseState,
+    available_games: &'a [(String, String)],
+    game_domain: Option<String>,
+) -> Element<'a, Message> {
     let title = text("Browse Nexus").size(20);
 
     let tab_bar = render_tab_bar(state.active_tab);
+    let game_options = nexus_game_options(available_games.iter());
+    let selected_game = state.selected_game_id.as_ref().and_then(|game_id| {
+        game_options
+            .iter()
+            .find(|option| option.value == *game_id)
+            .cloned()
+    });
+    let game_selector = game_pick_list(game_options, selected_game, "Select game", |option| {
+        Message::BrowseGameChanged(Some(option.value))
+    });
 
     let search_bar = text_input("Search Nexus mods & collections…", &state.search_query)
         .on_input(Message::BrowseSearchChanged)
@@ -87,7 +104,7 @@ pub fn view<'a>(state: &'a NexusBrowseState, game_domain: Option<String>) -> Ele
         .width(Length::Fill);
 
     let content: Element<'a, Message> = if game_domain.is_none() {
-        container(text("Load a profile to browse Nexus mods for its game.").size(14))
+        container(text("Select a supported Nexus game to browse mods.").size(14))
             .padding(20)
             .width(Length::Fill)
             .center_x(Length::Fill)
@@ -120,7 +137,7 @@ pub fn view<'a>(state: &'a NexusBrowseState, game_domain: Option<String>) -> Ele
     column![
         title,
         tab_bar,
-        search_bar,
+        row![game_selector, search_bar].spacing(8),
         iced::widget::rule::horizontal(1),
         content,
         status_bar,

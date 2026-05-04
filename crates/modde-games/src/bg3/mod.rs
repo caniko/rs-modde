@@ -1,0 +1,226 @@
+pub mod saves;
+pub mod scanner;
+
+use std::path::{Path, PathBuf};
+
+use anyhow::Result;
+use modde_core::installer::InstallMethod;
+
+use crate::policies::{BareLayoutPolicy, ContentPolicy};
+use crate::traits::{ContentCategory, GamePlugin, ModSafety};
+
+pub struct LarianBg3Game;
+
+pub static BALDURS_GATE3: LarianBg3Game = LarianBg3Game;
+
+const STEAM_APP_ID: &str = "1086940";
+
+const BG3_SAVE_BREAKING_EXT: &[&str] = &["pak", "dll", "json", "lsx"];
+const BG3_COSMETIC_EXT: &[&str] = &["png", "jpg", "dds", "tga"];
+const BG3_CONTENT_CATEGORIES: &[(&str, ContentCategory)] = &[
+    ("pak", ContentCategory::Archive),
+    ("dll", ContentCategory::Binary),
+    ("json", ContentCategory::Config),
+    ("lsx", ContentCategory::Config),
+    ("dds", ContentCategory::Texture),
+    ("png", ContentCategory::Texture),
+    ("tga", ContentCategory::Texture),
+    ("jpg", ContentCategory::Texture),
+];
+
+const BG3_CONTENT_POLICY: ContentPolicy = ContentPolicy {
+    save_breaking_ext: BG3_SAVE_BREAKING_EXT,
+    cosmetic_ext: BG3_COSMETIC_EXT,
+    save_breaking_dirs: &["script extender", "scriptextender"],
+    categories: BG3_CONTENT_CATEGORIES,
+};
+
+const BG3_BARE_LAYOUT_POLICY: BareLayoutPolicy = BareLayoutPolicy {
+    root_dirs: &["mods", "playerprofiles"],
+    root_file_exts: &["pak", "lsx"],
+    case_insensitive_dirs: true,
+};
+
+#[must_use]
+pub fn data_root_from_install(install: &Path) -> PathBuf {
+    let proton = install
+        .ancestors()
+        .find(|path| path.file_name().and_then(|name| name.to_str()) == Some("common"))
+        .and_then(|common| common.parent())
+        .map(|steamapps| {
+            steamapps
+                .join("compatdata")
+                .join(STEAM_APP_ID)
+                .join("pfx/drive_c/users/steamuser/AppData/Local/Larian Studios/Baldur's Gate 3")
+        });
+
+    proton.unwrap_or_else(|| install.join("Larian Studios/Baldur's Gate 3"))
+}
+
+#[must_use]
+pub fn mods_dir_from_install(install: &Path) -> PathBuf {
+    data_root_from_install(install).join("Mods")
+}
+
+#[must_use]
+pub fn modsettings_path_from_install(install: &Path) -> PathBuf {
+    data_root_from_install(install).join("PlayerProfiles/Public/modsettings.lsx")
+}
+
+#[must_use]
+pub fn save_dir_from_steam_default() -> Option<PathBuf> {
+    Some(
+        modde_core::paths::steam_common()
+            .parent()?
+            .join("compatdata")
+            .join(STEAM_APP_ID)
+            .join(
+                "pfx/drive_c/users/steamuser/AppData/Local/Larian Studios/Baldur's Gate 3/PlayerProfiles/Public/Savegames",
+            ),
+    )
+}
+
+pub fn read_modsettings(path: &Path) -> Result<Vec<String>> {
+    let content = std::fs::read_to_string(path)?;
+    Ok(content
+        .lines()
+        .filter_map(|line| line.split_once("value=\""))
+        .filter_map(|(_, rest)| rest.split_once('"'))
+        .map(|(value, _)| value.to_string())
+        .filter(|value| !value.is_empty())
+        .collect())
+}
+
+pub fn write_modsettings(path: &Path, mods: &[String]) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let module_nodes = mods
+        .iter()
+        .map(|name| format!("          <node id=\"ModuleShortDesc\"><attribute id=\"Folder\" type=\"LSString\" value=\"{name}\" /></node>"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(
+        path,
+        format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
+<save>
+  <region id="ModuleSettings">
+    <node id="root">
+      <children>
+{module_nodes}
+      </children>
+    </node>
+  </region>
+</save>
+"#
+        ),
+    )?;
+    Ok(())
+}
+
+impl GamePlugin for LarianBg3Game {
+    fn game_id(&self) -> &'static str {
+        "baldurs-gate3"
+    }
+
+    fn display_name(&self) -> &'static str {
+        "Baldur's Gate 3"
+    }
+
+    fn mod_directory(&self, install: &Path) -> PathBuf {
+        mods_dir_from_install(install)
+    }
+
+    fn mod_root(&self, install: &Path) -> Result<PathBuf> {
+        Ok(mods_dir_from_install(install))
+    }
+
+    fn save_directory(&self) -> Option<PathBuf> {
+        save_dir_from_steam_default()
+    }
+
+    fn supports_save_profiles(&self) -> bool {
+        true
+    }
+
+    fn classify_mod(&self, mod_dir: &Path) -> ModSafety {
+        BG3_CONTENT_POLICY.classify_mod(mod_dir)
+    }
+
+    fn classify_extension(&self, ext: &str) -> ContentCategory {
+        BG3_CONTENT_POLICY.classify_extension(ext)
+    }
+
+    fn archive_extensions(&self) -> &[&str] {
+        &["pak"]
+    }
+
+    fn executable_dir(&self, install: &Path) -> PathBuf {
+        install.join("bin")
+    }
+
+    fn steam_app_id_u32(&self) -> Option<u32> {
+        Some(1086940)
+    }
+
+    fn nexus_game_domain(&self) -> Option<&str> {
+        Some("baldursgate3")
+    }
+
+    fn post_deploy(&self, install: &Path) -> Result<()> {
+        let mods_dir = mods_dir_from_install(install);
+        let mut mods = Vec::new();
+        if mods_dir.is_dir() {
+            for entry in std::fs::read_dir(&mods_dir)?.flatten() {
+                let path = entry.path();
+                if path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("pak"))
+                    && let Some(stem) = path.file_stem().and_then(|stem| stem.to_str())
+                {
+                    mods.push(stem.to_string());
+                }
+            }
+        }
+        mods.sort();
+        if !mods.is_empty() {
+            write_modsettings(&modsettings_path_from_install(install), &mods)?;
+        }
+        Ok(())
+    }
+
+    fn analyze_mod_archive(&self, extracted_dir: &Path) -> Option<InstallMethod> {
+        if has_root_file_with_ext(extracted_dir, &["pak"]) {
+            return Some(InstallMethod::SingleFileSet);
+        }
+        extracted_dir
+            .join("Mods")
+            .is_dir()
+            .then(|| InstallMethod::StripContentRoot {
+                root: "Mods".to_string(),
+            })
+    }
+
+    fn recognizes_bare_layout(&self, extracted_dir: &Path) -> bool {
+        BG3_BARE_LAYOUT_POLICY.recognizes(extracted_dir)
+    }
+}
+
+fn has_root_file_with_ext(dir: &Path, extensions: &[&str]) -> bool {
+    std::fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().any(|entry| {
+            let path = entry.path();
+            path.is_file()
+                && path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| {
+                        extensions
+                            .iter()
+                            .any(|candidate| ext.eq_ignore_ascii_case(candidate))
+                    })
+        })
+    })
+}

@@ -1,6 +1,7 @@
 use std::path::Path;
 
-use modde_games::bethesda::{FALLOUT4, FALLOUT76, SKYRIM_AE, SKYRIM_SE};
+use modde_games::bethesda::{FALLOUT4, FALLOUT76, SKYRIM_AE, SKYRIM_SE, STARFIELD};
+use modde_games::cyberpunk::CYBERPUNK2077;
 use modde_games::traits::GamePlugin;
 use tempfile::TempDir;
 
@@ -122,6 +123,37 @@ fn test_all_game_ids_unique() {
     deduped.sort_unstable();
     deduped.dedup();
     assert_eq!(ids.len(), deduped.len(), "game IDs should be unique");
+}
+
+struct MinimalGame;
+
+impl GamePlugin for MinimalGame {
+    fn game_id(&self) -> &'static str {
+        "minimal"
+    }
+
+    fn display_name(&self) -> &'static str {
+        "Minimal"
+    }
+
+    fn mod_directory(&self, install: &Path) -> std::path::PathBuf {
+        install.join("mods")
+    }
+}
+
+#[test]
+fn test_save_profiles_default_disabled() {
+    assert!(!MinimalGame.supports_save_profiles());
+}
+
+#[test]
+fn test_existing_save_profile_games_opt_in() {
+    assert!(SKYRIM_SE.supports_save_profiles());
+    assert!(SKYRIM_AE.supports_save_profiles());
+    assert!(FALLOUT4.supports_save_profiles());
+    assert!(FALLOUT76.supports_save_profiles());
+    assert!(CYBERPUNK2077.supports_save_profiles());
+    assert!(STARFIELD.supports_save_profiles());
 }
 
 // ── Deploy symlinks ─────────────────────────────────────────────────

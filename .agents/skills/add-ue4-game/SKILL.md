@@ -18,6 +18,7 @@ This skill uses the existing `Ue4Game` data-driven struct. If `crates/modde-game
 - **UE4 project name** — the folder under install root containing `Content/Paks/` and `Binaries/Win64/`. Common examples: `SB` (Stellar Blade), `Pal` (Palworld), `LOP` (Lies of P). Check the game's install dir or community wikis.
 - Nexus Mods domain (if listed)
 - GOG / Epic IDs (if applicable)
+- OptiScaler compatibility data from `/optiscaler-quirks <game>` if the OptiScaler wiki has a community-tested profile. Do not invent or substitute missing compatibility data.
 
 ## Steps
 
@@ -31,6 +32,8 @@ This skill uses the existing `Ue4Game` data-driven struct. If `crates/modde-game
        None, // or Some("<nexus_domain>")
    );
    ```
+
+   If `/optiscaler-quirks <game>` returns verified community data, add an `OptiScalerProfile` entry for the game and extend the `OptiScalerProfiles for Ue4Game` match. Include the source URL, tested version, proxy DLL, optional release tag/asset, Wine overrides, companion-file behavior, INI overrides, and notes. If no verified data exists, do not add a placeholder profile.
 
 2. **Add the scanner const** in `crates/modde-games/src/ue4/scanner.rs`:
    ```rust
@@ -53,6 +56,7 @@ This skill uses the existing `Ue4Game` data-driven struct. If `crates/modde-game
 6. **Tests** — add cases to `crates/modde-games/tests/ue4_tests.rs` (preferred) or a new test file:
    - `test_<game>_game_id`, `test_<game>_display_name`, `test_<game>_mod_directory`
    - `test_<game>_in_supported_ids`, `test_resolve_game_plugin_<game>`
+   - OptiScaler profile resolver/default tests if community data exists; also preserve a no-profile UE4 game case when applicable
    - Scanner test with tempdir: create `<ProjectName>/Content/Paks/~mods/<Mod>.pak`, assert `DiscoveredMod` with `mod_id = "pak/<Mod>"`
 
 7. **Build + test:**
@@ -79,10 +83,12 @@ This skill uses the existing `Ue4Game` data-driven struct. If `crates/modde-game
 - [ ] **Non-standard mod dir** — a few UE4 games use a different paks subdirectory (e.g. `Mods/` instead of `~mods/`). If so, the `Ue4Game` struct may need a new field; note it for follow-up.
 - [ ] **Nexus domain** — if `None`, note it.
 - [ ] **Installer layouts** — UE4 mods often ship as bare `.pak` files or zips with the pak inside. If the installer pipeline struggles, suggest `/modde-installer`.
+- [ ] **OptiScaler profiles** — record whether `/optiscaler-quirks <game>` found a community-tested profile. If yes, include the profile ID and source URL. If no, state that no OptiScaler profile is shipped.
 
 ## Critical files
 
 - [crates/modde-games/src/ue4/mod.rs](crates/modde-games/src/ue4/mod.rs) — `Ue4Game` struct, game `const` instances
+- [crates/modde-games/src/optiscaler.rs](crates/modde-games/src/optiscaler.rs) — `OptiScalerProfile`, `OptiScalerProfiles`, profile resolver
 - [crates/modde-games/src/ue4/scanner.rs](crates/modde-games/src/ue4/scanner.rs) — `Ue4Scanner` struct, scanner instances
 - [crates/modde-games/src/lib.rs](crates/modde-games/src/lib.rs) — resolvers + `SUPPORTED_GAME_IDS`
 - [crates/modde-games/src/detection.rs](crates/modde-games/src/detection.rs) — `KNOWN_GAMES`

@@ -3,6 +3,7 @@ use std::path::Path;
 use anyhow::Result;
 
 use super::plugins_txt;
+use crate::scanner_patterns::SingleFileModRule;
 use crate::traits::{DiscoveredFile, DiscoveredMod, ModScanner, ModSource, ScanContext};
 
 /// Data-driven Bethesda mod scanner.
@@ -24,6 +25,10 @@ pub static FALLOUT4_SCANNER: BethesdaScanner = BethesdaScanner {
     game_folder_name: "Fallout4",
 };
 
+pub static FALLOUT76_SCANNER: BethesdaArchiveScanner = BethesdaArchiveScanner {
+    game_id: "fallout76",
+};
+
 pub static STARFIELD_SCANNER: BethesdaScanner = BethesdaScanner {
     game_id: "starfield",
     steam_app_id: plugins_txt::STARFIELD_APP_ID,
@@ -37,6 +42,40 @@ const PLUGIN_EXTENSIONS: &[&str] = &["esp", "esm", "esl"];
 
 /// Archive extensions that may accompany a plugin.
 const ARCHIVE_EXTENSIONS: &[&str] = &["bsa", "ba2"];
+
+/// Scanner for Bethesda titles that load loose archive mods without a local
+/// plugins.txt-style load order. Fallout 76 mods are typically `.ba2` files
+/// dropped in `Data/` and enabled from `Fallout76Custom.ini`.
+pub struct BethesdaArchiveScanner {
+    pub game_id: &'static str,
+}
+
+impl ModScanner for BethesdaArchiveScanner {
+    fn scan_directories(&self) -> &[&str] {
+        BETHESDA_SCAN_DIRS
+    }
+
+    fn scan_filesystem(&self, ctx: &ScanContext<'_>) -> Result<Vec<DiscoveredMod>> {
+        let mut mods = Vec::new();
+        SingleFileModRule {
+            rel_dir: "Data",
+            extension: "ba2",
+            ignored_prefixes: &["SeventySix"],
+            mod_id_prefix: "archive",
+            source_location: "Data",
+            confidence: 0.8,
+        }
+        .scan(ctx.install_dir, &mut mods)?;
+        Ok(mods)
+    }
+
+    fn mod_id_footprint(&self, mod_id: &str) -> Option<modde_core::scanner::ModFootprint> {
+        let stem = mod_id.strip_prefix("archive/")?.to_lowercase();
+        Some(modde_core::scanner::ModFootprint::File(format!(
+            "data/{stem}.ba2"
+        )))
+    }
+}
 
 impl ModScanner for BethesdaScanner {
     fn scan_directories(&self) -> &[&str] {

@@ -1,12 +1,16 @@
+pub mod saves;
 pub mod scanner;
 
 use std::path::{Path, PathBuf};
 
+use modde_core::collision::CollisionSeverity;
+use modde_core::installer::InstallMethod;
+use modde_core::paths;
 use smallvec::SmallVec;
 
-use crate::traits::{
-    ContentCategory, GamePlugin, ModClassifyConfig, ModSafety, classify_mod_by_content,
-};
+use crate::optiscaler::{OptiScalerProfile, OptiScalerProfiles};
+use crate::policies::{CollisionPolicy, ContentPolicy, DllOverridePolicy, StagingDllSearch};
+use crate::traits::{ContentCategory, DeployTarget, DeployTargetKind, GamePlugin, ModSafety};
 
 /// Data-driven UE4 game plugin.
 ///
@@ -27,6 +31,9 @@ pub struct Ue4Game {
     project_name: &'static str,
     /// Nexus Mods game domain name, if the game is tracked there.
     nexus_domain: Option<&'static str>,
+    /// Whether this specific UE4 game participates in modde's per-profile
+    /// save layer. This is intentionally per-game; UE4 save semantics vary.
+    save_profiles: bool,
 }
 
 impl Ue4Game {
@@ -44,7 +51,18 @@ impl Ue4Game {
             steam_app_id,
             project_name,
             nexus_domain,
+            save_profiles: false,
         }
+    }
+
+    /// Opt this UE4 game into modde's per-profile save layer.
+    ///
+    /// This is a const builder so game definitions can stay data-only while
+    /// avoiding engine-wide assumptions about save-file layout.
+    #[must_use]
+    pub const fn with_save_profiles(mut self, enabled: bool) -> Self {
+        self.save_profiles = enabled;
+        self
     }
 
     /// `<install>/<ProjectName>/Content/Paks`
@@ -78,10 +96,57 @@ const UE4_SAVE_BREAKING_EXT: &[&str] = &["pak", "ucas", "utoc", "dll", "lua"];
 /// File extensions that are purely cosmetic in UE4 games.
 const UE4_COSMETIC_EXT: &[&str] = &["png", "jpg", "dds", "tga", "ini"];
 
-const UE4_CLASSIFY_CONFIG: ModClassifyConfig = ModClassifyConfig {
+const UE4_CONTENT_CATEGORIES: &[(&str, ContentCategory)] = &[
+    ("pak", ContentCategory::Archive),
+    ("ucas", ContentCategory::Archive),
+    ("utoc", ContentCategory::Archive),
+    ("dll", ContentCategory::Binary),
+    ("so", ContentCategory::Binary),
+    ("lua", ContentCategory::Script),
+    ("dds", ContentCategory::Texture),
+    ("png", ContentCategory::Texture),
+    ("tga", ContentCategory::Texture),
+    ("jpg", ContentCategory::Texture),
+    ("ini", ContentCategory::Config),
+    ("json", ContentCategory::Config),
+    ("yaml", ContentCategory::Config),
+    ("xml", ContentCategory::Config),
+    ("toml", ContentCategory::Config),
+];
+
+const UE4_CONTENT_POLICY: ContentPolicy = ContentPolicy {
     save_breaking_ext: UE4_SAVE_BREAKING_EXT,
     cosmetic_ext: UE4_COSMETIC_EXT,
     save_breaking_dirs: &[],
+    categories: UE4_CONTENT_CATEGORIES,
+};
+
+const UE4_DLL_POLICY: DllOverridePolicy = DllOverridePolicy {
+    proxy_dlls: UE4_PROXY_DLLS,
+    staging_search: StagingDllSearch::DirectChildDirs,
+};
+
+pub(crate) const UE4_COLLISION_SEVERITIES: &[(&str, CollisionSeverity)] = &[
+    ("pak", CollisionSeverity::Dangerous),
+    ("ucas", CollisionSeverity::Dangerous),
+    ("utoc", CollisionSeverity::Dangerous),
+    ("dll", CollisionSeverity::Dangerous),
+    ("lua", CollisionSeverity::Dangerous),
+    ("ini", CollisionSeverity::Config),
+    ("cfg", CollisionSeverity::Config),
+    ("json", CollisionSeverity::Config),
+    ("toml", CollisionSeverity::Config),
+    ("xml", CollisionSeverity::Config),
+    ("yaml", CollisionSeverity::Config),
+    ("dds", CollisionSeverity::Cosmetic),
+    ("png", CollisionSeverity::Cosmetic),
+    ("jpg", CollisionSeverity::Cosmetic),
+    ("tga", CollisionSeverity::Cosmetic),
+];
+
+pub(crate) const UE4_COLLISION_POLICY: CollisionPolicy = CollisionPolicy {
+    archive_extensions: &["pak", "ucas", "utoc"],
+    severities: UE4_COLLISION_SEVERITIES,
 };
 
 pub const STELLAR_BLADE: Ue4Game = Ue4Game::new(
@@ -89,9 +154,38 @@ pub const STELLAR_BLADE: Ue4Game = Ue4Game::new(
     "Stellar Blade",
     "3489700",
     "SB",
-    // Not currently listed on Nexus Mods.
-    None,
-);
+    Some("stellarblade"),
+)
+.with_save_profiles(true);
+
+pub(crate) const STELLAR_BLADE_OPTISCALER_PROFILES: &[OptiScalerProfile] = &[OptiScalerProfile {
+    id: "community-dxgi",
+    name: "Community tested dxgi.dll",
+    source_url: "https://github.com/optiscaler/OptiScaler/wiki/Stellar-Blade",
+    tested_optiscaler_version: "0.9",
+    source_mode: Some("github_release"),
+    goverlay_channel: None,
+    proxy_dll: "dxgi.dll",
+    release_tag: Some("official:v0.9.1"),
+    release_asset: None,
+    wine_dll_overrides: &[],
+    copy_companion_files: true,
+    enable_optipatcher: true,
+    fsr4_variant: Some("latest_fp8"),
+    emulate_fp8: true,
+    spoof_dlss: false,
+    ini_overrides: &[],
+    notes: "Use OptiPatcher to unlock DLSS and DLSS-FG inputs without spoofing. The community compatibility notes report that the game may crash on first boot but work afterwards, and that setting the in-game sharpness slider to 0 can fix DLSSG HUD interpolation.",
+}];
+
+impl OptiScalerProfiles for Ue4Game {
+    fn optiscaler_profiles(&self) -> &'static [OptiScalerProfile] {
+        match self.game_id {
+            "stellar-blade" => STELLAR_BLADE_OPTISCALER_PROFILES,
+            _ => &[],
+        }
+    }
+}
 
 impl GamePlugin for Ue4Game {
     fn game_id(&self) -> &str {
@@ -110,6 +204,59 @@ impl GamePlugin for Ue4Game {
         self.paks_root(install).join("~mods")
     }
 
+    fn save_directory(&self) -> Option<PathBuf> {
+        let compat = paths::steam_common()
+            .parent()?
+            .join("compatdata")
+            .join(self.steam_app_id)
+            .join("pfx/drive_c/users/steamuser/AppData/Local")
+            .join(self.project_name)
+            .join("Saved/SaveGames");
+        if compat.exists() {
+            return Some(compat);
+        }
+        None
+    }
+
+    fn supports_save_profiles(&self) -> bool {
+        self.save_profiles
+    }
+
+    fn deploy_targets(&self) -> &'static [DeployTarget] {
+        &[DeployTarget {
+            id: "ue4-saved-config",
+            label: "UE4 Saved/Config",
+            kind: DeployTargetKind::UserConfig,
+        }]
+    }
+
+    /// Resolve the per-user config dir under the Proton prefix:
+    /// `<steam_root>/compatdata/<APP_ID>/pfx/drive_c/users/steamuser/`
+    /// `AppData/Local/<Project>/Saved/Config/Windows/`.
+    ///
+    /// Returns `None` if the prefix doesn't exist yet — the caller is
+    /// expected to surface that to the user (typically: launch the
+    /// game once so Proton creates the prefix).
+    fn resolve_deploy_target(&self, id: &str, _install: &Path) -> Option<PathBuf> {
+        if id != "ue4-saved-config" {
+            return None;
+        }
+        let prefix = paths::steam_common()
+            .parent()?
+            .join("compatdata")
+            .join(self.steam_app_id)
+            .join("pfx");
+        if !prefix.exists() {
+            return None;
+        }
+        Some(
+            prefix
+                .join("drive_c/users/steamuser/AppData/Local")
+                .join(self.project_name)
+                .join("Saved/Config/Windows"),
+        )
+    }
+
     fn executable_dir(&self, install: &Path) -> PathBuf {
         install
             .join(self.project_name)
@@ -118,56 +265,19 @@ impl GamePlugin for Ue4Game {
     }
 
     fn wine_dll_overrides(&self, game_dir: &Path) -> SmallVec<[String; 4]> {
-        let exe_dir = self.executable_dir(game_dir);
-        let mut out: SmallVec<[String; 4]> = SmallVec::new();
-        for &name in UE4_PROXY_DLLS {
-            if exe_dir.join(format!("{name}.dll")).exists() {
-                out.push(name.to_string());
-            }
-        }
-        out
+        UE4_DLL_POLICY.from_executable_dir(&self.executable_dir(game_dir))
     }
 
     fn wine_dll_overrides_from_staging(&self, staging: &Path) -> SmallVec<[String; 4]> {
-        // UE4 mods that ship a proxy DLL (e.g. UE4SS) drop it at the root of
-        // their mod dir. Walk one level for any *.dll and match.
-        let mut out: SmallVec<[String; 4]> = SmallVec::new();
-        let Ok(entries) = std::fs::read_dir(staging) else {
-            return out;
-        };
-        for entry in entries.flatten() {
-            if !entry.file_type().is_ok_and(|t| t.is_dir()) {
-                continue;
-            }
-            let Ok(inner) = std::fs::read_dir(entry.path()) else {
-                continue;
-            };
-            for f in inner.flatten() {
-                let name = f.file_name().to_string_lossy().to_lowercase();
-                if let Some(stem) = name.strip_suffix(".dll")
-                    && UE4_PROXY_DLLS.contains(&stem)
-                    && !out.iter().any(|x| x == stem)
-                {
-                    out.push(stem.to_string());
-                }
-            }
-        }
-        out
+        UE4_DLL_POLICY.from_staging(staging)
     }
 
     fn classify_mod(&self, mod_dir: &Path) -> ModSafety {
-        classify_mod_by_content(mod_dir, &UE4_CLASSIFY_CONFIG)
+        UE4_CONTENT_POLICY.classify_mod(mod_dir)
     }
 
     fn classify_extension(&self, ext: &str) -> ContentCategory {
-        match ext {
-            "pak" | "ucas" | "utoc" => ContentCategory::Archive,
-            "dll" | "so" => ContentCategory::Binary,
-            "lua" => ContentCategory::Script,
-            "dds" | "png" | "tga" | "jpg" => ContentCategory::Texture,
-            "ini" | "json" | "yaml" | "xml" | "toml" => ContentCategory::Config,
-            _ => ContentCategory::Other,
-        }
+        UE4_CONTENT_POLICY.classify_extension(ext)
     }
 
     fn archive_extensions(&self) -> &[&str] {
@@ -181,4 +291,26 @@ impl GamePlugin for Ue4Game {
     fn nexus_game_domain(&self) -> Option<&str> {
         self.nexus_domain
     }
+
+    fn analyze_mod_archive(&self, extracted_dir: &Path) -> Option<InstallMethod> {
+        has_root_file_with_ext(extracted_dir, &["pak", "ucas", "utoc"])
+            .then_some(InstallMethod::SingleFileSet)
+    }
+}
+
+fn has_root_file_with_ext(dir: &Path, extensions: &[&str]) -> bool {
+    std::fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().any(|entry| {
+            let path = entry.path();
+            path.is_file()
+                && path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| {
+                        extensions
+                            .iter()
+                            .any(|candidate| ext.eq_ignore_ascii_case(candidate))
+                    })
+        })
+    })
 }

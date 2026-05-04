@@ -12,23 +12,39 @@ pub fn view<'a>(
     snapshots: &'a [SaveSnapshot],
     profile_name: Option<&'a str>,
     current_fingerprint: Option<&'a SaveFingerprint>,
+    save_profiles_supported: bool,
     selected_id: Option<&'a str>,
 ) -> Element<'a, Message> {
-    let title_bar = row![
-        text("Save Management").size(20),
-        iced::widget::space::horizontal(),
-        button(text("Refresh").size(14))
-            .style(button::secondary)
-            .padding([6, 14])
-            .on_action(ButtonAction::LoadSaveHistory),
-    ]
-    .align_y(Alignment::Center);
+    let title_bar = if save_profiles_supported {
+        row![
+            text("Save Management").size(20),
+            iced::widget::space::horizontal(),
+            button(text("Refresh").size(14))
+                .style(button::secondary)
+                .padding([6, 14])
+                .on_action(ButtonAction::LoadSaveHistory),
+        ]
+        .align_y(Alignment::Center)
+    } else {
+        row![text("Save Management").size(20)].align_y(Alignment::Center)
+    };
 
     let mut profile_info = column![].spacing(2);
     profile_info = profile_info.push(match profile_name {
         Some(name) => text(format!("Profile: {name}")).size(14),
         None => text("No active profile").size(14).color(color!(0xFF8844)),
     });
+
+    if !save_profiles_supported {
+        let content = container(text("Save profiles are not supported for this game.").size(14))
+            .padding(20)
+            .width(Length::Fill)
+            .center_x(Length::Fill);
+        return column![title_bar, profile_info, content]
+            .spacing(12)
+            .padding(16)
+            .into();
+    }
 
     // Show current fingerprint
     if let Some(fp) = current_fingerprint

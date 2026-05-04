@@ -65,6 +65,19 @@ pub fn supported_game_options<'a>(
         .collect()
 }
 
+pub fn nexus_game_options<'a>(
+    games: impl IntoIterator<Item = &'a (String, String)>,
+) -> Vec<GameOption> {
+    games
+        .into_iter()
+        .filter(|(id, _)| {
+            modde_games::resolve_game(id)
+                .is_some_and(|game| game.nexus_domain.is_some() && game.nexus_game_id.is_some())
+        })
+        .map(|(id, _)| GameOption::from_game_id(id.clone()))
+        .collect()
+}
+
 pub fn supported_game_options_ordered<'a>(
     games: impl IntoIterator<Item = &'a (String, String)>,
     detected_game_ids: &HashSet<String>,
@@ -232,7 +245,7 @@ mod tests {
         let labels: Vec<String> = options.iter().map(ToString::to_string).collect();
 
         assert!(labels.contains(&"The Elder Scrolls V: Skyrim Special Edition".to_string()));
-        assert!(labels.contains(&"Oblivion Remastered".to_string()));
+        assert!(labels.contains(&"The Elder Scrolls IV: Oblivion Remastered".to_string()));
         assert!(labels.contains(&"Morrowind".to_string()));
         assert!(!labels.contains(&"Fallout 4".to_string()));
     }
@@ -258,7 +271,7 @@ mod tests {
         assert_eq!(
             options
                 .iter()
-                .filter(|option| option.value == "oblivionremastered")
+                .filter(|option| option.value == "oblivion-remastered")
                 .count(),
             1
         );
@@ -266,7 +279,7 @@ mod tests {
 
     #[test]
     fn supported_game_options_put_undetected_games_last() {
-        let games = vec![
+        let games = [
             ("missing-game".to_string(), "Missing".to_string()),
             ("skyrim-se".to_string(), "Skyrim".to_string()),
             ("cyberpunk2077".to_string(), "Cyberpunk".to_string()),
@@ -277,5 +290,21 @@ mod tests {
         let values: Vec<&str> = options.iter().map(|option| option.value.as_str()).collect();
 
         assert_eq!(values, vec!["cyberpunk2077", "skyrim-se", "missing-game"]);
+    }
+
+    #[test]
+    fn nexus_game_options_only_include_games_with_nexus_domains() {
+        let games = [
+            ("skyrim-se".to_string(), "Skyrim SE".to_string()),
+            ("fallout4".to_string(), "Fallout 4".to_string()),
+            ("stellar-blade".to_string(), "Stellar Blade".to_string()),
+        ];
+
+        let options = nexus_game_options(games.iter());
+        let values: Vec<&str> = options.iter().map(|option| option.value.as_str()).collect();
+
+        assert!(values.contains(&"skyrim-se"));
+        assert!(values.contains(&"fallout4"));
+        assert!(!values.contains(&"stellar-blade"));
     }
 }

@@ -16,7 +16,8 @@ use std::path::{Path, PathBuf};
 
 use modde_core::paths;
 
-use crate::traits::{GamePlugin, ModClassifyConfig, ModSafety, classify_mod_by_content};
+use crate::policies::{BareLayoutPolicy, ContentPolicy};
+use crate::traits::{ContentCategory, GamePlugin, ModSafety};
 
 /// Data-driven Bethesda game plugin.
 ///
@@ -37,6 +38,10 @@ pub struct BethesdaGame {
     nexus_domain: &'static str,
     /// Game folder name in Proton's AppData/Local for plugins.txt.
     plugins_txt_folder_name: &'static str,
+    /// Whether this specific Bethesda game participates in modde's
+    /// per-profile save layer. Not every Bethesda plugin has shipped save
+    /// traversal support yet.
+    save_profiles: bool,
 }
 
 impl BethesdaGame {
@@ -60,7 +65,15 @@ impl BethesdaGame {
             archive_ext,
             nexus_domain,
             plugins_txt_folder_name,
+            save_profiles: false,
         }
+    }
+
+    /// Opt this Bethesda game into modde's per-profile save layer.
+    #[must_use]
+    pub const fn with_save_profiles(mut self, enabled: bool) -> Self {
+        self.save_profiles = enabled;
+        self
     }
 }
 
@@ -73,10 +86,57 @@ const BETHESDA_COSMETIC_EXT: &[&str] = &[
     "json",
 ];
 
-const BETHESDA_CLASSIFY_CONFIG: ModClassifyConfig = ModClassifyConfig {
+const BETHESDA_CONTENT_CATEGORIES: &[(&str, ContentCategory)] = &[
+    ("esp", ContentCategory::Plugin),
+    ("esm", ContentCategory::Plugin),
+    ("esl", ContentCategory::Plugin),
+    ("dds", ContentCategory::Texture),
+    ("png", ContentCategory::Texture),
+    ("tga", ContentCategory::Texture),
+    ("jpg", ContentCategory::Texture),
+    ("nif", ContentCategory::Mesh),
+    ("wav", ContentCategory::Sound),
+    ("xwm", ContentCategory::Sound),
+    ("fuz", ContentCategory::Sound),
+    ("mp3", ContentCategory::Sound),
+    ("ogg", ContentCategory::Sound),
+    ("pex", ContentCategory::Script),
+    ("psc", ContentCategory::Script),
+    ("swf", ContentCategory::Interface),
+    ("bsa", ContentCategory::Archive),
+    ("ba2", ContentCategory::Archive),
+    ("ini", ContentCategory::Config),
+    ("json", ContentCategory::Config),
+    ("yaml", ContentCategory::Config),
+    ("xml", ContentCategory::Config),
+    ("toml", ContentCategory::Config),
+    ("dll", ContentCategory::Binary),
+    ("so", ContentCategory::Binary),
+];
+
+const BETHESDA_CONTENT_POLICY: ContentPolicy = ContentPolicy {
     save_breaking_ext: BETHESDA_SAVE_BREAKING_EXT,
     cosmetic_ext: BETHESDA_COSMETIC_EXT,
     save_breaking_dirs: &[],
+    categories: BETHESDA_CONTENT_CATEGORIES,
+};
+
+const BETHESDA_BARE_LAYOUT_POLICY: BareLayoutPolicy = BareLayoutPolicy {
+    root_dirs: &[
+        "data",
+        "meshes",
+        "textures",
+        "scripts",
+        "interface",
+        "sound",
+        "music",
+        "materials",
+        "seq",
+        "shadersfx",
+        "strings",
+    ],
+    root_file_exts: &["esp", "esm", "esl", "bsa", "ba2"],
+    case_insensitive_dirs: true,
 };
 
 pub const SKYRIM_SE: BethesdaGame = BethesdaGame::new(
@@ -88,7 +148,8 @@ pub const SKYRIM_SE: BethesdaGame = BethesdaGame::new(
     &["bsa", "ba2"],
     "skyrimspecialedition",
     "Skyrim Special Edition",
-);
+)
+.with_save_profiles(true);
 
 pub const SKYRIM_AE: BethesdaGame = BethesdaGame::new(
     "skyrim-ae",
@@ -99,7 +160,8 @@ pub const SKYRIM_AE: BethesdaGame = BethesdaGame::new(
     &["bsa", "ba2"],
     "skyrimspecialedition",
     "Skyrim Special Edition",
-);
+)
+.with_save_profiles(true);
 
 pub const FALLOUT4: BethesdaGame = BethesdaGame::new(
     "fallout4",
@@ -110,7 +172,8 @@ pub const FALLOUT4: BethesdaGame = BethesdaGame::new(
     &["ba2"],
     "fallout4",
     "Fallout4",
-);
+)
+.with_save_profiles(true);
 
 pub const FALLOUT76: BethesdaGame = BethesdaGame::new(
     "fallout76",
@@ -121,7 +184,8 @@ pub const FALLOUT76: BethesdaGame = BethesdaGame::new(
     &["ba2"],
     "fallout76",
     "Fallout76",
-);
+)
+.with_save_profiles(true);
 
 pub const STARFIELD: BethesdaGame = BethesdaGame::new(
     "starfield",
@@ -132,7 +196,8 @@ pub const STARFIELD: BethesdaGame = BethesdaGame::new(
     &["ba2"],
     "starfield",
     "Starfield",
-);
+)
+.with_save_profiles(true);
 
 impl GamePlugin for BethesdaGame {
     fn game_id(&self) -> &str {
@@ -162,8 +227,16 @@ impl GamePlugin for BethesdaGame {
         None
     }
 
+    fn supports_save_profiles(&self) -> bool {
+        self.save_profiles
+    }
+
     fn classify_mod(&self, mod_dir: &Path) -> ModSafety {
-        classify_mod_by_content(mod_dir, &BETHESDA_CLASSIFY_CONFIG)
+        BETHESDA_CONTENT_POLICY.classify_mod(mod_dir)
+    }
+
+    fn classify_extension(&self, ext: &str) -> ContentCategory {
+        BETHESDA_CONTENT_POLICY.classify_extension(ext)
     }
 
     fn ini_file_names(&self) -> &[&str] {
@@ -204,44 +277,6 @@ impl GamePlugin for BethesdaGame {
     }
 
     fn recognizes_bare_layout(&self, extracted_dir: &Path) -> bool {
-        // Bethesda bare layouts:
-        //   - top-level `Data/` (case-insensitive, since some archives
-        //     mirror the game's capitalization and others don't)
-        //   - top-level `meshes/`, `textures/`, `scripts/`, `interface/`,
-        //     `sound/`, `materials/` (loose Data/* contents at root)
-        //   - any top-level `.esp`/`.esm`/`.esl` file
-        let Ok(entries) = std::fs::read_dir(extracted_dir) else {
-            return false;
-        };
-        let asset_dirs = [
-            "data",
-            "meshes",
-            "textures",
-            "scripts",
-            "interface",
-            "sound",
-            "music",
-            "materials",
-            "seq",
-            "shadersfx",
-            "strings",
-        ];
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                let name = entry.file_name().to_string_lossy().to_lowercase();
-                if asset_dirs.iter().any(|d| *d == name) {
-                    return true;
-                }
-            } else if path.is_file()
-                && let Some(ext) = path.extension().and_then(|e| e.to_str())
-            {
-                let ext_lc = ext.to_lowercase();
-                if matches!(ext_lc.as_str(), "esp" | "esm" | "esl" | "bsa" | "ba2") {
-                    return true;
-                }
-            }
-        }
-        false
+        BETHESDA_BARE_LAYOUT_POLICY.recognizes(extracted_dir)
     }
 }

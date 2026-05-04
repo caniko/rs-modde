@@ -478,6 +478,42 @@ enum UpdateAction {
         #[arg(long, default_value = "1w")]
         period: String,
     },
+    /// Download and install the latest MAIN file for any tracked mod
+    /// in the profile that has a newer version on Nexus.
+    ///
+    /// Refuses to run on locked profiles (Wabbajack / Collection /
+    /// TOML import) unless `--confirm-locked` is passed — the lock
+    /// exists precisely to prevent the load order drifting away from
+    /// its authoritative source. Mods whose semver major bumps are
+    /// flagged "breaking" and require `--accept-breaking` plus a
+    /// secondary y/N confirmation per mod.
+    Apply {
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+        /// Time period to scan: "1d", "1w", or "1m"
+        #[arg(long, default_value = "1w")]
+        period: String,
+        /// Print the mods that would be updated without downloading.
+        #[arg(long)]
+        dry_run: bool,
+        /// Acknowledge that the profile is locked (Wabbajack / Collection
+        /// / TOML import) and that updating drifts it away from the
+        /// authoritative source. Required for any locked profile.
+        #[arg(long)]
+        confirm_locked: bool,
+        /// Permit applying updates that look like breaking semver bumps
+        /// (major version change). Each breaking mod still requires an
+        /// interactive y/N confirmation.
+        #[arg(long)]
+        accept_breaking: bool,
+        /// Skip interactive prompts (assume "yes" to per-mod breaking
+        /// confirmations). Refuses any breaking update unless
+        /// `--accept-breaking` is also set.
+        #[arg(long)]
+        yes: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -508,6 +544,52 @@ enum ToolAction {
         #[arg(long)]
         game: Option<String>,
         /// Arguments to pass to the tool
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
+    /// Save a named executable launch target for a game
+    AddExecutable {
+        /// Display name, e.g. xEdit or BodySlide
+        name: String,
+        /// Path to executable
+        executable: PathBuf,
+        #[arg(long)]
+        game: String,
+        /// Working directory. Defaults to the detected game install directory.
+        #[arg(long)]
+        working_dir: Option<PathBuf>,
+        /// Output mod for captured files. Defaults to __overwrite__.
+        #[arg(long, default_value = "__overwrite__")]
+        output_mod: String,
+        /// Wine DLL overrides, e.g. dinput8=n,b;winmm=n,b
+        #[arg(long)]
+        wine_dll_overrides: Option<String>,
+        /// Environment variable assignments, KEY=VALUE
+        #[arg(long = "env")]
+        environment: Vec<String>,
+        /// Default arguments to pass when running this executable
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
+    /// List saved executable launch targets for a game
+    ListExecutables {
+        #[arg(long)]
+        game: String,
+    },
+    /// Remove a saved executable launch target
+    RemoveExecutable {
+        name: String,
+        #[arg(long)]
+        game: String,
+    },
+    /// Run a saved executable launch target with overwrite capture
+    RunExecutable {
+        name: String,
+        #[arg(long)]
+        game: String,
+        #[arg(long)]
+        profile: Option<String>,
+        /// Additional arguments appended after the saved defaults
         #[arg(last = true)]
         args: Vec<String>,
     },
@@ -724,7 +806,7 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    if let Some(dir) = cli.data_dir {
+    if let Some(dir) = cli.data_dir.clone() {
         modde_core::paths::set_data_dir(dir);
     }
 
@@ -734,6 +816,20 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    // Whether this command may have mutated the profile DB / store.
+    // Used after the dispatch below to push a refresh signal to any
+    // running GUI(s). Read-only commands skip the notify so we don't
+    // spam GUIs on `modde profile show` or `modde update check`.
+    let mutates_state = command_mutates_state(&cli.command);
+
+    let result = run_command(cli);
+    if mutates_state && result.is_ok() {
+        let _ = modde_core::ipc::notify_refresh();
+    }
+    result
+}
+
+fn run_command(cli: Cli) -> Result<()> {
     // Sync commands that don't need the tokio runtime
     match cli.command {
         Commands::Profile { action } => return commands::profile::handle(action),
@@ -876,6 +972,26 @@ fn main() -> Result<()> {
                     game,
                     period,
                 } => commands::update::handle_check(profile, game, period).await?,
+                UpdateAction::Apply {
+                    profile,
+                    game,
+                    period,
+                    dry_run,
+                    confirm_locked,
+                    accept_breaking,
+                    yes,
+                } => {
+                    commands::update::handle_apply(
+                        profile,
+                        game,
+                        period,
+                        dry_run,
+                        confirm_locked,
+                        accept_breaking,
+                        yes,
+                    )
+                    .await?
+                }
             },
             Commands::Tool { action } => match action {
                 ToolAction::Run {
@@ -884,6 +1000,41 @@ fn main() -> Result<()> {
                     game,
                     args,
                 } => commands::tool::handle_run(executable, args, profile, game).await?,
+                ToolAction::AddExecutable {
+                    name,
+                    executable,
+                    game,
+                    working_dir,
+                    output_mod,
+                    wine_dll_overrides,
+                    environment,
+                    args,
+                } => {
+                    commands::tool::handle_add_executable(
+                        &name,
+                        executable,
+                        &game,
+                        working_dir,
+                        &output_mod,
+                        wine_dll_overrides,
+                        &environment,
+                        &args,
+                    )?;
+                }
+                ToolAction::ListExecutables { game } => {
+                    commands::tool::handle_list_executables(&game)?;
+                }
+                ToolAction::RemoveExecutable { name, game } => {
+                    commands::tool::handle_remove_executable(&name, &game)?;
+                }
+                ToolAction::RunExecutable {
+                    name,
+                    game,
+                    profile,
+                    args,
+                } => {
+                    commands::tool::handle_run_executable(&name, &game, profile, args).await?;
+                }
                 ToolAction::Releases { tool_id, game } => {
                     commands::tool::handle_releases(&tool_id, &game).await?;
                 }
@@ -923,4 +1074,394 @@ fn main() -> Result<()> {
         }
         Ok(())
     })
+}
+
+/// `true` when the command mutates persistent profile / store / DB
+/// state and a running GUI should re-read the DB after it finishes.
+///
+/// Centralized so we have one place to audit. Read-only commands
+/// (`Detect`, `Diagnostics`, `Export`, `Verify`, `update check`, …)
+/// return `false` to avoid spamming GUIs with no-op refreshes.
+fn command_mutates_state(cmd: &Commands) -> bool {
+    match cmd {
+        // Pure read paths.
+        Commands::Detect
+        | Commands::Diagnostics { .. }
+        | Commands::Export { .. }
+        | Commands::Verify { .. }
+        | Commands::Collisions { .. }
+        | Commands::Gui => false,
+
+        // `update check` is read-only; `update apply` mutates.
+        Commands::Update { action } => matches!(action, UpdateAction::Apply { .. }),
+
+        // `instance list` is read-only; create/switch flip the active
+        // data dir.
+        Commands::Instance { action } => !matches!(action, InstanceAction::List),
+
+        // Loot validate just reports, sort rewrites the load order.
+        Commands::Loot { action } => matches!(action, LootAction::Sort { .. }),
+
+        // Tool subcommands: queries are read-only, everything else
+        // mutates per-game tool config rows.
+        Commands::Tool { action } => !matches!(
+            action,
+            ToolAction::List { .. }
+                | ToolAction::Status { .. }
+                | ToolAction::Releases { .. }
+                | ToolAction::ListExecutables { .. }
+        ),
+
+        // Nexus: `auth` writes the API key, `status` prints validity.
+        // The status arm doesn't mutate, but the GUI surfaces auth
+        // state — a refresh is harmless and cheap. Notify on either.
+        Commands::Nexus { .. } => true,
+
+        // `mod diagnose` only prints the dossier; remove mutates.
+        Commands::Mod { action } => matches!(action, ModAction::Remove { .. }),
+
+        // `wabbajack search` / `download` / `hm-snippet` are read-only;
+        // `import-archive` writes into the store.
+        Commands::Wabbajack { action } => matches!(action, WabbajackAction::ImportArchive { .. }),
+
+        // Save commands cover read-only listing AND mutating
+        // capture/restore/adopt; conservatively notify on all of
+        // them — the cost is one socket round-trip per active GUI.
+        Commands::Save { .. } => true,
+
+        // `nxm install` registers the URI handler (system-side). We
+        // still notify so a GUI showing nxm settings can reflect it.
+        Commands::Nxm { .. } => true,
+
+        // Stock snapshots affect deploy decisions; treat as mutating.
+        Commands::Stock { .. } => true,
+
+        // Backup capture/restore mutates the data dir.
+        Commands::Backup { .. } => true,
+
+        // Everything below is unambiguously mutating.
+        Commands::Profile { .. }
+        | Commands::Scan { .. }
+        | Commands::Import
+        | Commands::Fomod { .. }
+        | Commands::Install { .. }
+        | Commands::Deploy { .. }
+        | Commands::Rollback { .. }
+        | Commands::Play { .. } => true,
+    }
+}
+
+#[cfg(test)]
+mod mutation_classification_tests {
+    //! Tests for [`command_mutates_state`].
+    //!
+    //! Goal: lock in which commands push a refresh signal to running
+    //! GUIs. A wrong classification has user-visible consequences:
+    //!
+    //! * False negative (mutating cmd marked read-only) → GUI misses
+    //!   an update; user sees stale state until they click around.
+    //! * False positive (read-only cmd marked mutating) → harmless
+    //!   socket round-trip per active GUI, but adds noise.
+    //!
+    //! When a new top-level [`Commands`] variant is added, the
+    //! exhaustive `match` in `command_mutates_state` will not compile
+    //! until you classify it — at which point a test in this module
+    //! should pin the answer.
+    use super::*;
+    use std::path::PathBuf;
+
+    fn list_profiles() -> Commands {
+        Commands::Profile {
+            action: ProfileAction::List { game: None },
+        }
+    }
+
+    fn create_profile() -> Commands {
+        Commands::Profile {
+            action: ProfileAction::Create {
+                name: "p".into(),
+                game: "skyrim-se".into(),
+            },
+        }
+    }
+
+    fn install_mod() -> Commands {
+        Commands::Install {
+            source: InstallSource::Mod {
+                url: "https://www.nexusmods.com/skyrimspecialedition/mods/1".into(),
+                profile: None,
+                fomod_config: None,
+            },
+        }
+    }
+
+    fn update_check() -> Commands {
+        Commands::Update {
+            action: UpdateAction::Check {
+                profile: None,
+                game: None,
+                period: "1w".into(),
+            },
+        }
+    }
+
+    fn update_apply() -> Commands {
+        Commands::Update {
+            action: UpdateAction::Apply {
+                profile: None,
+                game: None,
+                period: "1w".into(),
+                dry_run: false,
+                confirm_locked: false,
+                accept_breaking: false,
+                yes: false,
+            },
+        }
+    }
+
+    fn instance_list() -> Commands {
+        Commands::Instance {
+            action: InstanceAction::List,
+        }
+    }
+
+    fn instance_create() -> Commands {
+        Commands::Instance {
+            action: InstanceAction::Create {
+                name: "x".into(),
+                data_dir: PathBuf::from("/tmp/x"),
+            },
+        }
+    }
+
+    fn loot_validate() -> Commands {
+        Commands::Loot {
+            action: LootAction::Validate {
+                game: "skyrim-se".into(),
+            },
+        }
+    }
+
+    fn loot_sort() -> Commands {
+        Commands::Loot {
+            action: LootAction::Sort {
+                game: "skyrim-se".into(),
+                data_dir: None,
+            },
+        }
+    }
+
+    fn tool_list() -> Commands {
+        Commands::Tool {
+            action: ToolAction::List {
+                game: "skyrim-se".into(),
+            },
+        }
+    }
+
+    fn tool_apply() -> Commands {
+        Commands::Tool {
+            action: ToolAction::Apply {
+                tool_id: "mangohud".into(),
+                game: "skyrim-se".into(),
+            },
+        }
+    }
+
+    fn mod_remove() -> Commands {
+        Commands::Mod {
+            action: ModAction::Remove {
+                mod_id: "x".into(),
+                profile: None,
+            },
+        }
+    }
+
+    fn mod_diagnose() -> Commands {
+        Commands::Mod {
+            action: ModAction::Diagnose { mod_id: "x".into() },
+        }
+    }
+
+    fn wabbajack_search() -> Commands {
+        Commands::Wabbajack {
+            action: WabbajackAction::Search {
+                query: None,
+                game: None,
+                source: "both".into(),
+                json: false,
+            },
+        }
+    }
+
+    fn wabbajack_import() -> Commands {
+        Commands::Wabbajack {
+            action: WabbajackAction::ImportArchive {
+                manifest: PathBuf::from("m.json"),
+                archives: vec![],
+            },
+        }
+    }
+
+    // ── read-only ────────────────────────────────────────────────
+
+    #[test]
+    fn detect_is_read_only() {
+        assert!(!command_mutates_state(&Commands::Detect));
+    }
+
+    #[test]
+    fn diagnostics_is_read_only() {
+        assert!(!command_mutates_state(&Commands::Diagnostics {
+            game: "skyrim-se".into(),
+            profile: None,
+        }));
+    }
+
+    #[test]
+    fn export_is_read_only() {
+        assert!(!command_mutates_state(&Commands::Export {
+            profile: None,
+            game: None,
+            columns: None,
+            output: None,
+        }));
+    }
+
+    #[test]
+    fn verify_is_read_only() {
+        assert!(!command_mutates_state(&Commands::Verify {
+            profile: None,
+            game: None,
+        }));
+    }
+
+    #[test]
+    fn collisions_is_read_only() {
+        assert!(!command_mutates_state(&Commands::Collisions {
+            profile: None,
+            game: None,
+            all: false,
+            suggest_hides: false,
+        }));
+    }
+
+    #[test]
+    fn gui_is_read_only() {
+        // The GUI command launches the GUI itself; pushing to
+        // ourselves at startup would be confusing and pointless.
+        assert!(!command_mutates_state(&Commands::Gui));
+    }
+
+    #[test]
+    fn update_check_is_read_only() {
+        assert!(!command_mutates_state(&update_check()));
+    }
+
+    #[test]
+    fn instance_list_is_read_only() {
+        assert!(!command_mutates_state(&instance_list()));
+    }
+
+    #[test]
+    fn loot_validate_is_read_only() {
+        assert!(!command_mutates_state(&loot_validate()));
+    }
+
+    #[test]
+    fn tool_list_is_read_only() {
+        assert!(!command_mutates_state(&tool_list()));
+    }
+
+    #[test]
+    fn mod_diagnose_is_read_only() {
+        assert!(!command_mutates_state(&mod_diagnose()));
+    }
+
+    #[test]
+    fn wabbajack_search_is_read_only() {
+        assert!(!command_mutates_state(&wabbajack_search()));
+    }
+
+    // ── mutating ─────────────────────────────────────────────────
+
+    #[test]
+    fn profile_list_is_mutating() {
+        // Pinned as `mutating` in `command_mutates_state` because
+        // the dispatcher routes both List and create/delete through
+        // the same `commands::profile::handle` and we don't peek
+        // inside the action enum. Document that here; if we later
+        // refine the classification, flip this assertion.
+        assert!(command_mutates_state(&list_profiles()));
+    }
+
+    #[test]
+    fn profile_create_is_mutating() {
+        assert!(command_mutates_state(&create_profile()));
+    }
+
+    #[test]
+    fn install_is_mutating() {
+        assert!(command_mutates_state(&install_mod()));
+    }
+
+    #[test]
+    fn update_apply_is_mutating() {
+        assert!(command_mutates_state(&update_apply()));
+    }
+
+    #[test]
+    fn instance_create_is_mutating() {
+        assert!(command_mutates_state(&instance_create()));
+    }
+
+    #[test]
+    fn loot_sort_is_mutating() {
+        assert!(command_mutates_state(&loot_sort()));
+    }
+
+    #[test]
+    fn tool_apply_is_mutating() {
+        assert!(command_mutates_state(&tool_apply()));
+    }
+
+    #[test]
+    fn mod_remove_is_mutating() {
+        assert!(command_mutates_state(&mod_remove()));
+    }
+
+    #[test]
+    fn wabbajack_import_archive_is_mutating() {
+        assert!(command_mutates_state(&wabbajack_import()));
+    }
+
+    #[test]
+    fn deploy_is_mutating() {
+        assert!(command_mutates_state(&Commands::Deploy {
+            profile: None,
+            game: None,
+        }));
+    }
+
+    #[test]
+    fn rollback_is_mutating() {
+        assert!(command_mutates_state(&Commands::Rollback {
+            profile: None,
+            game: None,
+        }));
+    }
+
+    #[test]
+    fn import_is_mutating() {
+        assert!(command_mutates_state(&Commands::Import));
+    }
+
+    #[test]
+    fn stock_is_mutating() {
+        assert!(command_mutates_state(&Commands::Stock {
+            action: StockAction::Snapshot {
+                game_id: "skyrim-se".into(),
+            },
+        }));
+    }
 }

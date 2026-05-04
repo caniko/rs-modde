@@ -27,9 +27,12 @@ modde has comprehensive Nexus Mods integration: API v1 client, CDN downloads, mo
 **Key file:** `crates/modde-sources/src/nexus/auth.rs`
 
 API key lookup chain (highest priority first):
-1. `NEXUS_API_KEY` environment variable
-2. System keyring (secret-service D-Bus) — `modde/nexus-api-key`
-3. `NEXUS_API_KEY_FILE` file path (sops-nix compatible)
+1. OAuth token
+2. `~/.config/modde/nexus_api_key`
+3. `NEXUS_API_KEY` environment variable
+4. System keyring (secret-service D-Bus) — `modde/nexus-api-key`
+5. `NEXUS_API_KEY_FILE` file path (sops-nix compatible)
+6. Legacy `settings.toml` key
 
 CLI commands:
 - `modde nexus auth` — store API key in keyring

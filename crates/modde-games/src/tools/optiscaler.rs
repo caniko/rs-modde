@@ -15,16 +15,35 @@ use std::process::{Command, Stdio};
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use reqwest::Client;
-use serde::Deserialize;
 use smallvec::{SmallVec, smallvec};
 use tokio::io::AsyncWriteExt;
 use tracing::info;
 use xxhash_rust::xxh64::Xxh64;
 
-use super::{
-    AppliedFiles, GameTool, ToolAvailability, ToolCategory, ToolConfig, ToolGameContext,
-    ToolReleaseAsset, ToolReleaseInstallFuture, ToolReleaseListFuture, ToolReleaseSummary,
+use crate::optiscaler::{
+    OptiScalerProfile, default_optiscaler_profile, resolve_optiscaler_profiles,
 };
+
+use super::{
+    AppliedFiles, GameTool, ToolApplyPreview, ToolAvailability, ToolCategory, ToolConfig,
+    ToolGameContext, ToolReleaseAsset, ToolReleaseInstallFuture, ToolReleaseListFuture,
+    ToolReleaseSummary,
+};
+
+const CUSTOM_OPTISCALER_PROFILE: &str = "custom";
+pub const OPTISCALER_SOURCE_OFFICIAL: &str = "github_release";
+pub const OPTISCALER_SOURCE_GOVERLAY_BUILDS: &str = "goverlay_builds";
+pub const OPTISCALER_SOURCE_GOVERLAY_FGMOD: &str = "goverlay_fgmod";
+pub const FSR4_VARIANT_LATEST_FP8: &str = "latest_fp8";
+pub const FSR4_VARIANT_INT8_402: &str = "int8_402";
+
+const FSR4_DLL_NAME: &str = "amd_fidelityfx_upscaler_dx12.dll";
+const FSR4_LATEST_DIR: &str = "FSR4_LATEST";
+const FSR4_INT8_DIR: &str = "FSR4_INT8";
+const OPTIPATCHER_REPO: &str = "optiscaler/OptiPatcher";
+const OPTIPATCHER_ASSET: &str = "OptiPatcher.asi";
+const FP8_EMULATION_ENV_KEY: &str = "DXIL_SPIRV_CONFIG";
+const FP8_EMULATION_ENV_VALUE: &str = "wmma_rdna3_workaround";
 
 pub static OPTISCALER: OptiScaler = OptiScaler;
 
@@ -160,60 +179,157 @@ impl GameTool for OptiScaler {
 
     fn settings_schema_for(
         &self,
-        _context: Option<&ToolGameContext>,
+        context: Option<&ToolGameContext>,
         config: &ToolConfig,
     ) -> Vec<super::ToolSettingSpec> {
         let mut specs = vec![
-            super::ToolSettingSpec::select(
+            super::ToolSettingSpec::labeled_select(
                 "source_mode",
                 "Source",
                 "Where modde should get OptiScaler files from.",
-                &["github_release", "goverlay_fgmod", "local_dir"],
-            ),
+                &[
+                    (OPTISCALER_SOURCE_OFFICIAL, "Official GitHub releases"),
+                    (OPTISCALER_SOURCE_GOVERLAY_BUILDS, "GOverlay builds"),
+                    (OPTISCALER_SOURCE_GOVERLAY_FGMOD, "GOverlay fgmod directory"),
+                    ("local_dir", "Local OptiScaler directory"),
+                ],
+            )
+            .section("Source"),
+            super::ToolSettingSpec::labeled_select(
+                "goverlay_channel",
+                "GOverlay channel",
+                "GOverlay OptiScaler builds channel.",
+                &[
+                    ("edge", "Bleeding-edge"),
+                    ("stable", "Stable"),
+                    ("master", "Master"),
+                    ("any", "Any release branch"),
+                ],
+            )
+            .section("Source"),
             super::ToolSettingSpec::select(
                 "release_tag",
                 "Release tag",
-                "OptiScaler GitHub release tag selected in the UI.",
+                "OptiScaler release tag selected in the UI.",
                 std::slice::from_ref(&config.get_str("release_tag").unwrap_or("latest")),
-            ),
+            )
+            .section("Source"),
             super::ToolSettingSpec::select(
                 "release_asset",
                 "Release asset",
                 "Release asset selected from GitHub.",
                 std::slice::from_ref(&config.get_str("release_asset").unwrap_or("")),
-            ),
-            super::ToolSettingSpec::select(
+            )
+            .section("Source"),
+            super::ToolSettingSpec::labeled_select(
                 "proxy_dll",
                 "Proxy DLL",
                 "DLL name used to load OptiScaler for this game.",
                 &[
-                    "dxgi.dll",
-                    "version.dll",
-                    "dbghelp.dll",
-                    "d3d12.dll",
-                    "wininet.dll",
-                    "winhttp.dll",
-                    "winmm.dll",
-                    "nvngx.dll",
-                    "OptiScaler.asi",
+                    ("dxgi.dll", "dxgi.dll - DirectX graphics proxy"),
+                    ("version.dll", "version.dll - Windows version proxy"),
+                    ("dbghelp.dll", "dbghelp.dll - Debug helper proxy"),
+                    ("d3d12.dll", "d3d12.dll - Direct3D 12 proxy"),
+                    ("wininet.dll", "wininet.dll - WinINet proxy"),
+                    ("winhttp.dll", "winhttp.dll - WinHTTP proxy"),
+                    ("winmm.dll", "winmm.dll - Multimedia proxy"),
+                    ("nvngx.dll", "nvngx.dll - NVIDIA NGX proxy"),
+                    ("OptiScaler.asi", "OptiScaler.asi - ASI plugin"),
                 ],
-            ),
+            )
+            .section("Basic"),
             super::ToolSettingSpec::text(
                 "dll_overrides",
                 "DLL overrides",
                 "Comma or whitespace separated Wine DLL override base names.",
-            ),
+            )
+            .section("Basic"),
             super::ToolSettingSpec::bool(
                 "copy_companion_files",
                 "Copy companion files",
                 "Copy fakenvapi, nvngx wrapper, and other DLLs found next to OptiScaler.",
-            ),
+            )
+            .section("Basic"),
+            super::ToolSettingSpec::labeled_select(
+                "fsr4_variant",
+                "FSR4 variant",
+                "FSR4 payload copied as amd_fidelityfx_upscaler_dx12.dll.",
+                &[
+                    (FSR4_VARIANT_LATEST_FP8, "Latest (FP8)"),
+                    (FSR4_VARIANT_INT8_402, "4.0.2c (INT8)"),
+                ],
+            )
+            .section("Basic"),
+            super::ToolSettingSpec::bool(
+                "enable_optipatcher",
+                "OptiPatcher",
+                "Use OptiPatcher to unlock DLSS and DLSS frame generation inputs without whole-game spoofing in supported games.",
+            )
+            .section("Basic"),
+            super::ToolSettingSpec::bool(
+                "spoof_dlss",
+                "Spoof DLSS fallback",
+                "Fallback DXGI spoofing path for games that still need whole-game spoofing.",
+            )
+            .section("Basic"),
             super::ToolSettingSpec::read_only(
                 "derived_executable_dir",
                 "Executable directory",
                 "Derived from the selected game's metadata.",
-            ),
+            )
+            .section("Detected Game"),
         ];
+
+        if let Some(context) = context {
+            let profiles = resolve_optiscaler_profiles(&context.game_id);
+            if !profiles.is_empty() {
+                let profile_options = std::iter::once(super::ToolSelectOption::new(
+                    CUSTOM_OPTISCALER_PROFILE,
+                    "Custom / no community profile",
+                ))
+                .chain(
+                    profiles
+                        .iter()
+                        .map(|profile| super::ToolSelectOption::new(profile.id, profile.name)),
+                )
+                .collect();
+                specs.insert(
+                    0,
+                    super::ToolSettingSpec {
+                        key: "optiscaler_profile",
+                        label: "Profile",
+                        description: "Community-tested OptiScaler profile to apply, or custom settings.",
+                        section: "Profile",
+                        advanced: false,
+                        kind: super::ToolSettingKind::Select { options: profile_options },
+                    },
+                );
+                specs.push(
+                    super::ToolSettingSpec::read_only(
+                        "optiscaler_profile_source_url",
+                        "Profile source",
+                        "Community compatibility source for the selected profile.",
+                    )
+                    .section("Profile"),
+                );
+                specs.push(
+                    super::ToolSettingSpec::read_only(
+                        "tested_optiscaler_version",
+                        "Tested version",
+                        "OptiScaler version reported by the selected profile.",
+                    )
+                    .section("Profile"),
+                );
+                specs.push(
+                    super::ToolSettingSpec::read_only(
+                        "optiscaler_profile_notes",
+                        "Profile notes",
+                        "Community notes for the selected profile.",
+                    )
+                    .section("Profile"),
+                );
+            }
+        }
 
         if config.get_str("source_mode") == Some("local_dir") {
             specs.insert(
@@ -222,7 +338,31 @@ impl GameTool for OptiScaler {
                     "local_source_dir",
                     "Local source directory",
                     "Directory containing OptiScaler.dll and companion files.",
-                ),
+                )
+                .section("Source"),
+            );
+        }
+        if config.get_str("source_mode") != Some(OPTISCALER_SOURCE_GOVERLAY_BUILDS) {
+            specs.retain(|spec| spec.key != "goverlay_channel");
+        }
+
+        if config.get_str("fsr4_variant") == Some(FSR4_VARIANT_INT8_402) {
+            specs.push(
+                super::ToolSettingSpec::read_only(
+                    "emulate_fp8",
+                    "Emulate FP8",
+                    "Only applies to the Latest (FP8) FSR4 variant.",
+                )
+                .section("Basic"),
+            );
+        } else {
+            specs.push(
+                super::ToolSettingSpec::bool(
+                    "emulate_fp8",
+                    "Emulate FP8",
+                    "Set DXIL_SPIRV_CONFIG=wmma_rdna3_workaround for the Latest (FP8) FSR4 variant.",
+                )
+                .section("Basic"),
             );
         }
 
@@ -256,8 +396,17 @@ impl GameTool for OptiScaler {
         }
     }
 
-    fn env_vars(&self, _config: &ToolConfig) -> SmallVec<[(String, String); 4]> {
-        SmallVec::new()
+    fn env_vars(&self, config: &ToolConfig) -> SmallVec<[(String, String); 4]> {
+        if config.get_bool("emulate_fp8")
+            && config.get_str("fsr4_variant") == Some(FSR4_VARIANT_LATEST_FP8)
+        {
+            smallvec![(
+                FP8_EMULATION_ENV_KEY.to_string(),
+                FP8_EMULATION_ENV_VALUE.to_string()
+            )]
+        } else {
+            SmallVec::new()
+        }
     }
 
     fn wine_dll_overrides(&self, config: &ToolConfig) -> SmallVec<[String; 4]> {
@@ -326,7 +475,7 @@ impl GameTool for OptiScaler {
             let dest = target_dir.join(dll_name);
             std::fs::copy(&optiscaler_dll, &dest)
                 .with_context(|| format!("failed to copy OptiScaler to {}", dest.display()))?;
-            let rel = dest.strip_prefix(game_dir).unwrap_or(&dest).to_path_buf();
+            let rel = relative_to_game(game_dir, &dest)?;
             applied.files.push(rel);
             info!(as_dll = %dll_name, "applied OptiScaler DLL");
         }
@@ -337,7 +486,7 @@ impl GameTool for OptiScaler {
         if ini_src.exists() {
             let reset_reason = optiscaler_config_reset_reason(&existing, &ini_src, config);
             if reset_reason.is_some() {
-                std::fs::copy(&ini_src, &ini_dest)?;
+                apply_ini_overrides_with_existing(&ini_src, None, &ini_dest, config)?;
             } else {
                 apply_ini_overrides_with_existing(
                     &ini_src,
@@ -346,10 +495,7 @@ impl GameTool for OptiScaler {
                     config,
                 )?;
             }
-            let rel = ini_dest
-                .strip_prefix(game_dir)
-                .unwrap_or(&ini_dest)
-                .to_path_buf();
+            let rel = relative_to_game(game_dir, &ini_dest)?;
             applied.files.push(rel);
         }
 
@@ -365,14 +511,47 @@ impl GameTool for OptiScaler {
                 };
                 if !name.eq_ignore_ascii_case("OptiScaler.dll")
                     && !name.eq_ignore_ascii_case("OptiScaler.ini")
+                    && !name.eq_ignore_ascii_case(FSR4_DLL_NAME)
                     && name.to_ascii_lowercase().ends_with(".dll")
                 {
                     let dest = target_dir.join(name);
                     std::fs::copy(&src, &dest)?;
-                    let rel = dest.strip_prefix(game_dir).unwrap_or(&dest).to_path_buf();
+                    let rel = relative_to_game(game_dir, &dest)?;
                     applied.files.push(rel);
                 }
             }
+        }
+
+        if let Some(fsr4_src) = selected_fsr4_variant_source(&source_dir, config) {
+            if !fsr4_src.is_file() {
+                anyhow::bail!(
+                    "optiscaler: selected FSR4 variant '{}' was not found at {}",
+                    fsr4_variant(config),
+                    fsr4_src.display()
+                );
+            }
+            let dest = target_dir.join(FSR4_DLL_NAME);
+            std::fs::copy(&fsr4_src, &dest)
+                .with_context(|| format!("failed to copy FSR4 variant to {}", dest.display()))?;
+            let rel = relative_to_game(game_dir, &dest)?;
+            applied.files.push(rel);
+        }
+
+        if config.get_bool("enable_optipatcher") {
+            let optipatcher_src = optipatcher_asi_source(&source_dir);
+            if !optipatcher_src.is_file() {
+                anyhow::bail!(
+                    "optiscaler: OptiPatcher.asi is required but not cached; install or update the selected OptiScaler release first"
+                );
+            }
+            let dest = target_dir.join("plugins").join(OPTIPATCHER_ASSET);
+            if let Some(parent) = dest.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::copy(&optipatcher_src, &dest)
+                .with_context(|| format!("failed to copy OptiPatcher.asi to {}", dest.display()))?;
+            let rel = relative_to_game(game_dir, &dest)?;
+            applied.files.push(rel);
         }
 
         if source_dir.join("D3D12_OptiScaler").is_dir() {
@@ -384,16 +563,156 @@ impl GameTool for OptiScaler {
         Ok(applied)
     }
 
+    fn preview_apply_for(
+        &self,
+        game_dir: &Path,
+        context: Option<&ToolGameContext>,
+        config: &ToolConfig,
+    ) -> Result<ToolApplyPreview> {
+        let Some(source_dir) = resolve_source_dir(config) else {
+            return Ok(optiscaler_missing_preview(
+                "optiscaler: choose a GitHub release, local directory, or install fgmod/goverlay",
+            ));
+        };
+
+        let dll_name = config
+            .get_str("proxy_dll")
+            .or_else(|| config.get_str("dll_name"))
+            .unwrap_or("dxgi.dll");
+        let target_dir = context
+            .and_then(|context| context.executable_dir.clone())
+            .unwrap_or_else(|| legacy_target_dir(game_dir, config));
+        let applied_paths = managed_paths_from_config(config);
+        let existing = scan_optiscaler_install_in_dir(&target_dir, &applied_paths)?;
+        let mut preview = ToolApplyPreview::default();
+
+        let optiscaler_dll = source_dir.join("OptiScaler.dll");
+        if optiscaler_dll.is_file() {
+            preview_source_file(
+                game_dir,
+                &optiscaler_dll,
+                &target_dir.join(dll_name),
+                &mut preview,
+            )?;
+        } else {
+            preview.missing_inputs.push(format!(
+                "optiscaler: OptiScaler.dll not found in {}",
+                source_dir.display()
+            ));
+        }
+
+        let ini_src = source_dir.join("OptiScaler.ini");
+        let ini_dest = target_dir.join("OptiScaler.ini");
+        if ini_src.is_file() {
+            let reset_reason = optiscaler_config_reset_reason(&existing, &ini_src, config);
+            let content = if reset_reason.is_some() {
+                build_ini_with_overrides(&ini_src, None, config)?.into_bytes()
+            } else {
+                build_ini_with_overrides(
+                    &ini_src,
+                    ini_dest.exists().then_some(ini_dest.as_path()),
+                    config,
+                )?
+                .into_bytes()
+            };
+            preview_bytes(game_dir, &ini_dest, &content, &mut preview);
+        } else {
+            preview.missing_inputs.push(format!(
+                "optiscaler: OptiScaler.ini not found in {}",
+                source_dir.display()
+            ));
+        }
+
+        if config.get_bool("copy_companion_files") {
+            for entry in std::fs::read_dir(&source_dir)?.flatten() {
+                let src = entry.path();
+                if !src.is_file() {
+                    continue;
+                }
+                let Some(name) = src.file_name().and_then(|name| name.to_str()) else {
+                    continue;
+                };
+                if !name.eq_ignore_ascii_case("OptiScaler.dll")
+                    && !name.eq_ignore_ascii_case("OptiScaler.ini")
+                    && !name.eq_ignore_ascii_case(FSR4_DLL_NAME)
+                    && name.to_ascii_lowercase().ends_with(".dll")
+                {
+                    preview_source_file(game_dir, &src, &target_dir.join(name), &mut preview)?;
+                }
+            }
+        }
+
+        if let Some(fsr4_src) = selected_fsr4_variant_source(&source_dir, config) {
+            if fsr4_src.is_file() {
+                preview_source_file(
+                    game_dir,
+                    &fsr4_src,
+                    &target_dir.join(FSR4_DLL_NAME),
+                    &mut preview,
+                )?;
+            } else {
+                preview.missing_inputs.push(format!(
+                    "optiscaler: selected FSR4 variant '{}' not found at {}",
+                    fsr4_variant(config),
+                    fsr4_src.display()
+                ));
+            }
+        }
+
+        if config.get_bool("enable_optipatcher") {
+            let optipatcher_src = optipatcher_asi_source(&source_dir);
+            if optipatcher_src.is_file() {
+                preview_source_file(
+                    game_dir,
+                    &optipatcher_src,
+                    &target_dir.join("plugins").join(OPTIPATCHER_ASSET),
+                    &mut preview,
+                )?;
+            } else {
+                preview.missing_inputs.push(
+                    "optiscaler: OptiPatcher.asi is required but not cached; install or update the selected OptiScaler release first"
+                        .to_string(),
+                );
+            }
+        }
+
+        let d3d12_src = source_dir.join("D3D12_OptiScaler");
+        if d3d12_src.is_dir() {
+            preview_dir_recursive(
+                game_dir,
+                &d3d12_src,
+                &target_dir.join("D3D12_OptiScaler"),
+                &mut preview,
+            )?;
+        }
+
+        Ok(preview)
+    }
+
     fn default_config(&self) -> ToolConfig {
         let mut config = ToolConfig::new("optiscaler");
-        config.set("source_mode", serde_json::json!("goverlay_fgmod"));
+        config.set(
+            "source_mode",
+            serde_json::json!(OPTISCALER_SOURCE_GOVERLAY_FGMOD),
+        );
+        config.set("goverlay_channel", serde_json::json!("edge"));
         config.set("release_tag", serde_json::json!("latest"));
         config.set("release_asset", serde_json::json!(""));
         config.set("local_source_dir", serde_json::json!(""));
         config.set("proxy_dll", serde_json::json!("dxgi.dll"));
         config.set("dll_overrides", serde_json::json!(""));
         config.set("copy_companion_files", serde_json::json!(true));
+        config.set("enable_optipatcher", serde_json::json!(false));
+        config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_LATEST_FP8));
+        config.set("emulate_fp8", serde_json::json!(false));
+        config.set("spoof_dlss", serde_json::json!(false));
         config.set("ini_overrides", serde_json::json!({}));
+        config
+    }
+
+    fn default_config_for(&self, context: Option<&ToolGameContext>) -> ToolConfig {
+        let mut config = self.default_config();
+        apply_game_defaults(&mut config, context);
         config
     }
 
@@ -423,74 +742,100 @@ impl GameTool for OptiScaler {
     ) -> ToolReleaseInstallFuture<'a> {
         Box::pin(async move {
             install_optiscaler_release_asset(tag, asset).await?;
-            config.set("source_mode", serde_json::json!("github_release"));
-            config.set("release_tag", serde_json::json!(tag));
-            config.set("release_asset", serde_json::json!(asset));
+            let normalized_tag = normalize_optiscaler_release_tag(tag);
+            apply_optiscaler_release_selection(&mut config, &normalized_tag, asset);
+            if config.get_bool("enable_optipatcher") {
+                install_latest_optipatcher().await?;
+            }
             Ok(config)
         })
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct GitHubRelease {
-    tag_name: Option<String>,
-    name: Option<String>,
-    assets: Vec<GitHubReleaseAsset>,
-}
-
-#[derive(Debug, Deserialize)]
-struct GitHubReleaseAsset {
-    name: String,
-    browser_download_url: String,
-    size: u64,
-}
-
-async fn github_json<T: for<'de> Deserialize<'de>>(client: &Client, url: &str) -> Result<T> {
-    let mut request = client.get(url).header("User-Agent", "modde");
-    if let Ok(token) = std::env::var("GITHUB_TOKEN") {
-        request = request.header("Authorization", format!("Bearer {token}"));
-    }
-    Ok(request.send().await?.error_for_status()?.json().await?)
-}
-
 pub async fn list_optiscaler_releases() -> Result<Vec<ToolReleaseSummary>> {
-    let client = Client::new();
-    let releases: Vec<GitHubRelease> = github_json(
-        &client,
-        "https://api.github.com/repos/optiscaler/OptiScaler/releases",
-    )
-    .await?;
-    Ok(releases
-        .into_iter()
-        .filter_map(|release| {
-            Some(ToolReleaseSummary {
-                tag: release.tag_name?,
-                name: release.name,
-                assets: release
-                    .assets
-                    .into_iter()
-                    .map(|asset| ToolReleaseAsset {
-                        name: asset.name,
-                        download_url: asset.browser_download_url,
-                        size: asset.size,
-                    })
-                    .collect(),
-            })
-        })
-        .collect())
+    let mut releases = official_optiscaler_releases().await?;
+    releases.extend(goverlay_optiscaler_releases().await?);
+    Ok(releases)
+}
+
+#[must_use]
+pub fn normalize_optiscaler_release_config(config: &mut ToolConfig) -> bool {
+    let mut changed = false;
+    if let Some(tag) = config.get_str("release_tag").map(str::to_string) {
+        if !tag.trim().is_empty() {
+            let normalized = normalize_optiscaler_release_tag(&tag);
+            if normalized != tag {
+                config.set("release_tag", serde_json::json!(normalized));
+                changed = true;
+            }
+        }
+    }
+    if let Some(tag) = config.get_str("release_tag").map(str::to_string) {
+        if let Some(channel) = optiscaler_goverlay_channel_for_tag(&tag) {
+            if config.get_str("source_mode") != Some(OPTISCALER_SOURCE_GOVERLAY_BUILDS) {
+                config.set(
+                    "source_mode",
+                    serde_json::json!(OPTISCALER_SOURCE_GOVERLAY_BUILDS),
+                );
+                changed = true;
+            }
+            if config.get_str("goverlay_channel") != Some(channel) {
+                config.set("goverlay_channel", serde_json::json!(channel));
+                changed = true;
+            }
+        } else if !tag.trim().is_empty()
+            && optiscaler_release_is_official(&tag)
+            && config.get_str("source_mode").is_none()
+        {
+            config.set("source_mode", serde_json::json!(OPTISCALER_SOURCE_OFFICIAL));
+            changed = true;
+        }
+    }
+    changed
+}
+
+#[must_use]
+pub fn optiscaler_release_matches_config(
+    release: &ToolReleaseSummary,
+    config: &ToolConfig,
+) -> bool {
+    match config
+        .get_str("source_mode")
+        .unwrap_or(OPTISCALER_SOURCE_GOVERLAY_FGMOD)
+    {
+        OPTISCALER_SOURCE_OFFICIAL => optiscaler_release_is_official(&release.tag),
+        OPTISCALER_SOURCE_GOVERLAY_BUILDS => {
+            optiscaler_goverlay_channel_for_tag(&release.tag)
+                == Some(config.get_str("goverlay_channel").unwrap_or("edge"))
+        }
+        _ => false,
+    }
+}
+
+#[must_use]
+pub fn optiscaler_release_is_official(tag: &str) -> bool {
+    normalize_optiscaler_release_tag(tag).starts_with("official:")
+}
+
+#[must_use]
+pub fn optiscaler_goverlay_channel_for_tag(tag: &str) -> Option<&'static str> {
+    let encoded = normalize_optiscaler_release_tag(tag);
+    let channel = encoded
+        .strip_prefix("goverlay-")
+        .and_then(|rest| rest.split_once(':'))
+        .map(|(channel, _)| channel)?;
+    match channel {
+        "edge" => Some("edge"),
+        "stable" => Some("stable"),
+        "master" => Some("master"),
+        "any" => Some("any"),
+        _ => None,
+    }
 }
 
 pub async fn install_optiscaler_release_asset(tag: &str, asset_name: &str) -> Result<PathBuf> {
-    let release = list_optiscaler_releases()
-        .await?
-        .into_iter()
-        .find(|release| release.tag == tag)
-        .ok_or_else(|| anyhow::anyhow!("OptiScaler release tag not found: {tag}"))?;
-    let asset = release
-        .assets
-        .iter()
-        .find(|asset| asset.name == asset_name)
-        .ok_or_else(|| anyhow::anyhow!("asset '{asset_name}' not found in release {tag}"))?;
+    let releases = list_optiscaler_releases().await?;
+    let (normalized_tag, asset) = select_optiscaler_release_asset(&releases, tag, asset_name)?;
     if !is_installable_release_asset(&asset.name) {
         anyhow::bail!(
             "selected asset '{}' is not a supported archive (.zip or .7z)",
@@ -498,12 +843,174 @@ pub async fn install_optiscaler_release_asset(tag: &str, asset_name: &str) -> Re
         );
     }
 
-    let cache_dir = cached_release_dir(tag);
+    let cache_dir = cached_release_dir(&normalized_tag);
     std::fs::create_dir_all(&cache_dir)?;
     let archive_path = cache_dir.join(&asset.name);
     download_release_asset(asset, &archive_path).await?;
     extract_optiscaler_archive_flat(&archive_path, &cache_dir)?;
     Ok(cache_dir)
+}
+
+pub async fn install_latest_optipatcher() -> Result<PathBuf> {
+    let release = super::release::list_github_releases(OPTIPATCHER_REPO)
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("OptiPatcher release not found"))?;
+    let asset = release
+        .assets
+        .iter()
+        .find(|asset| asset.name.eq_ignore_ascii_case(OPTIPATCHER_ASSET))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "OptiPatcher release {} did not contain {}",
+                release.tag,
+                OPTIPATCHER_ASSET
+            )
+        })?;
+    let dest = cached_optipatcher_asi();
+    download_release_asset(asset, &dest).await?;
+    Ok(dest)
+}
+
+fn normalize_optiscaler_release_tag(tag: &str) -> String {
+    if tag.contains(':') {
+        tag.to_string()
+    } else {
+        encode_optiscaler_release_tag("official", tag)
+    }
+}
+
+fn select_optiscaler_release_asset<'a>(
+    releases: &'a [ToolReleaseSummary],
+    tag: &str,
+    asset_name: &str,
+) -> Result<(String, &'a ToolReleaseAsset)> {
+    let normalized_tag = normalize_optiscaler_release_tag(tag);
+    let release = releases
+        .iter()
+        .find(|release| release.tag == normalized_tag)
+        .ok_or_else(|| anyhow::anyhow!("OptiScaler release tag not found: {tag}"))?;
+    let asset = release
+        .assets
+        .iter()
+        .find(|asset| asset.name == asset_name)
+        .ok_or_else(|| anyhow::anyhow!("asset '{asset_name}' not found in release {tag}"))?;
+    Ok((normalized_tag, asset))
+}
+
+async fn official_optiscaler_releases() -> Result<Vec<ToolReleaseSummary>> {
+    Ok(
+        super::release::list_github_releases("optiscaler/OptiScaler")
+            .await?
+            .into_iter()
+            .map(|mut release| {
+                release.tag = encode_optiscaler_release_tag("official", &release.tag);
+                release
+            })
+            .collect(),
+    )
+}
+
+async fn goverlay_optiscaler_releases() -> Result<Vec<ToolReleaseSummary>> {
+    let mut releases: Vec<_> =
+        super::release::list_github_releases("benjamimgois/OptiScaler-builds")
+            .await?
+            .into_iter()
+            .filter_map(goverlay_release_summary)
+            .collect();
+    releases.sort_by(|left, right| right.published_at.cmp(&left.published_at));
+    Ok(releases)
+}
+
+fn goverlay_release_summary(mut release: ToolReleaseSummary) -> Option<ToolReleaseSummary> {
+    let channel = goverlay_release_channel(&release.tag)?;
+    let assets = goverlay_installable_assets(channel, &release);
+    if assets.is_empty() {
+        return None;
+    }
+    release.tag = encode_optiscaler_release_tag(channel, &release.tag);
+    release.assets = assets;
+    Some(release)
+}
+
+fn encode_optiscaler_release_tag(source: &str, tag: &str) -> String {
+    if tag.contains(':') {
+        tag.to_string()
+    } else {
+        format!("{source}:{tag}")
+    }
+}
+
+fn goverlay_release_channel(tag: &str) -> Option<&'static str> {
+    if tag.starts_with("edge-") {
+        Some("goverlay-edge")
+    } else if tag.starts_with("master-") {
+        Some("goverlay-master")
+    } else if tag.starts_with("any-release-") {
+        Some("goverlay-any")
+    } else if is_goverlay_stable_tag(tag) {
+        Some("goverlay-stable")
+    } else {
+        None
+    }
+}
+
+fn is_goverlay_stable_tag(tag: &str) -> bool {
+    let (version, patch) = tag
+        .split_once('-')
+        .map_or((tag, None), |(version, patch)| (version, Some(patch)));
+    if let Some(patch) = patch
+        && (patch.is_empty() || !patch.chars().all(|ch| ch.is_ascii_digit()))
+    {
+        return false;
+    }
+    let mut parts = version.split('.');
+    let Some(major) = parts.next() else {
+        return false;
+    };
+    let Some(minor) = parts.next() else {
+        return false;
+    };
+    let Some(patch) = parts.next() else {
+        return false;
+    };
+    parts.next().is_none()
+        && [major, minor, patch]
+            .into_iter()
+            .all(|part| !part.is_empty() && part.chars().all(|ch| ch.is_ascii_digit()))
+}
+
+fn goverlay_installable_assets(
+    channel: &str,
+    release: &ToolReleaseSummary,
+) -> Vec<ToolReleaseAsset> {
+    match channel {
+        "goverlay-stable" => release_assets_named(release, "optiScaler-stable.7z"),
+        "goverlay-edge" => release_assets_named(release, "optiscaler-edge.7z"),
+        "goverlay-master" | "goverlay-any" => release
+            .assets
+            .iter()
+            .filter(|asset| {
+                let lower = asset.name.to_ascii_lowercase();
+                lower.ends_with(".7z") && !lower.ends_with(".json")
+            })
+            .cloned()
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn release_assets_named(
+    release: &ToolReleaseSummary,
+    expected_name: &str,
+) -> Vec<ToolReleaseAsset> {
+    release
+        .assets
+        .iter()
+        .filter(|asset| asset.name.eq_ignore_ascii_case(expected_name))
+        .cloned()
+        .collect()
 }
 
 async fn download_release_asset(asset: &ToolReleaseAsset, dest: &Path) -> Result<()> {
@@ -541,12 +1048,37 @@ fn legacy_target_dir(game_dir: &Path, config: &ToolConfig) -> PathBuf {
     }
 }
 
+fn relative_to_game(game_dir: &Path, dest: &Path) -> Result<PathBuf> {
+    dest.strip_prefix(game_dir)
+        .map(Path::to_path_buf)
+        .with_context(|| {
+            format!(
+                "optiscaler: destination {} is not under game dir {}",
+                dest.display(),
+                game_dir.display()
+            )
+        })
+}
+
 #[must_use]
 pub fn cached_release_dir(tag: &str) -> PathBuf {
     modde_core::paths::modde_data_dir()
         .join("tools")
         .join("optiscaler")
         .join(sanitize_tag(tag))
+}
+
+#[must_use]
+pub fn cached_optipatcher_dir() -> PathBuf {
+    modde_core::paths::modde_data_dir()
+        .join("tools")
+        .join("optipatcher")
+        .join("rolling")
+}
+
+#[must_use]
+pub fn cached_optipatcher_asi() -> PathBuf {
+    cached_optipatcher_dir().join(OPTIPATCHER_ASSET)
 }
 
 fn sanitize_tag(tag: &str) -> String {
@@ -563,10 +1095,9 @@ fn sanitize_tag(tag: &str) -> String {
 
 fn resolve_source_dir(config: &ToolConfig) -> Option<PathBuf> {
     match config.get_str("source_mode").unwrap_or("goverlay_fgmod") {
-        "github_release" => {
+        OPTISCALER_SOURCE_OFFICIAL | OPTISCALER_SOURCE_GOVERLAY_BUILDS => {
             let tag = config.get_str("release_tag")?;
-            let dir = cached_release_dir(tag);
-            dir.join("OptiScaler.dll").exists().then_some(dir)
+            cached_release_source_dir(tag)
         }
         "local_dir" => config
             .get_str("local_source_dir")
@@ -580,58 +1111,199 @@ fn resolve_source_dir(config: &ToolConfig) -> Option<PathBuf> {
     }
 }
 
+fn cached_release_source_dir(tag: &str) -> Option<PathBuf> {
+    let candidates = if let Some(official_tag) = tag.strip_prefix("official:") {
+        vec![cached_release_dir(tag), cached_release_dir(official_tag)]
+    } else {
+        let normalized = normalize_optiscaler_release_tag(tag);
+        if normalized == tag {
+            vec![cached_release_dir(tag)]
+        } else {
+            vec![cached_release_dir(tag), cached_release_dir(&normalized)]
+        }
+    };
+    candidates
+        .into_iter()
+        .find(|dir| dir.join("OptiScaler.dll").exists())
+}
+
+fn optiscaler_missing_preview(message: impl Into<String>) -> ToolApplyPreview {
+    ToolApplyPreview {
+        missing_inputs: vec![message.into()],
+        ..ToolApplyPreview::default()
+    }
+}
+
+fn fsr4_variant(config: &ToolConfig) -> &str {
+    match config.get_str("fsr4_variant") {
+        Some(FSR4_VARIANT_INT8_402) => FSR4_VARIANT_INT8_402,
+        _ => FSR4_VARIANT_LATEST_FP8,
+    }
+}
+
+fn selected_fsr4_variant_source(source_dir: &Path, config: &ToolConfig) -> Option<PathBuf> {
+    let dir = match fsr4_variant(config) {
+        FSR4_VARIANT_INT8_402 => FSR4_INT8_DIR,
+        FSR4_VARIANT_LATEST_FP8 => FSR4_LATEST_DIR,
+        _ => return None,
+    };
+    let selected = source_dir.join(dir).join(FSR4_DLL_NAME);
+    let has_variant_payloads =
+        source_dir.join(FSR4_LATEST_DIR).is_dir() || source_dir.join(FSR4_INT8_DIR).is_dir();
+    let expects_goverlay_payloads = matches!(
+        config.get_str("source_mode"),
+        Some(OPTISCALER_SOURCE_GOVERLAY_BUILDS | OPTISCALER_SOURCE_GOVERLAY_FGMOD)
+    );
+    (selected.is_file() || has_variant_payloads || expects_goverlay_payloads).then_some(selected)
+}
+
+fn optipatcher_asi_source(source_dir: &Path) -> PathBuf {
+    [
+        source_dir.join("plugins").join(OPTIPATCHER_ASSET),
+        source_dir.join(OPTIPATCHER_ASSET),
+        cached_optipatcher_asi(),
+    ]
+    .into_iter()
+    .find(|path| path.is_file())
+    .unwrap_or_else(cached_optipatcher_asi)
+}
+
+fn preview_source_file(
+    game_dir: &Path,
+    src: &Path,
+    dest: &Path,
+    preview: &mut ToolApplyPreview,
+) -> Result<()> {
+    let expected = std::fs::read(src)?;
+    preview_bytes(game_dir, dest, &expected, preview);
+    Ok(())
+}
+
+fn preview_bytes(game_dir: &Path, dest: &Path, expected: &[u8], preview: &mut ToolApplyPreview) {
+    let changed = std::fs::read(dest).map_or(true, |current| current != expected);
+    let rel = dest.strip_prefix(game_dir).unwrap_or(dest).to_path_buf();
+    preview.record_file(rel, changed);
+}
+
+fn preview_dir_recursive(
+    game_dir: &Path,
+    src: &Path,
+    dest: &Path,
+    preview: &mut ToolApplyPreview,
+) -> Result<()> {
+    for entry in std::fs::read_dir(src)?.flatten() {
+        let ty = entry.file_type()?;
+        let src_path = entry.path();
+        let dest_path = dest.join(entry.file_name());
+        if ty.is_dir() {
+            preview_dir_recursive(game_dir, &src_path, &dest_path, preview)?;
+        } else {
+            preview_source_file(game_dir, &src_path, &dest_path, preview)?;
+        }
+    }
+    Ok(())
+}
+
 fn goverlay_optiscaler_ini_specs() -> Vec<super::ToolSettingSpec> {
     vec![
-        super::ToolSettingSpec::text(
+        super::ToolSettingSpec::labeled_select(
             "ini_overrides.Menu.ShortcutKey",
             "Menu shortcut",
             "OptiScaler [Menu] ShortcutKey override.",
-        ),
-        super::ToolSettingSpec::text(
+            &[
+                ("auto", "Auto"),
+                ("INSERT", "Insert"),
+                ("HOME", "Home"),
+                ("END", "End"),
+                ("DELETE", "Delete"),
+                ("BACKQUOTE", "Backquote"),
+                ("F1", "F1"),
+                ("F2", "F2"),
+                ("F3", "F3"),
+                ("F4", "F4"),
+                ("F5", "F5"),
+                ("F6", "F6"),
+                ("F7", "F7"),
+                ("F8", "F8"),
+                ("F9", "F9"),
+                ("F10", "F10"),
+                ("F11", "F11"),
+                ("F12", "F12"),
+            ],
+        )
+        .section("Menu"),
+        super::ToolSettingSpec::number(
             "ini_overrides.Menu.Scale",
             "Menu scale",
             "OptiScaler [Menu] Scale override.",
-        ),
-        super::ToolSettingSpec::text(
-            "ini_overrides.OptiScaler.OverrideNvapiDll",
+            0.5,
+            2.0,
+            0.1,
+        )
+        .section("Menu"),
+        super::ToolSettingSpec::tri_state_bool(
+            "ini_overrides.NvApi.OverrideNvapiDll",
             "Override NVAPI DLL",
             "OptiScaler OverrideNvapiDll override.",
-        ),
-        super::ToolSettingSpec::text(
-            "ini_overrides.OptiScaler.Dxgi",
-            "DXGI mode",
-            "OptiScaler Dxgi override.",
-        ),
-        super::ToolSettingSpec::text(
-            "ini_overrides.OptiScaler.LoadAsiPlugins",
-            "Load ASI plugins",
-            "OptiScaler LoadAsiPlugins override.",
-        ),
-        super::ToolSettingSpec::text(
-            "ini_overrides.OptiScaler.Fsr4Update",
-            "FSR4 update",
-            "OptiScaler Fsr4Update override.",
-        ),
-        super::ToolSettingSpec::text(
+        )
+        .section("Fakenvapi"),
+        super::ToolSettingSpec::labeled_select(
+            "ini_overrides.FSR.UpscalerIndex",
+            "FSR upscaler backend",
+            "OptiScaler [FSR] UpscalerIndex override.",
+            &[
+                ("auto", "Auto"),
+                ("0", "0 - FSR 4.0.2"),
+                ("1", "1 - FSR 3.1.5"),
+                ("2", "2 - FSR 2.3.4"),
+            ],
+        )
+        .section("Basic"),
+        super::ToolSettingSpec::labeled_select(
+            "ini_overrides.FSR.FGIndex",
+            "FSR frame generation backend",
+            "OptiScaler [FSR] FGIndex override.",
+            &[
+                ("auto", "Auto"),
+                ("0", "0 - FSR 4.0.0"),
+                ("1", "1 - FSR 3.1.6"),
+            ],
+        )
+        .section("Basic"),
+        super::ToolSettingSpec::labeled_select(
             "ini_overrides.fakenvapi.force_reflex",
             "Force Reflex",
             "fakenvapi force_reflex override.",
-        ),
-        super::ToolSettingSpec::text(
+            &[
+                ("0", "0 - Follow in-game setting"),
+                ("1", "1 - Force disable"),
+                ("2", "2 - Force enable"),
+            ],
+        )
+        .section("Fakenvapi"),
+        super::ToolSettingSpec::tri_state_bool(
             "ini_overrides.fakenvapi.force_latencyflex",
             "Force LatencyFlex",
             "fakenvapi force_latencyflex override.",
-        ),
-        super::ToolSettingSpec::text(
+        )
+        .section("Fakenvapi"),
+        super::ToolSettingSpec::labeled_select(
             "ini_overrides.fakenvapi.latencyflex_mode",
             "LatencyFlex mode",
             "fakenvapi latencyflex_mode override.",
-        ),
-        super::ToolSettingSpec::text(
+            &[
+                ("0", "0 - Conservative"),
+                ("1", "1 - Aggressive"),
+                ("2", "2 - Use Reflex frame IDs"),
+            ],
+        )
+        .section("Fakenvapi"),
+        super::ToolSettingSpec::tri_state_bool(
             "ini_overrides.fakenvapi.enable_trace_logs",
             "Trace logs",
             "fakenvapi enable_trace_logs override.",
-        ),
+        )
+        .section("Fakenvapi"),
     ]
 }
 
@@ -645,13 +1317,51 @@ fn optiscaler_ini_specs(config: &ToolConfig) -> Vec<super::ToolSettingSpec> {
     };
     parse_ini_keys(&content)
         .into_iter()
+        .filter(|key| {
+            !matches!(
+                key.as_str(),
+                "FSR.Fsr4Update" | "Spoofing.Dxgi" | "Plugins.LoadAsiPlugins"
+            )
+        })
         .take(24)
         .map(|key| {
             let leaked: &'static str = Box::leak(format!("ini_overrides.{key}").into_boxed_str());
             let label: &'static str = Box::leak(key.into_boxed_str());
-            super::ToolSettingSpec::text(leaked, label, "OptiScaler.ini override.")
+            infer_optiscaler_ini_spec(leaked, label)
+                .section("Advanced")
+                .advanced()
         })
         .collect()
+}
+
+fn infer_optiscaler_ini_spec(key: &'static str, label: &'static str) -> super::ToolSettingSpec {
+    let lower = label.to_ascii_lowercase();
+    if matches!(
+        lower.as_str(),
+        "fsr4update"
+            | "dxgi"
+            | "loadasiplugins"
+            | "overridenvapidll"
+            | "force_latencyflex"
+            | "enable_trace_logs"
+    ) {
+        return super::ToolSettingSpec::tri_state_bool(key, label, "OptiScaler.ini override.");
+    }
+    if lower.ends_with("scale")
+        || lower.ends_with("alpha")
+        || lower.contains("sharpness")
+        || lower.contains("bias")
+    {
+        return super::ToolSettingSpec::number(
+            key,
+            label,
+            "OptiScaler.ini override.",
+            0.0,
+            10.0,
+            0.05,
+        );
+    }
+    super::ToolSettingSpec::text(key, label, "OptiScaler.ini override.")
 }
 
 pub fn extract_optiscaler_archive_flat(archive_path: &Path, dest_dir: &Path) -> Result<()> {
@@ -678,10 +1388,10 @@ fn extract_zip_flat(archive_path: &Path, dest_dir: &Path) -> Result<()> {
         if entry.is_dir() {
             continue;
         }
-        let Some(name) = entry
-            .enclosed_name()
-            .and_then(|path| path.file_name().map(ToOwned::to_owned))
-        else {
+        let Some(enclosed) = entry.enclosed_name() else {
+            continue;
+        };
+        let Some(name) = enclosed.file_name().map(ToOwned::to_owned) else {
             continue;
         };
         let Some(name_str) = name.to_str() else {
@@ -691,7 +1401,10 @@ fn extract_zip_flat(archive_path: &Path, dest_dir: &Path) -> Result<()> {
         if !is_optiscaler_payload_file(&lower) {
             continue;
         }
-        let out = dest_dir.join(name);
+        let out = optiscaler_payload_dest(dest_dir, &enclosed, &name);
+        if let Some(parent) = out.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         let mut output = std::fs::File::create(&out)?;
         std::io::copy(&mut entry, &mut output)?;
         copied += 1;
@@ -760,7 +1473,12 @@ fn copy_optiscaler_payload_flat(source_root: &Path, dest_dir: &Path) -> Result<(
             };
             let lower = name.to_ascii_lowercase();
             if is_optiscaler_payload_file(&lower) {
-                std::fs::copy(&path, dest_dir.join(name))?;
+                let relative = path.strip_prefix(source_root).unwrap_or(&path);
+                let dest = optiscaler_payload_dest(dest_dir, relative, std::ffi::OsStr::new(name));
+                if let Some(parent) = dest.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::copy(&path, dest)?;
                 copied += 1;
                 copied_optiscaler |= lower == "optiscaler.dll";
             }
@@ -775,8 +1493,40 @@ fn copy_optiscaler_payload_flat(source_root: &Path, dest_dir: &Path) -> Result<(
 fn is_optiscaler_payload_file(lower_name: &str) -> bool {
     matches!(
         lower_name,
-        "optiscaler.dll" | "optiscaler.ini" | "fakenvapi.dll" | "nvngx-wrapper.dll"
+        "optiscaler.dll"
+            | "optiscaler.ini"
+            | "fakenvapi.dll"
+            | "nvngx-wrapper.dll"
+            | "optipatcher.asi"
     ) || lower_name.ends_with(".dll")
+}
+
+fn optiscaler_payload_dest(
+    dest_dir: &Path,
+    relative_path: &Path,
+    file_name: &std::ffi::OsStr,
+) -> PathBuf {
+    if file_name
+        .to_str()
+        .is_some_and(|name| name.eq_ignore_ascii_case(FSR4_DLL_NAME))
+    {
+        for component in relative_path.components() {
+            let value = component.as_os_str().to_string_lossy();
+            if value.eq_ignore_ascii_case(FSR4_LATEST_DIR) {
+                return dest_dir.join(FSR4_LATEST_DIR).join(FSR4_DLL_NAME);
+            }
+            if value.eq_ignore_ascii_case(FSR4_INT8_DIR) {
+                return dest_dir.join(FSR4_INT8_DIR).join(FSR4_DLL_NAME);
+            }
+        }
+    }
+    if file_name
+        .to_str()
+        .is_some_and(|name| name.eq_ignore_ascii_case(OPTIPATCHER_ASSET))
+    {
+        return dest_dir.join("plugins").join(OPTIPATCHER_ASSET);
+    }
+    dest_dir.join(file_name)
 }
 
 #[must_use]
@@ -839,6 +1589,16 @@ fn apply_ini_overrides_with_existing(
     dest: &Path,
     config: &ToolConfig,
 ) -> Result<()> {
+    let content = build_ini_with_overrides(src, existing, config)?;
+    std::fs::write(dest, content)?;
+    Ok(())
+}
+
+fn build_ini_with_overrides(
+    src: &Path,
+    existing: Option<&Path>,
+    config: &ToolConfig,
+) -> Result<String> {
     let mut content = std::fs::read_to_string(src)?;
     if let Some(existing) = existing
         && let Ok(existing_content) = std::fs::read_to_string(existing)
@@ -863,8 +1623,38 @@ fn apply_ini_overrides_with_existing(
             content = set_ini_value(&content, &path, &value);
         }
     }
-    std::fs::write(dest, content)?;
-    Ok(())
+    for (path, value) in effective_optiscaler_ini_overrides(config) {
+        content = set_ini_value(&content, &path, &value);
+    }
+    Ok(content)
+}
+
+fn effective_optiscaler_ini_overrides(config: &ToolConfig) -> Vec<(&'static str, &'static str)> {
+    let mut overrides = Vec::new();
+    overrides.push((
+        "FSR.Fsr4Update",
+        match fsr4_variant(config) {
+            FSR4_VARIANT_INT8_402 => "auto",
+            _ => "True",
+        },
+    ));
+    overrides.push((
+        "Spoofing.Dxgi",
+        if config.get_bool("spoof_dlss") {
+            "auto"
+        } else {
+            "false"
+        },
+    ));
+    overrides.push((
+        "Plugins.LoadAsiPlugins",
+        if config.get_bool("enable_optipatcher") {
+            "true"
+        } else {
+            "auto"
+        },
+    ));
+    overrides
 }
 
 #[must_use]
@@ -897,6 +1687,95 @@ pub fn managed_paths_from_config(config: &ToolConfig) -> BTreeSet<String> {
         .collect()
 }
 
+/// Apply game-specific `OptiScaler` defaults from community compatibility data.
+pub fn apply_game_defaults(config: &mut ToolConfig, context: Option<&ToolGameContext>) {
+    let Some(context) = context else {
+        return;
+    };
+    let Some(profile) = selected_or_default_profile(&context.game_id, config) else {
+        return;
+    };
+    apply_optiscaler_profile_metadata(config, profile);
+}
+
+/// Apply a community-tested `OptiScaler` profile to a config.
+pub fn apply_profile_by_id(config: &mut ToolConfig, game_id: &str, profile_id: &str) -> bool {
+    if profile_id == CUSTOM_OPTISCALER_PROFILE {
+        apply_custom_profile(config);
+        return true;
+    }
+    let Some(profile) = resolve_optiscaler_profiles(game_id)
+        .iter()
+        .find(|profile| profile.id == profile_id)
+    else {
+        return false;
+    };
+    apply_optiscaler_profile_metadata(config, profile);
+    true
+}
+
+fn selected_or_default_profile(
+    game_id: &str,
+    config: &ToolConfig,
+) -> Option<&'static OptiScalerProfile> {
+    if config.get_str("optiscaler_profile") == Some(CUSTOM_OPTISCALER_PROFILE) {
+        return None;
+    }
+    config
+        .get_str("optiscaler_profile")
+        .and_then(|selected| {
+            resolve_optiscaler_profiles(game_id)
+                .iter()
+                .find(|profile| profile.id == selected)
+        })
+        .or_else(|| default_optiscaler_profile(game_id))
+}
+
+fn apply_custom_profile(config: &mut ToolConfig) {
+    config.set(
+        "optiscaler_profile",
+        serde_json::json!(CUSTOM_OPTISCALER_PROFILE),
+    );
+    config.set(
+        "optiscaler_profile_name",
+        serde_json::json!("Custom / no community profile"),
+    );
+    config.set("optiscaler_profile_source_url", serde_json::json!(""));
+    config.set("tested_optiscaler_version", serde_json::json!(""));
+    config.set(
+        "optiscaler_profile_notes",
+        serde_json::json!("Community profile guidance is not applied."),
+    );
+}
+
+fn apply_optiscaler_profile_metadata(config: &mut ToolConfig, profile: &OptiScalerProfile) {
+    config.set("optiscaler_profile", serde_json::json!(profile.id));
+    config.set("optiscaler_profile_name", serde_json::json!(profile.name));
+    config.set(
+        "optiscaler_profile_source_url",
+        serde_json::json!(profile.source_url),
+    );
+    config.set(
+        "tested_optiscaler_version",
+        serde_json::json!(profile.tested_optiscaler_version),
+    );
+    config.set("optiscaler_profile_notes", serde_json::json!(profile.notes));
+}
+
+fn apply_optiscaler_release_selection(config: &mut ToolConfig, normalized_tag: &str, asset: &str) {
+    if let Some(channel) = optiscaler_goverlay_channel_for_tag(normalized_tag) {
+        config.set(
+            "source_mode",
+            serde_json::json!(OPTISCALER_SOURCE_GOVERLAY_BUILDS),
+        );
+        config.set("goverlay_channel", serde_json::json!(channel));
+    } else {
+        config.set("source_mode", serde_json::json!(OPTISCALER_SOURCE_OFFICIAL));
+    }
+    config.set("release_tag", serde_json::json!(normalized_tag));
+    config.set("release_asset", serde_json::json!(asset));
+}
+
 pub fn scan_optiscaler_install(
     game_id: &str,
     game_dir: &Path,
@@ -905,9 +1784,34 @@ pub fn scan_optiscaler_install(
     let executable_dir = crate::resolve_game_plugin(game_id)
         .map(|plugin| plugin.executable_dir(game_dir))
         .unwrap_or_else(|| game_dir.to_path_buf());
-    let mut state = scan_optiscaler_install_in_dir(&executable_dir, managed_paths)?;
+    let executable_managed_paths =
+        managed_paths_for_executable_dir(game_dir, &executable_dir, managed_paths);
+    let mut state = scan_optiscaler_install_in_dir(&executable_dir, &executable_managed_paths)?;
     state.latest_backup = latest_optiscaler_backup(Some(game_id));
     Ok(state)
+}
+
+fn managed_paths_for_executable_dir(
+    game_dir: &Path,
+    executable_dir: &Path,
+    managed_paths: &BTreeSet<String>,
+) -> BTreeSet<String> {
+    let mut out = managed_paths.clone();
+    let Ok(executable_rel) = executable_dir.strip_prefix(game_dir) else {
+        return out;
+    };
+    let executable_prefix = normalize_rel_path(executable_rel.to_string_lossy());
+    let executable_prefix = executable_prefix.trim_end_matches('/');
+    if executable_prefix.is_empty() {
+        return out;
+    }
+    let prefix = format!("{executable_prefix}/");
+    for path in managed_paths {
+        if let Some(stripped) = path.strip_prefix(&prefix) {
+            out.insert(stripped.to_string());
+        }
+    }
+    out
 }
 
 pub fn scan_optiscaler_install_in_dir(
@@ -1192,7 +2096,7 @@ fn collect_relative_files(game_dir: &Path, dir: &Path, out: &mut Vec<PathBuf>) -
         if path.is_dir() {
             collect_relative_files(game_dir, &path, out)?;
         } else if path.is_file() {
-            out.push(path.strip_prefix(game_dir).unwrap_or(&path).to_path_buf());
+            out.push(relative_to_game(game_dir, &path)?);
         }
     }
     Ok(())
@@ -1296,7 +2200,13 @@ fn flatten_ini_overrides(
 }
 
 fn set_ini_value(content: &str, path: &str, value: &str) -> String {
-    let (target_section, target_key) = path.rsplit_once('.').unwrap_or(("", path));
+    let Some((target_section, target_key)) = path.rsplit_once('.') else {
+        tracing::warn!(
+            ini_key = path,
+            "optiscaler: ini override key has no section prefix; expected 'section.key'"
+        );
+        return content.to_string();
+    };
     let mut current_section = "";
     let mut updated = false;
     let mut lines = Vec::new();
@@ -1320,6 +2230,11 @@ fn set_ini_value(content: &str, path: &str, value: &str) -> String {
             continue;
         }
         lines.push(line.to_string());
+    }
+
+    if !updated && !target_section.is_empty() && current_section == target_section {
+        lines.push(format!("{target_key}={value}"));
+        updated = true;
     }
 
     if !updated {
@@ -1410,20 +2325,23 @@ mod dirs {
 #[cfg(test)]
 mod tests {
     use std::collections::{BTreeMap, BTreeSet};
+    use std::path::PathBuf;
+
+    use crate::tools::ToolSettingKind;
 
     use super::*;
 
     #[test]
     fn parse_optiscaler_ini_preserves_section_paths() {
         let parsed = parse_optiscaler_ini(
-            r#"
+            r"
             ; comment
             [OptiScaler]
             Dxgi=auto
             LoadAsiPlugins=true
             [Menu]
             Scale=1.25
-            "#,
+            ",
         );
         assert_eq!(parsed.get("OptiScaler.Dxgi"), Some(&"auto".to_string()));
         assert_eq!(
@@ -1431,6 +2349,565 @@ mod tests {
             Some(&"true".to_string())
         );
         assert_eq!(parsed.get("Menu.Scale"), Some(&"1.25".to_string()));
+    }
+
+    #[test]
+    fn preview_reports_changed_when_proxy_or_ini_differ() {
+        let source = tempfile::tempdir().expect("source");
+        let game = tempfile::tempdir().expect("game");
+        std::fs::write(source.path().join("OptiScaler.dll"), b"new dll").expect("source dll");
+        std::fs::write(
+            source.path().join("OptiScaler.ini"),
+            "[FSR]\nFGIndex=auto\n",
+        )
+        .expect("source ini");
+        std::fs::write(game.path().join("dxgi.dll"), b"old dll").expect("dest dll");
+        std::fs::write(game.path().join("OptiScaler.ini"), "[FSR]\nFGIndex=1\n").expect("dest ini");
+        let mut config = OptiScaler.default_config();
+        config.set("source_mode", serde_json::json!("local_dir"));
+        config.set(
+            "local_source_dir",
+            serde_json::json!(source.path().display().to_string()),
+        );
+        config.set(
+            "ini_overrides",
+            serde_json::json!({ "FSR": { "FGIndex": "2" } }),
+        );
+
+        let preview = OptiScaler
+            .preview_apply_for(game.path(), None, &config)
+            .expect("preview");
+
+        assert!(preview.changed_files.contains(&PathBuf::from("dxgi.dll")));
+        assert!(
+            preview
+                .changed_files
+                .contains(&PathBuf::from("OptiScaler.ini"))
+        );
+        assert!(preview.missing_inputs.is_empty());
+    }
+
+    #[test]
+    fn preview_reports_unchanged_and_does_not_create_target_dirs() {
+        let source = tempfile::tempdir().expect("source");
+        let game = tempfile::tempdir().expect("game");
+        std::fs::write(source.path().join("OptiScaler.dll"), b"same dll").expect("source dll");
+        std::fs::write(
+            source.path().join("OptiScaler.ini"),
+            "[FSR]\nFGIndex=auto\n",
+        )
+        .expect("source ini");
+        let target = game.path().join("Bin");
+        std::fs::create_dir(&target).expect("target");
+        std::fs::write(target.join("dxgi.dll"), b"same dll").expect("dest dll");
+        std::fs::write(
+            target.join("OptiScaler.ini"),
+            "[FSR]\nFGIndex=auto\nFsr4Update=True\n[Spoofing]\nDxgi=false\n[Plugins]\nLoadAsiPlugins=auto\n",
+        )
+        .expect("dest ini");
+        let mut config = OptiScaler.default_config();
+        config.set("source_mode", serde_json::json!("local_dir"));
+        config.set(
+            "local_source_dir",
+            serde_json::json!(source.path().display().to_string()),
+        );
+        config.set("exe_subdir", serde_json::json!("Bin"));
+
+        let preview = OptiScaler
+            .preview_apply_for(game.path(), None, &config)
+            .expect("preview");
+
+        assert!(preview.changed_files.is_empty());
+        assert!(
+            preview
+                .unchanged_files
+                .contains(&PathBuf::from("Bin/dxgi.dll"))
+        );
+        assert!(
+            preview
+                .unchanged_files
+                .contains(&PathBuf::from("Bin/OptiScaler.ini"))
+        );
+        assert!(!game.path().join("Other").exists());
+    }
+
+    #[test]
+    fn preview_does_not_create_missing_target_directory() {
+        let source = tempfile::tempdir().expect("source");
+        let game = tempfile::tempdir().expect("game");
+        std::fs::write(source.path().join("OptiScaler.dll"), b"dll").expect("source dll");
+        std::fs::write(source.path().join("OptiScaler.ini"), "[FSR]\n").expect("source ini");
+        let mut config = OptiScaler.default_config();
+        config.set("source_mode", serde_json::json!("local_dir"));
+        config.set(
+            "local_source_dir",
+            serde_json::json!(source.path().display().to_string()),
+        );
+        config.set("exe_subdir", serde_json::json!("MissingBin"));
+
+        let preview = OptiScaler
+            .preview_apply_for(game.path(), None, &config)
+            .expect("preview");
+
+        assert!(preview.has_changes());
+        assert!(!game.path().join("MissingBin").exists());
+    }
+
+    #[test]
+    fn goverlay_inspired_settings_expose_friendly_raw_value_selects() {
+        let specs = OptiScaler.settings_schema();
+        let shortcut = specs
+            .iter()
+            .find(|spec| spec.key == "ini_overrides.Menu.ShortcutKey")
+            .expect("shortcut spec");
+        assert_eq!(shortcut.section, "Menu");
+        assert!(!shortcut.advanced);
+        let ToolSettingKind::Select { options } = &shortcut.kind else {
+            panic!("shortcut should be a select");
+        };
+        assert!(
+            options
+                .iter()
+                .any(|option| option.value == "INSERT" && option.label == "Insert")
+        );
+
+        let upscaler = specs
+            .iter()
+            .find(|spec| spec.key == "ini_overrides.FSR.UpscalerIndex")
+            .expect("FSR upscaler spec");
+        assert_eq!(upscaler.section, "Basic");
+        let ToolSettingKind::Select { options } = &upscaler.kind else {
+            panic!("FSR upscaler should be a select");
+        };
+        assert_eq!(options[0].value, "auto");
+        assert_eq!(options[0].label, "Auto");
+        assert!(
+            options
+                .iter()
+                .any(|option| option.value == "0" && option.label == "0 - FSR 4.0.2")
+        );
+        assert!(
+            options
+                .iter()
+                .any(|option| option.value == "2" && option.label == "2 - FSR 2.3.4")
+        );
+
+        let fg = specs
+            .iter()
+            .find(|spec| spec.key == "ini_overrides.FSR.FGIndex")
+            .expect("FSR FG spec");
+        let ToolSettingKind::Select { options } = &fg.kind else {
+            panic!("FSR FG should be a select");
+        };
+        assert!(
+            options
+                .iter()
+                .any(|option| option.value == "1" && option.label == "1 - FSR 3.1.6")
+        );
+    }
+
+    #[test]
+    fn goverlay_inspired_settings_mark_only_risky_entries_advanced() {
+        let specs = OptiScaler.settings_schema();
+        let spoof = specs
+            .iter()
+            .find(|spec| spec.key == "spoof_dlss")
+            .expect("spoof fallback spec");
+        assert_eq!(spoof.label, "Spoof DLSS fallback");
+        assert_eq!(spoof.section, "Basic");
+        assert!(!spoof.advanced);
+
+        let optipatcher = specs
+            .iter()
+            .find(|spec| spec.key == "enable_optipatcher")
+            .expect("OptiPatcher spec");
+        assert_eq!(optipatcher.section, "Basic");
+        assert!(!optipatcher.advanced);
+
+        assert!(
+            !specs
+                .iter()
+                .any(|spec| spec.key == "ini_overrides.Plugins.LoadAsiPlugins")
+        );
+    }
+
+    #[test]
+    fn emulate_fp8_schema_is_read_only_for_int8_variant() {
+        let mut config = OptiScaler.default_config();
+        config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_INT8_402));
+
+        let specs = OptiScaler.settings_schema_for(None, &config);
+        let emulate = specs
+            .iter()
+            .find(|spec| spec.key == "emulate_fp8")
+            .expect("emulate fp8 spec");
+
+        assert_eq!(emulate.section, "Basic");
+        assert!(matches!(emulate.kind, ToolSettingKind::ReadOnly));
+    }
+
+    #[test]
+    fn goverlay_channel_is_only_exposed_for_goverlay_build_source() {
+        let mut config = OptiScaler.default_config();
+        config.set("source_mode", serde_json::json!("github_release"));
+        let specs = OptiScaler.settings_schema_for(None, &config);
+        assert!(!specs.iter().any(|spec| spec.key == "goverlay_channel"));
+
+        config.set("source_mode", serde_json::json!("goverlay_builds"));
+        let specs = OptiScaler.settings_schema_for(None, &config);
+        assert!(specs.iter().any(|spec| spec.key == "goverlay_channel"));
+    }
+
+    #[test]
+    fn fsr_backend_overrides_write_raw_ini_values() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let src = tmp.path().join("OptiScaler.ini");
+        let dest = tmp.path().join("applied.ini");
+        std::fs::write(
+            &src,
+            "[FSR]\nUpscalerIndex=auto\nFGIndex=auto\n[Menu]\nShortcutKey=auto\n",
+        )
+        .expect("source ini");
+        let mut config = OptiScaler.default_config();
+        config.set(
+            "ini_overrides",
+            serde_json::json!({
+                "FSR": {
+                    "UpscalerIndex": "0",
+                    "FGIndex": "1"
+                },
+                "Menu": {
+                    "ShortcutKey": "INSERT"
+                }
+            }),
+        );
+
+        apply_ini_overrides_with_existing(&src, None, &dest, &config).expect("apply overrides");
+
+        let parsed = parse_optiscaler_ini(&std::fs::read_to_string(dest).expect("dest ini"));
+        assert_eq!(parsed.get("FSR.UpscalerIndex"), Some(&"0".to_string()));
+        assert_eq!(parsed.get("FSR.FGIndex"), Some(&"1".to_string()));
+        assert_eq!(parsed.get("Menu.ShortcutKey"), Some(&"INSERT".to_string()));
+    }
+
+    #[test]
+    fn optiscaler_high_level_controls_write_ini_values() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let src = tmp.path().join("OptiScaler.ini");
+        let dest = tmp.path().join("applied.ini");
+        std::fs::write(
+            &src,
+            "[FSR]\nFsr4Update=auto\n[Spoofing]\nDxgi=auto\n[Plugins]\nLoadAsiPlugins=auto\n",
+        )
+        .expect("source ini");
+        let mut config = OptiScaler.default_config();
+        config.set("enable_optipatcher", serde_json::json!(true));
+        config.set("spoof_dlss", serde_json::json!(false));
+        config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_LATEST_FP8));
+
+        apply_ini_overrides_with_existing(&src, None, &dest, &config).expect("apply overrides");
+
+        let parsed = parse_optiscaler_ini(&std::fs::read_to_string(dest).expect("dest ini"));
+        assert_eq!(parsed.get("FSR.Fsr4Update"), Some(&"True".to_string()));
+        assert_eq!(parsed.get("Spoofing.Dxgi"), Some(&"false".to_string()));
+        assert_eq!(
+            parsed.get("Plugins.LoadAsiPlugins"),
+            Some(&"true".to_string())
+        );
+    }
+
+    #[test]
+    fn optiscaler_fp8_variant_copies_selected_fsr4_dll() {
+        let source = tempfile::tempdir().expect("source");
+        let game = tempfile::tempdir().expect("game");
+        std::fs::write(source.path().join("OptiScaler.dll"), b"dll").expect("source dll");
+        std::fs::write(source.path().join("OptiScaler.ini"), "[FSR]\n").expect("source ini");
+        std::fs::create_dir_all(source.path().join(FSR4_LATEST_DIR)).expect("latest dir");
+        std::fs::write(
+            source.path().join(FSR4_LATEST_DIR).join(FSR4_DLL_NAME),
+            b"fp8",
+        )
+        .expect("fp8 dll");
+        let mut config = OptiScaler.default_config();
+        config.set("source_mode", serde_json::json!("local_dir"));
+        config.set(
+            "local_source_dir",
+            serde_json::json!(source.path().display().to_string()),
+        );
+        config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_LATEST_FP8));
+
+        let applied = OptiScaler.apply(game.path(), &config).expect("apply");
+
+        assert_eq!(
+            std::fs::read(game.path().join(FSR4_DLL_NAME)).expect("deployed FSR4"),
+            b"fp8"
+        );
+        assert!(applied.files.contains(&PathBuf::from(FSR4_DLL_NAME)));
+    }
+
+    #[test]
+    fn optiscaler_int8_variant_copies_int8_and_ignores_fp8_env() {
+        let source = tempfile::tempdir().expect("source");
+        let game = tempfile::tempdir().expect("game");
+        std::fs::write(source.path().join("OptiScaler.dll"), b"dll").expect("source dll");
+        std::fs::write(source.path().join("OptiScaler.ini"), "[FSR]\n").expect("source ini");
+        std::fs::create_dir_all(source.path().join(FSR4_INT8_DIR)).expect("int8 dir");
+        std::fs::write(
+            source.path().join(FSR4_INT8_DIR).join(FSR4_DLL_NAME),
+            b"int8",
+        )
+        .expect("int8 dll");
+        let mut config = OptiScaler.default_config();
+        config.set("source_mode", serde_json::json!("local_dir"));
+        config.set(
+            "local_source_dir",
+            serde_json::json!(source.path().display().to_string()),
+        );
+        config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_INT8_402));
+        config.set("emulate_fp8", serde_json::json!(true));
+
+        OptiScaler.apply(game.path(), &config).expect("apply");
+
+        assert_eq!(
+            std::fs::read(game.path().join(FSR4_DLL_NAME)).expect("deployed FSR4"),
+            b"int8"
+        );
+        assert!(OptiScaler.env_vars(&config).is_empty());
+    }
+
+    #[test]
+    fn optiscaler_missing_optipatcher_is_reported_in_preview() {
+        let source = tempfile::tempdir().expect("source");
+        let game = tempfile::tempdir().expect("game");
+        std::fs::write(source.path().join("OptiScaler.dll"), b"dll").expect("source dll");
+        std::fs::write(source.path().join("OptiScaler.ini"), "[Plugins]\n").expect("source ini");
+        let mut config = OptiScaler.default_config();
+        config.set("source_mode", serde_json::json!("local_dir"));
+        config.set(
+            "local_source_dir",
+            serde_json::json!(source.path().display().to_string()),
+        );
+        config.set("enable_optipatcher", serde_json::json!(true));
+
+        let preview = OptiScaler
+            .preview_apply_for(game.path(), None, &config)
+            .expect("preview");
+
+        let optipatcher_rel = PathBuf::from("plugins").join(OPTIPATCHER_ASSET);
+        assert!(
+            preview
+                .missing_inputs
+                .iter()
+                .any(|input| input.contains("OptiPatcher.asi"))
+                || preview.changed_files.contains(&optipatcher_rel)
+                || preview.unchanged_files.contains(&optipatcher_rel)
+        );
+    }
+
+    #[test]
+    fn optiscaler_uses_bundled_optipatcher_from_source_plugins() {
+        let source = tempfile::tempdir().expect("source");
+        let game = tempfile::tempdir().expect("game");
+        std::fs::write(source.path().join("OptiScaler.dll"), b"dll").expect("source dll");
+        std::fs::write(source.path().join("OptiScaler.ini"), "[Plugins]\n").expect("source ini");
+        std::fs::create_dir_all(source.path().join("plugins")).expect("plugins dir");
+        std::fs::write(
+            source.path().join("plugins").join(OPTIPATCHER_ASSET),
+            b"bundled asi",
+        )
+        .expect("source optipatcher");
+        let mut config = OptiScaler.default_config();
+        config.set("source_mode", serde_json::json!("local_dir"));
+        config.set(
+            "local_source_dir",
+            serde_json::json!(source.path().display().to_string()),
+        );
+        config.set("enable_optipatcher", serde_json::json!(true));
+
+        OptiScaler.apply(game.path(), &config).expect("apply");
+
+        assert_eq!(
+            std::fs::read(game.path().join("plugins").join(OPTIPATCHER_ASSET))
+                .expect("deployed optipatcher"),
+            b"bundled asi"
+        );
+    }
+
+    #[test]
+    fn optiscaler_archive_payload_keeps_optipatcher_in_plugins() {
+        assert!(is_optiscaler_payload_file("optipatcher.asi"));
+        assert_eq!(
+            optiscaler_payload_dest(
+                Path::new("/cache"),
+                Path::new("plugins/OptiPatcher.asi"),
+                std::ffi::OsStr::new("OptiPatcher.asi"),
+            ),
+            PathBuf::from("/cache/plugins/OptiPatcher.asi")
+        );
+    }
+
+    #[test]
+    fn optiscaler_fp8_env_only_for_latest_fp8_emulation() {
+        let mut config = OptiScaler.default_config();
+        config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_LATEST_FP8));
+        config.set("emulate_fp8", serde_json::json!(true));
+
+        assert_eq!(
+            OptiScaler.env_vars(&config).as_slice(),
+            [(
+                FP8_EMULATION_ENV_KEY.to_string(),
+                FP8_EMULATION_ENV_VALUE.to_string()
+            )]
+        );
+
+        config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_INT8_402));
+        assert!(OptiScaler.env_vars(&config).is_empty());
+    }
+
+    #[test]
+    fn goverlay_release_classification_maps_supported_channels() {
+        assert_eq!(
+            goverlay_release_channel("edge-0.9.12.0323"),
+            Some("goverlay-edge")
+        );
+        assert_eq!(
+            goverlay_release_channel("master-3ce61922"),
+            Some("goverlay-master")
+        );
+        assert_eq!(
+            goverlay_release_channel("any-release-0.9-2083b274"),
+            Some("goverlay-any")
+        );
+        assert_eq!(goverlay_release_channel("0.9.1-0"), Some("goverlay-stable"));
+        assert_eq!(goverlay_release_channel("fsr-int8"), None);
+    }
+
+    #[test]
+    fn goverlay_release_summary_requires_full_install_archive() {
+        let edge = release_fixture("edge-0.9.12.0323", &["notes.json", "optiscaler-edge.7z"]);
+        let edge = goverlay_release_summary(edge).expect("edge release");
+        assert_eq!(edge.tag, "goverlay-edge:edge-0.9.12.0323");
+        assert_eq!(edge.assets.len(), 1);
+        assert_eq!(edge.assets[0].name, "optiscaler-edge.7z");
+
+        let master = release_fixture(
+            "master-3ce61922",
+            &["master-3ce61922.json", "OptiScaler_master_3ce61922.7z"],
+        );
+        let master = goverlay_release_summary(master).expect("master release");
+        assert_eq!(master.tag, "goverlay-master:master-3ce61922");
+        assert_eq!(master.assets[0].name, "OptiScaler_master_3ce61922.7z");
+
+        let fsr_int8 = release_fixture("fsr-int8", &["amd_fidelityfx_upscaler_dx12.dll"]);
+        assert!(goverlay_release_summary(fsr_int8).is_none());
+    }
+
+    #[test]
+    fn optiscaler_release_tags_are_encoded_by_source() {
+        assert_eq!(
+            encode_optiscaler_release_tag("official", "v0.9.1"),
+            "official:v0.9.1"
+        );
+        assert_eq!(
+            normalize_optiscaler_release_tag("v0.9.1"),
+            "official:v0.9.1"
+        );
+        assert_eq!(
+            normalize_optiscaler_release_tag("goverlay-edge:edge-0.9.12.0323"),
+            "goverlay-edge:edge-0.9.12.0323"
+        );
+    }
+
+    #[test]
+    fn optiscaler_release_asset_selection_uses_encoded_source_keys() {
+        let releases = vec![
+            release_fixture("official:v0.9.1", &["Optiscaler_0.9.1-final.7z"]),
+            release_fixture("goverlay-edge:edge-0.9.12.0323", &["optiscaler-edge.7z"]),
+        ];
+
+        let (tag, asset) =
+            select_optiscaler_release_asset(&releases, "v0.9.1", "Optiscaler_0.9.1-final.7z")
+                .expect("legacy official tag resolves");
+        assert_eq!(tag, "official:v0.9.1");
+        assert_eq!(asset.name, "Optiscaler_0.9.1-final.7z");
+
+        let (tag, asset) = select_optiscaler_release_asset(
+            &releases,
+            "goverlay-edge:edge-0.9.12.0323",
+            "optiscaler-edge.7z",
+        )
+        .expect("goverlay edge tag resolves");
+        assert_eq!(tag, "goverlay-edge:edge-0.9.12.0323");
+        assert_eq!(asset.name, "optiscaler-edge.7z");
+
+        assert!(
+            select_optiscaler_release_asset(&releases, "edge-0.9.12.0323", "optiscaler-edge.7z")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn optiscaler_release_config_moves_legacy_goverlay_tag_to_goverlay_source() {
+        let mut config = OptiScaler.default_config();
+        config.set("source_mode", serde_json::json!("github_release"));
+        config.set(
+            "release_tag",
+            serde_json::json!("goverlay-edge:edge-0.9.12.0323"),
+        );
+
+        assert!(normalize_optiscaler_release_config(&mut config));
+
+        assert_eq!(config.get_str("source_mode"), Some("goverlay_builds"));
+        assert_eq!(config.get_str("goverlay_channel"), Some("edge"));
+        assert_eq!(
+            config.get_str("release_tag"),
+            Some("goverlay-edge:edge-0.9.12.0323")
+        );
+    }
+
+    #[test]
+    fn optiscaler_release_matching_respects_source_and_channel() {
+        let official = release_fixture("official:v0.9.1", &["Optiscaler.7z"]);
+        let edge = release_fixture("goverlay-edge:edge-0.9.12.0323", &["optiscaler-edge.7z"]);
+        let master = release_fixture(
+            "goverlay-master:master-3ce61922",
+            &["OptiScaler_master_3ce61922.7z"],
+        );
+        let mut config = OptiScaler.default_config();
+
+        config.set("source_mode", serde_json::json!("github_release"));
+        assert!(optiscaler_release_matches_config(&official, &config));
+        assert!(!optiscaler_release_matches_config(&edge, &config));
+
+        config.set("source_mode", serde_json::json!("goverlay_builds"));
+        config.set("goverlay_channel", serde_json::json!("edge"));
+        assert!(optiscaler_release_matches_config(&edge, &config));
+        assert!(!optiscaler_release_matches_config(&master, &config));
+
+        config.set("goverlay_channel", serde_json::json!("master"));
+        assert!(!optiscaler_release_matches_config(&edge, &config));
+        assert!(optiscaler_release_matches_config(&master, &config));
+    }
+
+    #[test]
+    fn goverlay_release_sorts_newest_first_by_publish_date() {
+        let mut releases = [
+            release_fixture_with_date(
+                "goverlay-edge:edge-old",
+                &["optiscaler-edge.7z"],
+                "2026-03-20T01:08:18Z",
+            ),
+            release_fixture_with_date(
+                "goverlay-edge:edge-new",
+                &["optiscaler-edge.7z"],
+                "2026-03-24T00:18:25Z",
+            ),
+        ];
+
+        releases.sort_by(|left, right| right.published_at.cmp(&left.published_at));
+
+        assert_eq!(releases[0].tag, "goverlay-edge:edge-new");
+        assert_eq!(releases[1].tag, "goverlay-edge:edge-old");
     }
 
     #[test]
@@ -1478,6 +2955,341 @@ mod tests {
     }
 
     #[test]
+    fn scanner_matches_stellar_blade_root_relative_managed_manifest() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let exe_dir = tmp.path().join("SB/Binaries/Win64");
+        std::fs::create_dir_all(&exe_dir).expect("exe dir");
+        std::fs::write(exe_dir.join("dxgi.dll"), b"optiscaler").expect("proxy");
+        std::fs::write(exe_dir.join("OptiScaler.ini"), "[OptiScaler]\nDxgi=auto\n").expect("ini");
+        std::fs::write(exe_dir.join("version.txt"), "v0.9.1\n").expect("version");
+
+        let unmanaged =
+            scan_optiscaler_install("stellar-blade", tmp.path(), &BTreeSet::new()).expect("scan");
+        assert_eq!(unmanaged.status, OptiScalerInstallStatus::Unmanaged);
+        assert_eq!(
+            unmanaged.summary(),
+            "unmanaged; version v0.9.1; proxy dxgi.dll"
+        );
+        assert_eq!(unmanaged.wine_dll_overrides, vec!["dxgi".to_string()]);
+
+        let mut managed = BTreeSet::new();
+        managed.insert("sb/binaries/win64/dxgi.dll".to_string());
+        managed.insert("sb/binaries/win64/optiscaler.ini".to_string());
+        let managed_state =
+            scan_optiscaler_install("stellar-blade", tmp.path(), &managed).expect("scan");
+        assert_eq!(managed_state.status, OptiScalerInstallStatus::Managed);
+        assert_eq!(
+            managed_state.summary(),
+            "managed; version v0.9.1; proxy dxgi.dll"
+        );
+    }
+
+    #[test]
+    fn stellar_blade_default_config_adds_community_metadata_only() {
+        let context = ToolGameContext::from_parts(
+            "stellar-blade",
+            "Stellar Blade",
+            Some(PathBuf::from("/fake/StellarBlade")),
+            None,
+        );
+        let config = OptiScaler.default_config_for(Some(&context));
+
+        assert_eq!(
+            config.get_str("source_mode"),
+            Some(OPTISCALER_SOURCE_GOVERLAY_FGMOD)
+        );
+        assert_eq!(config.get_str("goverlay_channel"), Some("edge"));
+        assert_eq!(config.get_str("release_tag"), Some("latest"));
+        assert_eq!(config.get_str("release_asset"), Some(""));
+        assert_eq!(config.get_str("proxy_dll"), Some("dxgi.dll"));
+        assert_eq!(config.get_str("dll_overrides"), Some(""));
+        assert!(config.get_bool("copy_companion_files"));
+        assert!(!config.get_bool("enable_optipatcher"));
+        assert_eq!(
+            config.get_str("fsr4_variant"),
+            Some(FSR4_VARIANT_LATEST_FP8)
+        );
+        assert!(!config.get_bool("emulate_fp8"));
+        assert!(!config.get_bool("spoof_dlss"));
+        assert_eq!(config.get_str("optiscaler_profile"), Some("community-dxgi"));
+        assert_eq!(config.get_str("tested_optiscaler_version"), Some("0.9"));
+        assert_eq!(
+            config.get_str("optiscaler_profile_source_url"),
+            Some("https://github.com/optiscaler/OptiScaler/wiki/Stellar-Blade")
+        );
+        assert_eq!(
+            config.settings.get("ini_overrides"),
+            Some(&serde_json::json!({}))
+        );
+    }
+
+    #[test]
+    fn games_without_optiscaler_profiles_keep_generic_defaults() {
+        let context =
+            ToolGameContext::from_parts("skyrim-se", "Skyrim Special Edition", None, None);
+        let config = OptiScaler.default_config_for(Some(&context));
+
+        assert_eq!(config.get_str("source_mode"), Some("goverlay_fgmod"));
+        assert_eq!(config.get_str("release_tag"), Some("latest"));
+        assert_eq!(config.get_str("proxy_dll"), Some("dxgi.dll"));
+        assert_eq!(config.get_str("dll_overrides"), Some(""));
+        assert_eq!(config.get_str("optiscaler_profile"), None);
+    }
+
+    #[test]
+    fn custom_profile_opt_out_prevents_community_defaults() {
+        let context = ToolGameContext::from_parts(
+            "stellar-blade",
+            "Stellar Blade",
+            Some(PathBuf::from("/fake/StellarBlade")),
+            None,
+        );
+        let mut config = OptiScaler.default_config();
+        config.set("optiscaler_profile", serde_json::json!("custom"));
+        config.set("source_mode", serde_json::json!("local_dir"));
+        config.set("release_tag", serde_json::json!("latest"));
+        config.set("proxy_dll", serde_json::json!("winmm.dll"));
+
+        apply_game_defaults(&mut config, Some(&context));
+
+        assert_eq!(config.get_str("optiscaler_profile"), Some("custom"));
+        assert_eq!(config.get_str("source_mode"), Some("local_dir"));
+        assert_eq!(config.get_str("release_tag"), Some("latest"));
+        assert_eq!(config.get_str("proxy_dll"), Some("winmm.dll"));
+        assert_eq!(config.get_str("tested_optiscaler_version"), None);
+    }
+
+    #[test]
+    fn stellar_blade_game_defaults_preserve_custom_settings_for_profile() {
+        let context = ToolGameContext::from_parts(
+            "stellar-blade",
+            "Stellar Blade",
+            Some(PathBuf::from("/fake/StellarBlade")),
+            None,
+        );
+        let mut config = OptiScaler.default_config();
+        config.set("optiscaler_profile", serde_json::json!("community-dxgi"));
+        config.set("source_mode", serde_json::json!("goverlay_builds"));
+        config.set("goverlay_channel", serde_json::json!("edge"));
+        config.set(
+            "release_tag",
+            serde_json::json!("goverlay-edge:edge-0.9.12.0323"),
+        );
+        config.set("release_asset", serde_json::json!("optiscaler-edge.7z"));
+        config.set("proxy_dll", serde_json::json!("winmm.dll"));
+        config.set("dll_overrides", serde_json::json!("winmm,nvngx"));
+        config.set("copy_companion_files", serde_json::json!(false));
+        config.set("enable_optipatcher", serde_json::json!(false));
+        config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_INT8_402));
+        config.set("emulate_fp8", serde_json::json!(true));
+        config.set("spoof_dlss", serde_json::json!(true));
+        config.set(
+            "ini_overrides",
+            serde_json::json!({"Spoofing": {"Dxgi": "false"}}),
+        );
+
+        apply_game_defaults(&mut config, Some(&context));
+
+        assert_eq!(config.get_str("optiscaler_profile"), Some("community-dxgi"));
+        assert_eq!(config.get_str("source_mode"), Some("goverlay_builds"));
+        assert_eq!(config.get_str("goverlay_channel"), Some("edge"));
+        assert_eq!(
+            config.get_str("release_tag"),
+            Some("goverlay-edge:edge-0.9.12.0323")
+        );
+        assert_eq!(config.get_str("release_asset"), Some("optiscaler-edge.7z"));
+        assert_eq!(config.get_str("proxy_dll"), Some("winmm.dll"));
+        assert_eq!(config.get_str("dll_overrides"), Some("winmm,nvngx"));
+        assert!(!config.get_bool("copy_companion_files"));
+        assert!(!config.get_bool("enable_optipatcher"));
+        assert_eq!(config.get_str("fsr4_variant"), Some(FSR4_VARIANT_INT8_402));
+        assert!(config.get_bool("emulate_fp8"));
+        assert!(config.get_bool("spoof_dlss"));
+        assert_eq!(
+            config
+                .settings
+                .pointer("/ini_overrides/Spoofing/Dxgi")
+                .and_then(serde_json::Value::as_str),
+            Some("false")
+        );
+        assert_eq!(config.get_str("tested_optiscaler_version"), Some("0.9"));
+    }
+
+    #[test]
+    fn stellar_blade_game_defaults_preserve_existing_release_without_profile_marker() {
+        let context = ToolGameContext::from_parts(
+            "stellar-blade",
+            "Stellar Blade",
+            Some(PathBuf::from("/fake/StellarBlade")),
+            None,
+        );
+        let mut config = OptiScaler.default_config();
+        config.set("source_mode", serde_json::json!("github_release"));
+        config.set("release_tag", serde_json::json!("official:v0.9.11"));
+        config.set("release_asset", serde_json::json!("OptiScaler_0.9.11.7z"));
+
+        apply_game_defaults(&mut config, Some(&context));
+
+        assert_eq!(config.get_str("optiscaler_profile"), Some("community-dxgi"));
+        assert_eq!(config.get_str("source_mode"), Some("github_release"));
+        assert_eq!(config.get_str("release_tag"), Some("official:v0.9.11"));
+        assert_eq!(
+            config.get_str("release_asset"),
+            Some("OptiScaler_0.9.11.7z")
+        );
+        assert_eq!(config.get_str("proxy_dll"), Some("dxgi.dll"));
+        assert!(!config.get_bool("enable_optipatcher"));
+    }
+
+    #[test]
+    fn selecting_profile_after_custom_applies_metadata_only() {
+        let mut config = OptiScaler.default_config();
+        assert!(apply_profile_by_id(&mut config, "stellar-blade", "custom"));
+        assert_eq!(config.get_str("optiscaler_profile"), Some("custom"));
+        config.set("source_mode", serde_json::json!("local_dir"));
+        config.set("release_tag", serde_json::json!("custom-build"));
+        config.set("release_asset", serde_json::json!("CustomOptiScaler.7z"));
+        config.set("proxy_dll", serde_json::json!("winmm.dll"));
+        config.set("dll_overrides", serde_json::json!("winmm,nvngx"));
+        config.set("copy_companion_files", serde_json::json!(false));
+        config.set("enable_optipatcher", serde_json::json!(false));
+        config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_INT8_402));
+        config.set("emulate_fp8", serde_json::json!(true));
+        config.set("spoof_dlss", serde_json::json!(true));
+
+        assert!(apply_profile_by_id(
+            &mut config,
+            "stellar-blade",
+            "community-dxgi"
+        ));
+
+        assert_eq!(config.get_str("optiscaler_profile"), Some("community-dxgi"));
+        assert_eq!(config.get_str("source_mode"), Some("local_dir"));
+        assert_eq!(config.get_str("goverlay_channel"), Some("edge"));
+        assert_eq!(config.get_str("release_tag"), Some("custom-build"));
+        assert_eq!(config.get_str("release_asset"), Some("CustomOptiScaler.7z"));
+        assert_eq!(config.get_str("proxy_dll"), Some("winmm.dll"));
+        assert_eq!(config.get_str("dll_overrides"), Some("winmm,nvngx"));
+        assert!(!config.get_bool("copy_companion_files"));
+        assert!(!config.get_bool("enable_optipatcher"));
+        assert_eq!(config.get_str("fsr4_variant"), Some(FSR4_VARIANT_INT8_402));
+        assert!(config.get_bool("emulate_fp8"));
+        assert!(config.get_bool("spoof_dlss"));
+        assert_eq!(config.get_str("tested_optiscaler_version"), Some("0.9"));
+    }
+
+    #[test]
+    fn optiscaler_profile_metadata_does_not_change_settings() {
+        let profile = crate::optiscaler::OptiScalerProfile {
+            id: "test-profile",
+            name: "Test Profile",
+            source_url: "https://example.test/profile",
+            tested_optiscaler_version: "1.2.3",
+            source_mode: None,
+            goverlay_channel: None,
+            proxy_dll: "winmm.dll",
+            release_tag: Some("v1.2.3"),
+            release_asset: Some("OptiScaler.7z"),
+            wine_dll_overrides: &["winmm", "nvngx"],
+            copy_companion_files: false,
+            enable_optipatcher: true,
+            fsr4_variant: Some(FSR4_VARIANT_INT8_402),
+            emulate_fp8: true,
+            spoof_dlss: true,
+            ini_overrides: &[crate::optiscaler::OptiScalerIniOverride {
+                key: "Spoofing.Dxgi",
+                value: "false",
+            }],
+            notes: "Test notes",
+        };
+        let mut config = OptiScaler.default_config();
+        config.set("source_mode", serde_json::json!("local_dir"));
+        config.set("release_tag", serde_json::json!("custom-build"));
+        config.set("release_asset", serde_json::json!("CustomOptiScaler.7z"));
+        config.set("proxy_dll", serde_json::json!("dxgi.dll"));
+        config.set("dll_overrides", serde_json::json!("dxgi"));
+        config.set("copy_companion_files", serde_json::json!(true));
+        config.set("enable_optipatcher", serde_json::json!(false));
+        config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_LATEST_FP8));
+        config.set("emulate_fp8", serde_json::json!(false));
+        config.set("spoof_dlss", serde_json::json!(false));
+        config.set(
+            "ini_overrides",
+            serde_json::json!({"OptiScaler": {"Dxgi": "auto"}}),
+        );
+
+        apply_optiscaler_profile_metadata(&mut config, &profile);
+
+        assert_eq!(config.get_str("optiscaler_profile"), Some("test-profile"));
+        assert_eq!(config.get_str("source_mode"), Some("local_dir"));
+        assert_eq!(config.get_str("release_tag"), Some("custom-build"));
+        assert_eq!(config.get_str("release_asset"), Some("CustomOptiScaler.7z"));
+        assert_eq!(config.get_str("proxy_dll"), Some("dxgi.dll"));
+        assert_eq!(config.get_str("dll_overrides"), Some("dxgi"));
+        assert!(config.get_bool("copy_companion_files"));
+        assert!(!config.get_bool("enable_optipatcher"));
+        assert_eq!(
+            config.get_str("fsr4_variant"),
+            Some(FSR4_VARIANT_LATEST_FP8)
+        );
+        assert!(!config.get_bool("emulate_fp8"));
+        assert!(!config.get_bool("spoof_dlss"));
+        assert_eq!(
+            config
+                .settings
+                .pointer("/ini_overrides/OptiScaler/Dxgi")
+                .and_then(serde_json::Value::as_str),
+            Some("auto")
+        );
+        assert_eq!(config.get_str("tested_optiscaler_version"), Some("1.2.3"));
+        assert_eq!(
+            config.get_str("optiscaler_profile_source_url"),
+            Some("https://example.test/profile")
+        );
+    }
+
+    #[test]
+    fn optiscaler_release_selection_preserves_custom_profile_deployment() {
+        let mut config = OptiScaler.default_config();
+        config.set("optiscaler_profile", serde_json::json!("community-dxgi"));
+        config.set("proxy_dll", serde_json::json!("winmm.dll"));
+        config.set("dll_overrides", serde_json::json!("winmm,nvngx"));
+        config.set("copy_companion_files", serde_json::json!(false));
+        config.set("enable_optipatcher", serde_json::json!(false));
+        config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_INT8_402));
+        config.set("emulate_fp8", serde_json::json!(true));
+        config.set("spoof_dlss", serde_json::json!(true));
+        config.set(
+            "ini_overrides",
+            serde_json::json!({"Spoofing": {"Dxgi": "false"}}),
+        );
+
+        apply_optiscaler_release_selection(&mut config, "official:v0.9.11", "OptiScaler_0.9.11.7z");
+
+        assert_eq!(config.get_str("optiscaler_profile"), Some("community-dxgi"));
+        assert_eq!(config.get_str("source_mode"), Some("github_release"));
+        assert_eq!(config.get_str("release_tag"), Some("official:v0.9.11"));
+        assert_eq!(
+            config.get_str("release_asset"),
+            Some("OptiScaler_0.9.11.7z")
+        );
+        assert_eq!(config.get_str("proxy_dll"), Some("winmm.dll"));
+        assert_eq!(config.get_str("dll_overrides"), Some("winmm,nvngx"));
+        assert!(!config.get_bool("copy_companion_files"));
+        assert!(!config.get_bool("enable_optipatcher"));
+        assert_eq!(config.get_str("fsr4_variant"), Some(FSR4_VARIANT_INT8_402));
+        assert!(config.get_bool("emulate_fp8"));
+        assert!(config.get_bool("spoof_dlss"));
+        assert_eq!(
+            config
+                .settings
+                .pointer("/ini_overrides/Spoofing/Dxgi")
+                .and_then(serde_json::Value::as_str),
+            Some("false")
+        );
+    }
+
+    #[test]
     fn incompatible_existing_ini_triggers_reset_reason() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let new_ini = tmp.path().join("new.ini");
@@ -1498,6 +3310,78 @@ mod tests {
         assert_eq!(
             optiscaler_config_reset_reason(&state, &new_ini, &config).as_deref(),
             Some("schema mismatch")
+        );
+    }
+
+    fn release_fixture(tag: &str, asset_names: &[&str]) -> ToolReleaseSummary {
+        ToolReleaseSummary {
+            tag: tag.to_string(),
+            name: None,
+            published_at: None,
+            assets: asset_names
+                .iter()
+                .map(|name| ToolReleaseAsset {
+                    name: (*name).to_string(),
+                    download_url: format!("https://example.test/{name}"),
+                    size: 1,
+                })
+                .collect(),
+        }
+    }
+
+    fn release_fixture_with_date(
+        tag: &str,
+        asset_names: &[&str],
+        published_at: &str,
+    ) -> ToolReleaseSummary {
+        let mut release = release_fixture(tag, asset_names);
+        release.published_at = Some(published_at.to_string());
+        release
+    }
+
+    // ── set_ini_value ─────────────────────────────────────────────────
+
+    #[test]
+    fn set_ini_value_updates_existing_key_in_section() {
+        let content = "[OptiScaler]\nDxgi=auto\nLoadAsiPlugins=false\n";
+        let updated = set_ini_value(content, "OptiScaler.Dxgi", "manual");
+        assert!(updated.contains("Dxgi=manual"));
+        assert!(updated.contains("LoadAsiPlugins=false"));
+    }
+
+    #[test]
+    fn set_ini_value_appends_section_when_missing() {
+        let updated = set_ini_value("", "Menu.Scale", "1.25");
+        assert!(updated.contains("[Menu]"));
+        assert!(updated.contains("Scale=1.25"));
+    }
+
+    #[test]
+    fn set_ini_value_returns_content_unchanged_when_key_has_no_section() {
+        let content = "[OptiScaler]\nDxgi=auto\n";
+        let updated = set_ini_value(content, "no_section_prefix", "x");
+        assert_eq!(updated, content, "malformed key should not mutate content");
+    }
+
+    // ── relative_to_game ──────────────────────────────────────────────
+
+    #[test]
+    fn relative_to_game_strips_game_prefix() {
+        let game = PathBuf::from("/games/skyrim");
+        let dest = PathBuf::from("/games/skyrim/Data/SKSE/plugins/foo.dll");
+        let rel = relative_to_game(&game, &dest).expect("strips prefix");
+        assert_eq!(rel, PathBuf::from("Data/SKSE/plugins/foo.dll"));
+    }
+
+    #[test]
+    fn relative_to_game_errors_when_dest_outside_game_dir() {
+        let game = PathBuf::from("/games/skyrim");
+        let dest = PathBuf::from("/elsewhere/foo.dll");
+        let err = relative_to_game(&game, &dest).expect_err("must fail");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("/elsewhere/foo.dll") && msg.contains("/games/skyrim"),
+            "error must mention both paths: {msg}"
         );
     }
 }

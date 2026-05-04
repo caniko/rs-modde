@@ -14,6 +14,33 @@ fn visible_buttons_do_not_use_raw_message_handlers() {
     );
 }
 
+#[test]
+fn described_button_path_uses_app_level_hover_toasts() {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let action_button = fs::read_to_string(manifest_dir.join("src/action_button.rs"))
+        .expect("read action_button source");
+    let app = fs::read_to_string(manifest_dir.join("src/app.rs")).expect("read app source");
+
+    assert!(
+        action_button.contains("mouse_area(button)"),
+        "DescribedButtonExt must wrap buttons in mouse_area for app-level hover lifecycle messages"
+    );
+    assert!(
+        !action_button.contains("tooltip("),
+        "DescribedButtonExt must not use iced::tooltip; tooltips can be clipped by scrollables"
+    );
+    assert!(
+        action_button.contains("Message::ButtonHoverStarted")
+            && action_button.contains("Message::ButtonHoverEnded"),
+        "DescribedButtonExt must emit hover lifecycle messages"
+    );
+    assert!(
+        app.contains("BUTTON_HOVER_TOAST_DELAY: Duration = Duration::from_secs(2)")
+            && app.contains("Message::ButtonHoverElapsed"),
+        "Modde must own the delayed 2 second hover toast lifecycle"
+    );
+}
+
 fn collect_raw_button_handlers(path: &Path, offenders: &mut Vec<String>) {
     if path.is_dir() {
         for entry in fs::read_dir(path).expect("read modde-ui src directory") {

@@ -10,6 +10,32 @@ use anyhow::Result;
 
 use modde_core::collision::{CollisionClassifier, CollisionSeverity};
 
+use crate::policies::CollisionPolicy;
+
+const CYBERPUNK_COLLISION_SEVERITIES: &[(&str, CollisionSeverity)] = &[
+    ("reds", CollisionSeverity::Dangerous),
+    ("lua", CollisionSeverity::Dangerous),
+    ("tweak", CollisionSeverity::Dangerous),
+    ("xl", CollisionSeverity::Dangerous),
+    ("yaml", CollisionSeverity::Dangerous),
+    ("yml", CollisionSeverity::Dangerous),
+    ("dll", CollisionSeverity::Dangerous),
+    ("ini", CollisionSeverity::Config),
+    ("cfg", CollisionSeverity::Config),
+    ("json", CollisionSeverity::Config),
+    ("toml", CollisionSeverity::Config),
+    ("archive", CollisionSeverity::Cosmetic),
+    ("png", CollisionSeverity::Cosmetic),
+    ("jpg", CollisionSeverity::Cosmetic),
+    ("dds", CollisionSeverity::Cosmetic),
+    ("tga", CollisionSeverity::Cosmetic),
+];
+
+const CYBERPUNK_COLLISION_POLICY: CollisionPolicy = CollisionPolicy {
+    archive_extensions: &[],
+    severities: CYBERPUNK_COLLISION_SEVERITIES,
+};
+
 /// Collision classifier for Cyberpunk 2077.
 pub struct CyberpunkCollisionClassifier;
 
@@ -20,23 +46,11 @@ impl CollisionClassifier for CyberpunkCollisionClassifier {
     }
 
     fn classify_severity(&self, file_path: &str) -> CollisionSeverity {
-        let ext = file_path.rsplit('.').next().unwrap_or("").to_lowercase();
-
-        match ext.as_str() {
-            // Scripts, tweaks, DLLs — save-breaking / dangerous
-            "reds" | "lua" | "tweak" | "xl" | "yaml" | "yml" | "dll" => {
-                CollisionSeverity::Dangerous
-            }
-            // Config files
-            "ini" | "cfg" | "json" | "toml" => CollisionSeverity::Config,
-            // Archives, textures — cosmetic
-            "archive" | "png" | "jpg" | "dds" | "tga" => CollisionSeverity::Cosmetic,
-            _ => CollisionSeverity::Unknown,
-        }
+        CYBERPUNK_COLLISION_POLICY.classify_severity(file_path)
     }
 
     fn archive_extensions(&self) -> &[&str] {
         // Cyberpunk .archive files cannot be indexed yet
-        &[]
+        CYBERPUNK_COLLISION_POLICY.archive_extensions
     }
 }

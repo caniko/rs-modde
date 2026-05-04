@@ -10,7 +10,8 @@ use anyhow::Result;
 
 use smallvec::SmallVec;
 
-use crate::traits::{GamePlugin, ModClassifyConfig, ModSafety, classify_mod_by_content};
+use crate::policies::{BareLayoutPolicy, ContentPolicy, DllOverridePolicy, StagingDllSearch};
+use crate::traits::{ContentCategory, GamePlugin, ModSafety};
 
 pub struct Cyberpunk2077;
 
@@ -29,10 +30,32 @@ const CYBERPUNK_SAVE_BREAKING_DIRS: &[&str] = &[
 /// Extensions that are purely cosmetic.
 const CYBERPUNK_COSMETIC_EXT: &[&str] = &["archive", "xl", "png", "jpg", "dds", "tga", "ini"];
 
-const CYBERPUNK_CLASSIFY_CONFIG: ModClassifyConfig = ModClassifyConfig {
+const CYBERPUNK_CONTENT_CATEGORIES: &[(&str, ContentCategory)] = &[
+    ("archive", ContentCategory::Archive),
+    ("dll", ContentCategory::Binary),
+    ("so", ContentCategory::Binary),
+    ("reds", ContentCategory::Script),
+    ("lua", ContentCategory::Script),
+    ("tweak", ContentCategory::Script),
+    ("xl", ContentCategory::Script),
+    ("yaml", ContentCategory::Config),
+    ("yls", ContentCategory::Config),
+    ("yml", ContentCategory::Config),
+    ("ini", ContentCategory::Config),
+    ("json", ContentCategory::Config),
+    ("toml", ContentCategory::Config),
+    ("xml", ContentCategory::Config),
+    ("dds", ContentCategory::Texture),
+    ("png", ContentCategory::Texture),
+    ("tga", ContentCategory::Texture),
+    ("jpg", ContentCategory::Texture),
+];
+
+const CYBERPUNK_CONTENT_POLICY: ContentPolicy = ContentPolicy {
     save_breaking_ext: CYBERPUNK_SAVE_BREAKING_EXT,
     cosmetic_ext: CYBERPUNK_COSMETIC_EXT,
     save_breaking_dirs: CYBERPUNK_SAVE_BREAKING_DIRS,
+    categories: CYBERPUNK_CONTENT_CATEGORIES,
 };
 
 /// Windows system DLLs commonly hijacked by mod frameworks as proxy/hook DLLs.
@@ -47,6 +70,19 @@ const KNOWN_PROXY_DLLS: &[&str] = &[
     "winhttp",   // Some mod loaders
     "xinput1_3", // Controller hook mods
 ];
+
+const CYBERPUNK_DLL_POLICY: DllOverridePolicy = DllOverridePolicy {
+    proxy_dlls: KNOWN_PROXY_DLLS,
+    staging_search: StagingDllSearch::NestedModsBinX64,
+};
+
+const CYBERPUNK_BARE_LAYOUT_POLICY: BareLayoutPolicy = BareLayoutPolicy {
+    root_dirs: &[
+        "r6", "archive", "archives", "bin", "engine", "mods", "red4ext",
+    ],
+    root_file_exts: &[],
+    case_insensitive_dirs: false,
+};
 
 impl GamePlugin for Cyberpunk2077 {
     fn game_id(&self) -> &'static str {
@@ -108,57 +144,24 @@ impl GamePlugin for Cyberpunk2077 {
         None
     }
 
+    fn supports_save_profiles(&self) -> bool {
+        true
+    }
+
     fn classify_mod(&self, mod_dir: &Path) -> ModSafety {
-        classify_mod_by_content(mod_dir, &CYBERPUNK_CLASSIFY_CONFIG)
+        CYBERPUNK_CONTENT_POLICY.classify_mod(mod_dir)
+    }
+
+    fn classify_extension(&self, ext: &str) -> ContentCategory {
+        CYBERPUNK_CONTENT_POLICY.classify_extension(ext)
     }
 
     fn wine_dll_overrides(&self, game_dir: &Path) -> SmallVec<[String; 4]> {
-        let exe_dir = self.executable_dir(game_dir);
-        let mut overrides = SmallVec::new();
-
-        for &dll_name in KNOWN_PROXY_DLLS {
-            let dll_path = exe_dir.join(format!("{dll_name}.dll"));
-            if dll_path.exists() {
-                overrides.push(dll_name.to_string());
-            }
-        }
-
-        overrides
+        CYBERPUNK_DLL_POLICY.from_executable_dir(&self.executable_dir(game_dir))
     }
 
     fn wine_dll_overrides_from_staging(&self, staging: &Path) -> SmallVec<[String; 4]> {
-        let mut overrides = SmallVec::new();
-        let mods_dir = staging.join("mods");
-        if !mods_dir.is_dir() {
-            return overrides;
-        }
-
-        for entry in std::fs::read_dir(&mods_dir).into_iter().flatten().flatten() {
-            if !entry.file_type().is_ok_and(|t| t.is_dir()) {
-                continue;
-            }
-
-            let mod_bin_x64 = entry.path().join("bin/x64");
-            if !mod_bin_x64.is_dir() {
-                continue;
-            }
-
-            for dll_entry in std::fs::read_dir(&mod_bin_x64)
-                .into_iter()
-                .flatten()
-                .flatten()
-            {
-                let name = dll_entry.file_name().to_string_lossy().to_lowercase();
-                if let Some(stem) = name.strip_suffix(".dll")
-                    && KNOWN_PROXY_DLLS.contains(&stem)
-                    && !overrides.contains(&stem.to_string())
-                {
-                    overrides.push(stem.to_string());
-                }
-            }
-        }
-
-        overrides
+        CYBERPUNK_DLL_POLICY.from_staging(staging)
     }
 
     fn executable_dir(&self, install: &Path) -> PathBuf {
@@ -209,13 +212,6 @@ impl GamePlugin for Cyberpunk2077 {
         // If any of them exist at the extraction root, treat the archive
         // as a bare extract — the deploy step will symlink into
         // `<install>/mods/<name>/` via the REDmod loader.
-        for name in [
-            "r6", "archive", "archives", "bin", "engine", "mods", "red4ext",
-        ] {
-            if extracted_dir.join(name).is_dir() {
-                return true;
-            }
-        }
-        false
+        CYBERPUNK_BARE_LAYOUT_POLICY.recognizes(extracted_dir)
     }
 }

@@ -201,7 +201,7 @@ mod tests {
 
     #[test]
     fn challenge_page_has_no_mirrors() {
-        let html = r#"<html><head><title>Just a moment...</title></head></html>"#;
+        let html = r"<html><head><title>Just a moment...</title></head></html>";
         let links = extract_html_mirror_links(
             html,
             "https://www.moddb.com/downloads/start/1/all",

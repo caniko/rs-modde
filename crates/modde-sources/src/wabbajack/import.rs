@@ -151,7 +151,7 @@ mod tests {
         let manifest = manifest_for(b"archive bytes", "archive.7z");
         let store = temp.path().join("store");
 
-        import_archives(&manifest, &store, &[archive.clone()])
+        import_archives(&manifest, &store, std::slice::from_ref(&archive))
             .await
             .unwrap();
         let results = import_archives(&manifest, &store, &[archive])

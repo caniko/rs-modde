@@ -7,123 +7,35 @@
 //! click/input interactions produce the right `Message` variants.
 
 use iced_test::core::Point;
+use iced_test::selector;
 use iced_test::simulator::{click, simulator};
 use modde_ui::app::{
-    Message, SettingsState, ToolReleaseSupport, ToolState, ToolUiEntry, VerifyResults, VerifyState,
+    ExecutableUiEntry, Message, SettingsState, ToolReleaseSupport, ToolState, ToolUiEntry,
     WabbajackInstallerState,
 };
+use modde_ui::semantics;
 use modde_ui::views::data_tab::DataTabState;
-use modde_ui::views::diagnostics::{DiagnosticEntry, DiagnosticSeverity, DiagnosticsState};
+use modde_ui::views::diagnostics::{
+    DiagnosticEntry, DiagnosticSeverity, DiagnosticsReport, DiagnosticsState, IntegritySummary,
+};
 use modde_ui::views::downloads::{DownloadState, DownloadTask};
-use smallvec::SmallVec;
 use std::path::PathBuf;
 
-// ─── Verify View ──────────────────────────────────────────────
-
-#[test]
-fn verify_idle_shows_run_button() {
-    let mut ui = simulator(modde_ui::views::verify::view(&VerifyState::Idle));
-    ui.find("Run Verify")
-        .expect("should find 'Run Verify' button");
-}
-
-#[test]
-fn verify_idle_shows_instructions() {
-    let mut ui = simulator(modde_ui::views::verify::view(&VerifyState::Idle));
-    ui.find("Click 'Run Verify' to check installed mod integrity.")
-        .expect("should show instructions");
-}
-
-#[test]
-fn verify_running_shows_running_label() {
-    let mut ui = simulator(modde_ui::views::verify::view(&VerifyState::Running));
-    ui.find("Running...")
-        .expect("should find 'Running...' label");
-}
-
-#[test]
-fn verify_click_run_emits_message() {
-    let mut ui = simulator(modde_ui::views::verify::view(&VerifyState::Idle));
-    ui.click("Run Verify").expect("should click 'Run Verify'");
-    let messages: Vec<_> = ui.into_messages().collect();
-    assert!(
-        messages.iter().any(|m| matches!(m, Message::RunVerify)),
-        "clicking 'Run Verify' should emit Message::RunVerify, got: {messages:?}",
-    );
-}
-
-#[test]
-fn verify_complete_shows_ok_count() {
-    let results = VerifyResults {
-        missing_mods: SmallVec::new(),
-        hash_mismatches: vec![],
-        broken_symlinks: SmallVec::new(),
-        ok_count: 42,
-    };
-    let state = VerifyState::Complete(results);
-    let mut ui = simulator(modde_ui::views::verify::view(&state));
-    ui.find("42 file(s) OK").expect("should show ok count");
-    ui.find("All files verified successfully!")
-        .expect("should show success message");
-}
-
-#[test]
-fn verify_complete_shows_broken_symlinks() {
-    let results = VerifyResults {
-        missing_mods: SmallVec::new(),
-        hash_mismatches: vec![],
-        broken_symlinks: smallvec::smallvec![PathBuf::from("/game/broken_link.esp")],
-        ok_count: 10,
-    };
-    let state = VerifyState::Complete(results);
-    let mut ui = simulator(modde_ui::views::verify::view(&state));
-    ui.find("1 broken symlink(s)")
-        .expect("should show broken symlink count");
-    ui.find("/game/broken_link.esp")
-        .expect("should show the broken path");
-}
-
-#[test]
-fn verify_complete_shows_hash_mismatches() {
-    let results = VerifyResults {
-        missing_mods: SmallVec::new(),
-        hash_mismatches: vec![(
-            PathBuf::from("/game/data.bsa"),
-            "aaa".to_string(),
-            "bbb".to_string(),
-        )],
-        broken_symlinks: SmallVec::new(),
-        ok_count: 5,
-    };
-    let state = VerifyState::Complete(results);
-    let mut ui = simulator(modde_ui::views::verify::view(&state));
-    ui.find("1 hash mismatch(es)")
-        .expect("should show mismatch count");
-}
-
-#[test]
-fn verify_complete_shows_missing_mods() {
-    let results = VerifyResults {
-        missing_mods: smallvec::smallvec!["SkyUI".to_string(), "USSEP".to_string()],
-        hash_mismatches: vec![],
-        broken_symlinks: SmallVec::new(),
-        ok_count: 0,
-    };
-    let state = VerifyState::Complete(results);
-    let mut ui = simulator(modde_ui::views::verify::view(&state));
-    ui.find("2 missing mod(s)")
-        .expect("should show missing mod count");
-    ui.find("SkyUI").expect("should list SkyUI");
-    ui.find("USSEP").expect("should list USSEP");
+fn by_test_id(test_id: &str) -> impl iced_test::Selector<Output = iced_test::selector::Target> {
+    selector::id(semantics::widget_id(test_id.to_string()))
 }
 
 // ─── Settings View ────────────────────────────────────────────
 
 fn default_settings_state() -> SettingsState {
     SettingsState {
-        nexus_api_key: String::new(),
-        game_path: None,
+        nexus_api_key_draft: String::new(),
+        nexus_api_key_visible: false,
+        nexus_api_key_source: None,
+        nexus_config_key_exists: false,
+        game_install_paths: Vec::new(),
         download_dir: None,
+        effective_download_dir: PathBuf::new(),
         has_stock_snapshot: false,
         theme_name: "Dark".to_string(),
         nexus_status: None,
@@ -140,6 +52,41 @@ fn settings_shows_sections() {
     ui.find("Stock Game Snapshot")
         .expect("stock snapshot section");
     ui.find("Theme").expect("theme section");
+}
+
+#[test]
+fn settings_hides_nexus_key_by_default_and_can_toggle() {
+    let mut ui = simulator(modde_ui::views::settings::view(default_settings_state()));
+    ui.find("Show").expect("should show reveal button");
+    ui.click("Show").expect("should click 'Show'");
+    let messages: Vec<_> = ui.into_messages().collect();
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::ToggleNexusApiKeyVisibility)),
+        "should emit ToggleNexusApiKeyVisibility, got: {messages:?}",
+    );
+}
+
+#[test]
+fn settings_click_replace_and_remove_emit_messages() {
+    let mut ui = simulator(modde_ui::views::settings::view(default_settings_state()));
+    ui.click("Replace").expect("should click 'Replace'");
+    ui.click("Remove modde config")
+        .expect("should click 'Remove modde config'");
+    let messages: Vec<_> = ui.into_messages().collect();
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::ReplaceNexusApiKey)),
+        "should emit ReplaceNexusApiKey, got: {messages:?}",
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::RemoveNexusConfigKey)),
+        "should emit RemoveNexusConfigKey, got: {messages:?}",
+    );
 }
 
 #[test]
@@ -213,6 +160,7 @@ fn wabbajack_shows_generated_hm_snippet_preview() {
         &state,
         &manifest,
         &available_games,
+        Some("skyrim-se"),
     ));
 
     ui.find("programs.modde.profiles.lotf = {\n  game = \"skyrim-se\";\n};\n")
@@ -355,6 +303,7 @@ macro_rules! sidebar_test {
                 &profiles,
                 &active,
                 $depth,
+                true,
                 None,
                 None,
             ));
@@ -371,7 +320,6 @@ sidebar_test!(
     |ui| {
         ui.find("Game").expect("group: Game");
         ui.find("Install").expect("group: Install");
-        ui.find("Maintenance").expect("group: Maintenance");
         ui.find("General").expect("group: General");
         ui.find("Mod List").expect("nav: Mod List");
         ui.find("Saves").expect("nav: Saves");
@@ -382,18 +330,20 @@ sidebar_test!(
         ui.find("Data Files").expect("nav: Data Files");
         ui.find("Diagnostics").expect("nav: Diagnostics");
         ui.find("Tools").expect("nav: Tools");
-        ui.find("Verify").expect("nav: Verify");
+        ui.find("Executables").expect("nav: Executables");
         ui.find("Settings").expect("nav: Settings");
+        assert!(ui.find("Maintenance").is_err(), "Maintenance group is gone");
+        assert!(
+            ui.find("Verify").is_err(),
+            "Verify nav item is unified into Diagnostics"
+        );
     }
 );
 
 #[test]
 fn sidebar_default_collapsed_groups_hide_inactive_items() {
     let view = modde_ui::app::View::ModList;
-    let collapsed_groups = std::collections::HashSet::from([
-        modde_ui::app::SidebarGroup::Maintenance,
-        modde_ui::app::SidebarGroup::General,
-    ]);
+    let collapsed_groups = std::collections::HashSet::from([modde_ui::app::SidebarGroup::General]);
     let profiles = Vec::new();
     let active = None;
     let mut ui = simulator(modde_ui::views::sidebar::view(
@@ -402,16 +352,15 @@ fn sidebar_default_collapsed_groups_hide_inactive_items() {
         &profiles,
         &active,
         0,
+        true,
         None,
         None,
     ));
 
     ui.find("Mod List")
         .expect("active game item remains visible");
-    assert!(
-        ui.find("Diagnostics").is_err(),
-        "collapsed inactive Maintenance item should be hidden"
-    );
+    ui.find("Diagnostics")
+        .expect("Diagnostics remains visible in the Game group");
     assert!(
         ui.find("Settings").is_err(),
         "collapsed inactive General item should be hidden"
@@ -420,9 +369,8 @@ fn sidebar_default_collapsed_groups_hide_inactive_items() {
 
 #[test]
 fn sidebar_collapsed_active_group_still_shows_active_view() {
-    let view = modde_ui::app::View::Verify;
-    let collapsed_groups =
-        std::collections::HashSet::from([modde_ui::app::SidebarGroup::Maintenance]);
+    let view = modde_ui::app::View::Settings;
+    let collapsed_groups = std::collections::HashSet::from([modde_ui::app::SidebarGroup::General]);
     let profiles = Vec::new();
     let active = None;
     let mut ui = simulator(modde_ui::views::sidebar::view(
@@ -431,16 +379,13 @@ fn sidebar_collapsed_active_group_still_shows_active_view() {
         &profiles,
         &active,
         0,
+        true,
         None,
         None,
     ));
 
-    ui.find("Verify")
+    ui.find("Settings")
         .expect("active collapsed item remains visible");
-    assert!(
-        ui.find("Diagnostics").is_err(),
-        "inactive sibling should remain hidden in a collapsed group"
-    );
 }
 
 #[test]
@@ -455,27 +400,58 @@ fn sidebar_group_toggle_emits_message() {
         &profiles,
         &active,
         0,
+        true,
         None,
         None,
     ));
 
-    ui.click("Maintenance")
-        .expect("should click Maintenance group header");
+    ui.click("Game").expect("should click Game group header");
     let messages: Vec<_> = ui.into_messages().collect();
     assert!(
         messages.iter().any(|m| matches!(
             m,
-            Message::ToggleSidebarGroup(modde_ui::app::SidebarGroup::Maintenance)
+            Message::ToggleSidebarGroup(modde_ui::app::SidebarGroup::Game)
         )),
-        "should emit ToggleSidebarGroup(Maintenance), got: {messages:?}",
+        "should emit ToggleSidebarGroup(Game), got: {messages:?}",
+    );
+}
+
+#[test]
+fn sidebar_hides_inactive_saves_when_save_profiles_are_unsupported() {
+    let view = modde_ui::app::View::ModList;
+    let collapsed_groups = std::collections::HashSet::new();
+    let profiles = Vec::new();
+    let active = None;
+    let mut ui = simulator(modde_ui::views::sidebar::view(
+        &view,
+        &collapsed_groups,
+        &profiles,
+        &active,
+        0,
+        false,
+        None,
+        None,
+    ));
+
+    assert!(
+        ui.find("Saves").is_err(),
+        "inactive Saves item should be hidden for games without save profiles"
     );
 }
 
 #[test]
 fn browse_nexus_tabs_keep_existing_messages() {
-    let state = modde_ui::views::browse_nexus::NexusBrowseState::default();
+    let state = modde_ui::views::browse_nexus::NexusBrowseState {
+        selected_game_id: Some("skyrim-se".to_string()),
+        ..Default::default()
+    };
+    let games = vec![
+        ("skyrim-se".to_string(), "Skyrim SE".to_string()),
+        ("fallout4".to_string(), "Fallout 4".to_string()),
+    ];
     let mut ui = simulator(modde_ui::views::browse_nexus::view(
         &state,
+        &games,
         Some("skyrimspecialedition".to_string()),
     ));
 
@@ -491,6 +467,28 @@ fn browse_nexus_tabs_keep_existing_messages() {
 }
 
 #[test]
+fn browse_nexus_with_supported_game_renders_browse_surface() {
+    let state = modde_ui::views::browse_nexus::NexusBrowseState {
+        selected_game_id: Some("fallout4".to_string()),
+        ..Default::default()
+    };
+    let games = vec![
+        ("skyrim-se".to_string(), "Skyrim SE".to_string()),
+        ("fallout4".to_string(), "Fallout 4".to_string()),
+        ("stellar-blade".to_string(), "Stellar Blade".to_string()),
+    ];
+    let mut ui = simulator(modde_ui::views::browse_nexus::view(
+        &state,
+        &games,
+        Some("fallout4".to_string()),
+    ));
+
+    ui.find("Browse Nexus").expect("should show title");
+    ui.find("Search Nexus mods & collections…")
+        .expect("should show search input");
+}
+
+#[test]
 fn wabbajack_tabs_keep_existing_messages() {
     let state = WabbajackInstallerState::default();
     let manifest = None;
@@ -499,6 +497,7 @@ fn wabbajack_tabs_keep_existing_messages() {
         &state,
         &manifest,
         &available_games,
+        Some("skyrim-se"),
     ));
 
     ui.click("Manual").expect("should click Manual tab");
@@ -511,6 +510,23 @@ fn wabbajack_tabs_keep_existing_messages() {
         "should emit WabbajackTabChanged(Manual), got: {messages:?}",
     );
 }
+
+sidebar_test!(
+    sidebar_click_executables_emits_switch_view,
+    profiles = vec![],
+    active = None,
+    depth = 0,
+    |ui| {
+        ui.click("Executables").expect("should click 'Executables'");
+        let messages: Vec<_> = ui.into_messages().collect();
+        assert!(
+            messages
+                .iter()
+                .any(|m| matches!(m, Message::SwitchView(modde_ui::app::View::Executables))),
+            "should emit SwitchView(Executables), got: {messages:?}",
+        );
+    }
+);
 
 sidebar_test!(
     sidebar_click_settings_emits_switch_view,
@@ -652,6 +668,19 @@ fn data_tab_shows_conflict_rows_and_count() {
 }
 
 #[test]
+fn data_tab_reports_missing_store_mods_when_empty() {
+    let state = DataTabState {
+        missing_store_mod_count: 452,
+        ..Default::default()
+    };
+    let conflicts = Vec::new();
+
+    let mut ui = simulator(modde_ui::views::data_tab::view(&state, &conflicts));
+    ui.find("452 enabled mod(s) are missing from the store; conflict data is incomplete.")
+        .expect("should show incomplete conflict data message");
+}
+
+#[test]
 fn diagnostics_idle_click_run_emits_message() {
     let mut ui = simulator(modde_ui::views::diagnostics::view(&DiagnosticsState::Idle));
     ui.find("Diagnostics").expect("should show title");
@@ -668,20 +697,32 @@ fn diagnostics_idle_click_run_emits_message() {
 
 #[test]
 fn diagnostics_complete_shows_summary_and_findings() {
-    let state = DiagnosticsState::Complete(vec![
-        DiagnosticEntry {
-            severity: DiagnosticSeverity::Error,
-            message: "Missing master: Update.esm".to_string(),
+    let state = DiagnosticsState::Complete(DiagnosticsReport {
+        profile_name: "test-profile".to_string(),
+        game_id: "skyrim-se".to_string(),
+        entries: vec![
+            DiagnosticEntry {
+                severity: DiagnosticSeverity::Error,
+                message: "Missing master: Update.esm".to_string(),
+            },
+            DiagnosticEntry {
+                severity: DiagnosticSeverity::Warning,
+                message: "Loose file conflict detected".to_string(),
+            },
+        ],
+        integrity: IntegritySummary {
+            ok_count: 42,
+            broken_symlinks: vec![PathBuf::from("/game/broken_link.esp")],
         },
-        DiagnosticEntry {
-            severity: DiagnosticSeverity::Warning,
-            message: "Loose file conflict detected".to_string(),
-        },
-    ]);
+    });
 
     let mut ui = simulator(modde_ui::views::diagnostics::view(&state));
-    ui.find("1 error(s), 1 warning(s), 0 info(s)")
+    ui.find("test-profile (skyrim-se) - 1 error(s), 1 warning(s), 0 info(s), 1 broken symlink(s)")
         .expect("should show diagnostics summary");
+    ui.find("Integrity: 42 staged file(s) OK, 1 broken symlink(s)")
+        .expect("should show integrity summary");
+    ui.find("/game/broken_link.esp")
+        .expect("should show broken symlink path");
     ui.find("Missing master: Update.esm")
         .expect("should show error finding");
     ui.find("Loose file conflict detected")
@@ -709,6 +750,10 @@ fn tools_view_shows_entries_and_actions() {
     refresh_ui
         .find("Applied successfully")
         .expect("should show tool status");
+    assert!(
+        refresh_ui.find("Executables").is_err(),
+        "executables should not render inside Tools view",
+    );
     refresh_ui.click("Refresh").expect("should click Refresh");
     let refresh_messages: Vec<_> = refresh_ui.into_messages().collect();
     assert!(
@@ -740,16 +785,94 @@ fn tools_view_shows_entries_and_actions() {
 }
 
 #[test]
+fn tools_view_shows_loading_state_with_existing_entries() {
+    let mut state = sample_tools_state("reshade");
+    state.loading = true;
+
+    let mut ui = simulator(modde_ui::views::tools::view(&state));
+
+    ui.find("Loading tools...")
+        .expect("loading status should render");
+    ui.find("ReShade")
+        .expect("existing tool entries should remain visible while loading");
+}
+
+#[test]
+fn tools_actions_disable_while_loading() {
+    let mut state = sample_tools_state("reshade");
+    state.loading = true;
+
+    let mut refresh_ui = simulator(modde_ui::views::tools::view(&state));
+    refresh_ui
+        .click("Refresh")
+        .expect("refresh button remains visible");
+    let messages: Vec<_> = refresh_ui.into_messages().collect();
+    assert!(
+        !messages.iter().any(|m| matches!(m, Message::RefreshTools)),
+        "loading refresh should not emit RefreshTools, got: {messages:?}",
+    );
+
+    let mut apply_ui = simulator(modde_ui::views::tools::view(&state));
+    apply_ui
+        .click("Apply")
+        .expect("loading apply button remains visible");
+    let messages: Vec<_> = apply_ui.into_messages().collect();
+    assert!(
+        !messages
+            .iter()
+            .any(|m| matches!(m, Message::ApplyTool(tool_id) if tool_id == "reshade")),
+        "loading apply should not emit ApplyTool, got: {messages:?}",
+    );
+
+    let mut revert_ui = simulator(modde_ui::views::tools::view(&state));
+    revert_ui
+        .click("Revert")
+        .expect("revert button remains visible");
+    let messages: Vec<_> = revert_ui.into_messages().collect();
+    assert!(
+        !messages
+            .iter()
+            .any(|m| matches!(m, Message::RevertTool(tool_id) if tool_id == "reshade")),
+        "loading revert should not emit RevertTool, got: {messages:?}",
+    );
+}
+
+#[test]
 fn tools_view_shows_registered_tool_tabs_including_proton() {
     let state = ToolState {
         active_tool_id: Some("mangohud".to_string()),
         game_label: Some("Skyrim SE".to_string()),
         game_dir_configured: true,
+        loading: false,
+        load_error: None,
+        load_generation: 0,
+        show_advanced_settings: false,
+        active_operations: std::collections::HashSet::new(),
+        tool_option_catalog: std::collections::HashMap::from([
+            (
+                "optiscaler.release_tag".to_string(),
+                vec!["v1.0.0".to_string()],
+            ),
+            (
+                "optiscaler.release_asset".to_string(),
+                vec!["OptiScaler.zip".to_string()],
+            ),
+            (
+                "proton.selected_version".to_string(),
+                vec!["latest".to_string()],
+            ),
+        ]),
         optiscaler_releases: Vec::new(),
-        optiscaler_release_tags: vec!["v1.0.0".to_string()],
-        optiscaler_release_assets: vec!["OptiScaler.zip".to_string()],
         optiscaler_releases_loading: false,
-        proton_versions: vec!["latest".to_string()],
+        proton_versions_loading: false,
+        executables: Vec::new(),
+        executables_loading: false,
+        executables_load_error: None,
+        executables_load_generation: 0,
+        executable_draft: Default::default(),
+        executable_editor_open: false,
+        executable_error: None,
+        active_executable_operations: std::collections::HashSet::new(),
         entries: vec![
             sample_tool_entry("mangohud", "MangoHud"),
             sample_tool_entry("vkbasalt", "vkBasalt"),
@@ -779,11 +902,109 @@ fn tools_view_shows_registered_tool_tabs_including_proton() {
 }
 
 #[test]
+fn tools_optiscaler_scrollable_has_stable_test_id() {
+    let mut state = sample_tools_state("optiscaler");
+    state.game_dir_configured = true;
+    state.entries = vec![ToolUiEntry {
+        has_file_patching: true,
+        optiscaler_state: Some("partially managed".to_string()),
+        optiscaler_latest_backup: Some("/tmp/backup".to_string()),
+        optiscaler_detected_files: 2,
+        ..sample_tool_entry("optiscaler", "OptiScaler")
+    }];
+
+    let mut ui = simulator(modde_ui::views::tools::view(&state));
+
+    ui.find(by_test_id("tools.optiscaler.scroll"))
+        .expect("OptiScaler scrollable should have a stable test id");
+    ui.find(by_test_id("tools.optiscaler.adopt"))
+        .expect("Adopt button should have a stable test id");
+    ui.find(by_test_id("tools.optiscaler.restore_backup"))
+        .expect("Restore backup button should have a stable test id");
+    ui.find(by_test_id("tools.optiscaler.reset_config"))
+        .expect("Reset config button should have a stable test id");
+}
+
+#[test]
+fn executables_view_renders_configured_executables() {
+    let mut state = sample_tools_state("reshade");
+    state.executables = vec![ExecutableUiEntry {
+        name: "xEdit".to_string(),
+        executable_path: "/tools/SSEEdit.exe".to_string(),
+        arguments: "-IKnowWhatImDoing".to_string(),
+        working_dir: "/games/skyrim".to_string(),
+        environment: "WINESYNC=1".to_string(),
+        wine_dll_overrides: "dinput8=n,b".to_string(),
+        output_mod: "xedit-output".to_string(),
+        enabled: true,
+    }];
+
+    let mut ui = simulator(modde_ui::views::executables::view(&state));
+    ui.find("Executables - Skyrim SE")
+        .expect("executables title");
+    ui.find("Executables").expect("executables section");
+    ui.find("xEdit").expect("saved executable name");
+    ui.find("/tools/SSEEdit.exe")
+        .expect("saved executable path");
+    ui.find(
+        "args: -IKnowWhatImDoing | cwd: /games/skyrim | dll: dinput8=n,b | output: xedit-output",
+    )
+    .expect("saved executable metadata");
+
+    ui.click("Run").expect("run button");
+    let messages: Vec<_> = ui.into_messages().collect();
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::RunExecutable(name) if name == "xEdit")),
+        "should emit RunExecutable(xEdit), got: {messages:?}",
+    );
+}
+
+#[test]
+fn executables_view_empty_form_emits_save() {
+    let state = sample_tools_state("reshade");
+    let mut ui = simulator(modde_ui::views::executables::view(&state));
+
+    ui.find("No executables configured")
+        .expect("empty executable state");
+    ui.click("Save").expect("save button");
+    let messages: Vec<_> = ui.into_messages().collect();
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::SaveExecutable)),
+        "should emit SaveExecutable, got: {messages:?}",
+    );
+}
+
+#[test]
+fn executables_view_refresh_emits_message() {
+    let state = sample_tools_state("reshade");
+    let mut ui = simulator(modde_ui::views::executables::view(&state));
+
+    ui.click("Refresh").expect("refresh button");
+    let messages: Vec<_> = ui.into_messages().collect();
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::RefreshExecutables)),
+        "should emit RefreshExecutables, got: {messages:?}",
+    );
+}
+
+#[test]
 fn tools_optiscaler_release_buttons_emit_messages() {
     let mut state = sample_tools_state("optiscaler");
     state.entries = vec![sample_tool_entry("optiscaler", "OptiScaler")];
-    state.optiscaler_release_tags = vec!["v0.7.7".to_string()];
-    state.optiscaler_release_assets = vec!["OptiScaler.zip".to_string()];
+    state.tool_option_catalog.insert(
+        "optiscaler.release_tag".to_string(),
+        vec!["v0.7.7".to_string()],
+    );
+    state.tool_option_catalog.insert(
+        "optiscaler.release_asset".to_string(),
+        vec!["OptiScaler.zip".to_string()],
+    );
 
     let mut refresh_ui = simulator(modde_ui::views::tools::view(&state));
     refresh_ui
@@ -811,26 +1032,317 @@ fn tools_optiscaler_release_buttons_emit_messages() {
 }
 
 #[test]
+fn tools_optiscaler_release_buttons_disable_while_unready() {
+    let mut state = sample_tools_state("optiscaler");
+    state.entries = vec![sample_tool_entry("optiscaler", "OptiScaler")];
+    state.optiscaler_releases_loading = true;
+    state.tool_option_catalog.insert(
+        "optiscaler.release_asset".to_string(),
+        vec!["OptiScaler.zip".to_string()],
+    );
+
+    let mut refresh_ui = simulator(modde_ui::views::tools::view(&state));
+    refresh_ui
+        .click("Loading releases")
+        .expect("loading releases button remains visible");
+    let messages: Vec<_> = refresh_ui.into_messages().collect();
+    assert!(
+        !messages
+            .iter()
+            .any(|m| matches!(m, Message::RefreshOptiScalerReleases)),
+        "loading releases button should not emit refresh, got: {messages:?}",
+    );
+
+    let mut install_ui = simulator(modde_ui::views::tools::view(&state));
+    install_ui
+        .click("Install selected release")
+        .expect("install release button remains visible");
+    let messages: Vec<_> = install_ui.into_messages().collect();
+    assert!(
+        !messages
+            .iter()
+            .any(|m| matches!(m, Message::InstallOptiScalerRelease)),
+        "install button should not emit while releases are loading, got: {messages:?}",
+    );
+}
+
+#[test]
+fn tools_optiscaler_install_release_disables_without_assets() {
+    let mut state = sample_tools_state("optiscaler");
+    state.entries = vec![sample_tool_entry("optiscaler", "OptiScaler")];
+    state
+        .tool_option_catalog
+        .insert("optiscaler.release_asset".to_string(), Vec::new());
+
+    let mut ui = simulator(modde_ui::views::tools::view(&state));
+    ui.click("Install selected release")
+        .expect("install release button remains visible");
+    let messages: Vec<_> = ui.into_messages().collect();
+    assert!(
+        !messages
+            .iter()
+            .any(|m| matches!(m, Message::InstallOptiScalerRelease)),
+        "install button should not emit without assets, got: {messages:?}",
+    );
+}
+
+#[test]
+fn tools_apply_and_revert_buttons_disable_while_busy() {
+    let mut state = sample_tools_state("reshade");
+    state.active_operations.insert("reshade".to_string());
+
+    let mut apply_ui = simulator(modde_ui::views::tools::view(&state));
+    apply_ui
+        .click("Applying")
+        .expect("busy apply button remains visible");
+    let messages: Vec<_> = apply_ui.into_messages().collect();
+    assert!(
+        !messages
+            .iter()
+            .any(|m| matches!(m, Message::ApplyTool(tool_id) if tool_id == "reshade")),
+        "busy apply should not emit ApplyTool, got: {messages:?}",
+    );
+
+    let mut revert_ui = simulator(modde_ui::views::tools::view(&state));
+    revert_ui
+        .click("Revert")
+        .expect("busy revert button remains visible");
+    let messages: Vec<_> = revert_ui.into_messages().collect();
+    assert!(
+        !messages
+            .iter()
+            .any(|m| matches!(m, Message::RevertTool(tool_id) if tool_id == "reshade")),
+        "busy revert should not emit RevertTool, got: {messages:?}",
+    );
+}
+
+#[test]
+fn tools_apply_button_disables_when_current_settings_are_applied() {
+    let mut state = sample_tools_state("reshade");
+    state.entries[0].apply_pending = false;
+
+    let mut ui = simulator(modde_ui::views::tools::view(&state));
+    ui.click("No changes")
+        .expect("already-applied apply button remains visible");
+    let messages: Vec<_> = ui.into_messages().collect();
+    assert!(
+        !messages
+            .iter()
+            .any(|m| matches!(m, Message::ApplyTool(tool_id) if tool_id == "reshade")),
+        "already-applied settings should not emit ApplyTool, got: {messages:?}",
+    );
+}
+
+#[test]
+fn tools_apply_button_disables_when_preview_has_missing_inputs() {
+    let mut state = sample_tools_state("reshade");
+    state.entries[0].apply_pending = false;
+    state.entries[0]
+        .apply_missing_inputs
+        .push("source DLL missing".to_string());
+
+    let mut ui = simulator(modde_ui::views::tools::view(&state));
+    ui.click("Apply")
+        .expect("missing-input apply button remains visible");
+    let messages: Vec<_> = ui.into_messages().collect();
+    assert!(
+        !messages
+            .iter()
+            .any(|m| matches!(m, Message::ApplyTool(tool_id) if tool_id == "reshade")),
+        "missing inputs should not emit ApplyTool, got: {messages:?}",
+    );
+}
+
+#[test]
 fn tools_optiscaler_release_asset_selector_is_rendered() {
     let mut state = sample_tools_state("optiscaler");
     state.entries = vec![sample_tool_entry("optiscaler", "OptiScaler")];
-    state.optiscaler_release_tags = vec!["v0.9.1".to_string()];
-    state.optiscaler_release_assets = vec!["Optiscaler_0.9.1-final.7z".to_string()];
+    state.tool_option_catalog.insert(
+        "optiscaler.release_tag".to_string(),
+        vec!["v0.9.1".to_string()],
+    );
+    state.tool_option_catalog.insert(
+        "optiscaler.release_asset".to_string(),
+        vec!["Optiscaler_0.9.1-final.7z".to_string()],
+    );
     state.entries[0].settings = serde_json::json!({
+        "source_mode": "github_release",
         "release_tag": "v0.9.1",
         "release_asset": "Optiscaler_0.9.1-final.7z",
     });
 
     let mut ui = simulator(modde_ui::views::tools::view(&state));
+    ui.find("OptiScaler Release")
+        .expect("release panel title should render");
+    ui.find("Source")
+        .expect("source selector label should render");
+    ui.find("Release tag")
+        .expect("release tag selector label should render");
     ui.find("Release asset")
         .expect("release asset selector label should render");
+    ui.find("Refresh releases")
+        .expect("refresh release action should render in panel");
+    ui.find("Install selected release")
+        .expect("install release action should render in panel");
+}
+
+#[test]
+fn tools_optiscaler_local_source_renders_in_release_panel() {
+    let mut state = sample_tools_state("optiscaler");
+    state.entries = vec![sample_tool_entry("optiscaler", "OptiScaler")];
+    state.entries[0].setting_specs.push(
+        modde_games::tools::ToolSettingSpec::path(
+            "local_source_dir",
+            "Local source directory",
+            "Directory containing OptiScaler.dll and companion files.",
+        )
+        .section("Source"),
+    );
+    state.entries[0].settings = serde_json::json!({
+        "source_mode": "local_dir",
+        "local_source_dir": "/tmp/optiscaler",
+        "release_tag": "v0.9.1",
+        "release_asset": "Optiscaler_0.9.1-final.7z",
+    });
+
+    let mut ui = simulator(modde_ui::views::tools::view(&state));
+    ui.find("OptiScaler Release")
+        .expect("release panel title should render");
+    ui.find("Source")
+        .expect("source selector label should render");
+    ui.find("Local source directory")
+        .expect("local source control should render in release panel");
+    assert!(
+        ui.find("Release tag").is_err(),
+        "release tag should not render in local directory mode",
+    );
+    assert!(
+        ui.find("Release asset").is_err(),
+        "release asset should not render in local directory mode",
+    );
+}
+
+#[test]
+fn tools_optiscaler_advanced_settings_are_hidden_by_default() {
+    let mut state = sample_tools_state("optiscaler");
+    state.entries = vec![sample_tool_entry("optiscaler", "OptiScaler")];
+    state.entries[0].setting_specs.push(
+        modde_games::tools::ToolSettingSpec::tri_state_bool(
+            "ini_overrides.FSR.Fsr4Update",
+            "FSR4 update",
+            "FSR4 update.",
+        )
+        .section("Advanced")
+        .advanced(),
+    );
+
+    let mut ui = simulator(modde_ui::views::tools::view(&state));
+    ui.find("Show advanced")
+        .expect("advanced toggle should render");
+    assert!(
+        ui.find("FSR4 update").is_err(),
+        "advanced OptiScaler setting should be hidden by default",
+    );
+
+    ui.click("Show advanced").expect("advanced toggle");
+    let messages: Vec<_> = ui.into_messages().collect();
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::ToggleToolAdvancedSettings)),
+        "advanced toggle should emit ToggleToolAdvancedSettings, got: {messages:?}",
+    );
+}
+
+#[test]
+fn tools_optiscaler_basic_settings_are_visible_by_default() {
+    let mut state = sample_tools_state("optiscaler");
+    state.entries = vec![sample_tool_entry("optiscaler", "OptiScaler")];
+    state.entries[0].setting_specs.extend([
+        modde_games::tools::ToolSettingSpec::tri_state_bool(
+            "ini_overrides.Spoofing.Dxgi",
+            "Spoof DLSS / DXGI",
+            "OptiScaler Dxgi override.",
+        )
+        .section("Basic"),
+        modde_games::tools::ToolSettingSpec::labeled_select(
+            "ini_overrides.FSR.UpscalerIndex",
+            "FSR upscaler backend",
+            "OptiScaler [FSR] UpscalerIndex override.",
+            &[
+                ("auto", "Auto"),
+                ("0", "0 - FSR 4.0.2"),
+                ("1", "1 - FSR 3.1.5"),
+                ("2", "2 - FSR 2.3.4"),
+            ],
+        )
+        .section("Basic"),
+    ]);
+
+    let mut ui = simulator(modde_ui::views::tools::view(&state));
+    ui.find("Basic").expect("basic section should render");
+    ui.find("Spoof DLSS / DXGI")
+        .expect("basic DXGI setting should render");
+    ui.find("FSR upscaler backend")
+        .expect("basic FSR selector should render");
+}
+
+#[test]
+fn tools_optiscaler_typed_controls_emit_typed_updates() {
+    let mut state = sample_tools_state("optiscaler");
+    state.entries = vec![sample_tool_entry("optiscaler", "OptiScaler")];
+    state.entries[0].settings = serde_json::json!({
+        "copy_companion_files": false,
+        "ini_overrides": {
+            "FSR": {
+                "Fsr4Update": "auto"
+            }
+        }
+    });
+    state.entries[0].setting_specs = vec![
+        modde_games::tools::ToolSettingSpec::bool(
+            "copy_companion_files",
+            "Copy companion files",
+            "Copy companion files.",
+        )
+        .section("Deployment"),
+        modde_games::tools::ToolSettingSpec::tri_state_bool(
+            "ini_overrides.FSR.Fsr4Update",
+            "FSR4 update",
+            "FSR4 update.",
+        )
+        .section("OptiScaler Upscaling"),
+    ];
+    state.show_advanced_settings = true;
+
+    let mut rendered_ui = simulator(modde_ui::views::tools::view(&state));
+    rendered_ui
+        .find("Copy companion files")
+        .expect("boolean setting label should render");
+
+    let mut tri_state_ui = simulator(modde_ui::views::tools::view(&state));
+    tri_state_ui.click("On").expect("tri-state on option");
+    let messages: Vec<_> = tri_state_ui.into_messages().collect();
+    assert!(
+        messages.iter().any(|m| matches!(
+            m,
+            Message::UpdateToolSetting { tool_id, key, value }
+                if tool_id == "optiscaler"
+                    && key == "ini_overrides.FSR.Fsr4Update"
+                    && value == &serde_json::json!(true)
+        )),
+        "should emit typed tri-state update, got: {messages:?}",
+    );
 }
 
 #[test]
 fn tools_proton_install_button_emits_message() {
     let mut state = sample_tools_state("proton");
     state.entries = vec![sample_tool_entry("proton", "Proton")];
-    state.proton_versions = vec!["latest".to_string(), "GE-Proton10-1".to_string()];
+    state.tool_option_catalog.insert(
+        "proton.selected_version".to_string(),
+        vec!["latest".to_string(), "GE-Proton10-1".to_string()],
+    );
 
     let mut ui = simulator(modde_ui::views::tools::view(&state));
     ui.click("Install with protonup-rs")
@@ -944,11 +1456,26 @@ fn sample_tools_state(active_tool_id: &str) -> ToolState {
         active_tool_id: Some(active_tool_id.to_string()),
         game_label: Some("Skyrim SE".to_string()),
         game_dir_configured: true,
+        loading: false,
+        load_error: None,
+        load_generation: 0,
+        show_advanced_settings: false,
+        active_operations: std::collections::HashSet::new(),
+        tool_option_catalog: std::collections::HashMap::from([(
+            "proton.selected_version".to_string(),
+            vec!["latest".to_string()],
+        )]),
         optiscaler_releases: Vec::new(),
-        optiscaler_release_tags: Vec::new(),
-        optiscaler_release_assets: Vec::new(),
         optiscaler_releases_loading: false,
-        proton_versions: vec!["latest".to_string()],
+        proton_versions_loading: false,
+        executables: Vec::new(),
+        executables_loading: false,
+        executables_load_error: None,
+        executables_load_generation: 0,
+        executable_draft: Default::default(),
+        executable_editor_open: false,
+        executable_error: None,
+        active_executable_operations: std::collections::HashSet::new(),
         entries: vec![ToolUiEntry {
             tool_id: "reshade".to_string(),
             display_name: "ReShade".to_string(),
@@ -993,6 +1520,9 @@ fn sample_tools_state(active_tool_id: &str) -> ToolState {
             optiscaler_state: None,
             optiscaler_latest_backup: None,
             optiscaler_detected_files: 0,
+            apply_pending: true,
+            apply_missing_inputs: Vec::new(),
+            setting_history: Vec::new(),
         }],
     }
 }
@@ -1000,6 +1530,17 @@ fn sample_tools_state(active_tool_id: &str) -> ToolState {
 fn sample_tool_entry(tool_id: &str, display_name: &str) -> ToolUiEntry {
     let setting_specs = if tool_id == "optiscaler" {
         vec![
+            modde_games::tools::ToolSettingSpec::labeled_select(
+                "source_mode",
+                "Source",
+                "Where modde should get OptiScaler files from.",
+                &[
+                    ("github_release", "Official GitHub releases"),
+                    ("goverlay_builds", "GOverlay builds"),
+                    ("goverlay_fgmod", "GOverlay fgmod directory"),
+                    ("local_dir", "Local OptiScaler directory"),
+                ],
+            ),
             modde_games::tools::ToolSettingSpec::select(
                 "release_tag",
                 "Release tag",
@@ -1028,7 +1569,15 @@ fn sample_tool_entry(tool_id: &str, display_name: &str) -> ToolUiEntry {
         available: true,
         availability_text: "available".to_string(),
         enabled: false,
-        settings: serde_json::json!({ "summary": display_name }),
+        settings: if tool_id == "optiscaler" {
+            serde_json::json!({
+                "source_mode": "github_release",
+                "release_tag": "v0.9.1",
+                "release_asset": "Optiscaler_0.9.1-final.7z",
+            })
+        } else {
+            serde_json::json!({ "summary": display_name })
+        },
         setting_specs,
         generated_config_path: None,
         applied_files: Vec::new(),
@@ -1042,5 +1591,8 @@ fn sample_tool_entry(tool_id: &str, display_name: &str) -> ToolUiEntry {
         optiscaler_state: None,
         optiscaler_latest_backup: None,
         optiscaler_detected_files: 0,
+        apply_pending: true,
+        apply_missing_inputs: Vec::new(),
+        setting_history: Vec::new(),
     }
 }

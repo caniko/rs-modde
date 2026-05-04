@@ -1,19 +1,36 @@
 use anyhow::{Context, Result};
 use smallvec::SmallVec;
 
+pub mod bannerlord;
 pub mod bethesda;
+pub mod bg3;
 pub mod cyberpunk;
 pub mod detection;
+pub mod gamebryo;
 pub mod generic;
 pub mod launcher;
+pub mod oblivion_remastered;
+pub mod optiscaler;
+pub mod policies;
+pub mod registry;
+pub mod save_patterns;
+pub mod scanner_patterns;
+pub mod stardew;
 pub mod tools;
 pub mod traits;
 pub mod ue4;
+pub mod witcher3;
 
 pub use detection::{DetectedGame, LauncherSource, find_detected_game, scan_installed_games};
+pub use optiscaler::{
+    OptiScalerIniOverride, OptiScalerProfile, OptiScalerProfiles, default_optiscaler_profile,
+    resolve_optiscaler_profiles,
+};
+pub use registry::{EngineFamily, GameRegistration, LauncherIds, all_games, resolve_game};
 pub use traits::{
-    DiscoveredFile, DiscoveredMod, GamePlugin, ModClassifyConfig, ModSafety, ModScanner, ModSource,
-    SaveTracker, ScanContext, classify_mod_by_content, slug, walk_files_relative,
+    DeployTarget, DeployTargetKind, DiscoveredFile, DiscoveredMod, GamePlugin, ModClassifyConfig,
+    ModSafety, ModScanner, ModSource, SaveTracker, ScanContext, classify_mod_by_content, slug,
+    walk_files_relative,
 };
 
 /// Build an [`modde_core::installer::InstallProbe`] that delegates to a
@@ -30,29 +47,31 @@ pub use traits::{
 /// let plan = modde_core::installer::analyze(&extracted, &probe, hash)?;
 /// ```
 pub fn game_probe(plugin: &'static dyn GamePlugin) -> modde_core::installer::InstallProbe {
-    modde_core::installer::InstallProbe::new(
+    let mut probe = modde_core::installer::InstallProbe::new(
         move |dir: &std::path::Path| plugin.analyze_mod_archive(dir),
         move |dir: &std::path::Path| plugin.recognizes_bare_layout(dir),
-    )
+    );
+    // Surface the first `UserConfig` deploy target the plugin
+    // advertises so analyze can route config-only archives.
+    if let Some(target) = plugin
+        .deploy_targets()
+        .iter()
+        .find(|t| t.kind == crate::traits::DeployTargetKind::UserConfig)
+    {
+        probe = probe.with_user_config_target(target.id);
+    }
+    probe
 }
 
-/// All recognized game IDs, in the order they appear in the match table.
-pub const SUPPORTED_GAME_IDS: &[&str] = &[
-    "skyrim-se",
-    "skyrim-ae",
-    "fallout4",
-    "fallout76",
-    "starfield",
-    "cyberpunk2077",
-    "stellar-blade",
-];
+/// All recognized game IDs, in registry order.
+pub const SUPPORTED_GAME_IDS: &[&str] = registry::SUPPORTED_GAME_IDS;
 
 /// (`game_id`, `display_name`) for every supported game, derived from the plugin registry.
 #[must_use]
 pub fn supported_games() -> SmallVec<[(&'static str, &'static str); 8]> {
-    SUPPORTED_GAME_IDS
+    registry::all_games()
         .iter()
-        .filter_map(|&id| resolve_game_plugin(id).map(|p| (p.game_id(), p.display_name())))
+        .map(|game| (game.game_id, game.display_name))
         .collect()
 }
 
@@ -68,44 +87,33 @@ pub fn normalize_wabbajack_game(wj_game: &str) -> Option<&'static str> {
         .flat_map(char::to_lowercase)
         .collect();
 
-    match key.as_str() {
-        "cyberpunk2077" => Some("cyberpunk2077"),
-        "skyrimspecialedition" | "skyrimse" => Some("skyrim-se"),
-        "skyrimanniversaryedition" | "skyrimae" => Some("skyrim-ae"),
-        "fallout4" => Some("fallout4"),
-        "fallout76" => Some("fallout76"),
-        "starfield" => Some("starfield"),
-        "stellarblade" => Some("stellar-blade"),
-        _ => None,
-    }
+    registry::all_games()
+        .iter()
+        .find(|game| game.normalized_wabbajack_names().any(|name| name == key))
+        .map(|game| game.game_id)
 }
 
 /// Resolve a `game_id` string to the corresponding `GamePlugin` implementation.
 #[must_use]
 pub fn resolve_game_plugin(game_id: &str) -> Option<&'static dyn GamePlugin> {
-    match game_id {
-        "skyrim-se" => Some(&bethesda::SKYRIM_SE),
-        "skyrim-ae" => Some(&bethesda::SKYRIM_AE),
-        "fallout4" => Some(&bethesda::FALLOUT4),
-        "fallout76" => Some(&bethesda::FALLOUT76),
-        "starfield" => Some(&bethesda::STARFIELD),
-        "cyberpunk2077" => Some(&cyberpunk::CYBERPUNK2077),
-        "stellar-blade" => Some(&ue4::STELLAR_BLADE),
-        _ => None,
-    }
+    registry::resolve_game(game_id).map(|game| game.plugin)
+}
+
+/// Like [`resolve_game_plugin`] but keyed on the Nexus Mods domain.
+///
+/// The Nexus URL format embeds the domain (e.g. `stellarblade`,
+/// `skyrimspecialedition`), which in many cases doesn't match modde's
+/// `game_id` (`stellar-blade`, `skyrim-se`). The install pipeline uses
+/// this to recover the right plugin when a user pastes a Nexus URL.
+#[must_use]
+pub fn resolve_game_plugin_by_nexus_domain(domain: &str) -> Option<&'static dyn GamePlugin> {
+    registry::resolve_game_by_nexus_domain(domain).map(|game| game.plugin)
 }
 
 /// Resolve a `game_id` to its `ModScanner` implementation, if one exists.
 #[must_use]
 pub fn resolve_mod_scanner(game_id: &str) -> Option<&'static dyn ModScanner> {
-    match game_id {
-        "cyberpunk2077" => Some(&cyberpunk::scanner::CYBERPUNK_SCANNER),
-        "skyrim-se" | "skyrim-ae" => Some(&bethesda::scanner::SKYRIM_SCANNER),
-        "fallout4" => Some(&bethesda::scanner::FALLOUT4_SCANNER),
-        "starfield" => Some(&bethesda::scanner::STARFIELD_SCANNER),
-        "stellar-blade" => Some(&ue4::scanner::STELLAR_BLADE_SCANNER),
-        _ => None,
-    }
+    registry::resolve_game(game_id).and_then(|game| game.scanner)
 }
 
 /// Resolve a `game_id` to its `CollisionClassifier` implementation, if one exists.
@@ -113,29 +121,19 @@ pub fn resolve_mod_scanner(game_id: &str) -> Option<&'static dyn ModScanner> {
 pub fn resolve_collision_classifier(
     game_id: &str,
 ) -> Option<Box<dyn modde_core::collision::CollisionClassifier>> {
-    match game_id {
-        "skyrim-se" | "skyrim-ae" | "fallout4" | "fallout76" | "starfield" => {
-            Some(Box::new(bethesda::collision::BethesdaCollisionClassifier))
-        }
-        "cyberpunk2077" => Some(Box::new(cyberpunk::collision::CyberpunkCollisionClassifier)),
-        _ => None,
-    }
+    registry::resolve_game(game_id).and_then(|game| game.collision_classifier.map(|build| build()))
 }
 
 /// Resolve a `game_id` to its `SaveTracker` implementation, if one exists.
 #[must_use]
 pub fn resolve_save_tracker(game_id: &str) -> Option<&'static dyn SaveTracker> {
-    match game_id {
-        "skyrim-se" | "skyrim-ae" => Some(&bethesda::saves::SKYRIM_SAVE_TRACKER),
-        "fallout4" => Some(&bethesda::saves::FALLOUT4_SAVE_TRACKER),
-        // FO76 saves are server-side; local cache files are captured with a warning
-        "fallout76" => Some(&bethesda::saves::FALLOUT76_SAVE_TRACKER),
-        // Starfield save tracking is intentionally not exposed until it has a
-        // real tracker instead of silently borrowing Skyrim semantics.
-        "starfield" => None,
-        "cyberpunk2077" => Some(&cyberpunk::saves::CYBERPUNK_SAVE_TRACKER),
-        _ => None,
-    }
+    registry::resolve_game(game_id).and_then(|game| game.save_tracker)
+}
+
+/// Return whether a game participates in modde's per-profile save layer.
+#[must_use]
+pub fn supports_save_profiles(game_id: &str) -> bool {
+    registry::resolve_game(game_id).is_some_and(|game| game.supports_save_profiles)
 }
 
 /// Read the native plugin order for a game from `plugins.txt`, when the game uses one.

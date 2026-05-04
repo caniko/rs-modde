@@ -6,6 +6,7 @@ use iced::{Alignment, Element, Length, color};
 
 use crate::action_button::{ButtonAction, DescribedButtonExt};
 use crate::app::{Message, NexusAuthStatus, SettingsState};
+use crate::semantics;
 
 /// Render the settings view.
 pub fn view(state: SettingsState) -> Element<'static, Message> {
@@ -34,31 +35,78 @@ pub fn view(state: SettingsState) -> Element<'static, Message> {
     };
 
     let game_path_str = state
-        .game_path
-        .as_ref()
-        .map(|p| p.display().to_string())
+        .game_install_paths
+        .first()
+        .map(|install| install.path.display().to_string())
         .unwrap_or_default();
     let download_dir_str = state
         .download_dir
         .as_ref()
         .map(|p| p.display().to_string())
         .unwrap_or_default();
+    let nexus_source = state
+        .nexus_api_key_source
+        .as_ref()
+        .map(|source| format!("Using {}", source.label()))
+        .unwrap_or_else(|| "No key configured".to_string());
+    let show_hide_label = if state.nexus_api_key_visible {
+        "Hide"
+    } else {
+        "Show"
+    };
 
     let api_key_section = column![
         text("Nexus Mods API Key").size(14),
         text("Required for downloading mods and browsing collections.").size(11),
         row![
-            text_input("Enter your API key...", &state.nexus_api_key)
-                .on_input(Message::SetNexusApiKey)
+            text_input("Enter your API key...", &state.nexus_api_key_draft)
+                .id(semantics::widget_id("settings.nexus_api_key"))
+                .secure(!state.nexus_api_key_visible)
+                .on_input(Message::SetNexusApiKeyDraft)
                 .padding(8)
                 .width(Length::Fill),
-            button(text("Validate").size(13))
-                .style(button::primary)
-                .padding([6, 12])
-                .on_action(ButtonAction::ValidateNexusKey),
+            semantics::test_id(
+                "settings.nexus_api_key.toggle_visibility",
+                button(text(show_hide_label).size(13))
+                    .style(button::secondary)
+                    .padding([6, 12])
+                    .on_action(ButtonAction::ToggleNexusApiKeyVisibility),
+            ),
         ]
         .spacing(8)
         .align_y(Alignment::Center),
+        row![
+            semantics::test_id(
+                "settings.nexus_api_key.replace",
+                button(text("Replace").size(13))
+                    .style(button::secondary)
+                    .padding([6, 12])
+                    .on_action(ButtonAction::ReplaceNexusApiKey),
+            ),
+            semantics::test_id(
+                "settings.nexus_api_key.remove_modde_config",
+                button(text("Remove modde config").size(13))
+                    .style(button::secondary)
+                    .padding([6, 12])
+                    .on_action(ButtonAction::RemoveNexusConfigKey),
+            ),
+            semantics::test_id(
+                "settings.nexus_api_key.validate",
+                button(text("Validate").size(13))
+                    .style(button::primary)
+                    .padding([6, 12])
+                    .on_action(ButtonAction::ValidateNexusKey),
+            ),
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center),
+        text(nexus_source).size(12),
+        text(if state.nexus_config_key_exists {
+            "modde config key exists"
+        } else {
+            "No modde config key"
+        })
+        .size(11),
         nexus_status_widget,
     ]
     .spacing(4);
@@ -69,16 +117,20 @@ pub fn view(state: SettingsState) -> Element<'static, Message> {
         text("Root directory of the game installation.").size(11),
         row![
             text_input("/path/to/game", &game_path_str,)
+                .id(semantics::widget_id("settings.game_path"))
                 .on_input(|s| Message::SetGamePath {
                     game_id: "default".to_string(),
                     path: PathBuf::from(s)
                 })
                 .padding(8)
                 .width(Length::Fill),
-            button(text("Browse").size(13))
-                .style(button::secondary)
-                .padding([6, 12])
-                .on_action(ButtonAction::BrowseGamePath),
+            semantics::test_id(
+                "settings.game_path.browse",
+                button(text("Browse").size(13))
+                    .style(button::secondary)
+                    .padding([6, 12])
+                    .on_action(ButtonAction::BrowseGamePath),
+            ),
         ]
         .spacing(8)
         .align_y(Alignment::Center),
@@ -91,13 +143,17 @@ pub fn view(state: SettingsState) -> Element<'static, Message> {
         text("Where downloaded mod archives are stored.").size(11),
         row![
             text_input("/path/to/downloads", &download_dir_str,)
+                .id(semantics::widget_id("settings.download_dir"))
                 .on_input(|s| Message::SetDownloadDir(PathBuf::from(s)))
                 .padding(8)
                 .width(Length::Fill),
-            button(text("Browse").size(13))
-                .style(button::secondary)
-                .padding([6, 12])
-                .on_action(ButtonAction::BrowseDownloadDir),
+            semantics::test_id(
+                "settings.download_dir.browse",
+                button(text("Browse").size(13))
+                    .style(button::secondary)
+                    .padding([6, 12])
+                    .on_action(ButtonAction::BrowseDownloadDir),
+            ),
         ]
         .spacing(8)
         .align_y(Alignment::Center),
@@ -109,14 +165,20 @@ pub fn view(state: SettingsState) -> Element<'static, Message> {
         text("Stock Game Snapshot").size(14),
         text("Create a snapshot of your clean game install for virtual deployment.").size(11),
         row![
-            button(text("Create Snapshot").size(13))
-                .style(button::primary)
-                .padding([6, 14])
-                .on_action(ButtonAction::CreateStockSnapshot),
-            button(text("Verify Snapshot").size(13))
-                .style(button::secondary)
-                .padding([6, 14])
-                .on_action(ButtonAction::VerifyStockSnapshot),
+            semantics::test_id(
+                "settings.stock_snapshot.create",
+                button(text("Create Snapshot").size(13))
+                    .style(button::primary)
+                    .padding([6, 14])
+                    .on_action(ButtonAction::CreateStockSnapshot),
+            ),
+            semantics::test_id(
+                "settings.stock_snapshot.verify",
+                button(text("Verify Snapshot").size(13))
+                    .style(button::secondary)
+                    .padding([6, 14])
+                    .on_action(ButtonAction::VerifyStockSnapshot),
+            ),
             text(if state.has_stock_snapshot {
                 "Snapshot exists"
             } else {

@@ -144,33 +144,6 @@ fn release_summary(release: Release) -> Option<GitHubReleaseSummary> {
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn github_release_summary_preserves_tag_and_asset_names() {
-        let release: Release = serde_json::from_str(
-            r#"{
-                "tag_name": "v0.7.7",
-                "name": "OptiScaler v0.7.7",
-                "assets": [
-                    {
-                        "name": "OptiScaler_v0.7.7.zip",
-                        "browser_download_url": "https://example.test/OptiScaler.zip",
-                        "size": 1234
-                    }
-                ]
-            }"#,
-        )
-        .expect("release json parses");
-        let summary = release_summary(release).expect("release has tag");
-        assert_eq!(summary.tag, "v0.7.7");
-        assert_eq!(summary.assets[0].name, "OptiScaler_v0.7.7.zip");
-        assert_eq!(summary.assets[0].size, 1234);
-    }
-}
-
 impl DownloadSource for GitHubSource {
     fn can_handle(&self, directive: &DownloadDirective) -> bool {
         matches!(directive, DownloadDirective::GitHub { .. })
@@ -229,5 +202,32 @@ impl DownloadSource for GitHubSource {
             simple_download(&client, handle_ref, dest_ref, progress_ref).await
         })
         .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn github_release_summary_preserves_tag_and_asset_names() {
+        let release: Release = serde_json::from_str(
+            r#"{
+                "tag_name": "v0.7.7",
+                "name": "OptiScaler v0.7.7",
+                "assets": [
+                    {
+                        "name": "OptiScaler_v0.7.7.zip",
+                        "browser_download_url": "https://example.test/OptiScaler.zip",
+                        "size": 1234
+                    }
+                ]
+            }"#,
+        )
+        .expect("release json parses");
+        let summary = release_summary(release).expect("release has tag");
+        assert_eq!(summary.tag, "v0.7.7");
+        assert_eq!(summary.assets[0].name, "OptiScaler_v0.7.7.zip");
+        assert_eq!(summary.assets[0].size, 1234);
     }
 }

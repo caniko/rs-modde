@@ -35,7 +35,23 @@ use modde_core::save::SaveFingerprint;
 ///
 /// Shared across profile and save commands to avoid duplication.
 pub fn resolve_save_dir(game_id: &str) -> Option<PathBuf> {
-    modde_games::resolve_game_plugin(game_id).and_then(modde_games::GamePlugin::save_directory)
+    let plugin = modde_games::resolve_game_plugin(game_id)?;
+    plugin
+        .supports_save_profiles()
+        .then(|| plugin.save_directory())
+        .flatten()
+}
+
+/// Whether this game supports modde's per-profile save layer.
+pub fn supports_save_profiles(game_id: &str) -> Result<bool> {
+    let plugin = modde_games::resolve_game_plugin(game_id).ok_or_else(|| {
+        anyhow::anyhow!(
+            "unknown game '{}'. Supported games: {}",
+            game_id,
+            modde_games::SUPPORTED_GAME_IDS.join(", ")
+        )
+    })?;
+    Ok(plugin.supports_save_profiles())
 }
 
 /// Resolve the game's save directory, returning an error if not found.
@@ -46,6 +62,12 @@ pub fn require_save_dir(game_id: &str) -> Result<PathBuf> {
             "unknown game '{}'. Supported games: {}",
             game_id,
             modde_games::SUPPORTED_GAME_IDS.join(", ")
+        );
+    }
+    if !supports_save_profiles(game_id)? {
+        anyhow::bail!(
+            "save profiles are not supported for game '{game_id}'. \
+             This title does not use modde's per-profile save layer."
         );
     }
     resolve_save_dir(game_id).ok_or_else(|| {
@@ -62,6 +84,9 @@ pub fn compute_fingerprint(
     name: &str,
     game_id: &str,
 ) -> Option<SaveFingerprint> {
+    if !supports_save_profiles(game_id).ok()? {
+        return None;
+    }
     let profile = pm.load(name, Some(game_id)).ok()?;
     let game_plugin = modde_games::resolve_game_plugin(game_id)?;
     let staging_dir = ProfileManager::staging_dir(&profile.name);
@@ -132,4 +157,40 @@ pub fn persist_plugin_order(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn supports_save_profiles_errors_for_unknown_game() {
+        let err = supports_save_profiles("not-a-game").unwrap_err();
+        assert!(err.to_string().contains("unknown game 'not-a-game'"));
+    }
+
+    #[test]
+    fn stellar_blade_without_save_dir_reports_missing_directory() {
+        assert!(supports_save_profiles("stellar-blade").unwrap());
+        assert!(resolve_save_dir("stellar-blade").is_none());
+
+        let err = require_save_dir("stellar-blade").unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("save directory not found for game 'stellar-blade'")
+        );
+    }
+
+    #[test]
+    fn enabled_game_without_save_dir_reports_missing_directory() {
+        assert!(supports_save_profiles("skyrim-se").unwrap());
+
+        if resolve_save_dir("skyrim-se").is_none() {
+            let err = require_save_dir("skyrim-se").unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("save directory not found for game 'skyrim-se'")
+            );
+        }
+    }
 }

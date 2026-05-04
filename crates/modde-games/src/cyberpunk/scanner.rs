@@ -3,9 +3,8 @@ use std::path::Path;
 use anyhow::Result;
 
 use super::manifest::RedModManifest;
-use crate::traits::{
-    DiscoveredFile, DiscoveredMod, ModScanner, ModSource, ScanContext, walk_files_relative,
-};
+use crate::scanner_patterns::{DirectoryModRule, SingleFileModRule};
+use crate::traits::{DiscoveredMod, ModScanner, ModSource, ScanContext, walk_files_relative};
 
 pub struct CyberpunkScanner;
 
@@ -20,6 +19,42 @@ const SCAN_DIRS: &[&str] = &[
     "mods",
 ];
 
+const CET_RULE: DirectoryModRule = DirectoryModRule {
+    rel_dir: "bin/x64/plugins/cyber_engine_tweaks/mods",
+    mod_id_prefix: "cet",
+    source_location: "cet",
+    confidence: 0.7,
+    marker_file: Some("init.lua"),
+    marker_confidence: Some(0.95),
+};
+
+const REDSCRIPT_RULE: DirectoryModRule = DirectoryModRule {
+    rel_dir: "r6/scripts",
+    mod_id_prefix: "reds",
+    source_location: "r6/scripts",
+    confidence: 0.9,
+    marker_file: None,
+    marker_confidence: None,
+};
+
+const TWEAKXL_RULE: DirectoryModRule = DirectoryModRule {
+    rel_dir: "r6/tweaks",
+    mod_id_prefix: "tweak",
+    source_location: "r6/tweaks",
+    confidence: 0.9,
+    marker_file: None,
+    marker_confidence: None,
+};
+
+const ARCHIVE_RULE: SingleFileModRule = SingleFileModRule {
+    rel_dir: "archive/pc/mod",
+    extension: "archive",
+    ignored_prefixes: &[],
+    mod_id_prefix: "archive",
+    source_location: "archive/pc/mod",
+    confidence: 0.85,
+};
+
 impl ModScanner for CyberpunkScanner {
     fn scan_directories(&self) -> &[&str] {
         SCAN_DIRS
@@ -29,10 +64,10 @@ impl ModScanner for CyberpunkScanner {
         let install = ctx.install_dir;
         let mut mods = Vec::new();
 
-        scan_cet_mods(install, &mut mods)?;
-        scan_redscript_mods(install, &mut mods)?;
-        scan_tweakxl_mods(install, &mut mods)?;
-        scan_archive_mods(install, &mut mods)?;
+        CET_RULE.scan(install, &mut mods)?;
+        REDSCRIPT_RULE.scan(install, &mut mods)?;
+        TWEAKXL_RULE.scan(install, &mut mods)?;
+        ARCHIVE_RULE.scan(install, &mut mods)?;
         scan_redmod_mods(install, &mut mods)?;
 
         Ok(mods)
@@ -74,144 +109,6 @@ impl ModScanner for CyberpunkScanner {
             })
         }
     }
-}
-
-/// Cyber Engine Tweaks mods: each subdirectory of `.../cyber_engine_tweaks/mods/` is one mod.
-fn scan_cet_mods(install: &Path, out: &mut Vec<DiscoveredMod>) -> Result<()> {
-    let cet_dir = install.join("bin/x64/plugins/cyber_engine_tweaks/mods");
-    if !cet_dir.is_dir() {
-        return Ok(());
-    }
-
-    for entry in std::fs::read_dir(&cet_dir)?.flatten() {
-        if !entry.path().is_dir() {
-            continue;
-        }
-        let name = entry.file_name().to_string_lossy().to_string();
-        let has_init = entry.path().join("init.lua").exists();
-        let files = walk_files_relative(install, &entry.path());
-
-        if files.is_empty() {
-            continue;
-        }
-
-        out.push(DiscoveredMod {
-            mod_id: format!("cet/{name}"),
-            display_name: name,
-            version: None,
-            files,
-            source: ModSource::Filesystem {
-                location: "cet".into(),
-            },
-            confidence: if has_init { 0.95 } else { 0.7 },
-        });
-    }
-    Ok(())
-}
-
-/// `REDscript` mods: each subdirectory of `r6/scripts/` is one mod.
-fn scan_redscript_mods(install: &Path, out: &mut Vec<DiscoveredMod>) -> Result<()> {
-    let scripts_dir = install.join("r6/scripts");
-    if !scripts_dir.is_dir() {
-        return Ok(());
-    }
-
-    for entry in std::fs::read_dir(&scripts_dir)?.flatten() {
-        if !entry.path().is_dir() {
-            continue;
-        }
-        let name = entry.file_name().to_string_lossy().to_string();
-        let files = walk_files_relative(install, &entry.path());
-
-        if files.is_empty() {
-            continue;
-        }
-
-        out.push(DiscoveredMod {
-            mod_id: format!("reds/{name}"),
-            display_name: name,
-            version: None,
-            files,
-            source: ModSource::Filesystem {
-                location: "r6/scripts".into(),
-            },
-            confidence: 0.9,
-        });
-    }
-    Ok(())
-}
-
-/// `TweakXL` mods: each subdirectory of `r6/tweaks/` is one mod.
-fn scan_tweakxl_mods(install: &Path, out: &mut Vec<DiscoveredMod>) -> Result<()> {
-    let tweaks_dir = install.join("r6/tweaks");
-    if !tweaks_dir.is_dir() {
-        return Ok(());
-    }
-
-    for entry in std::fs::read_dir(&tweaks_dir)?.flatten() {
-        if !entry.path().is_dir() {
-            continue;
-        }
-        let name = entry.file_name().to_string_lossy().to_string();
-        let files = walk_files_relative(install, &entry.path());
-
-        if files.is_empty() {
-            continue;
-        }
-
-        out.push(DiscoveredMod {
-            mod_id: format!("tweak/{name}"),
-            display_name: name,
-            version: None,
-            files,
-            source: ModSource::Filesystem {
-                location: "r6/tweaks".into(),
-            },
-            confidence: 0.9,
-        });
-    }
-    Ok(())
-}
-
-/// Archive mods: each `.archive` file in `archive/pc/mod/` is one mod.
-fn scan_archive_mods(install: &Path, out: &mut Vec<DiscoveredMod>) -> Result<()> {
-    let archive_dir = install.join("archive/pc/mod");
-    if !archive_dir.is_dir() {
-        return Ok(());
-    }
-
-    for entry in std::fs::read_dir(&archive_dir)?.flatten() {
-        let path = entry.path();
-        if path.is_dir() || path.extension().and_then(|e| e.to_str()) != Some("archive") {
-            continue;
-        }
-
-        let stem = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("unknown");
-        let size = path.metadata().map_or(0, |m| m.len());
-        let rel = path
-            .strip_prefix(install)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .replace('\\', "/");
-
-        out.push(DiscoveredMod {
-            mod_id: format!("archive/{stem}"),
-            display_name: stem.to_string(),
-            version: None,
-            files: vec![DiscoveredFile {
-                rel_path: rel,
-                size,
-            }],
-            source: ModSource::Filesystem {
-                location: "archive/pc/mod".into(),
-            },
-            confidence: 0.85,
-        });
-    }
-    Ok(())
 }
 
 /// `REDmod` mods: each subdirectory of `mods/` is one mod (parse `info.json`).

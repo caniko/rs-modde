@@ -47,7 +47,7 @@ Settings are stored per-game in the database and persisted across sessions. Enab
 
 ## Proton settings
 
-The `proton` tool stores launch compatibility settings for a game. It does not install Steam or the game itself. If `protonup-rs` is available, modde can detect installed GE-Proton versions and expose an install action in the UI.
+The `proton` tool stores launch compatibility settings for a game. It does not install Steam or the game itself. The UI can load the upstream GE-Proton version catalog from `GloriousEggroll/proton-ge-custom` and merges those versions with locally installed Steam compatibility tools. Installing a selected version still requires `protonup-rs`.
 
 ```bash
 # Keep the launcher's default Proton runner
@@ -75,6 +75,10 @@ modde tool revert reshade --game skyrim-se
 ```
 
 modde records which files were patched so that `revert` can cleanly remove them. Proton, MangoHud, vkBasalt, and GameMode are launch/config integrations and do not normally apply files into the game directory.
+
+For Stellar Blade, OptiScaler is managed in `SB/Binaries/Win64` and defaults to official release `official:v0.9.1` with `dxgi.dll` as the proxy. If an existing install is detected as `unmanaged; version v0.9.1; proxy dxgi.dll`, adopt it instead of reinstalling so modde records the working files. The Stellar Blade profile enables OptiPatcher and deploys `plugins/OptiPatcher.asi` so DLSS and DLSS-FG inputs can be unlocked without spoofing.
+
+The OptiScaler source selector separates upstream releases from GOverlay packaging. `Official GitHub releases` lists `official:*` entries from `optiscaler/OptiScaler`. `GOverlay builds` lists GOverlay's external `benjamimgois/OptiScaler-builds` feed and exposes a channel selector for stable, bleeding-edge, master, or any-release builds. Bleeding-edge FSR 4.0.2-capable setups are commonly distributed through that GOverlay builds source rather than official OptiScaler releases. Existing local GOverlay installs remain available through the `GOverlay fgmod directory` source mode.
 
 ## Running external tools with overwrite capture
 

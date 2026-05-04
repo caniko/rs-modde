@@ -1,11 +1,7 @@
-use std::collections::BTreeMap;
-use std::path::Path;
-
 use anyhow::Result;
 
-use crate::traits::{
-    DiscoveredFile, DiscoveredMod, ModScanner, ModSource, ScanContext, walk_files_relative,
-};
+use crate::scanner_patterns::FileGroupRule;
+use crate::traits::{DiscoveredMod, ModScanner, ScanContext};
 
 /// Data-driven scanner for UE4 pak-based mods.
 ///
@@ -22,27 +18,14 @@ pub static STELLAR_BLADE_SCANNER: Ue4Scanner = Ue4Scanner {
     project_name: "SB",
 };
 
-/// Returns the basename stem if `rel` ends with a UE4 pak-triple extension.
-///
-/// `rel` is expected to be a relative path string; both `/` and `\` are
-/// tolerated. Matching is case-insensitive.
-fn stem_for(rel: &str) -> Option<String> {
-    let lower = rel.to_lowercase();
-    if !(lower.ends_with(".pak") || lower.ends_with(".ucas") || lower.ends_with(".utoc")) {
-        return None;
-    }
-    let path = std::path::Path::new(rel);
-    path.file_stem()
-        .and_then(|s| s.to_str())
-        .map(std::string::ToString::to_string)
-}
+const UE4_GROUP_EXTENSIONS: &[&str] = &["pak", "ucas", "utoc"];
 
 impl Ue4Scanner {
     fn scan_subdir(
         &self,
-        install: &Path,
+        install: &std::path::Path,
         subdir: &str,
-        location: &str,
+        location: &'static str,
         out: &mut Vec<DiscoveredMod>,
     ) {
         let dir = install
@@ -50,58 +33,14 @@ impl Ue4Scanner {
             .join("Content")
             .join("Paks")
             .join(subdir);
-        if !dir.is_dir() {
-            return;
+        FileGroupRule {
+            rel_dir: "",
+            extensions: UE4_GROUP_EXTENSIONS,
+            mod_id_prefix: "pak",
+            source_location: location,
+            confidence: 0.9,
         }
-
-        // Group discovered files by file stem so a .pak + .ucas + .utoc triple
-        // collapses into a single DiscoveredMod.
-        let mut by_stem: BTreeMap<String, Vec<DiscoveredFile>> = BTreeMap::new();
-
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-
-            if path.is_dir() {
-                // Some packaged mods ship as a subdir containing the pak triple.
-                for f in walk_files_relative(install, &path) {
-                    if let Some(stem) = stem_for(&f.rel_path) {
-                        by_stem.entry(stem).or_default().push(f);
-                    }
-                }
-                continue;
-            }
-
-            let Ok(meta) = path.metadata() else {
-                continue;
-            };
-            let Ok(rel) = path.strip_prefix(install) else {
-                continue;
-            };
-            let rel_str = rel.to_string_lossy().to_string();
-            let Some(stem) = stem_for(&rel_str) else {
-                continue;
-            };
-            by_stem.entry(stem).or_default().push(DiscoveredFile {
-                rel_path: rel_str,
-                size: meta.len(),
-            });
-        }
-
-        for (stem, files) in by_stem {
-            out.push(DiscoveredMod {
-                mod_id: format!("pak/{stem}"),
-                display_name: stem,
-                version: None,
-                files,
-                source: ModSource::Filesystem {
-                    location: location.into(),
-                },
-                confidence: 0.9,
-            });
-        }
+        .scan_dir(install, &dir, out);
     }
 }
 

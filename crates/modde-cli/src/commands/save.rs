@@ -4,7 +4,7 @@ use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use modde_core::profile::ProfileManager;
 use modde_core::save::{FingerprintCheck, SaveFingerprint, SaveManager};
 
-use super::require_save_dir;
+use super::{require_save_dir, supports_save_profiles};
 use crate::SaveAction;
 
 /// Resolve profile name: use explicit value or fall back to active profile for the game.
@@ -22,6 +22,17 @@ fn resolve_profile_name(
             .ok_or_else(|| {
                 anyhow::anyhow!("no active profile for game '{game}'; use --profile to specify")
             }),
+    }
+}
+
+fn require_save_profiles_supported(game: &str) -> Result<()> {
+    if supports_save_profiles(game)? {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "save profiles are not supported for game '{game}'. \
+             This title does not use modde's per-profile save layer."
+        )
     }
 }
 
@@ -74,6 +85,7 @@ pub async fn handle(action: SaveAction) -> Result<()> {
             label,
         } => {
             let p = pm.load(&profile, game.as_deref())?;
+            require_save_profiles_supported(p.game_id.as_str())?;
             let profile_id =
                 p.id.ok_or_else(|| anyhow::anyhow!("profile has no database ID"))?;
 
@@ -88,6 +100,7 @@ pub async fn handle(action: SaveAction) -> Result<()> {
         }
         SaveAction::List { profile, game } => {
             let p = pm.load(&profile, game.as_deref())?;
+            require_save_profiles_supported(p.game_id.as_str())?;
             let profile_id =
                 p.id.ok_or_else(|| anyhow::anyhow!("profile has no database ID"))?;
 
@@ -174,6 +187,7 @@ pub async fn handle(action: SaveAction) -> Result<()> {
             profile,
             limit,
         } => {
+            require_save_profiles_supported(&game)?;
             let snapshots = SaveManager::history(&game, &profile, limit)?;
             if snapshots.is_empty() {
                 println!("No save history for profile '{profile}' (game: {game}).");

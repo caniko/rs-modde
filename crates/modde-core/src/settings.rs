@@ -10,7 +10,7 @@ use crate::resolver::GameId;
 /// Stored as TOML at `<config_dir>/modde/settings.toml`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AppSettings {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub nexus_api_key: String,
     /// Configured game install paths — typically 1–4 games.
     /// `SmallVec<[_; 4]>` keeps ≤4 entries inline (no heap allocation).
@@ -161,8 +161,10 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("settings.toml");
 
-        let mut original = AppSettings::default();
-        original.nexus_api_key = "test-key-123".into();
+        let mut original = AppSettings {
+            nexus_api_key: "test-key-123".into(),
+            ..AppSettings::default()
+        };
         original.set_game_path("cyberpunk2077", PathBuf::from("/games/cp2077"));
         original.set_game_path("skyrim-se", PathBuf::from("/games/skyrim"));
         original.selected_game = Some("cyberpunk2077".into());

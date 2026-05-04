@@ -231,13 +231,10 @@ fn clean_archive_name(name: &str) -> String {
     // Strip extension.
     let stem = name.rsplit_once('.').map_or(name, |(s, _)| s);
     // Nexus filenames: "ModName-modid-version-timestamp". Strip from first `-{digits}`.
-    if let Some(idx) = stem.find('-').and_then(|i| {
-        if stem[i + 1..].starts_with(|c: char| c.is_ascii_digit()) {
-            Some(i)
-        } else {
-            None
-        }
-    }) {
+    if let Some(idx) = stem
+        .find('-')
+        .filter(|&i| stem[i + 1..].starts_with(|c: char| c.is_ascii_digit()))
+    {
         stem[..idx].replace('_', " ")
     } else {
         stem.replace('_', " ")

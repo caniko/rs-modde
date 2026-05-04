@@ -160,10 +160,74 @@ fn detect_method(dir: &Path, probe: &InstallProbe) -> InstallMethod {
         return InstallMethod::BareExtract;
     }
 
-    // 6. Fall through to Unknown.
+    // 6. User-config overlay — last fallback before Unknown.
+    //
+    // The plugin had to advertise a `UserConfig` deploy target for
+    // this branch to fire (probe carries the id). We additionally
+    // require *every* file in the tree to look like a config file:
+    // an unrecognized layout that happens to ship one INI alongside
+    // a binary blob should still be `Unknown` and prompt a dossier
+    // dump rather than silently routing the binary into the user's
+    // config dir.
+    if let Some(target_id) = probe.user_config_target
+        && tree_is_only_config(dir)
+    {
+        return InstallMethod::UserConfigOverlay {
+            target_id: target_id.to_string(),
+        };
+    }
+
+    // 7. Fall through to Unknown.
     InstallMethod::Unknown {
         reason: "no matching install method — dossier should be dumped".to_string(),
     }
+}
+
+/// Recognized config-file extensions for the `UserConfigOverlay` branch.
+///
+/// Kept conservative on purpose: an archive containing extensions
+/// outside this list (e.g. `.dll`, `.pak`, `.exe`) is *not* a config
+/// overlay even if it also contains an INI. Adding extensions here
+/// expands what's considered "user config payload" everywhere at once.
+const USER_CONFIG_EXTENSIONS: &[&str] = &[
+    "ini", "cfg", "conf", "json", "toml", "yaml", "yml", "xml",
+];
+
+/// `true` when every regular file in `dir` (recursively) has an
+/// extension in [`USER_CONFIG_EXTENSIONS`]. Empty directories return
+/// `false` — there's no config payload to deploy.
+fn tree_is_only_config(dir: &Path) -> bool {
+    fn visit(dir: &Path, saw_any: &mut bool) -> bool {
+        let Ok(rd) = fs::read_dir(dir) else {
+            return false;
+        };
+        for entry in rd.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if !visit(&path, saw_any) {
+                    return false;
+                }
+                continue;
+            }
+            if !path.is_file() {
+                continue;
+            }
+            *saw_any = true;
+            let Some(ext) = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(str::to_ascii_lowercase)
+            else {
+                return false;
+            };
+            if !USER_CONFIG_EXTENSIONS.iter().any(|e| *e == ext) {
+                return false;
+            }
+        }
+        true
+    }
+    let mut saw_any = false;
+    visit(dir, &mut saw_any) && saw_any
 }
 
 fn looks_like_bain(dir: &Path) -> bool {
@@ -319,6 +383,46 @@ mod tests {
         touch(&tmp.path().join("mystery_blob.bin"));
 
         let probe = InstallProbe::noop();
+        let plan = analyze(tmp.path(), &probe, "h".to_string()).unwrap();
+        assert!(matches!(plan.method, InstallMethod::Unknown { .. }));
+    }
+
+    #[test]
+    fn detects_user_config_overlay() {
+        let tmp = tempfile::tempdir().unwrap();
+        touch(&tmp.path().join("Engine.ini"));
+        touch(&tmp.path().join("GameUserSettings.ini"));
+
+        let probe = InstallProbe::noop().with_user_config_target("test-config");
+        let plan = analyze(tmp.path(), &probe, "h".to_string()).unwrap();
+        match plan.method {
+            InstallMethod::UserConfigOverlay { target_id } => assert_eq!(target_id, "test-config"),
+            other => panic!("expected UserConfigOverlay, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn user_config_overlay_requires_plugin_target() {
+        // Same archive, no plugin target advertised → must fall through
+        // to Unknown rather than route INIs nowhere.
+        let tmp = tempfile::tempdir().unwrap();
+        touch(&tmp.path().join("Engine.ini"));
+
+        let probe = InstallProbe::noop();
+        let plan = analyze(tmp.path(), &probe, "h".to_string()).unwrap();
+        assert!(matches!(plan.method, InstallMethod::Unknown { .. }));
+    }
+
+    #[test]
+    fn user_config_overlay_rejects_mixed_payloads() {
+        // INI alongside a binary blob is not a config overlay — we
+        // refuse to silently route an unknown binary into the user's
+        // config dir.
+        let tmp = tempfile::tempdir().unwrap();
+        touch(&tmp.path().join("Engine.ini"));
+        touch(&tmp.path().join("payload.bin"));
+
+        let probe = InstallProbe::noop().with_user_config_target("test-config");
         let plan = analyze(tmp.path(), &probe, "h".to_string()).unwrap();
         assert!(matches!(plan.method, InstallMethod::Unknown { .. }));
     }

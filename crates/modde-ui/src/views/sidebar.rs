@@ -30,7 +30,7 @@ enum NavTarget {
     Downloads,
     Diagnostics,
     Tools,
-    Verify,
+    Executables,
     Settings,
 }
 
@@ -46,7 +46,7 @@ impl NavTarget {
             NavTarget::Downloads => View::Downloads,
             NavTarget::Diagnostics => View::Diagnostics,
             NavTarget::Tools => View::Tools,
-            NavTarget::Verify => View::Verify,
+            NavTarget::Executables => View::Executables,
             NavTarget::Settings => View::Settings,
         }
     }
@@ -66,8 +66,16 @@ const GAME_ITEMS: &[NavItem] = &[
         target: NavTarget::DataTab,
     },
     NavItem {
+        label: "Diagnostics",
+        target: NavTarget::Diagnostics,
+    },
+    NavItem {
         label: "Tools",
         target: NavTarget::Tools,
+    },
+    NavItem {
+        label: "Executables",
+        target: NavTarget::Executables,
     },
 ];
 
@@ -90,17 +98,6 @@ const INSTALL_ITEMS: &[NavItem] = &[
     },
 ];
 
-const MAINTENANCE_ITEMS: &[NavItem] = &[
-    NavItem {
-        label: "Diagnostics",
-        target: NavTarget::Diagnostics,
-    },
-    NavItem {
-        label: "Verify",
-        target: NavTarget::Verify,
-    },
-];
-
 const GENERAL_ITEMS: &[NavItem] = &[NavItem {
     label: "Settings",
     target: NavTarget::Settings,
@@ -116,10 +113,6 @@ const NAV_GROUPS: &[NavGroup] = &[
         items: INSTALL_ITEMS,
     },
     NavGroup {
-        group: SidebarGroup::Maintenance,
-        items: MAINTENANCE_ITEMS,
-    },
-    NavGroup {
         group: SidebarGroup::General,
         items: GENERAL_ITEMS,
     },
@@ -132,6 +125,7 @@ pub fn view<'a>(
     profiles: &'a [modde_core::profile::ProfileSummary],
     active_profile: &'a Option<String>,
     experiment_depth: usize,
+    save_profiles_supported: bool,
     mod_details: Option<&'a ModDetailsState>,
     save_details: Option<&'a SaveDetailsState>,
 ) -> Element<'a, Message> {
@@ -164,6 +158,12 @@ pub fn view<'a>(
             let mut group_items = column![].spacing(4);
             for item in group.items {
                 let view = item.target.view();
+                if matches!(item.target, NavTarget::Saves)
+                    && !save_profiles_supported
+                    && !same_view_kind(&view, active_view)
+                {
+                    continue;
+                }
                 if show_all_items || same_view_kind(&view, active_view) {
                     group_items = group_items.push(nav_button(item.label, view, active_view));
                 }

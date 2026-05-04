@@ -67,7 +67,7 @@ fn sample_manifest() -> WabbajackManifest {
     let fixture_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/wabbajack_manifest.json");
     let json = std::fs::read_to_string(&fixture_path)
-        .unwrap_or_else(|e| panic!("failed to read fixture {fixture_path:?}: {e}"));
+        .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", fixture_path.display()));
     serde_json::from_str(&json).expect("parse wabbajack_manifest.json fixture")
 }
 

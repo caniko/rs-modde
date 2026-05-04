@@ -30,6 +30,31 @@ pub enum InstallMethod {
     /// that drop straight into Skyrim's `Data/`).
     BareExtract,
 
+    /// Archive contains a content root directory that should be stripped
+    /// before staging. Example: `Data/Foo.esp` stages as `Foo.esp` for games
+    /// whose deploy root is already `Data/`.
+    StripContentRoot { root: String },
+
+    /// Archive root is one directory-style mod. Files are staged under a
+    /// stable mod directory, usually the store directory name.
+    DirectoryMod { directory_name: Option<String> },
+
+    /// Archive root is one directory-style mod whose stable directory name
+    /// is read from an XML marker such as Bannerlord's `SubModule.xml`.
+    DirectoryModFromXml {
+        marker: PathBuf,
+        id_attr: String,
+        fallback_name: Option<String>,
+    },
+
+    /// Archive contains multiple game-root overlay directories such as
+    /// `mods/`, `dlc/`, and `bin/`.
+    MultiRootOverlay { roots: Vec<String> },
+
+    /// Archive contains one or more loose files that should stage directly
+    /// into the game's resolved mod root.
+    SingleFileSet,
+
     /// FOMOD installer. `module_config` points at the archive-relative
     /// `fomod/ModuleConfig.xml`. `config_toml` is a TOML-serialized
     /// `fomod_oxide::DeclarativeConfig` describing the chosen options —
@@ -63,6 +88,18 @@ pub enum InstallMethod {
         base: Box<InstallMethod>,
     },
 
+    /// Mod ships files that belong in a plugin-supplied alternate root
+    /// rather than the game install dir. The canonical case is
+    /// per-user config tweak packs (UE4/UE5 `Saved/Config`, Bethesda
+    /// `Documents/My Games/<Game>` INIs), but the variant is generic:
+    /// `target_id` is whatever id the game plugin advertised via
+    /// `GamePlugin::deploy_targets`, and the deploy step resolves it
+    /// to a real path through `GamePlugin::resolve_deploy_target`.
+    ///
+    /// Files are staged unchanged into the mod's store dir (same as
+    /// `BareExtract`); the routing only differs at *deploy* time.
+    UserConfigOverlay { target_id: String },
+
     /// Detection failed. `reason` is a short human-readable string and a
     /// dossier has been (or should be) written so a skill can extend the
     /// installer to handle this layout.
@@ -75,11 +112,17 @@ impl InstallMethod {
     pub fn label(&self) -> &'static str {
         match self {
             InstallMethod::BareExtract => "bare",
+            InstallMethod::StripContentRoot { .. } => "strip-content-root",
+            InstallMethod::DirectoryMod { .. } => "directory-mod",
+            InstallMethod::DirectoryModFromXml { .. } => "directory-mod-xml",
+            InstallMethod::MultiRootOverlay { .. } => "multi-root-overlay",
+            InstallMethod::SingleFileSet => "single-file-set",
             InstallMethod::Fomod { .. } => "fomod",
             InstallMethod::REDmod { .. } => "redmod",
             InstallMethod::Bain { .. } => "bain",
             InstallMethod::DllOverlay { .. } => "dll-overlay",
             InstallMethod::ScriptMerge { .. } => "script-merge",
+            InstallMethod::UserConfigOverlay { .. } => "user-config-overlay",
             InstallMethod::Unknown { .. } => "unknown",
         }
     }
@@ -89,8 +132,14 @@ impl InstallMethod {
     pub fn is_ready(&self) -> bool {
         match self {
             InstallMethod::BareExtract
+            | InstallMethod::StripContentRoot { .. }
+            | InstallMethod::DirectoryMod { .. }
+            | InstallMethod::DirectoryModFromXml { .. }
+            | InstallMethod::MultiRootOverlay { .. }
+            | InstallMethod::SingleFileSet
             | InstallMethod::REDmod { .. }
-            | InstallMethod::DllOverlay { .. } => true,
+            | InstallMethod::DllOverlay { .. }
+            | InstallMethod::UserConfigOverlay { .. } => true,
             InstallMethod::Fomod { config_toml, .. } => config_toml.is_some(),
             InstallMethod::Bain {
                 selected_subdirs, ..

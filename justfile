@@ -33,29 +33,13 @@ gui:
 
 # ─── Publishing ───────────────────────────────────────────────
 
-# Publish all crates to crates.io (dependency order)
-publish:
-    cargo publish -p modde-core
-    cargo publish -p modde-sources
-    cargo publish -p modde-games
-    cargo publish -p modde-ui --no-verify
-    cargo publish -p modde-cli --no-verify
+# Dry-run a cargo-release workspace release (usage: just release-dry 0.2.0)
+release-dry VERSION:
+    cargo release {{VERSION}} --workspace --no-confirm
 
-# Dry-run publish (no upload)
-publish-dry:
-    cargo publish -p modde-core --dry-run
-    cargo publish -p modde-sources --dry-run
-    cargo publish -p modde-games --dry-run
-    cargo publish -p modde-ui --dry-run --no-verify
-    cargo publish -p modde-cli --dry-run --no-verify
-
-# Tag and push a release (usage: just release 0.2.0)
+# Release all crates with cargo-release, then push the tag (usage: just release 0.2.0)
 release VERSION:
-    sed -i 's/^Version:.*/Version:        {{VERSION}}/' modde.spec
-    git add modde.spec
-    git commit -m "chore: bump spec to v{{VERSION}}"
-    git tag -a "v{{VERSION}}" -m "v{{VERSION}}"
-    git push origin trunk "v{{VERSION}}"
+    cargo release {{VERSION}} --workspace --execute --no-confirm
 
 # ─── COPR ─────────────────────────────────────────────────────
 

@@ -38,6 +38,87 @@ pub fn execute(
     let files = match &plan.method {
         InstallMethod::BareExtract => stage_tree(&source_root, store_mod_dir, None)?,
 
+        InstallMethod::StripContentRoot { root } => {
+            let content_root = source_root.join(root);
+            if !content_root.is_dir() {
+                return Err(InstallerError::MissingFile(root.clone()));
+            }
+            stage_tree_into(
+                &content_root,
+                store_mod_dir,
+                store_mod_dir,
+                Some(PathBuf::from(root)),
+            )?
+        }
+
+        InstallMethod::DirectoryMod { directory_name } => {
+            let dir_name = directory_name
+                .clone()
+                .unwrap_or_else(|| store_dir_name(store_mod_dir));
+            let nested = store_mod_dir.join(&dir_name);
+            fs::create_dir_all(&nested)?;
+            stage_tree_into(&source_root, &nested, store_mod_dir, None)?
+        }
+
+        InstallMethod::DirectoryModFromXml {
+            marker,
+            id_attr,
+            fallback_name,
+        } => {
+            let marker_path = source_root.join(marker);
+            if !marker_path.is_file() {
+                return Err(InstallerError::MissingFile(
+                    marker.to_string_lossy().to_string(),
+                ));
+            }
+            let dir_name = read_xml_attr(&marker_path, id_attr)
+                .or_else(|| fallback_name.clone())
+                .unwrap_or_else(|| store_dir_name(store_mod_dir));
+            let nested = store_mod_dir.join(&dir_name);
+            fs::create_dir_all(&nested)?;
+            stage_tree_into(&source_root, &nested, store_mod_dir, None)?
+        }
+
+        InstallMethod::MultiRootOverlay { roots } => {
+            let mut out = Vec::new();
+            for root in roots {
+                let root_src = source_root.join(root);
+                if root_src.exists() {
+                    out.extend(stage_tree_into(
+                        &root_src,
+                        &store_mod_dir.join(root),
+                        store_mod_dir,
+                        Some(PathBuf::from(root)),
+                    )?);
+                }
+            }
+            out
+        }
+
+        InstallMethod::SingleFileSet => {
+            let mut out = Vec::new();
+            for entry in fs::read_dir(&source_root)? {
+                let entry = entry?;
+                let path = entry.path();
+                if !path.is_file() {
+                    continue;
+                }
+                let dest = store_mod_dir.join(entry.file_name());
+                if fs::rename(&path, &dest).is_err() {
+                    fs::copy(&path, &dest)?;
+                    let _ = fs::remove_file(&path);
+                }
+                let size = fs::metadata(&dest).map_or(0, |m| m.len());
+                out.push(StagedFile {
+                    rel_path: dest_rel(store_mod_dir, &dest),
+                    origin_rel_path: entry.file_name().to_string_lossy().to_string(),
+                    size,
+                    merge_group: None,
+                });
+            }
+            out
+        }
+
         InstallMethod::REDmod { manifest: _ } => {
             // REDmod layout already ships under a top-level dir the game
             // expects; we stage everything under `mods/<mod-name>/`. The
@@ -166,6 +247,13 @@ pub fn execute(
             files
         }
 
+        InstallMethod::UserConfigOverlay { .. } => {
+            // Stage like `BareExtract`: the alternate routing only
+            // matters at deploy time, where the deploy command reads
+            // back the install method and resolves the target id.
+            stage_tree(&source_root, store_mod_dir, None)?
+        }
+
         InstallMethod::Unknown { reason } => {
             return Err(InstallerError::UnknownMethod {
                 reason: reason.clone(),
@@ -184,6 +272,15 @@ pub fn execute(
 fn stage_tree(
     src: &Path,
     dest: &Path,
+    origin_prefix: Option<PathBuf>,
+) -> InstallerResult<Vec<StagedFile>> {
+    stage_tree_into(src, dest, dest, origin_prefix)
+}
+
+fn stage_tree_into(
+    src: &Path,
+    dest: &Path,
+    manifest_root: &Path,
     origin_prefix: Option<PathBuf>,
 ) -> InstallerResult<Vec<StagedFile>> {
     let mut out = Vec::new();
@@ -205,7 +302,7 @@ fn stage_tree(
             None => rel.to_string_lossy().to_string(),
         };
         out.push(StagedFile {
-            rel_path: dest_rel(dest, &dest_path),
+            rel_path: dest_rel(manifest_root, &dest_path),
             origin_rel_path,
             size,
             merge_group: None,
@@ -219,6 +316,34 @@ fn dest_rel(dest_root: &Path, dest_path: &Path) -> String {
         |_| dest_path.to_string_lossy().to_string(),
         |p| p.to_string_lossy().to_string(),
     )
+}
+
+fn store_dir_name(store_mod_dir: &Path) -> String {
+    store_mod_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("mod")
+        .to_string()
+}
+
+fn read_xml_attr(path: &Path, attr: &str) -> Option<String> {
+    let content = fs::read_to_string(path).ok()?;
+    if let Some((element, attr)) = attr.split_once('.') {
+        let marker = format!("<{element}");
+        let start = content.find(&marker)?;
+        let rest = &content[start..];
+        return read_attr_from_str(rest, attr);
+    }
+    read_attr_from_str(&content, attr)
+}
+
+fn read_attr_from_str(content: &str, attr: &str) -> Option<String> {
+    let needle = format!("{attr}=\"");
+    let start = content.find(&needle)? + needle.len();
+    let rest = &content[start..];
+    let end = rest.find('"')?;
+    let value = rest[..end].trim();
+    (!value.is_empty()).then(|| value.to_string())
 }
 
 #[cfg(test)]

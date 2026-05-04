@@ -1,11 +1,12 @@
-use std::time::Duration;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::app::{Message, ReorderDirection, SidebarGroup, View, WabbajackTab};
 use crate::views::browse_nexus::BrowseTab;
-use crate::views::selectable_text::text;
-use iced::widget::{Button, container, tooltip};
-use iced::{Element, Length};
+use iced::Element;
+use iced::widget::{Button, mouse_area};
 use modde_core::filter::FilterKind;
+
+static NEXT_BUTTON_HOVER_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Trait-enforced hover copy for GUI button actions.
 pub trait ButtonActionDescription {
@@ -70,26 +71,50 @@ pub enum ButtonAction {
     PauseDownload(usize),
     ResumeDownload(usize),
     CancelDownload(usize),
-    RunVerify,
     RunDiagnostics,
     ClearOverwrite,
     MoveOverwriteToMod(String),
     LoadSaveHistory,
     ValidateNexusKey,
+    ToggleNexusApiKeyVisibility,
+    ReplaceNexusApiKey,
+    RemoveNexusConfigKey,
     BrowseGamePath,
     BrowseDownloadDir,
     CreateStockSnapshot,
     VerifyStockSnapshot,
     RefreshTools,
     SelectToolTab(String),
+    UpdateToolSetting {
+        tool_id: String,
+        key: String,
+        value: serde_json::Value,
+    },
+    ToggleToolAdvancedSettings,
     ApplyTool(String),
     RevertTool(String),
+    ActivateOptiScaler,
+    DeactivateOptiScaler,
     AdoptOptiScaler,
     RestoreOptiScalerBackup,
     ResetOptiScalerConfig,
+    RestoreToolSettings {
+        tool_id: String,
+        node_id: String,
+    },
     RefreshOptiScalerReleases,
     InstallOptiScalerRelease,
+    RefreshProtonVersions,
     InstallProtonVersion,
+    OpenExecutableEditor,
+    RefreshExecutables,
+    ClearExecutableDraft,
+    EditExecutable(String),
+    SaveExecutable,
+    RemoveExecutable(String),
+    RunExecutable(String),
+    BrowseExecutablePath,
+    BrowseExecutableWorkingDir,
     WindowMinimize,
     WindowToggleMaximize,
     WindowClose,
@@ -200,11 +225,8 @@ impl ButtonActionDescription for ButtonAction {
             ButtonAction::PauseDownload(_) => "Pause this active download.",
             ButtonAction::ResumeDownload(_) => "Resume or retry this download.",
             ButtonAction::CancelDownload(_) => "Cancel this queued or active download.",
-            ButtonAction::RunVerify => {
-                "Check the active profile deployment for missing files and integrity problems."
-            }
             ButtonAction::RunDiagnostics => {
-                "Scan the active profile for common modding and configuration issues."
+                "Scan the active profile for game-specific modding and integrity issues."
             }
             ButtonAction::ClearOverwrite => {
                 "Delete all files currently stored in the profile override area."
@@ -218,6 +240,15 @@ impl ButtonActionDescription for ButtonAction {
             ButtonAction::ValidateNexusKey => {
                 "Validate the configured Nexus Mods API key and show account status."
             }
+            ButtonAction::ToggleNexusApiKeyVisibility => {
+                "Show or hide the Nexus Mods API key in the settings field."
+            }
+            ButtonAction::ReplaceNexusApiKey => {
+                "Save this key to modde's own Nexus API key config file."
+            }
+            ButtonAction::RemoveNexusConfigKey => {
+                "Remove only modde's own Nexus API key config file."
+            }
             ButtonAction::BrowseGamePath => "Choose the game installation directory.",
             ButtonAction::BrowseDownloadDir => "Choose where downloaded mod archives are stored.",
             ButtonAction::CreateStockSnapshot => {
@@ -230,11 +261,23 @@ impl ButtonActionDescription for ButtonAction {
                 "Refresh detected gaming tools and overlay integration status."
             }
             ButtonAction::SelectToolTab(_) => "Switch to this tool's game-specific settings tab.",
+            ButtonAction::UpdateToolSetting { .. } => {
+                "Apply this value to the selected tool setting."
+            }
+            ButtonAction::ToggleToolAdvancedSettings => {
+                "Show or hide advanced tool settings for the active tool."
+            }
             ButtonAction::ApplyTool(_) => {
                 "Apply this tool's required files or configuration to the game directory."
             }
             ButtonAction::RevertTool(_) => {
                 "Remove this tool's applied files from the game directory."
+            }
+            ButtonAction::ActivateOptiScaler => {
+                "Apply OptiScaler files and enable its launch integration."
+            }
+            ButtonAction::DeactivateOptiScaler => {
+                "Revert OptiScaler files and disable its launch integration."
             }
             ButtonAction::AdoptOptiScaler => {
                 "Record the detected OptiScaler files as managed for this game."
@@ -245,14 +288,45 @@ impl ButtonActionDescription for ButtonAction {
             ButtonAction::ResetOptiScalerConfig => {
                 "Clear OptiScaler INI overrides so the selected release defaults are used."
             }
+            ButtonAction::RestoreToolSettings { .. } => {
+                "Restore this settings version without applying or reverting game files."
+            }
             ButtonAction::RefreshOptiScalerReleases => {
                 "Load OptiScaler release tags and assets from the official GitHub repository."
             }
             ButtonAction::InstallOptiScalerRelease => {
                 "Download and cache the selected OptiScaler release for this game."
             }
+            ButtonAction::RefreshProtonVersions => {
+                "Load GE-Proton release versions from the official GitHub repository."
+            }
             ButtonAction::InstallProtonVersion => {
                 "Install the selected GEProton version through protonup-rs."
+            }
+            ButtonAction::OpenExecutableEditor => {
+                "Open the editor for adding a new executable launch target."
+            }
+            ButtonAction::RefreshExecutables => {
+                "Refresh executable launch targets for the selected game."
+            }
+            ButtonAction::ClearExecutableDraft => {
+                "Close the executable editor and discard unsaved field values."
+            }
+            ButtonAction::EditExecutable(_) => {
+                "Load this executable into the editor so its settings can be updated."
+            }
+            ButtonAction::SaveExecutable => {
+                "Save the executable launch target for the selected game."
+            }
+            ButtonAction::RemoveExecutable(_) => {
+                "Remove this executable launch target from the selected game."
+            }
+            ButtonAction::RunExecutable(_) => {
+                "Run this executable through the active profile with overwrite capture."
+            }
+            ButtonAction::BrowseExecutablePath => "Choose the executable file to launch.",
+            ButtonAction::BrowseExecutableWorkingDir => {
+                "Choose the working directory for this executable."
             }
             ButtonAction::WindowMinimize => "Minimize the modde window.",
             ButtonAction::WindowToggleMaximize => {
@@ -334,26 +408,53 @@ impl From<ButtonAction> for Message {
             ButtonAction::PauseDownload(id) => Message::PauseDownload(id),
             ButtonAction::ResumeDownload(id) => Message::ResumeDownload(id),
             ButtonAction::CancelDownload(id) => Message::CancelDownload(id),
-            ButtonAction::RunVerify => Message::RunVerify,
             ButtonAction::RunDiagnostics => Message::RunDiagnostics,
             ButtonAction::ClearOverwrite => Message::ClearOverwrite,
             ButtonAction::MoveOverwriteToMod(mod_id) => Message::MoveOverwriteToMod(mod_id),
             ButtonAction::LoadSaveHistory => Message::LoadSaveHistory,
             ButtonAction::ValidateNexusKey => Message::ValidateNexusKey,
+            ButtonAction::ToggleNexusApiKeyVisibility => Message::ToggleNexusApiKeyVisibility,
+            ButtonAction::ReplaceNexusApiKey => Message::ReplaceNexusApiKey,
+            ButtonAction::RemoveNexusConfigKey => Message::RemoveNexusConfigKey,
             ButtonAction::BrowseGamePath => Message::BrowseGamePath,
             ButtonAction::BrowseDownloadDir => Message::BrowseDownloadDir,
             ButtonAction::CreateStockSnapshot => Message::CreateStockSnapshot,
             ButtonAction::VerifyStockSnapshot => Message::VerifyStockSnapshot,
             ButtonAction::RefreshTools => Message::RefreshTools,
             ButtonAction::SelectToolTab(tool_id) => Message::SelectToolTab(tool_id),
+            ButtonAction::UpdateToolSetting {
+                tool_id,
+                key,
+                value,
+            } => Message::UpdateToolSetting {
+                tool_id,
+                key,
+                value,
+            },
+            ButtonAction::ToggleToolAdvancedSettings => Message::ToggleToolAdvancedSettings,
             ButtonAction::ApplyTool(tool_id) => Message::ApplyTool(tool_id),
             ButtonAction::RevertTool(tool_id) => Message::RevertTool(tool_id),
+            ButtonAction::ActivateOptiScaler => Message::ActivateOptiScaler,
+            ButtonAction::DeactivateOptiScaler => Message::DeactivateOptiScaler,
             ButtonAction::AdoptOptiScaler => Message::AdoptOptiScaler,
             ButtonAction::RestoreOptiScalerBackup => Message::RestoreOptiScalerBackup,
             ButtonAction::ResetOptiScalerConfig => Message::ResetOptiScalerConfig,
+            ButtonAction::RestoreToolSettings { tool_id, node_id } => {
+                Message::RestoreToolSettings { tool_id, node_id }
+            }
             ButtonAction::RefreshOptiScalerReleases => Message::RefreshOptiScalerReleases,
             ButtonAction::InstallOptiScalerRelease => Message::InstallOptiScalerRelease,
+            ButtonAction::RefreshProtonVersions => Message::RefreshProtonVersions,
             ButtonAction::InstallProtonVersion => Message::InstallProtonVersion,
+            ButtonAction::OpenExecutableEditor => Message::OpenExecutableEditor,
+            ButtonAction::RefreshExecutables => Message::RefreshExecutables,
+            ButtonAction::ClearExecutableDraft => Message::ClearExecutableDraft,
+            ButtonAction::EditExecutable(name) => Message::EditExecutable(name),
+            ButtonAction::SaveExecutable => Message::SaveExecutable,
+            ButtonAction::RemoveExecutable(name) => Message::RemoveExecutable(name),
+            ButtonAction::RunExecutable(name) => Message::RunExecutable(name),
+            ButtonAction::BrowseExecutablePath => Message::BrowseExecutablePath,
+            ButtonAction::BrowseExecutableWorkingDir => Message::BrowseExecutableWorkingDir,
             ButtonAction::WindowMinimize => Message::WindowMinimize,
             ButtonAction::WindowToggleMaximize => Message::WindowToggleMaximize,
             ButtonAction::WindowClose => Message::WindowClose,
@@ -398,17 +499,12 @@ impl<'a> DescribedButtonExt<'a> for Button<'a, Message> {
 }
 
 fn described<'a>(button: Button<'a, Message>, description: &'static str) -> Element<'a, Message> {
-    tooltip(
-        button,
-        container(text(description).size(12))
-            .padding(6)
-            .width(Length::Shrink)
-            .style(container::rounded_box),
-        tooltip::Position::FollowCursor,
-    )
-    .gap(8)
-    .delay(Duration::from_secs(2))
-    .into()
+    let id = NEXT_BUTTON_HOVER_ID.fetch_add(1, Ordering::Relaxed);
+
+    mouse_area(button)
+        .on_enter(Message::ButtonHoverStarted { id, description })
+        .on_exit(Message::ButtonHoverEnded { id })
+        .into()
 }
 
 #[cfg(test)]
@@ -497,7 +593,6 @@ mod tests {
             ("Pause", ButtonAction::PauseDownload(0)),
             ("Resume", ButtonAction::ResumeDownload(0)),
             ("Cancel", ButtonAction::CancelDownload(0)),
-            ("Run Verify", ButtonAction::RunVerify),
             ("Run Diagnostics", ButtonAction::RunDiagnostics),
             ("Clear All", ButtonAction::ClearOverwrite),
             (
@@ -506,12 +601,27 @@ mod tests {
             ),
             ("Refresh", ButtonAction::LoadSaveHistory),
             ("Validate", ButtonAction::ValidateNexusKey),
+            ("Show", ButtonAction::ToggleNexusApiKeyVisibility),
+            ("Replace", ButtonAction::ReplaceNexusApiKey),
+            ("Remove modde config", ButtonAction::RemoveNexusConfigKey),
             ("Browse", ButtonAction::BrowseGamePath),
             ("Browse", ButtonAction::BrowseDownloadDir),
             ("Create Snapshot", ButtonAction::CreateStockSnapshot),
             ("Verify Snapshot", ButtonAction::VerifyStockSnapshot),
             ("Refresh", ButtonAction::RefreshTools),
             ("Tool", ButtonAction::SelectToolTab("mangohud".to_string())),
+            (
+                "Tool Setting",
+                ButtonAction::UpdateToolSetting {
+                    tool_id: "tool".to_string(),
+                    key: "setting".to_string(),
+                    value: serde_json::json!(true),
+                },
+            ),
+            (
+                "Advanced Settings",
+                ButtonAction::ToggleToolAdvancedSettings,
+            ),
             ("Apply", ButtonAction::ApplyTool("tool".to_string())),
             ("Revert", ButtonAction::RevertTool("tool".to_string())),
             ("Adopt OptiScaler", ButtonAction::AdoptOptiScaler),
@@ -519,7 +629,20 @@ mod tests {
             ("Reset OptiScaler", ButtonAction::ResetOptiScalerConfig),
             ("Releases", ButtonAction::RefreshOptiScalerReleases),
             ("Install OptiScaler", ButtonAction::InstallOptiScalerRelease),
+            ("Proton Versions", ButtonAction::RefreshProtonVersions),
             ("Install Proton", ButtonAction::InstallProtonVersion),
+            ("Add executable", ButtonAction::OpenExecutableEditor),
+            ("Refresh", ButtonAction::RefreshExecutables),
+            ("Clear", ButtonAction::ClearExecutableDraft),
+            ("Edit", ButtonAction::EditExecutable("xEdit".to_string())),
+            ("Save", ButtonAction::SaveExecutable),
+            (
+                "Remove",
+                ButtonAction::RemoveExecutable("xEdit".to_string()),
+            ),
+            ("Run", ButtonAction::RunExecutable("xEdit".to_string())),
+            ("Browse", ButtonAction::BrowseExecutablePath),
+            ("Browse", ButtonAction::BrowseExecutableWorkingDir),
             ("-", ButtonAction::WindowMinimize),
             ("Maximize", ButtonAction::WindowToggleMaximize),
             ("Close", ButtonAction::WindowClose),
@@ -541,6 +664,20 @@ mod tests {
             assert!(
                 description.len() > label.len(),
                 "description for {action:?} is not more detailed than {label:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn optiscaler_state_actions_have_descriptions() {
+        for action in [
+            ButtonAction::AdoptOptiScaler,
+            ButtonAction::RestoreOptiScalerBackup,
+            ButtonAction::ResetOptiScalerConfig,
+        ] {
+            assert!(
+                !action.button_description().trim().is_empty(),
+                "missing OptiScaler description for {action:?}"
             );
         }
     }

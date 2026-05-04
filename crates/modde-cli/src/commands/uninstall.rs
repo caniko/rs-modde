@@ -72,6 +72,7 @@ pub async fn handle(mod_id: String, profile_name: Option<String>) -> Result<()> 
         profile.name,
         staged_files.len()
     );
+
     Ok(())
 }
 

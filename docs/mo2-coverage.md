@@ -24,7 +24,7 @@ This document is intentionally conservative.
 | FOMOD | `Done` | Wizard flow plus declarative config generation/application are shipped. |
 | BAIN | `Partial` | Detection and execution scaffolding exist, but the required user-selection flow is not finished. |
 | Generic game support | `Not shipped` | `GenericGame` exists as an internal helper, not as a polished user-facing “support any game” feature. |
-| Starfield save tracking | `Not shipped` | The Starfield game plugin exists, but save tracking is intentionally unavailable until it has a real tracker. |
+| Starfield save tracking | `Done` | Starfield `.sfs` files are tracked through the shared save tracker path. |
 | Executables management / mod info dialog | `Not shipped` | This remains the biggest MO2 parity gap. |
 
 ## Supported games
@@ -33,10 +33,10 @@ This document is intentionally conservative.
 |------|--------|-------|
 | Skyrim SE / AE | `Done` | Plugins, LOOT, diagnostics, VFS, saves, and Wabbajack/Nexus workflows are the strongest path today. |
 | Fallout 4 | `Done` | Plugins, diagnostics, VFS, and save tracking are shipped. |
-| Fallout 76 | `Partial` | VFS and plugin handling exist; saves are effectively server-side and only lightly represented locally. |
-| Starfield | `Partial` | Game plugin, plugin handling, and VFS exist; save tracking is not shipped yet. |
+| Fallout 76 | `Partial` | VFS, plugin handling, and BA2 scanning exist; saves are effectively server-side and only lightly represented locally. |
+| Starfield | `Partial` | Game plugin, plugin handling, VFS, diagnostics, and `.sfs` save tracking exist. |
 | Cyberpunk 2077 | `Done` | REDmod/CET/TweakXL-aware install and launch flows are shipped. |
-| Stellar Blade | `Partial` | UE4/UE5-style support is present, but depth is below the Bethesda/Cyberpunk paths. |
+| Stellar Blade | `Partial` | UE4/UE5-style deployment, scanning, conflicts, and local save tracking are present, but depth is below the Bethesda/Cyberpunk paths. |
 
 ## What changed in this audit pass
 

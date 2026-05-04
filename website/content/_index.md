@@ -28,7 +28,7 @@ description = "Virtual filesystem keeps your game directory clean. Mods overlay 
 
 [[extra.features]]
 title = "Multi-game"
-description = "Skyrim SE/AE, Fallout 4/76, Starfield, Cyberpunk 2077, and Stellar Blade. Support depth varies by game; Starfield save tracking is not shipped yet."
+description = "Skyrim SE/AE, Fallout 4/76, Starfield, Cyberpunk 2077, and Stellar Blade. Support depth varies by game."
 
 [[extra.features]]
 title = "Save vaults"

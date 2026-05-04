@@ -4,7 +4,7 @@ use tracing::info;
 use modde_core::profile::{ActivateResult, ProfileManager};
 use modde_core::save::SaveManager;
 
-use super::{compute_fingerprint, resolve_save_dir};
+use super::{compute_fingerprint, resolve_save_dir, supports_save_profiles};
 
 pub async fn handle(
     profile_name: Option<String>,
@@ -49,6 +49,10 @@ pub async fn handle(
                 ActivateResult::Activated => {
                     if save_dir.is_some() {
                         println!("Switched to profile: {target_profile} (saves swapped)");
+                    } else if matches!(supports_save_profiles(&game_id), Ok(false)) {
+                        println!(
+                            "Switched to profile: {target_profile} (save profiles unsupported)"
+                        );
                     } else {
                         println!("Switched to profile: {target_profile}");
                     }
@@ -94,14 +98,20 @@ pub async fn handle(
                         Ok(_) => println!("Saves auto-captured for profile '{target_profile}'."),
                         Err(e) => eprintln!("Warning: save auto-capture failed: {e}"),
                     }
+                } else if matches!(supports_save_profiles(&game_id), Ok(false)) {
+                    info!(game = %game_id, "save profiles unsupported, skipping capture");
                 }
             }
             None => {
-                println!(
-                    "Game launched via Steam (fire-and-forget).\n\
-                     Saves will be captured by the launch wrapper on exit, or run:\n  \
-                     modde save auto-capture --game {game_id}"
-                );
+                if matches!(supports_save_profiles(&game_id), Ok(false)) {
+                    println!("Game launched via Steam (fire-and-forget).");
+                } else {
+                    println!(
+                        "Game launched via Steam (fire-and-forget).\n\
+                         Saves will be captured by the launch wrapper on exit, or run:\n  \
+                         modde save auto-capture --game {game_id}"
+                    );
+                }
             }
         }
     }
