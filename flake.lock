@@ -200,6 +200,7 @@
           "nixpkgs"
         ],
         "rs-harbor": "rs-harbor",
+        "rs-harbor-macos-sdk-pin": "rs-harbor-macos-sdk-pin",
         "rust-overlay": [
           "rs-harbor",
           "rust-overlay"
@@ -215,17 +216,32 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1777536823,
-        "narHash": "sha256-5CaFjDcN4VLg5b6edZdjMiHpaTXphZdqmk89vONClY8=",
+        "lastModified": 1777960975,
+        "narHash": "sha256-5mFMsOmBc95EQ0jT+J+W10r0Sr0TVRshbfZHY1OVVnY=",
         "ref": "refs/heads/main",
-        "rev": "44130633fd18463270b4571eeb2ee9ab27e79ade",
-        "revCount": 14,
+        "rev": "cf8f04a7ad39594a4bc4805c0f88f55a6a507de4",
+        "revCount": 26,
         "type": "git",
         "url": "https://codeberg.org/caniko/rs-harbor.git"
       },
       "original": {
         "type": "git",
         "url": "https://codeberg.org/caniko/rs-harbor.git"
+      }
+    },
+    "rs-harbor-macos-sdk-pin": {
+      "locked": {
+        "lastModified": 1779004173,
+        "narHash": "sha256-CLTVNszR21O3Bd05fQ12rdm/89bcL7z7xp0NT3TAUVY=",
+        "ref": "refs/heads/main",
+        "rev": "df59522ba6dd77ed83f5e2c40104086a4792e0c0",
+        "revCount": 1,
+        "type": "git",
+        "url": "ssh://git@codeberg.org/caniko/rs-harbor-macos-sdk-pin.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "ssh://git@codeberg.org/caniko/rs-harbor-macos-sdk-pin.git"
       }
     },
     "rust-overlay": {
