@@ -299,7 +299,10 @@ mod tests {
         let path = gui_socket_path();
         let name = path.file_name().unwrap().to_string_lossy().to_string();
         let prefix = socket_prefix();
-        assert!(name.starts_with(&prefix), "expected prefix {prefix} in {name}");
+        assert!(
+            name.starts_with(&prefix),
+            "expected prefix {prefix} in {name}"
+        );
         assert!(name.ends_with(".sock"), "expected .sock suffix in {name}");
         let pid = std::process::id().to_string();
         assert!(name.contains(&pid), "expected pid {pid} in {name}");

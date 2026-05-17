@@ -1,3 +1,6 @@
+use std::sync::{OnceLock, RwLock};
+
+use crate::generic::loader::load_user_games;
 use crate::optiscaler::OptiScalerProfile;
 use crate::policies::{CollisionPolicy, PolicyCollisionClassifier};
 use crate::traits::{GamePlugin, ModScanner, SaveTracker};
@@ -10,6 +13,7 @@ pub enum EngineFamily {
     Bannerlord,
     CyberpunkRedEngine,
     Gamebryo,
+    Generic,
     Larian,
     Smapi,
     Unreal4,
@@ -98,7 +102,8 @@ const DEFAULT_SEVERITIES: &[(&str, modde_core::collision::CollisionSeverity)] = 
     ("ws", modde_core::collision::CollisionSeverity::Dangerous),
 ];
 
-fn generic_collision_classifier() -> Box<dyn modde_core::collision::CollisionClassifier> {
+pub(crate) fn generic_collision_classifier() -> Box<dyn modde_core::collision::CollisionClassifier>
+{
     policy_collision_classifier(DEFAULT_ARCHIVE_EXTENSIONS)
 }
 
@@ -421,9 +426,37 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
     },
 ];
 
+static REGISTRY: OnceLock<RwLock<&'static [GameRegistration]>> = OnceLock::new();
+
+fn build_registry_snapshot() -> &'static [GameRegistration] {
+    Box::leak(
+        GAME_REGISTRY
+            .iter()
+            .copied()
+            .chain(load_user_games())
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+    )
+}
+
 #[must_use]
 pub fn all_games() -> &'static [GameRegistration] {
-    GAME_REGISTRY
+    *REGISTRY
+        .get_or_init(|| RwLock::new(build_registry_snapshot()))
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+pub fn reload_registry() {
+    let registry = REGISTRY.get_or_init(|| RwLock::new(build_registry_snapshot()));
+    *registry
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = build_registry_snapshot();
+}
+
+#[must_use]
+pub fn supported_game_ids() -> Vec<&'static str> {
+    all_games().iter().map(|game| game.game_id).collect()
 }
 
 #[must_use]

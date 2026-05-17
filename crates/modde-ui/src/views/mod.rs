@@ -1,3 +1,4 @@
+pub mod add_custom_game;
 pub mod browse_nexus;
 pub mod collections;
 pub mod data_tab;

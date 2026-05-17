@@ -2,9 +2,10 @@ use std::path::Path;
 
 use anyhow::Result;
 use tracing::{info, warn};
-use xxhash_rust::xxh3::xxh3_64;
 
 use modde_core::manifest::wabbajack::WabbajackManifest;
+
+use super::staging::StagingStore;
 
 /// Result of post-install verification.
 #[derive(Debug)]
@@ -22,6 +23,12 @@ pub struct ValidationMismatch {
     pub actual_hash: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ExpectedFile {
+    pub path: String,
+    pub expected_hash: Option<u64>,
+}
+
 /// Post-install verification: re-hash every installed file against the manifest.
 ///
 /// Walks the expected files from the manifest's install directives, checks each
@@ -37,32 +44,36 @@ pub async fn validate_install(
     let mut verified = 0usize;
     let mut missing = Vec::new();
     let mut mismatches = Vec::new();
+    let staging = StagingStore::new(staging_dir);
 
-    for (rel_path, expected_hash) in &expected_files {
-        let full_path = staging_dir.join(rel_path);
-
-        if !full_path.exists() {
-            warn!(path = %rel_path, "expected file missing from staging directory");
-            missing.push(rel_path.clone());
+    for expected in &expected_files {
+        if !staging.logical_exists(&expected.path).await {
+            warn!(path = %expected.path, "expected file missing from staging directory");
+            missing.push(expected.path.clone());
             continue;
         }
 
-        let data = tokio::fs::read(&full_path).await?;
-        let actual_hash = xxh3_64(&data);
+        let Some(expected_hash) = expected.expected_hash else {
+            verified += 1;
+            continue;
+        };
 
-        if actual_hash == *expected_hash {
+        let (actual_xxh64, actual_xxh3) = staging.hash_logical_file_compat(&expected.path).await?;
+
+        if actual_xxh64 == expected_hash || actual_xxh3 == expected_hash {
             verified += 1;
         } else {
             warn!(
-                path = %rel_path,
+                path = %expected.path,
                 expected = format!("{expected_hash:016x}"),
-                actual = format!("{actual_hash:016x}"),
+                actual_xxh64 = format!("{actual_xxh64:016x}"),
+                actual_xxh3 = format!("{actual_xxh3:016x}"),
                 "hash mismatch"
             );
             mismatches.push(ValidationMismatch {
-                path: rel_path.clone(),
-                expected_hash: *expected_hash,
-                actual_hash,
+                path: expected.path.clone(),
+                expected_hash,
+                actual_hash: actual_xxh3,
             });
         }
     }
@@ -92,60 +103,43 @@ pub async fn preflight_staging(manifest: &WabbajackManifest, staging_dir: &Path)
     if expected.is_empty() {
         return false;
     }
-    for (rel_path, _hash) in &expected {
-        if !staging_dir.join(rel_path).exists() {
+    let staging = StagingStore::new(staging_dir);
+    for expected in &expected {
+        if !staging.logical_exists(&expected.path).await {
             return false;
         }
     }
     true
 }
 
-/// Collect expected (`relative_path`, hash) pairs from the manifest.
+/// Collect expected logical staging files from the manifest.
 ///
-/// Uses archive entries as the source of truth for expected hashes. Install
-/// directives reference archives by hash, so we build a lookup from archive
-/// hash -> archive entry, then map install directive targets to expected hashes.
-pub(crate) fn collect_expected_files(manifest: &WabbajackManifest) -> Vec<(String, u64)> {
+/// `InlineFile`, `RemappedInlineFile`, and `PatchedFromArchive` carry expected
+/// output hashes in the manifest. `FromArchive` directives do not; for those we
+/// can validate existence only without inventing a false source-hash check.
+pub(crate) fn collect_expected_files(manifest: &WabbajackManifest) -> Vec<ExpectedFile> {
     use modde_core::manifest::wabbajack::RawDirective;
 
     let mut files = Vec::new();
 
-    // Build archive hash -> archive entry lookup
-    let archive_map: std::collections::HashMap<
-        u64,
-        &modde_core::manifest::wabbajack::ArchiveEntry,
-    > = manifest.archives.iter().map(|a| (a.hash, a)).collect();
-
     for directive in &manifest.directives {
         match directive {
-            RawDirective::FromArchive {
-                archive_hash_path,
-                to,
-            } => {
-                // The archive hash is the first element of archive_hash_path
-                let archive_hash = archive_hash_path
-                    .first()
-                    .and_then(|v| v.as_str())
-                    .and_then(modde_core::manifest::wabbajack::parse_b64_hash)
-                    .or_else(|| {
-                        archive_hash_path
-                            .first()
-                            .and_then(serde_json::Value::as_u64)
-                    })
-                    .unwrap_or(0);
-
-                // Use the archive's hash as a proxy for the expected output hash
-                // In a real implementation, individual file hashes would be tracked
-                if let Some(archive) = archive_map.get(&archive_hash) {
-                    files.push((to.clone(), archive.hash));
-                }
-            }
+            RawDirective::FromArchive { to, .. } => files.push(ExpectedFile {
+                path: to.clone(),
+                expected_hash: None,
+            }),
             RawDirective::PatchedFromArchive { to, hash, .. } => {
-                // The hash field on PatchedFromArchive is the expected output hash
-                files.push((to.clone(), *hash));
+                files.push(ExpectedFile {
+                    path: to.clone(),
+                    expected_hash: Some(*hash),
+                });
             }
-            RawDirective::InlineFile { to, hash, .. } => {
-                files.push((to.clone(), *hash));
+            RawDirective::InlineFile { to, hash, .. }
+            | RawDirective::RemappedInlineFile { to, hash, .. } => {
+                files.push(ExpectedFile {
+                    path: to.clone(),
+                    expected_hash: Some(*hash),
+                });
             }
             RawDirective::CreateBSA { .. } | RawDirective::Unknown => {}
         }
@@ -157,7 +151,9 @@ pub(crate) fn collect_expected_files(manifest: &WabbajackManifest) -> Vec<(Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wabbajack::staging::{StagingCompressionPolicy, StagingStore, compressed_path};
     use modde_core::manifest::wabbajack::WabbajackManifest;
+    use xxhash_rust::xxh3::xxh3_64;
 
     fn empty_manifest() -> WabbajackManifest {
         WabbajackManifest {
@@ -203,6 +199,7 @@ mod tests {
                     serde_json::Value::String("inner.txt".to_string()),
                 ],
                 to: "output/inner.txt".to_string(),
+                size: 0,
             }],
         };
 
@@ -210,6 +207,83 @@ mod tests {
         assert_eq!(report.total_files, 1);
         assert_eq!(report.missing.len(), 1);
         assert_eq!(report.missing[0], "output/inner.txt");
+    }
+
+    #[tokio::test]
+    async fn preflight_and_validate_accept_compressed_logical_files() {
+        let staging = tempfile::tempdir().unwrap();
+        let rel = "mods/test/texture.dds";
+        let content = vec![7_u8; 128 * 1024];
+        let store = StagingStore::with_policy(
+            staging.path(),
+            StagingCompressionPolicy {
+                min_bytes: 1,
+                level: 1,
+                suffix: ".modde-zst".to_string(),
+            },
+        );
+        store.prepare_fresh().await.unwrap();
+        let file_path = staging.path().join(rel);
+        tokio::fs::create_dir_all(file_path.parent().unwrap())
+            .await
+            .unwrap();
+        tokio::fs::write(&file_path, &content).await.unwrap();
+        store.compress_eligible_files(1).await.unwrap();
+
+        let manifest = WabbajackManifest {
+            directives: vec![modde_core::manifest::wabbajack::RawDirective::InlineFile {
+                hash: xxh3_64(&content),
+                size: content.len() as u64,
+                source_data_id: "inline".into(),
+                to: rel.into(),
+            }],
+            ..empty_manifest()
+        };
+
+        assert!(!file_path.exists());
+        assert!(compressed_path(&file_path).exists());
+        assert!(preflight_staging(&manifest, staging.path()).await);
+        let report = validate_install(&manifest, staging.path()).await.unwrap();
+        assert_eq!(report.verified, 1);
+        assert!(report.missing.is_empty());
+        assert!(report.mismatches.is_empty());
+    }
+
+    #[tokio::test]
+    async fn validate_fails_on_corrupt_compressed_logical_file() {
+        let staging = tempfile::tempdir().unwrap();
+        let rel = "mods/test/texture.dds";
+        let content = vec![9_u8; 128 * 1024];
+        let store = StagingStore::with_policy(
+            staging.path(),
+            StagingCompressionPolicy {
+                min_bytes: 1,
+                level: 1,
+                suffix: ".modde-zst".to_string(),
+            },
+        );
+        store.prepare_fresh().await.unwrap();
+        let file_path = staging.path().join(rel);
+        tokio::fs::create_dir_all(file_path.parent().unwrap())
+            .await
+            .unwrap();
+        tokio::fs::write(&file_path, &content).await.unwrap();
+        store.compress_eligible_files(1).await.unwrap();
+        tokio::fs::write(compressed_path(&file_path), b"not zstd")
+            .await
+            .unwrap();
+
+        let manifest = WabbajackManifest {
+            directives: vec![modde_core::manifest::wabbajack::RawDirective::InlineFile {
+                hash: xxh3_64(&content),
+                size: content.len() as u64,
+                source_data_id: "inline".into(),
+                to: rel.into(),
+            }],
+            ..empty_manifest()
+        };
+
+        assert!(validate_install(&manifest, staging.path()).await.is_err());
     }
 
     #[tokio::test]
@@ -231,6 +305,7 @@ mod tests {
                 modde_core::manifest::wabbajack::RawDirective::PatchedFromArchive {
                     archive_hash_path: vec![serde_json::Value::Number(0.into())],
                     patch_id: String::new(),
+                    size: 0,
                     to: "test.txt".to_string(),
                     hash: 99999, // wrong hash
                 },
@@ -262,6 +337,7 @@ mod tests {
                 modde_core::manifest::wabbajack::RawDirective::PatchedFromArchive {
                     archive_hash_path: vec![serde_json::Value::Number(0.into())],
                     patch_id: String::new(),
+                    size: 0,
                     to: "test.txt".to_string(),
                     hash: expected_hash,
                 },
@@ -290,18 +366,21 @@ mod tests {
                 modde_core::manifest::wabbajack::RawDirective::PatchedFromArchive {
                     archive_hash_path: vec![serde_json::Value::Number(0.into())],
                     patch_id: String::new(),
+                    size: 0,
                     to: "file_a.txt".to_string(),
                     hash: 111,
                 },
                 modde_core::manifest::wabbajack::RawDirective::PatchedFromArchive {
                     archive_hash_path: vec![serde_json::Value::Number(0.into())],
                     patch_id: String::new(),
+                    size: 0,
                     to: "file_b.txt".to_string(),
                     hash: 222,
                 },
                 modde_core::manifest::wabbajack::RawDirective::PatchedFromArchive {
                     archive_hash_path: vec![serde_json::Value::Number(0.into())],
                     patch_id: String::new(),
+                    size: 0,
                     to: "file_c.txt".to_string(),
                     hash: 333,
                 },
@@ -344,18 +423,21 @@ mod tests {
                 modde_core::manifest::wabbajack::RawDirective::PatchedFromArchive {
                     archive_hash_path: vec![serde_json::Value::Number(0.into())],
                     patch_id: String::new(),
+                    size: 0,
                     to: "correct.txt".to_string(),
                     hash: correct_hash,
                 },
                 modde_core::manifest::wabbajack::RawDirective::PatchedFromArchive {
                     archive_hash_path: vec![serde_json::Value::Number(0.into())],
                     patch_id: String::new(),
+                    size: 0,
                     to: "wrong.txt".to_string(),
                     hash: 99999,
                 },
                 modde_core::manifest::wabbajack::RawDirective::PatchedFromArchive {
                     archive_hash_path: vec![serde_json::Value::Number(0.into())],
                     patch_id: String::new(),
+                    size: 0,
                     to: "missing.txt".to_string(),
                     hash: 55555,
                 },
@@ -396,6 +478,7 @@ mod tests {
                 modde_core::manifest::wabbajack::RawDirective::PatchedFromArchive {
                     archive_hash_path: vec![serde_json::Value::Number(77777.into())],
                     patch_id: String::new(),
+                    size: 0,
                     to: "patched.esp".to_string(),
                     hash: patched_hash, // uses the directive's own hash, not archive hash
                 },
@@ -483,6 +566,7 @@ mod tests {
                 modde_core::manifest::wabbajack::RawDirective::PatchedFromArchive {
                     archive_hash_path: vec![serde_json::Value::Number(0.into())],
                     patch_id: String::new(),
+                    size: 0,
                     to: "subdir/test.txt".to_string(),
                     hash: expected_hash,
                 },

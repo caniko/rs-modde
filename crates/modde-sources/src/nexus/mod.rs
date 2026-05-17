@@ -8,6 +8,26 @@ pub mod updates;
 
 pub use api::NexusApi;
 
+const DEFAULT_BASE_URL: &str = "https://api.nexusmods.com/v1";
+const DEFAULT_GRAPHQL_URL: &str = "https://api.nexusmods.com/v2/graphql";
+
+/// Base URL for the v1 REST API.
+///
+/// Honours `MODDE_NEXUS_BASE_URL` so integration tests can point the
+/// client at a local mock server (e.g. wiremock). Production code never
+/// sets the var, so it falls through to the official endpoint.
+#[must_use]
+pub fn base_url() -> String {
+    std::env::var("MODDE_NEXUS_BASE_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_string())
+}
+
+/// Base URL for the v2 GraphQL API. Same override semantics as
+/// [`base_url`] but via `MODDE_NEXUS_GRAPHQL_URL`.
+#[must_use]
+pub fn graphql_url() -> String {
+    std::env::var("MODDE_NEXUS_GRAPHQL_URL").unwrap_or_else(|_| DEFAULT_GRAPHQL_URL.to_string())
+}
+
 use std::collections::HashMap;
 use std::path::Path;
 

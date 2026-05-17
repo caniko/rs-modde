@@ -5,7 +5,7 @@ steps:
       - echo 'experimental-features = flakes nix-command' >> /etc/nix/nix.conf
       - nix develop --command cargo fmt --all -- --check
       - nix develop --command cargo clippy --workspace -- -D warnings
-      - nix develop --command cargo test --workspace
+      - nix develop --command just coverage-ci
       - nix develop --command cargo build --workspace --release
     when:
       - event: [push, pull_request]

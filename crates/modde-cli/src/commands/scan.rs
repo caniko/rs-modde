@@ -30,7 +30,7 @@ pub fn handle(
     let game_plugin = modde_games::resolve_game_plugin(&game).ok_or_else(|| {
         anyhow::anyhow!(
             "unsupported game '{game}'. Supported: {}",
-            modde_games::SUPPORTED_GAME_IDS.join(", ")
+            modde_games::supported_game_ids().join(", ")
         )
     })?;
 

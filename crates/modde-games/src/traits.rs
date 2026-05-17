@@ -176,7 +176,7 @@ pub trait GamePlugin: Send + Sync {
     ///
     /// Most supported games use a directory under the install root, so the
     /// default delegates to [`GamePlugin::mod_directory`]. Games whose mod
-    /// loader reads from a user-data path (for example Proton AppData) can
+    /// loader reads from a user-data path (for example Proton `AppData`) can
     /// override this without breaking existing install-relative callers.
     fn mod_root(&self, install: &Path) -> Result<PathBuf> {
         Ok(self.mod_directory(install))

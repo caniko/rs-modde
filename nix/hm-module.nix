@@ -51,6 +51,42 @@ flake: {
               default = null;
               description = "Local or Nix store path to an already available .wabbajack file.";
             };
+            missingArchivePolicy = lib.mkOption {
+              type = lib.types.enum ["fail" "omit-files" "omit-mods"];
+              default = "fail";
+              description = "Behavior when optional manual/Nexus Wabbajack archives are absent.";
+            };
+            manualArchives = lib.mkOption {
+              type = lib.types.attrsOf (lib.types.submodule {
+                options = {
+                  hash = lib.mkOption {
+                    type = lib.types.nullOr lib.types.str;
+                    default = null;
+                    description = ''
+                      Wabbajack xxh64 hex hash for this archive. Required
+                      when the manualArchives attribute name is a readable
+                      label instead of the hash itself.
+                    '';
+                  };
+                  path = lib.mkOption {
+                    type = lib.types.nullOr (lib.types.either lib.types.path lib.types.str);
+                    default = null;
+                    description = "Path to the exact source archive for this Wabbajack archive hash.";
+                  };
+                  optional = lib.mkOption {
+                    type = lib.types.bool;
+                    default = false;
+                    description = "Allow activation to omit affected outputs when this archive is absent.";
+                  };
+                };
+              });
+              default = {};
+              description = ''
+                User-provided manual/Nexus archives. Entries may be keyed by
+                Wabbajack xxh64 hex hash, or by a readable label when hash is
+                set inside the entry.
+              '';
+            };
           };
         });
         default = null;
@@ -92,6 +128,22 @@ flake: {
             hasWabbajack
             && (profile.wabbajackList.url != null || profile.wabbajackList.hash != null)
             && !hasUrlHash;
+          isManualArchiveHashKey = key: builtins.match "[0-9a-fA-F]{16}" key != null;
+          resolveManualArchiveHash = key: archive:
+            if archive.hash != null
+            then archive.hash
+            else key;
+          manualArchiveEntries =
+            if hasWabbajack
+            then lib.mapAttrsToList (
+              key: archive: {
+                inherit key archive;
+                resolvedHash = resolveManualArchiveHash key archive;
+              }
+            )
+            profile.wabbajackList.manualArchives
+            else [];
+          resolvedManualArchiveHashes = map (entry: entry.resolvedHash) manualArchiveEntries;
         in {
           "${name}-exclusive-source" = {
             assertion = !(profile.wabbajackList != null && profile.nexusCollection != null);
@@ -104,6 +156,30 @@ flake: {
           "${name}-wabbajack-url-hash" = {
             assertion = !hasPartialUrlHash;
             message = "programs.modde.profiles.${name}: wabbajackList url and hash must be set together.";
+          };
+          "${name}-wabbajack-required-manual-archives" = {
+            assertion =
+              !hasWabbajack
+              || lib.all (archive: archive.optional || archive.path != null)
+              (lib.attrValues profile.wabbajackList.manualArchives);
+            message = "programs.modde.profiles.${name}: required manualArchives entries must set path, or mark optional = true.";
+          };
+          "${name}-wabbajack-manual-archive-hashes" = {
+            assertion =
+              !hasWabbajack
+              || lib.all (
+                entry:
+                  entry.archive.hash != null || isManualArchiveHashKey entry.key
+              )
+              manualArchiveEntries;
+            message = "programs.modde.profiles.${name}: readable manualArchives entries must set hash.";
+          };
+          "${name}-wabbajack-manual-archive-duplicate-hashes" = {
+            assertion =
+              !hasWabbajack
+              || builtins.length resolvedManualArchiveHashes
+              == builtins.length (lib.unique resolvedManualArchiveHashes);
+            message = "programs.modde.profiles.${name}: manualArchives entries resolve to duplicate hashes.";
           };
         }
       )
@@ -143,6 +219,23 @@ flake: {
             inherit (profile.wabbajackList) url hash;
           };
       modlistArg = lib.escapeShellArg (toString modlist);
+      manualArchiveImports =
+        lib.concatStringsSep "\n" (
+          lib.mapAttrsToList (
+            label: archive: let
+              resolvedHash =
+                if archive.hash != null
+                then archive.hash
+                else label;
+            in
+              lib.optionalString (archive.path != null) ''
+                echo "modde: importing Wabbajack manual archive ${resolvedHash} (${label}) for '${name}'"
+                modde wabbajack import-archive ${modlistArg} ${lib.escapeShellArg (toString archive.path)}
+              ''
+          )
+          profile.wabbajackList.manualArchives
+        );
+      missingPolicyArg = lib.escapeShellArg profile.wabbajackList.missingArchivePolicy;
     in
       if profile.gameDir == null
       then awaitingMessage "gameDir is not configured"
@@ -153,8 +246,9 @@ flake: {
       elif [ -n ${requiredModDirShell} ] && [ ! -d ${gameDirShell}/${requiredModDirShell} ]; then
         ${awaitingMessage "gameDir is missing ${requiredModDir}"}
       else
+        ${manualArchiveImports}
         if ! modde profile lock-info ${nameArg} --game ${gameArg} >/dev/null 2>&1; then
-          modde install wabbajack ${modlistArg} --profile ${nameArg}${gameDirArg}
+          modde install wabbajack ${modlistArg} --profile ${nameArg}${gameDirArg} --missing-archive-policy ${missingPolicyArg}
         fi
         modde deploy ${deployArgs} || echo "modde: deploy failed for '${name}'"
       fi

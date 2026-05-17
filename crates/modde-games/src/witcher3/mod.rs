@@ -197,7 +197,7 @@ impl GamePlugin for Witcher3Game {
             .find_map(|entry| {
                 let path = entry.path();
                 let name = entry.file_name().to_string_lossy().to_string();
-                (path.is_dir() && name.to_lowercase().starts_with("mod")).then(|| {
+                (path.is_dir() && name.to_lowercase().starts_with("mod")).then_some({
                     InstallMethod::DirectoryMod {
                         directory_name: Some(name),
                     }

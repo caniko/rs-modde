@@ -5,7 +5,9 @@ use anyhow::{Context, Result, bail};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tokio::io::{AsyncSeekExt as _, AsyncWriteExt as _};
+use tokio::io::{AsyncReadExt as _, AsyncSeekExt as _, AsyncWriteExt as _};
+use xxhash_rust::xxh3::Xxh3;
+use xxhash_rust::xxh64::Xxh64;
 
 use crate::ProgressCallback;
 
@@ -617,7 +619,7 @@ async fn download_authored_wabbajack_file(
         tokio::fs::create_dir_all(parent).await?;
     }
 
-    download_authored_file_parts_from_page(client, page, munged_name, base_url, &dest, None)
+    download_authored_file_parts_from_page(client, page, munged_name, base_url, &dest, None, None)
         .await?;
     Ok(dest)
 }
@@ -631,6 +633,7 @@ pub async fn download_authored_file_to_path(
     client: &reqwest::Client,
     url: &str,
     dest: &Path,
+    expected_hash: Option<u64>,
     progress: Option<&ProgressCallback>,
 ) -> Result<()> {
     let target = authored_file_target(url)
@@ -640,6 +643,7 @@ pub async fn download_authored_file_to_path(
         &target.munged_name,
         &target.base_url,
         dest,
+        expected_hash,
         progress,
     )
     .await
@@ -650,11 +654,20 @@ async fn download_authored_file_parts(
     munged_name: &str,
     base_url: &str,
     dest: &Path,
+    expected_hash: Option<u64>,
     progress: Option<&ProgressCallback>,
 ) -> Result<()> {
     let page = fetch_authored_files_download_page(client, munged_name, base_url).await?;
-    download_authored_file_parts_from_page(client, page, munged_name, base_url, dest, progress)
-        .await
+    download_authored_file_parts_from_page(
+        client,
+        page,
+        munged_name,
+        base_url,
+        dest,
+        expected_hash,
+        progress,
+    )
+    .await
 }
 
 async fn fetch_authored_files_download_page(
@@ -689,6 +702,7 @@ async fn download_authored_file_parts_from_page(
     munged_name: &str,
     base_url: &str,
     dest: &Path,
+    expected_hash: Option<u64>,
     progress: Option<&ProgressCallback>,
 ) -> Result<()> {
     let munged_name = if page.munged_name.is_empty() {
@@ -747,6 +761,23 @@ async fn download_authored_file_parts_from_page(
         .unwrap_or(0);
     file.seek(std::io::SeekFrom::End(0)).await?;
 
+    let mut xxh64 = Xxh64::new(0);
+    let mut xxh3 = Xxh3::new();
+    if expected_hash.is_some() && written > 0 {
+        let mut existing = tokio::fs::File::open(&part_dest)
+            .await
+            .with_context(|| format!("failed to open {}", part_dest.display()))?;
+        let mut buf = vec![0_u8; 1024 * 1024];
+        loop {
+            let read = existing.read(&mut buf).await?;
+            if read == 0 {
+                break;
+            }
+            xxh64.update(&buf[..read]);
+            xxh3.update(&buf[..read]);
+        }
+    }
+
     for part in parts.into_iter().skip(state.completed_parts.len()) {
         if part.offset != written {
             anyhow::bail!(
@@ -778,6 +809,10 @@ async fn download_authored_file_parts_from_page(
                 part.index
             )
         })? {
+            if expected_hash.is_some() {
+                xxh64.update(&chunk);
+                xxh3.update(&chunk);
+            }
             part_written += chunk.len() as u64;
             file.write_all(&chunk).await?;
         }
@@ -819,6 +854,19 @@ async fn download_authored_file_parts_from_page(
                 dest.display()
             )
         })?;
+    if let Some(expected_hash) = expected_hash {
+        let h64 = xxh64.digest();
+        let h3 = xxh3.digest();
+        if h64 != expected_hash && h3 != expected_hash {
+            let _ = tokio::fs::remove_file(dest).await;
+            anyhow::bail!(
+                "hash verification failed for {} (expected {:016x}, got xxh64 {:016x})",
+                dest.display(),
+                expected_hash,
+                h64
+            );
+        }
+    }
     let _ = tokio::fs::remove_file(&sidecar_dest).await;
     Ok(())
 }
@@ -1492,6 +1540,7 @@ mod tests {
             &format!("{base_url}/authored_files/download/Test%20List.wabbajack_abc"),
             &dest,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -1526,6 +1575,7 @@ mod tests {
             &client,
             &format!("{base_url}/authored_files/download/Test%20List.wabbajack_abc"),
             &dest,
+            None,
             None,
         )
         .await

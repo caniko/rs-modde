@@ -2,8 +2,6 @@ use std::io::{Cursor, Write};
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
-use flate2::Compression;
-use flate2::write::ZlibEncoder;
 use tokio::fs;
 use tracing::{info, warn};
 
@@ -94,7 +92,7 @@ async fn create_bsa_inner(
             warn!(path = %state.path, "file not found in staging, using empty data");
             Vec::new()
         };
-        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        let mut encoder = lz4_flex::frame::FrameEncoder::new(Vec::new());
         encoder.write_all(&data)?;
         let compressed = encoder.finish()?;
 

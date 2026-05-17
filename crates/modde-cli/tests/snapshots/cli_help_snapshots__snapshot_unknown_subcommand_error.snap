@@ -1,0 +1,13 @@
+---
+source: crates/modde-cli/tests/cli_help_snapshots.rs
+expression: "stdout(&[\"nonexistent\"])"
+---
+
+--- stderr ---
+error: unrecognized subcommand 'nonexistent'
+
+  tip: a similar subcommand exists: 'nexus'
+
+Usage: modde [OPTIONS] <COMMAND>
+
+For more information, try '--help'.

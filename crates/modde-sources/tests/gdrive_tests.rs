@@ -94,7 +94,7 @@ async fn gdrive_resolve_builds_correct_url() {
     let handle = source.resolve(&directive).await.unwrap();
     assert_eq!(
         handle.url,
-        "https://drive.google.com/uc?id=1A2B3C&export=download"
+        "https://drive.usercontent.google.com/download?id=1A2B3C&export=download&authuser=0&confirm=t"
     );
     assert_eq!(handle.expected_hash, 42);
     assert!(handle.headers.is_empty());

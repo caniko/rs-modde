@@ -128,9 +128,12 @@ pub struct Modde {
     pub new_profile_name: String,
     pub new_profile_dialog_open: bool,
     pub game_path_dialog_open: bool,
+    pub add_custom_game_dialog_open: bool,
+    pub manage_custom_games_dialog_open: bool,
     pub pending_game_path_game_id: Option<String>,
     pub previous_game_before_path_dialog: Option<String>,
     pub game_path_dialog_error: Option<String>,
+    pub add_custom_game: AddCustomGameState,
     pub available_games: SmallVec<[(String, String); 8]>,
     pub detected_games: HashSet<String>,
     pub selected_game: Option<String>,
@@ -1660,6 +1663,22 @@ impl Modde {
         self.settings.save();
     }
 
+    fn refresh_available_games(&mut self) {
+        self.available_games = modde_games::supported_games()
+            .iter()
+            .map(|(id, name)| (id.to_string(), name.to_string()))
+            .collect();
+        self.detected_games = detected_game_ids(&self.settings, self.available_games.as_slice());
+    }
+
+    fn custom_games(&self) -> Vec<(String, String)> {
+        self.available_games
+            .iter()
+            .filter(|(id, _)| !modde_games::SUPPORTED_GAME_IDS.contains(&id.as_str()))
+            .cloned()
+            .collect()
+    }
+
     fn current_game_id(&self) -> Option<&str> {
         self.loaded_profile
             .as_ref()
@@ -1673,6 +1692,30 @@ impl Modde {
             modde_games::resolve_game_plugin(game_id)
                 .and_then(modde_games::GamePlugin::detect_install)
         })
+    }
+
+    fn add_custom_game_modal(&self) -> Element<'_, Message> {
+        opaque(
+            container(crate::views::add_custom_game::add_dialog(
+                &self.add_custom_game,
+            ))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill),
+        )
+    }
+
+    fn manage_custom_games_modal(&self) -> Element<'_, Message> {
+        opaque(
+            container(crate::views::add_custom_game::manage_dialog(
+                self.custom_games(),
+            ))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill),
+        )
     }
 
     fn current_tool_game_context(&self) -> Option<modde_games::tools::ToolGameContext> {
@@ -2553,6 +2596,13 @@ async fn run_wabbajack_install_for_ui(
                     profile_name,
                     game_dir,
                     force: false,
+                    no_deploy: false,
+                    safety: modde_sources::wabbajack::runner::WabbajackInstallSafety::default(),
+                    diagnostics: None,
+                    archive_retention:
+                        modde_sources::wabbajack::installer::ArchiveRetentionPolicy::Keep,
+                    missing_archive_policy:
+                        modde_sources::wabbajack::impact::MissingArchivePolicy::Fail,
                 },
                 Some(tx),
             )
@@ -2592,6 +2642,12 @@ fn format_install_progress(
         InstallProgress::Patching { name } => format!("Patching: {name}"),
         InstallProgress::CreatingBSA { name } => format!("Creating BSA: {name}"),
         InstallProgress::InlineFile { name } => format!("Writing inline file: {name}"),
+        InstallProgress::StagingAdopted {
+            archive_batches,
+            create_bsa,
+        } => format!(
+            "Adopted existing staging: {archive_batches} archive batches, {create_bsa} BSA outputs"
+        ),
         InstallProgress::Complete => "Install pipeline complete".to_string(),
         InstallProgress::Failed { error } => format!("Install failed: {error}"),
     }
@@ -2778,6 +2834,94 @@ pub enum ExecutableDraftField {
     Environment,
     WineDllOverrides,
     OutputMod,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AddCustomGameDraft {
+    pub id: String,
+    pub display_name: String,
+    pub install_path: String,
+    pub executable_dir: Option<String>,
+    pub steam_app_id: Option<String>,
+    pub nexus_domain: Option<String>,
+    pub proxy_dlls_csv: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AddCustomGameState {
+    pub draft: AddCustomGameDraft,
+    pub detected_dirs: Vec<modde_games::DetectCandidateDir>,
+    pub error: Option<String>,
+}
+
+impl AddCustomGameState {
+    #[must_use]
+    pub fn can_submit(&self) -> bool {
+        self.build_spec().is_ok()
+    }
+
+    pub fn build_spec(&self) -> Result<modde_games::generic::spec::GameSpec, String> {
+        let install_path = PathBuf::from(self.draft.install_path.trim());
+        if self.draft.id.trim().is_empty()
+            || self.draft.display_name.trim().is_empty()
+            || self.draft.executable_dir.is_none()
+            || self.draft.install_path.trim().is_empty()
+        {
+            return Err("Fill in the required custom game fields.".to_string());
+        }
+        if !install_path.is_dir() {
+            return Err(format!(
+                "Install path does not exist: {}",
+                install_path.display()
+            ));
+        }
+
+        let spec = modde_games::generic::spec::GameSpec {
+            id: self.draft.id.trim().to_string(),
+            display_name: self.draft.display_name.trim().to_string(),
+            steam_app_id: empty_to_none(self.draft.steam_app_id.as_deref()),
+            install_dir_name: None,
+            install_path_override: None,
+            executable_dir: PathBuf::from(
+                self.draft
+                    .executable_dir
+                    .as_deref()
+                    .unwrap_or_default()
+                    .trim(),
+            ),
+            mod_dir: None,
+            nexus_domain: empty_to_none(self.draft.nexus_domain.as_deref()),
+            proxy_dlls: self
+                .draft
+                .proxy_dlls_csv
+                .split(',')
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+                .collect(),
+        };
+
+        spec.validate().map_err(|error| error.to_string())?;
+        Ok(spec)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AddCustomGameDraftField {
+    Id,
+    DisplayName,
+    InstallPath,
+    ExecutableDir,
+    SteamAppId,
+    NexusDomain,
+    ProxyDlls,
+}
+
+fn empty_to_none(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
 }
 
 #[derive(Debug, Clone)]
@@ -3199,6 +3343,18 @@ pub enum Message {
         path: PathBuf,
     },
     CancelGamePathDialog,
+    OpenAddCustomGame,
+    BrowseAddCustomGameInstallPath,
+    AddCustomGameFieldChanged {
+        field: AddCustomGameDraftField,
+        value: String,
+    },
+    AddCustomGameInstallPathPicked(PathBuf),
+    AddCustomGameSubmit,
+    AddCustomGameCancel,
+    OpenManageCustomGames,
+    CloseManageCustomGames,
+    RemoveCustomGame(String),
 
     // Window controls (custom title bar)
     GotWindowId(Option<window::Id>),
@@ -3599,9 +3755,12 @@ impl Modde {
             new_profile_name: String::new(),
             new_profile_dialog_open: false,
             game_path_dialog_open: false,
+            add_custom_game_dialog_open: false,
+            manage_custom_games_dialog_open: false,
             pending_game_path_game_id: None,
             previous_game_before_path_dialog: None,
             game_path_dialog_error: None,
+            add_custom_game: AddCustomGameState::default(),
             available_games,
             detected_games,
             selected_game,
@@ -3880,6 +4039,133 @@ impl Modde {
                 }
                 self.save_settings();
             }
+            Message::OpenAddCustomGame => {
+                self.add_custom_game_dialog_open = true;
+                self.manage_custom_games_dialog_open = false;
+                self.add_custom_game.error = None;
+            }
+            Message::BrowseAddCustomGameInstallPath => {
+                return Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Select Custom Game Install Directory")
+                            .pick_folder()
+                            .await
+                            .map(|handle| handle.path().to_path_buf())
+                    },
+                    |path| match path {
+                        Some(path) => Message::AddCustomGameInstallPathPicked(path),
+                        None => Message::Noop,
+                    },
+                );
+            }
+            Message::AddCustomGameFieldChanged { field, value } => {
+                self.add_custom_game.error = None;
+                match field {
+                    AddCustomGameDraftField::Id => self.add_custom_game.draft.id = value,
+                    AddCustomGameDraftField::DisplayName => {
+                        self.add_custom_game.draft.display_name = value;
+                    }
+                    AddCustomGameDraftField::InstallPath => {
+                        self.add_custom_game.draft.install_path = value;
+                        self.add_custom_game.draft.executable_dir = None;
+                        self.add_custom_game.detected_dirs.clear();
+                    }
+                    AddCustomGameDraftField::ExecutableDir => {
+                        self.add_custom_game.draft.executable_dir = Some(value);
+                    }
+                    AddCustomGameDraftField::SteamAppId => {
+                        self.add_custom_game.draft.steam_app_id = empty_to_none(Some(&value));
+                    }
+                    AddCustomGameDraftField::NexusDomain => {
+                        self.add_custom_game.draft.nexus_domain = empty_to_none(Some(&value));
+                    }
+                    AddCustomGameDraftField::ProxyDlls => {
+                        self.add_custom_game.draft.proxy_dlls_csv = value;
+                    }
+                }
+            }
+            Message::AddCustomGameInstallPathPicked(path) => {
+                self.add_custom_game.error = None;
+                self.add_custom_game.draft.install_path = path.display().to_string();
+                match modde_games::detect_candidates(&path) {
+                    Ok(candidates) => {
+                        self.add_custom_game.detected_dirs = candidates;
+                        self.add_custom_game.draft.executable_dir = self
+                            .add_custom_game
+                            .detected_dirs
+                            .first()
+                            .map(|candidate| candidate.relative_dir.clone());
+                    }
+                    Err(error) => {
+                        self.add_custom_game.detected_dirs.clear();
+                        self.add_custom_game.draft.executable_dir = None;
+                        self.add_custom_game.error = Some(error.to_string());
+                    }
+                }
+            }
+            Message::AddCustomGameSubmit => {
+                let install_path = PathBuf::from(self.add_custom_game.draft.install_path.trim());
+                let spec = match self.add_custom_game.build_spec() {
+                    Ok(spec) => spec,
+                    Err(error) => {
+                        self.add_custom_game.error = Some(error.clone());
+                        self.status_message = error;
+                        return Task::none();
+                    }
+                };
+                match modde_games::add_user_game(&spec, false) {
+                    Ok(_) => {
+                        modde_games::reload_user_games();
+                        self.settings.set_game_path(&spec.id, install_path);
+                        self.refresh_available_games();
+                        self.add_custom_game_dialog_open = false;
+                        self.add_custom_game = AddCustomGameState::default();
+                        self.accept_game_selection(spec.id.clone(), self.selected_game.clone());
+                        self.status_message =
+                            format!("Registered custom game '{}'", spec.display_name);
+                    }
+                    Err(error) => {
+                        self.add_custom_game.error = Some(error.to_string());
+                        self.status_message = format!("Custom game not saved: {error}");
+                    }
+                }
+            }
+            Message::AddCustomGameCancel => {
+                self.add_custom_game_dialog_open = false;
+                self.add_custom_game = AddCustomGameState::default();
+            }
+            Message::OpenManageCustomGames => {
+                self.manage_custom_games_dialog_open = true;
+                self.add_custom_game_dialog_open = false;
+                self.add_custom_game.error = None;
+            }
+            Message::CloseManageCustomGames => {
+                self.manage_custom_games_dialog_open = false;
+            }
+            Message::RemoveCustomGame(id) => match modde_games::remove_user_game(&id) {
+                Ok(_) => {
+                    modde_games::reload_user_games();
+                    self.settings
+                        .game_paths
+                        .retain(|entry| entry.game_id.as_ref() != id.as_str());
+                    if self.settings.selected_game.as_deref() == Some(id.as_str()) {
+                        self.settings.selected_game = None;
+                        self.selected_game = None;
+                    }
+                    self.refresh_available_games();
+                    if self.selected_game.is_none()
+                        && let Some((game_id, _)) = self.available_games.first().cloned()
+                    {
+                        self.accept_game_selection(game_id, None);
+                    }
+                    self.save_settings();
+                    self.status_message = format!("Removed custom game '{id}'");
+                }
+                Err(error) => {
+                    self.status_message = format!("Custom game not removed: {error}");
+                }
+            },
 
             // ── Window controls (custom title bar) ───────────────
             Message::GotWindowId(Some(id)) => {
@@ -6716,6 +7002,20 @@ impl Modde {
             "Select a game",
             |option| Message::SelectGame(option.value),
         );
+        let add_custom_game_button = crate::semantics::test_id(
+            "game_picker.add_custom_game",
+            button(text("+ Add custom game").size(12))
+                .style(button::secondary)
+                .padding([4, 10])
+                .on_action(ButtonAction::OpenAddCustomGame),
+        );
+        let manage_custom_games_button = crate::semantics::test_id(
+            "game_picker.manage_custom_games",
+            button(text("Manage custom games").size(12))
+                .style(button::secondary)
+                .padding([4, 10])
+                .on_action(ButtonAction::OpenManageCustomGames),
+        );
 
         let title_label = text("modde").size(14);
 
@@ -6737,6 +7037,8 @@ impl Modde {
 
         let title_bar_content = row![
             game_picker,
+            add_custom_game_button,
+            manage_custom_games_button,
             iced::widget::Space::new().width(Length::Fill),
             title_label,
             iced::widget::Space::new().width(Length::Fill),
@@ -6800,6 +7102,12 @@ impl Modde {
         }
         if self.game_path_dialog_open {
             base = stack([base, self.game_path_dialog()]).into();
+        }
+        if self.add_custom_game_dialog_open {
+            base = stack([base, self.add_custom_game_modal()]).into();
+        }
+        if self.manage_custom_games_dialog_open {
+            base = stack([base, self.manage_custom_games_modal()]).into();
         }
 
         crate::shortcut_layer::shortcut_layer(base).into()
@@ -6920,7 +7228,7 @@ impl Modde {
     /// and emit a [`Message::ExternalRefresh`] for every connection
     /// received. The socket is cleaned up on startup (in case a
     /// previous GUI crashed without unlinking) and on each new bind.
-    /// While idle, the listener costs nothing — accept() just blocks
+    /// While idle, the listener costs nothing — `accept()` just blocks
     /// in the kernel.
     fn subscription(&self) -> iced::Subscription<Message> {
         iced::Subscription::run(external_refresh_stream)
@@ -7100,9 +7408,12 @@ mod tests {
             new_profile_name: String::new(),
             new_profile_dialog_open: false,
             game_path_dialog_open: false,
+            add_custom_game_dialog_open: false,
+            manage_custom_games_dialog_open: false,
             pending_game_path_game_id: None,
             previous_game_before_path_dialog: None,
             game_path_dialog_error: None,
+            add_custom_game: AddCustomGameState::default(),
             available_games: smallvec::smallvec![
                 ("skyrim-se".to_string(), "Skyrim SE".to_string()),
                 ("fallout4".to_string(), "Fallout 4".to_string()),
@@ -9241,6 +9552,62 @@ mod tests {
         assert!(!app.game_path_dialog_open);
         assert_eq!(app.selected_game.as_deref(), Some("skyrim-se"));
         assert_eq!(app.settings.selected_game.as_deref(), Some("skyrim-se"));
+    }
+
+    #[test]
+    fn add_custom_game_submit_registers_and_selects_game() {
+        let _guard = db_lock();
+        reset_isolated_db();
+        let custom_id = "elden-ring-custom";
+        let _ = modde_games::remove_user_game(custom_id);
+        modde_games::reload_user_games();
+
+        let install = tempfile::tempdir().expect("install dir");
+        let game_dir = install.path().join("Game");
+        std::fs::create_dir_all(&game_dir).expect("game dir");
+        std::fs::write(game_dir.join("eldenring.exe"), b"exe").expect("write exe");
+
+        let mut app = test_app();
+        let _ = app.update(Message::OpenAddCustomGame);
+        let _ = app.update(Message::AddCustomGameFieldChanged {
+            field: AddCustomGameDraftField::Id,
+            value: custom_id.to_string(),
+        });
+        let _ = app.update(Message::AddCustomGameFieldChanged {
+            field: AddCustomGameDraftField::DisplayName,
+            value: "ELDEN RING".to_string(),
+        });
+        let _ = app.update(Message::AddCustomGameInstallPathPicked(
+            install.path().to_path_buf(),
+        ));
+        let _ = app.update(Message::AddCustomGameSubmit);
+
+        assert!(!app.add_custom_game_dialog_open);
+        assert_eq!(app.selected_game.as_deref(), Some(custom_id));
+        assert_eq!(app.settings.selected_game.as_deref(), Some(custom_id));
+        assert_eq!(
+            app.settings.game_path(custom_id),
+            Some(&install.path().to_path_buf())
+        );
+        assert!(
+            app.available_games
+                .iter()
+                .any(|(id, name)| id == custom_id && name == "ELDEN RING")
+        );
+        assert!(
+            modde_games::supported_games()
+                .iter()
+                .any(|(id, name)| *id == custom_id && *name == "ELDEN RING")
+        );
+        let plugin =
+            modde_games::resolve_game_plugin(custom_id).expect("custom game should resolve");
+        assert_eq!(
+            plugin.executable_dir(install.path()),
+            install.path().join("Game")
+        );
+
+        modde_games::remove_user_game(custom_id).expect("remove custom game");
+        modde_games::reload_user_games();
     }
 
     // ─── ReorderMod refusal / allow paths ────────────────────────

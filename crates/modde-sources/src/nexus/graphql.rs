@@ -25,8 +25,6 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-const GRAPHQL_URL: &str = "https://api.nexusmods.com/v2/graphql";
-
 /// POST a query to the Nexus v2 GraphQL endpoint and decode the `data`
 /// field into `T`. On any shape mismatch or transport error, returns
 /// an `anyhow::Error` — callers that have a REST fallback should
@@ -49,7 +47,7 @@ pub async fn post<T: DeserializeOwned>(
     });
 
     let resp = client
-        .post(GRAPHQL_URL)
+        .post(super::graphql_url())
         .header("apikey", api_key)
         .header("content-type", "application/json")
         .json(&body)

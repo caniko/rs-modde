@@ -83,6 +83,11 @@ fn cli_wabbajack_help() {
 }
 
 #[test]
+fn cli_skill_help() {
+    modde().args(["skill", "--help"]).assert().success();
+}
+
+#[test]
 fn cli_wabbajack_search_help() {
     modde()
         .args(["wabbajack", "search", "--help"])
@@ -110,6 +115,38 @@ fn cli_wabbajack_hm_snippet_help() {
 fn cli_wabbajack_import_archive_help() {
     modde()
         .args(["wabbajack", "import-archive", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_wabbajack_acquire_missing_help() {
+    modde()
+        .args(["wabbajack", "acquire-missing", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_wabbajack_assess_help() {
+    modde()
+        .args(["wabbajack", "assess", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_wabbajack_missing_impact_help() {
+    modde()
+        .args(["wabbajack", "missing-impact", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_wabbajack_manual_links_help() {
+    modde()
+        .args(["wabbajack", "manual-links", "--help"])
         .assert()
         .success();
 }

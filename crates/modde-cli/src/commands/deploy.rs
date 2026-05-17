@@ -27,7 +27,7 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
         anyhow::anyhow!(
             "unsupported game: '{}'\nSupported games: {}",
             profile.game_id,
-            modde_games::SUPPORTED_GAME_IDS.join(", ")
+            modde_games::supported_game_ids().join(", ")
         )
     })?;
 

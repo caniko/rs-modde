@@ -16,7 +16,10 @@ use modde_core::profile::{
 use crate::direct::DirectSource;
 use crate::nexus::NexusSource;
 use crate::wabbajack::cdn::WabbajackCdnSource;
-use crate::wabbajack::installer::{InstallProgress, WabbajackInstaller};
+use crate::wabbajack::diagnostics::{WabbajackDiagnostics, WabbajackDiagnosticsOptions};
+use crate::wabbajack::impact::{MissingArchiveImpact, MissingArchivePolicy};
+use crate::wabbajack::installer::{ArchiveRetentionPolicy, InstallProgress, WabbajackInstaller};
+use crate::wabbajack::staging::{StagingStore, is_compressed_path, logical_path_from_compressed};
 
 #[derive(Debug, Clone)]
 pub struct WabbajackInstallOptions {
@@ -24,6 +27,26 @@ pub struct WabbajackInstallOptions {
     pub profile_name: Option<String>,
     pub game_dir: Option<PathBuf>,
     pub force: bool,
+    /// When true, stage the modlist but skip the final copy/deploy into
+    /// `game_dir`. The directory is still used to read `GameFileSource` archives
+    /// and to register a profile.
+    pub no_deploy: bool,
+    pub safety: WabbajackInstallSafety,
+    pub diagnostics: Option<WabbajackDiagnosticsOptions>,
+    pub archive_retention: ArchiveRetentionPolicy,
+    pub missing_archive_policy: MissingArchivePolicy,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WabbajackInstallSafety {
+    /// When true, log per-archive download / per-directive apply failures
+    /// instead of aborting. Useful for very large modlists with a handful of
+    /// archives that need manual intervention.
+    pub continue_on_error: bool,
+    /// Explicitly discard existing staging instead of adopting it.
+    pub reset_staging: bool,
+    /// Skip post-apply validation before deploy.
+    pub skip_validate: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -82,7 +105,14 @@ pub async fn install_wabbajack(
     let store = paths::store_dir();
     let staging = paths::staging_dir().join(&profile_name);
     std::fs::create_dir_all(&store)?;
-    std::fs::create_dir_all(&staging)?;
+    let staging_store = StagingStore::new(&staging);
+    let prepare_status = if options.safety.reset_staging {
+        staging_store.reset_and_prepare().await
+    } else {
+        staging_store.prepare_resumable().await
+    }
+    .context("failed to prepare Wabbajack staging layout")?;
+    info!(?prepare_status, staging = %staging.display(), "prepared Wabbajack staging");
 
     let manifest_hash = compute_manifest_hash(&manifest);
     let client = build_http_client()?;
@@ -95,6 +125,13 @@ pub async fn install_wabbajack(
     if let Some(game_dir) = options.game_dir.clone() {
         installer.set_game_dir(game_dir);
     }
+    installer.set_continue_on_error(options.safety.continue_on_error);
+    installer.set_archive_retention(options.archive_retention);
+    installer.set_missing_archive_policy(options.missing_archive_policy);
+    if let Some(diagnostics_options) = options.diagnostics.clone() {
+        let diagnostics = WabbajackDiagnostics::new(diagnostics_options).await?;
+        installer.set_diagnostics(diagnostics);
+    }
 
     match NexusSource::new(client.clone()) {
         Ok(nexus) => installer.add_source(crate::AnySource::Nexus(nexus)),
@@ -103,6 +140,19 @@ pub async fn install_wabbajack(
     installer.add_source(crate::AnySource::WabbajackCdn(WabbajackCdnSource::new(
         client.clone(),
     )));
+    installer.add_source(crate::AnySource::GitHub(crate::github::GitHubSource::new(
+        client.clone(),
+    )));
+    installer.add_source(crate::AnySource::GoogleDrive(
+        crate::gdrive::GoogleDriveSource::new(client.clone()),
+    ));
+    installer.add_source(crate::AnySource::Mega(crate::mega::MegaSource::new(
+        client.clone(),
+    )));
+    installer.add_source(crate::AnySource::MediaFire(
+        crate::mediafire::MediaFireSource::new(client.clone()),
+    ));
+    installer.add_source(crate::AnySource::Manual(crate::manual::ManualSource::new()));
     installer.add_source(crate::AnySource::Direct(DirectSource::new(client)));
 
     let skip_install =
@@ -123,11 +173,45 @@ pub async fn install_wabbajack(
         drain.abort();
     }
 
-    if let Some(ref game_dir) = options.game_dir {
+    if !options.safety.skip_validate {
+        let report = crate::wabbajack::validator::validate_install(&manifest, &staging)
+            .await
+            .context("Wabbajack staging validation failed")?;
+        let skip_plan = MissingArchiveImpact::analyze(&manifest, &store)
+            .skip_plan(&manifest, options.missing_archive_policy);
+        let missing = report
+            .missing
+            .iter()
+            .filter(|path| !skip_plan.should_omit_path(path))
+            .collect::<Vec<_>>();
+        let mismatches = report
+            .mismatches
+            .iter()
+            .filter(|mismatch| !skip_plan.should_omit_path(&mismatch.path))
+            .collect::<Vec<_>>();
+        if !missing.is_empty() || !mismatches.is_empty() {
+            anyhow::bail!(
+                "Wabbajack staging validation found {} missing and {} mismatched file(s)",
+                missing.len(),
+                mismatches.len()
+            );
+        }
+        info!(
+            total_files = report.total_files,
+            verified = report.verified,
+            "Wabbajack staging validation passed"
+        );
+    }
+
+    if let Some(ref game_dir) = options.game_dir
+        && !options.no_deploy
+    {
         deploy_mo2_to_game(&staging, game_dir, options.force)
             .await
             .context("failed to deploy mods to game directory")?;
         configure_wine_overrides(&game_id, game_dir, &staging)?;
+    } else if options.no_deploy {
+        info!("--no-deploy set: skipping copy of staging into game directory");
     }
 
     let mut enabled_mods = Vec::new();
@@ -228,6 +312,7 @@ pub async fn deploy_mo2_to_game(staging: &Path, game_dir: &Path, force: bool) ->
         return Ok(());
     }
 
+    let staging_store = StagingStore::new(staging);
     let mut entries = tokio::fs::read_dir(&mods_dir).await?;
     while let Some(mod_entry) = entries.next_entry().await? {
         if !mod_entry.file_type().await?.is_dir() {
@@ -245,13 +330,33 @@ pub async fn deploy_mo2_to_game(staging: &Path, game_dir: &Path, force: bool) ->
                     continue;
                 }
 
-                let rel_path = entry_path.strip_prefix(&mod_path).unwrap_or(&entry_path);
+                let logical_entry_path = if is_compressed_path(&entry_path) {
+                    logical_path_from_compressed(&entry_path)
+                } else {
+                    entry_path.clone()
+                };
+                let rel_path = logical_entry_path
+                    .strip_prefix(&mod_path)
+                    .unwrap_or(&logical_entry_path);
                 let filename = rel_path.file_name().unwrap_or_default().to_string_lossy();
                 if filename == "meta.ini" || filename == "meta.json" {
                     continue;
                 }
 
                 let dest = game_dir.join(rel_path);
+                let staging_relative = logical_entry_path
+                    .strip_prefix(staging)
+                    .unwrap_or(&logical_entry_path)
+                    .to_string_lossy()
+                    .to_string();
+                if is_compressed_path(&entry_path) {
+                    staging_store
+                        .materialize_logical_file(&staging_relative, &dest)
+                        .await?;
+                    tracing::debug!(src = %entry_path.display(), dst = %dest.display(), "deployed compressed staging file");
+                    continue;
+                }
+
                 #[cfg(unix)]
                 if !force
                     && let (Ok(src_meta), Ok(dst_meta)) = (
@@ -265,35 +370,65 @@ pub async fn deploy_mo2_to_game(staging: &Path, game_dir: &Path, force: bool) ->
                     }
                 }
 
-                if let Some(parent) = dest.parent() {
-                    tokio::fs::create_dir_all(parent).await?;
-                }
-                if dest.exists() || dest.symlink_metadata().is_ok() {
-                    tokio::fs::remove_file(&dest).await.ok();
-                }
-                match tokio::fs::hard_link(&entry_path, &dest).await {
-                    Ok(()) => {}
-                    Err(e) if modde_core::fs::is_cross_device_error(&e) => {
-                        tokio::fs::copy(&entry_path, &dest).await.with_context(|| {
-                            format!(
-                                "cross-filesystem copy fallback failed: {} -> {}",
-                                entry_path.display(),
-                                dest.display()
-                            )
-                        })?;
-                    }
-                    Err(e) => {
-                        return Err(e).with_context(|| {
-                            format!(
-                                "failed to hardlink {} -> {}",
-                                entry_path.display(),
-                                dest.display()
-                            )
-                        });
-                    }
-                }
+                let kind = modde_core::link::link_or_copy(&entry_path, &dest).await?;
+                tracing::debug!(src = %entry_path.display(), dst = %dest.display(), ?kind, "deployed file");
             }
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::wabbajack::staging::{StagingCompressionPolicy, StagingStore, compressed_path};
+
+    #[tokio::test]
+    async fn deploy_decodes_compressed_files_and_links_plain_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let staging = temp.path().join("staging");
+        let game = temp.path().join("game");
+        let store = StagingStore::with_policy(
+            &staging,
+            StagingCompressionPolicy {
+                min_bytes: 1,
+                level: 1,
+                suffix: ".modde-zst".to_string(),
+            },
+        );
+        store.prepare_fresh().await.unwrap();
+
+        let compressed_rel = "mods/TextureMod/textures/landscape/snow.dds";
+        let plain_rel = "mods/PluginMod/plugin.esp";
+        let compressed_path_plain = staging.join(compressed_rel);
+        let plain_path = staging.join(plain_rel);
+        tokio::fs::create_dir_all(compressed_path_plain.parent().unwrap())
+            .await
+            .unwrap();
+        tokio::fs::create_dir_all(plain_path.parent().unwrap())
+            .await
+            .unwrap();
+        let compressed_bytes = vec![3_u8; 128 * 1024];
+        tokio::fs::write(&compressed_path_plain, &compressed_bytes)
+            .await
+            .unwrap();
+        tokio::fs::write(&plain_path, b"plugin").await.unwrap();
+        store.compress_eligible_files(1).await.unwrap();
+
+        assert!(compressed_path(&compressed_path_plain).exists());
+        assert!(!compressed_path_plain.exists());
+
+        deploy_mo2_to_game(&staging, &game, false).await.unwrap();
+
+        assert_eq!(
+            tokio::fs::read(game.join("textures/landscape/snow.dds"))
+                .await
+                .unwrap(),
+            compressed_bytes
+        );
+        assert_eq!(
+            tokio::fs::read(game.join("plugin.esp")).await.unwrap(),
+            b"plugin"
+        );
+    }
 }

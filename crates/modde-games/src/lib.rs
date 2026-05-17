@@ -22,11 +22,18 @@ pub mod ue4;
 pub mod witcher3;
 
 pub use detection::{DetectedGame, LauncherSource, find_detected_game, scan_installed_games};
+pub use generic::loader::{load_user_games, reload_user_games};
+pub use generic::manage::{
+    AddUserGameResult, DetectCandidateDir, add_user_game, detect_candidates, read_user_game_spec,
+    remove_user_game,
+};
 pub use optiscaler::{
     OptiScalerIniOverride, OptiScalerProfile, OptiScalerProfiles, default_optiscaler_profile,
     resolve_optiscaler_profiles,
 };
-pub use registry::{EngineFamily, GameRegistration, LauncherIds, all_games, resolve_game};
+pub use registry::{
+    EngineFamily, GameRegistration, LauncherIds, all_games, resolve_game, supported_game_ids,
+};
 pub use traits::{
     DeployTarget, DeployTargetKind, DiscoveredFile, DiscoveredMod, GamePlugin, ModClassifyConfig,
     ModSafety, ModScanner, ModSource, SaveTracker, ScanContext, classify_mod_by_content, slug,

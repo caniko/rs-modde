@@ -5,6 +5,7 @@ pub mod detect;
 pub mod diagnostics;
 pub mod export;
 pub mod fomod;
+pub mod game;
 pub mod import;
 pub mod install;
 pub mod instance;
@@ -16,6 +17,7 @@ pub mod profile;
 pub mod rollback;
 pub mod save;
 pub mod scan;
+pub mod skill;
 pub mod stock;
 pub mod tool;
 pub mod uninstall;
@@ -48,7 +50,7 @@ pub fn supports_save_profiles(game_id: &str) -> Result<bool> {
         anyhow::anyhow!(
             "unknown game '{}'. Supported games: {}",
             game_id,
-            modde_games::SUPPORTED_GAME_IDS.join(", ")
+            modde_games::supported_game_ids().join(", ")
         )
     })?;
     Ok(plugin.supports_save_profiles())
@@ -61,7 +63,7 @@ pub fn require_save_dir(game_id: &str) -> Result<PathBuf> {
         anyhow::bail!(
             "unknown game '{}'. Supported games: {}",
             game_id,
-            modde_games::SUPPORTED_GAME_IDS.join(", ")
+            modde_games::supported_game_ids().join(", ")
         );
     }
     if !supports_save_profiles(game_id)? {

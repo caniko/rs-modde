@@ -290,17 +290,15 @@ fn parse_label(label: Option<&str>) -> (String, u32) {
         return ("Unknown".to_string(), 0);
     };
     if let Some((name_part, slot_part)) = label.split_once(" — Save ") {
-        match slot_part.parse() {
-            Ok(slot) => return (name_part.to_string(), slot),
-            Err(_) => {
-                tracing::warn!(
-                    raw_slot = slot_part,
-                    label,
-                    "bethesda saves: failed to parse save slot number; treating as 0"
-                );
-                return (format!("{name_part} — Save {slot_part}"), 0);
-            }
+        if let Ok(slot) = slot_part.parse() {
+            return (name_part.to_string(), slot);
         }
+        tracing::warn!(
+            raw_slot = slot_part,
+            label,
+            "bethesda saves: failed to parse save slot number; treating as 0"
+        );
+        return (format!("{name_part} — Save {slot_part}"), 0);
     }
     (label.to_string(), 0)
 }

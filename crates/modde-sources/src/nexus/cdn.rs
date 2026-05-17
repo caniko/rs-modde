@@ -3,8 +3,7 @@ use reqwest::Client;
 use serde::Deserialize;
 
 use super::auth;
-
-const BASE_URL: &str = "https://api.nexusmods.com/v1";
+use crate::wabbajack::acquire::normalize_nexus_game_domain;
 
 #[derive(Debug, Deserialize)]
 struct DownloadLink {
@@ -31,8 +30,11 @@ pub async fn generate_download_link(
         );
     }
 
-    let url =
-        format!("{BASE_URL}/games/{game_domain}/mods/{mod_id}/files/{file_id}/download_link.json");
+    let game_domain = normalize_nexus_game_domain(game_domain);
+    let url = format!(
+        "{}/games/{game_domain}/mods/{mod_id}/files/{file_id}/download_link.json",
+        super::base_url()
+    );
 
     let links: Vec<DownloadLink> = client
         .get(&url)

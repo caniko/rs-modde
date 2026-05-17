@@ -214,17 +214,8 @@ async fn snapshot_recursive(src: &Path, dst: &Path) -> Result<()> {
             tokio::fs::create_dir_all(&dst_path).await?;
             Box::pin(snapshot_recursive(&src_path, &dst_path)).await?;
         } else if file_type.is_file() {
-            match tokio::fs::hard_link(&src_path, &dst_path).await {
-                Ok(()) => {}
-                Err(e) if crate::fs::is_cross_device_error(&e) => {
-                    warn!(
-                        src = %src_path.display(),
-                        "cross-device hardlink; falling back to copy"
-                    );
-                    tokio::fs::copy(&src_path, &dst_path).await?;
-                }
-                Err(e) => return Err(e.into()),
-            }
+            let kind = crate::link::link_or_copy(&src_path, &dst_path).await?;
+            tracing::debug!(src = %src_path.display(), dst = %dst_path.display(), ?kind, "stock snapshot linked file");
         }
     }
     Ok(())

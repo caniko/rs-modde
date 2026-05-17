@@ -1,0 +1,24 @@
+---
+source: crates/modde-cli/tests/cli_help_snapshots.rs
+assertion_line: 55
+expression: "stdout(&[\"game\", \"--help\"])"
+---
+Manage user-defined games
+
+Usage: modde game [OPTIONS] <COMMAND>
+
+Commands:
+  add             Add or overwrite a user-defined game registration
+  list            List user-defined games
+  remove          Remove a user-defined game registration
+  detect          Detect executable-bearing directories under a game install
+  show            Show a resolved game registration
+  export          Export a game registration to TOML
+  import          Import a game registration from TOML
+  import-profile  Import OptiScaler profiles from TOML for a game
+  help            Print this message or the help of the given subcommand(s)
+
+Options:
+      --data-dir <DATA_DIR>          Override data directory (default: ~/.local/share/modde or $`MODDE_DATA_DIR`) [env: MODDE_DATA_DIR=]
+      --heap-profile <HEAP_PROFILE>  Write a DHAT heap profile. Requires the `heap-profile` cargo feature [env: MODDE_HEAP_PROFILE=]
+  -h, --help                         Print help

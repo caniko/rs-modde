@@ -4,8 +4,6 @@ use reqwest::Client;
 use serde::Deserialize;
 use tracing::warn;
 
-const BASE_URL: &str = "https://api.nexusmods.com/v1";
-
 /// Typed Nexus API client.
 pub struct NexusApi {
     client: Client,
@@ -155,7 +153,10 @@ impl NexusApi {
 
     /// Get mod details.
     pub async fn get_mod(&self, game_domain: &str, mod_id: u64) -> Result<NexusMod> {
-        let url = format!("{BASE_URL}/games/{game_domain}/mods/{mod_id}.json");
+        let url = format!(
+            "{}/games/{game_domain}/mods/{mod_id}.json",
+            super::base_url()
+        );
         self.get(&url).await
     }
 
@@ -302,7 +303,7 @@ impl NexusApi {
 
         let resp = self
             .client
-            .post("https://api.nexusmods.com/v2/graphql")
+            .post(super::graphql_url())
             .header("apikey", &self.api_key)
             .header("content-type", "application/json")
             .json(&body)
@@ -334,7 +335,10 @@ impl NexusApi {
 
     /// Get files for a mod.
     pub async fn get_mod_files(&self, game_domain: &str, mod_id: u64) -> Result<NexusModFiles> {
-        let url = format!("{BASE_URL}/games/{game_domain}/mods/{mod_id}/files.json");
+        let url = format!(
+            "{}/games/{game_domain}/mods/{mod_id}/files.json",
+            super::base_url()
+        );
         self.get(&url).await
     }
 
@@ -345,14 +349,19 @@ impl NexusApi {
         query: &str,
         page: u32,
     ) -> Result<NexusSearchResults> {
-        let url =
-            format!("{BASE_URL}/games/{game_domain}/mods/search.json?search={query}&page={page}");
+        let url = format!(
+            "{}/games/{game_domain}/mods/search.json?search={query}&page={page}",
+            super::base_url()
+        );
         self.get(&url).await
     }
 
     /// Get trending mods for a game.
     pub async fn trending_mods(&self, game_domain: &str) -> Result<Vec<NexusMod>> {
-        let url = format!("{BASE_URL}/games/{game_domain}/mods/trending.json");
+        let url = format!(
+            "{}/games/{game_domain}/mods/trending.json",
+            super::base_url()
+        );
         self.get(&url).await
     }
 
@@ -362,7 +371,10 @@ impl NexusApi {
         game_domain: &str,
         period: &str,
     ) -> Result<Vec<NexusUpdatedMod>> {
-        let url = format!("{BASE_URL}/games/{game_domain}/mods/updated.json?period={period}");
+        let url = format!(
+            "{}/games/{game_domain}/mods/updated.json?period={period}",
+            super::base_url()
+        );
         self.get(&url).await
     }
 
@@ -372,7 +384,10 @@ impl NexusApi {
         game_domain: &str,
         query: &str,
     ) -> Result<Vec<CollectionManifest>> {
-        let url = format!("{BASE_URL}/games/{game_domain}/collections.json?search={query}");
+        let url = format!(
+            "{}/games/{game_domain}/collections.json?search={query}",
+            super::base_url()
+        );
         self.get(&url).await
     }
 
@@ -382,7 +397,10 @@ impl NexusApi {
         game_domain: &str,
         slug: &str,
     ) -> Result<CollectionManifest> {
-        let url = format!("{BASE_URL}/games/{game_domain}/collections/{slug}.json");
+        let url = format!(
+            "{}/games/{game_domain}/collections/{slug}.json",
+            super::base_url()
+        );
         self.get(&url).await
     }
 
@@ -393,8 +411,10 @@ impl NexusApi {
         slug: &str,
         revision: u64,
     ) -> Result<CollectionManifest> {
-        let url =
-            format!("{BASE_URL}/games/{game_domain}/collections/{slug}/revisions/{revision}.json");
+        let url = format!(
+            "{}/games/{game_domain}/collections/{slug}/revisions/{revision}.json",
+            super::base_url()
+        );
         self.get(&url).await
     }
 
@@ -404,7 +424,7 @@ impl NexusApi {
     pub async fn get_collection_meta(&self, slug: &str) -> Result<NexusCollectionMeta> {
         // The collections endpoint accepts a slug without game_domain:
         //   GET /v1/collections/{slug}.json
-        let url = format!("{BASE_URL}/collections/{slug}.json");
+        let url = format!("{}/collections/{slug}.json", super::base_url());
         self.get(&url).await
     }
 
@@ -416,7 +436,10 @@ impl NexusApi {
     /// loaded `NexusMod` response (not the local install, which may be
     /// stale).
     pub async fn endorse_mod(&self, game_domain: &str, mod_id: u64, version: &str) -> Result<()> {
-        let url = format!("{BASE_URL}/games/{game_domain}/mods/{mod_id}/endorse.json");
+        let url = format!(
+            "{}/games/{game_domain}/mods/{mod_id}/endorse.json",
+            super::base_url()
+        );
         self.client
             .post(&url)
             .header("apikey", &self.api_key)
@@ -429,7 +452,10 @@ impl NexusApi {
 
     /// Abstain from endorsing (won't be asked again).
     pub async fn abstain_mod(&self, game_domain: &str, mod_id: u64, version: &str) -> Result<()> {
-        let url = format!("{BASE_URL}/games/{game_domain}/mods/{mod_id}/abstain.json");
+        let url = format!(
+            "{}/games/{game_domain}/mods/{mod_id}/abstain.json",
+            super::base_url()
+        );
         self.client
             .post(&url)
             .header("apikey", &self.api_key)
@@ -444,13 +470,13 @@ impl NexusApi {
     /// games. The v1 endpoint is not filterable by domain, so callers that
     /// only care about one mod should filter the returned list themselves.
     pub async fn get_tracked_mods(&self) -> Result<Vec<NexusTrackedMod>> {
-        let url = format!("{BASE_URL}/user/tracked_mods.json");
+        let url = format!("{}/user/tracked_mods.json", super::base_url());
         self.get(&url).await
     }
 
     /// Track a mod (receive Nexus notifications).
     pub async fn track_mod(&self, game_domain: &str, mod_id: u64) -> Result<()> {
-        let url = format!("{BASE_URL}/user/tracked_mods.json");
+        let url = format!("{}/user/tracked_mods.json", super::base_url());
         self.client
             .post(&url)
             .header("apikey", &self.api_key)
@@ -466,7 +492,7 @@ impl NexusApi {
 
     /// Stop tracking a mod.
     pub async fn untrack_mod(&self, game_domain: &str, mod_id: u64) -> Result<()> {
-        let url = format!("{BASE_URL}/user/tracked_mods.json");
+        let url = format!("{}/user/tracked_mods.json", super::base_url());
         self.delete_req(
             &url,
             &[

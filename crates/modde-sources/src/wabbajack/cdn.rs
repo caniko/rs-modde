@@ -6,7 +6,7 @@ use reqwest::Client;
 
 use modde_core::manifest::wabbajack::DownloadDirective;
 
-use crate::common::{ensure_parent, verify_and_wrap};
+use crate::common::ensure_parent;
 use crate::traits::{DownloadHandle, DownloadSource, ProgressCallback, VerifiedFile};
 
 use super::catalog::download_authored_file_to_path;
@@ -57,13 +57,17 @@ impl DownloadSource for WabbajackCdnSource {
         progress: ProgressCallback,
     ) -> Result<VerifiedFile> {
         ensure_parent(dest).await?;
-        download_authored_file_to_path(&self.client, &handle.url, dest, Some(&progress)).await?;
-        match verify_and_wrap(dest, handle.expected_hash).await {
-            Ok(verified) => Ok(verified),
-            Err(e) => {
-                let _ = tokio::fs::remove_file(dest).await;
-                Err(e)
-            }
-        }
+        download_authored_file_to_path(
+            &self.client,
+            &handle.url,
+            dest,
+            Some(handle.expected_hash),
+            Some(&progress),
+        )
+        .await?;
+        Ok(VerifiedFile {
+            path: dest.to_path_buf(),
+            hash: handle.expected_hash,
+        })
     }
 }

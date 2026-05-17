@@ -211,12 +211,14 @@ async fn test_validator_all_files_present_and_correct() {
             RawDirective::PatchedFromArchive {
                 archive_hash_path: vec![serde_json::Value::Number(0.into())],
                 patch_id: String::new(),
+                size: 0,
                 to: "file_a.txt".to_string(),
                 hash: hash_a,
             },
             RawDirective::PatchedFromArchive {
                 archive_hash_path: vec![serde_json::Value::Number(0.into())],
                 patch_id: String::new(),
+                size: 0,
                 to: "file_b.txt".to_string(),
                 hash: hash_b,
             },
@@ -240,18 +242,21 @@ async fn test_validator_all_files_missing() {
             RawDirective::PatchedFromArchive {
                 archive_hash_path: vec![serde_json::Value::Number(0.into())],
                 patch_id: String::new(),
+                size: 0,
                 to: "a.txt".to_string(),
                 hash: 111,
             },
             RawDirective::PatchedFromArchive {
                 archive_hash_path: vec![serde_json::Value::Number(0.into())],
                 patch_id: String::new(),
+                size: 0,
                 to: "b.txt".to_string(),
                 hash: 222,
             },
             RawDirective::PatchedFromArchive {
                 archive_hash_path: vec![serde_json::Value::Number(0.into())],
                 patch_id: String::new(),
+                size: 0,
                 to: "c.txt".to_string(),
                 hash: 333,
             },
@@ -279,6 +284,7 @@ async fn test_validator_hash_mismatch_includes_both_hashes() {
         directives: vec![RawDirective::PatchedFromArchive {
             archive_hash_path: vec![serde_json::Value::Number(0.into())],
             patch_id: String::new(),
+            size: 0,
             to: "file.txt".to_string(),
             hash: wrong_hash,
         }],
@@ -296,12 +302,10 @@ async fn test_validator_hash_mismatch_includes_both_hashes() {
 }
 
 #[tokio::test]
-async fn test_validator_from_archive_uses_archive_hash() {
+async fn test_validator_from_archive_checks_presence_only() {
     let staging = tempfile::tempdir().unwrap();
 
-    // The archive hash is 55555, and content matches that hash
     let content = b"archive content";
-    // Write file with content whose hash is 55555 (won't match, but we test the flow)
     tokio::fs::write(staging.path().join("extracted.txt"), content)
         .await
         .unwrap();
@@ -321,14 +325,15 @@ async fn test_validator_from_archive_uses_archive_hash() {
                 serde_json::Value::String("inner.txt".to_string()),
             ],
             to: "extracted.txt".to_string(),
+            size: 0,
         }],
         ..empty_manifest()
     };
 
     let report = validate_install(&manifest, staging.path()).await.unwrap();
     assert_eq!(report.total_files, 1);
-    // The content hash won't match the archive hash (55555), so it's a mismatch
-    assert_eq!(report.mismatches.len(), 1);
+    assert_eq!(report.verified, 1);
+    assert!(report.mismatches.is_empty());
 }
 
 #[tokio::test]
@@ -348,6 +353,7 @@ async fn test_validator_deeply_nested_files() {
         directives: vec![RawDirective::PatchedFromArchive {
             archive_hash_path: vec![serde_json::Value::Number(0.into())],
             patch_id: String::new(),
+            size: 0,
             to: "a/b/c/d/file.txt".to_string(),
             hash,
         }],
@@ -382,18 +388,21 @@ async fn test_validator_mixed_correct_missing_mismatch() {
             RawDirective::PatchedFromArchive {
                 archive_hash_path: vec![serde_json::Value::Number(0.into())],
                 patch_id: String::new(),
+                size: 0,
                 to: "correct.txt".to_string(),
                 hash: correct_hash,
             },
             RawDirective::PatchedFromArchive {
                 archive_hash_path: vec![serde_json::Value::Number(0.into())],
                 patch_id: String::new(),
+                size: 0,
                 to: "wrong.txt".to_string(),
                 hash: 99999,
             },
             RawDirective::PatchedFromArchive {
                 archive_hash_path: vec![serde_json::Value::Number(0.into())],
                 patch_id: String::new(),
+                size: 0,
                 to: "missing.txt".to_string(),
                 hash: 88888,
             },
@@ -596,6 +605,7 @@ async fn test_validator_many_files_stress() {
         directives.push(RawDirective::PatchedFromArchive {
             archive_hash_path: vec![serde_json::Value::Number(0.into())],
             patch_id: String::new(),
+            size: 0,
             to: rel_path,
             hash,
         });

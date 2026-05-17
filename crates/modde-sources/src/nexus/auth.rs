@@ -8,7 +8,6 @@ use reqwest::Client;
 use serde::Deserialize;
 use tracing::{debug, info, warn};
 
-const VALIDATE_URL: &str = "https://api.nexusmods.com/v1/users/validate.json";
 const KEYRING_SERVICE: &str = "modde";
 const KEYRING_KEY: &str = "nexus-api-key";
 
@@ -261,8 +260,9 @@ fn resolve_api_key_from_sources(
 
 /// Check if the given API key belongs to a premium account.
 pub async fn check_premium(client: &Client, api_key: &str) -> Result<bool> {
+    let validate_url = format!("{}/users/validate.json", super::base_url());
     let resp: ValidateResponse = client
-        .get(VALIDATE_URL)
+        .get(&validate_url)
         .header("apikey", api_key)
         .send()
         .await?

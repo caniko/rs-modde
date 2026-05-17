@@ -13,6 +13,10 @@ struct Cli {
     #[arg(long, global = true, env = "MODDE_DATA_DIR")]
     data_dir: Option<PathBuf>,
 
+    /// Write a DHAT heap profile. Requires the `heap-profile` cargo feature.
+    #[arg(long, global = true, env = "MODDE_HEAP_PROFILE")]
+    heap_profile: Option<PathBuf>,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -183,15 +187,95 @@ enum Commands {
     },
     /// Detect installed games across Steam and Heroic launchers
     Detect,
+    /// Manage user-defined games
+    Game {
+        #[command(subcommand)]
+        action: GameAction,
+    },
     /// Manage modde instances (multiple data directories)
     Instance {
         #[command(subcommand)]
         action: InstanceAction,
     },
+    /// Manage named launch targets (`xEdit`, `BodySlide`, `FNIS`, etc.)
+    ///
+    /// Thin alias for the executable subset of `modde tool`. The
+    /// underlying storage is shared, so `modde exec list` and
+    /// `modde tool list-executables` print the same rows.
+    Exec {
+        #[command(subcommand)]
+        action: ExecAction,
+    },
+    /// Install and update modde-maintained Codex skills
+    Skill {
+        #[command(subcommand)]
+        action: SkillAction,
+    },
     /// Import existing TOML profiles into the database
     Import,
     /// Launch the graphical user interface
     Gui,
+}
+
+#[derive(Subcommand)]
+enum ExecAction {
+    /// Save (or update) a named launch target.
+    ///
+    /// Re-running with the same name overwrites the existing entry,
+    /// so `add` doubles as `edit`.
+    Add {
+        name: String,
+        executable: PathBuf,
+        #[arg(long)]
+        game: String,
+        #[arg(long)]
+        working_dir: Option<PathBuf>,
+        #[arg(long, default_value = "__overwrite__")]
+        output_mod: String,
+        #[arg(long)]
+        wine_dll_overrides: Option<String>,
+        #[arg(long = "env")]
+        environment: Vec<String>,
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
+    /// List configured launch targets for a game.
+    List {
+        #[arg(long)]
+        game: String,
+    },
+    /// Remove a launch target.
+    Remove {
+        name: String,
+        #[arg(long)]
+        game: String,
+    },
+    /// Run a saved launch target with overwrite capture.
+    Run {
+        name: String,
+        #[arg(long)]
+        game: String,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum SkillAction {
+    /// List built-in modde skills and install status
+    List,
+    /// Print the target skill directory
+    Path,
+    /// Install or update one built-in skill, or `all`
+    Install {
+        /// Skill name, or `all`
+        name: String,
+        /// Replace installed skills even when the installed version is newer
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -206,6 +290,66 @@ enum InstanceAction {
     List,
     /// Switch to an instance
     Switch { name: String },
+}
+
+#[derive(Subcommand)]
+enum GameAction {
+    /// Add or overwrite a user-defined game registration
+    Add {
+        id: String,
+        #[arg(long)]
+        display_name: String,
+        #[arg(long)]
+        executable_dir: PathBuf,
+        #[arg(long)]
+        steam_app_id: Option<String>,
+        #[arg(long)]
+        install_dir_name: Option<String>,
+        #[arg(long)]
+        mod_dir: Option<PathBuf>,
+        #[arg(long)]
+        nexus_domain: Option<String>,
+        #[arg(long = "proxy-dll")]
+        proxy_dlls: Vec<String>,
+        /// Overwrite an existing user-defined game TOML
+        #[arg(long)]
+        force: bool,
+    },
+    /// List user-defined games
+    List,
+    /// Remove a user-defined game registration
+    Remove {
+        id: String,
+        /// Skip the confirmation prompt
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Detect executable-bearing directories under a game install
+    Detect { install_path: PathBuf },
+    /// Show a resolved game registration
+    Show { id: String },
+    /// Export a game registration to TOML
+    Export {
+        id: String,
+        #[arg(long)]
+        with_optiscaler: bool,
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Import a game registration from TOML
+    Import {
+        path: PathBuf,
+        #[arg(long)]
+        force: bool,
+    },
+    /// Import OptiScaler profiles from TOML for a game
+    ImportProfile {
+        path: PathBuf,
+        #[arg(long = "for")]
+        game: String,
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -407,6 +551,59 @@ enum InstallSource {
         /// Force full reinstall, skipping preflight checks
         #[arg(long, default_value_t = false)]
         force: bool,
+        /// Stage the modlist into modde's data directory but skip the final copy
+        /// into `--game-dir`. Useful for Stock-Game lists that should not write
+        /// into the live game install.
+        #[arg(long, default_value_t = false)]
+        no_deploy: bool,
+        /// Log per-archive failures (downloads, missing files, broken upstream
+        /// links) instead of aborting. The install proceeds as far as possible
+        /// and the operator can drop manually-fetched archives into the store
+        /// before re-running.
+        #[arg(long, default_value_t = false)]
+        continue_on_error: bool,
+        /// Explicitly discard existing Wabbajack staging before installing.
+        #[arg(long, default_value_t = false)]
+        reset_staging: bool,
+        /// Skip staging validation before deploy.
+        #[arg(long, default_value_t = false)]
+        skip_validate: bool,
+        /// Write Wabbajack apply diagnostics JSONL to this directory.
+        #[arg(long)]
+        diagnostics_dir: Option<PathBuf>,
+        /// Diagnostics heartbeat interval in seconds.
+        #[arg(long, default_value_t = 30)]
+        diagnostics_interval: u64,
+        /// Warn when apply makes no batch/sentinel progress for this many seconds.
+        #[arg(long, default_value_t = 600)]
+        stall_warn_seconds: u64,
+        /// Abort when stalled this long and cgroup memory/swap are saturated.
+        #[arg(long, default_value_t = 1800)]
+        stall_abort_seconds: u64,
+        /// Source archive retention after successful archive-batch integration.
+        #[arg(long, value_enum, default_value_t = WabbajackArchiveRetentionArg::Keep)]
+        archive_retention: WabbajackArchiveRetentionArg,
+        /// Behavior when optional manual/Nexus Wabbajack archives are missing.
+        #[arg(long, value_enum, default_value_t = WabbajackMissingArchivePolicyArg::Fail)]
+        missing_archive_policy: WabbajackMissingArchivePolicyArg,
+        /// Frontload assisted manual archive acquisition before applying.
+        #[arg(long, default_value_t = false)]
+        acquire_missing: bool,
+        /// Browser download directory to watch during assisted acquisition.
+        #[arg(long)]
+        acquire_download_dir: Option<PathBuf>,
+        /// Per-archive assisted acquisition timeout in seconds.
+        #[arg(long, default_value_t = 900)]
+        acquire_timeout: u64,
+        /// Include Nexus archives in frontloaded acquisition.
+        #[arg(long, default_value_t = false)]
+        acquire_include_nexus: bool,
+        /// Use controlled Chromium tabs for frontloaded acquisition.
+        #[arg(long, default_value_t = false)]
+        acquire_browser_controller: bool,
+        /// Disable automatic frontloaded manual archive acquisition.
+        #[arg(long, default_value_t = false)]
+        no_acquire_missing: bool,
     },
     /// Install a single mod from Nexus
     Mod {
@@ -417,6 +614,44 @@ enum InstallSource {
         #[arg(long)]
         fomod_config: Option<String>,
     },
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum WabbajackArchiveRetentionArg {
+    Keep,
+    PruneApplied,
+    Auto,
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum WabbajackMissingArchivePolicyArg {
+    Fail,
+    OmitFiles,
+    OmitMods,
+}
+
+impl From<WabbajackMissingArchivePolicyArg>
+    for modde_sources::wabbajack::impact::MissingArchivePolicy
+{
+    fn from(value: WabbajackMissingArchivePolicyArg) -> Self {
+        match value {
+            WabbajackMissingArchivePolicyArg::Fail => Self::Fail,
+            WabbajackMissingArchivePolicyArg::OmitFiles => Self::OmitFiles,
+            WabbajackMissingArchivePolicyArg::OmitMods => Self::OmitMods,
+        }
+    }
+}
+
+impl From<WabbajackArchiveRetentionArg>
+    for modde_sources::wabbajack::installer::ArchiveRetentionPolicy
+{
+    fn from(value: WabbajackArchiveRetentionArg) -> Self {
+        match value {
+            WabbajackArchiveRetentionArg::Keep => Self::Keep,
+            WabbajackArchiveRetentionArg::PruneApplied => Self::PruneApplied,
+            WabbajackArchiveRetentionArg::Auto => Self::Auto,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -549,7 +784,7 @@ enum ToolAction {
     },
     /// Save a named executable launch target for a game
     AddExecutable {
-        /// Display name, e.g. xEdit or BodySlide
+        /// Display name, e.g. `xEdit` or `BodySlide`
         name: String,
         /// Path to executable
         executable: PathBuf,
@@ -710,6 +945,59 @@ pub enum WabbajackAction {
         manifest: PathBuf,
         archives: Vec<PathBuf>,
     },
+    /// Open manual Wabbajack archive pages and import matching browser downloads
+    AcquireMissing {
+        manifest: PathBuf,
+        #[arg(long)]
+        download_dir: Option<PathBuf>,
+        #[arg(long)]
+        data_dir: Option<PathBuf>,
+        #[arg(long)]
+        browser_profile: Option<PathBuf>,
+        #[arg(long, default_value_t = false)]
+        include_nexus: bool,
+        #[arg(long, default_value_t = false)]
+        browser_controller: bool,
+        #[arg(long, default_value_t = 900)]
+        timeout: u64,
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+    /// Report missing manual/Nexus archives and their install impact
+    MissingImpact {
+        manifest: PathBuf,
+        #[arg(long)]
+        data_dir: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        /// Print Home Manager manualArchives entries for missing archives.
+        #[arg(long)]
+        nix_snippet: bool,
+    },
+    /// Print missing manual archive URLs that require operator visits
+    ManualLinks {
+        manifest: PathBuf,
+        #[arg(long)]
+        data_dir: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Assess readiness for a large Wabbajack install without mutating state
+    Assess {
+        manifest: PathBuf,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game_dir: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Summarize Wabbajack diagnostics JSONL from a previous install run
+    AnalyzeDiagnostics {
+        diagnostics_dir: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -805,6 +1093,7 @@ fn main() -> Result<()> {
         .init();
 
     let cli = Cli::parse();
+    let _heap_profiler = start_heap_profiler(cli.heap_profile.as_deref())?;
 
     if let Some(dir) = cli.data_dir.clone() {
         modde_core::paths::set_data_dir(dir);
@@ -827,6 +1116,28 @@ fn main() -> Result<()> {
         let _ = modde_core::ipc::notify_refresh();
     }
     result
+}
+
+#[cfg(feature = "heap-profile")]
+fn start_heap_profiler(path: Option<&std::path::Path>) -> Result<Option<()>> {
+    if let Some(path) = path {
+        anyhow::bail!(
+            "--heap-profile={} is not available in this build because the `turso` dependency already defines the process global allocator; use `--diagnostics-dir` for bounded-memory telemetry",
+            path.display()
+        );
+    }
+    Ok(None)
+}
+
+#[cfg(not(feature = "heap-profile"))]
+fn start_heap_profiler(path: Option<&std::path::Path>) -> Result<Option<()>> {
+    if let Some(path) = path {
+        anyhow::bail!(
+            "--heap-profile={} requires building modde-cli with `--features heap-profile`",
+            path.display()
+        );
+    }
+    Ok(None)
 }
 
 fn run_command(cli: Cli) -> Result<()> {
@@ -867,6 +1178,32 @@ fn run_command(cli: Cli) -> Result<()> {
             return commands::backup::handle(action);
         }
         Commands::Detect => return commands::detect::handle(),
+        Commands::Game {
+            action: GameAction::List,
+        } => return commands::game::handle_list(),
+        Commands::Game {
+            action: GameAction::Remove { id, yes },
+        } => return commands::game::handle_remove(&id, yes),
+        Commands::Game {
+            action: GameAction::Detect { install_path },
+        } => return commands::game::handle_detect(install_path),
+        Commands::Game {
+            action: GameAction::Show { id },
+        } => return commands::game::handle_show(&id),
+        Commands::Game {
+            action:
+                GameAction::Export {
+                    id,
+                    with_optiscaler,
+                    output,
+                },
+        } => return commands::game::handle_export(&id, with_optiscaler, output),
+        Commands::Game {
+            action: GameAction::Import { path, force },
+        } => return commands::game::handle_import(path, force),
+        Commands::Game {
+            action: GameAction::ImportProfile { path, game, force },
+        } => return commands::game::handle_import_profile(path, game, force),
         Commands::Instance { action } => {
             return match action {
                 InstanceAction::Create { name, data_dir } => {
@@ -930,6 +1267,43 @@ fn run_command(cli: Cli) -> Result<()> {
             commands::nxm::install_handler()?;
             return Ok(());
         }
+        Commands::Exec {
+            action:
+                ExecAction::Add {
+                    name,
+                    executable,
+                    game,
+                    working_dir,
+                    output_mod,
+                    wine_dll_overrides,
+                    environment,
+                    args,
+                },
+        } => {
+            return commands::tool::handle_add_executable(
+                &name,
+                executable,
+                &game,
+                working_dir,
+                &output_mod,
+                wine_dll_overrides,
+                &environment,
+                &args,
+            );
+        }
+        Commands::Exec {
+            action: ExecAction::List { game },
+        } => {
+            return commands::tool::handle_list_executables(&game);
+        }
+        Commands::Exec {
+            action: ExecAction::Remove { name, game },
+        } => {
+            return commands::tool::handle_remove_executable(&name, &game);
+        }
+        Commands::Skill { action } => {
+            return commands::skill::handle(action);
+        }
         Commands::Wabbajack { .. } => {}
         _ => {}
     }
@@ -966,6 +1340,33 @@ fn run_command(cli: Cli) -> Result<()> {
             Commands::Nexus { action } => commands::nexus::handle(action).await?,
             Commands::Stock { action } => commands::stock::handle(action).await?,
             Commands::Save { action } => commands::save::handle(action).await?,
+            Commands::Game {
+                action:
+                    GameAction::Add {
+                        id,
+                        display_name,
+                        executable_dir,
+                        steam_app_id,
+                        install_dir_name,
+                        mod_dir,
+                        nexus_domain,
+                        proxy_dlls,
+                        force,
+                    },
+            } => {
+                commands::game::handle_add(commands::game::AddGameArgs {
+                    id,
+                    display_name,
+                    executable_dir,
+                    steam_app_id,
+                    install_dir_name,
+                    mod_dir,
+                    nexus_domain,
+                    proxy_dlls,
+                    force,
+                })
+                .await?;
+            }
             Commands::Update { action } => match action {
                 UpdateAction::Check {
                     profile,
@@ -981,16 +1382,18 @@ fn run_command(cli: Cli) -> Result<()> {
                     accept_breaking,
                     yes,
                 } => {
-                    commands::update::handle_apply(
-                        profile,
-                        game,
+                    commands::update::handle_apply(commands::update::ApplyOptions {
+                        profile_name: profile,
+                        game_id: game,
                         period,
                         dry_run,
-                        confirm_locked,
-                        accept_breaking,
-                        yes,
-                    )
-                    .await?
+                        safety: commands::update::ApplySafety {
+                            confirm_locked,
+                            accept_breaking,
+                            yes,
+                        },
+                    })
+                    .await?;
                 }
             },
             Commands::Tool { action } => match action {
@@ -1058,11 +1461,26 @@ fn run_command(cli: Cli) -> Result<()> {
                 NxmAction::Handle { uri, profile } => commands::nxm::handle(uri, profile).await?,
                 NxmAction::Install => unreachable!(),
             },
+            Commands::Exec { action } => match action {
+                ExecAction::Run {
+                    name,
+                    game,
+                    profile,
+                    args,
+                } => {
+                    commands::tool::handle_run_executable(&name, &game, profile, args).await?;
+                }
+                // Sync arms handled in the pre-tokio block above.
+                ExecAction::Add { .. } | ExecAction::List { .. } | ExecAction::Remove { .. } => {
+                    unreachable!()
+                }
+            },
             Commands::Wabbajack { action } => commands::wabbajack::handle(action).await?,
             // Already handled above
             Commands::Profile { .. }
             | Commands::Scan { .. }
             | Commands::Detect
+            | Commands::Game { .. }
             | Commands::Import
             | Commands::Instance { .. }
             | Commands::Backup { .. }
@@ -1070,6 +1488,7 @@ fn run_command(cli: Cli) -> Result<()> {
             | Commands::Export { .. }
             | Commands::Fomod { .. }
             | Commands::Loot { .. }
+            | Commands::Skill { .. }
             | Commands::Gui => unreachable!(),
         }
         Ok(())
@@ -1092,6 +1511,16 @@ fn command_mutates_state(cmd: &Commands) -> bool {
         | Commands::Collisions { .. }
         | Commands::Gui => false,
 
+        Commands::Game { action } => {
+            matches!(
+                action,
+                GameAction::Add { .. }
+                    | GameAction::Remove { .. }
+                    | GameAction::Import { .. }
+                    | GameAction::ImportProfile { .. }
+            )
+        }
+
         // `update check` is read-only; `update apply` mutates.
         Commands::Update { action } => matches!(action, UpdateAction::Apply { .. }),
 
@@ -1112,6 +1541,15 @@ fn command_mutates_state(cmd: &Commands) -> bool {
                 | ToolAction::ListExecutables { .. }
         ),
 
+        // Exec is the alias for tool's executable subset. List is a
+        // read-only query; the others mutate or run a child process
+        // whose overwrite-capture writes to the store.
+        Commands::Exec { action } => !matches!(action, ExecAction::List { .. }),
+
+        // Skill list/path are read-only; install writes files under the
+        // user-global `.agents/skills` tree.
+        Commands::Skill { action } => matches!(action, SkillAction::Install { .. }),
+
         // Nexus: `auth` writes the API key, `status` prints validity.
         // The status arm doesn't mutate, but the GUI surfaces auth
         // state — a refresh is harmless and cheap. Notify on either.
@@ -1120,9 +1558,13 @@ fn command_mutates_state(cmd: &Commands) -> bool {
         // `mod diagnose` only prints the dossier; remove mutates.
         Commands::Mod { action } => matches!(action, ModAction::Remove { .. }),
 
-        // `wabbajack search` / `download` / `hm-snippet` are read-only;
-        // `import-archive` writes into the store.
-        Commands::Wabbajack { action } => matches!(action, WabbajackAction::ImportArchive { .. }),
+        // `wabbajack search` / `download` / `hm-snippet` / `assess` /
+        // `missing-impact` / `manual-links` are read-only;
+        // import/acquire commands write into the store.
+        Commands::Wabbajack { action } => matches!(
+            action,
+            WabbajackAction::ImportArchive { .. } | WabbajackAction::AcquireMissing { .. }
+        ),
 
         // Save commands cover read-only listing AND mutating
         // capture/restore/adopt; conservatively notify on all of
@@ -1303,6 +1745,72 @@ mod mutation_classification_tests {
         }
     }
 
+    fn wabbajack_acquire_missing() -> Commands {
+        Commands::Wabbajack {
+            action: WabbajackAction::AcquireMissing {
+                manifest: PathBuf::from("m.json"),
+                download_dir: None,
+                data_dir: None,
+                browser_profile: None,
+                include_nexus: false,
+                browser_controller: false,
+                timeout: 1,
+                json: false,
+            },
+        }
+    }
+
+    fn wabbajack_assess() -> Commands {
+        Commands::Wabbajack {
+            action: WabbajackAction::Assess {
+                manifest: PathBuf::from("list.wabbajack"),
+                profile: None,
+                game_dir: None,
+                json: false,
+            },
+        }
+    }
+
+    fn skill_list() -> Commands {
+        Commands::Skill {
+            action: SkillAction::List,
+        }
+    }
+
+    fn skill_install() -> Commands {
+        Commands::Skill {
+            action: SkillAction::Install {
+                name: "all".into(),
+                force: false,
+            },
+        }
+    }
+
+    fn game_add() -> Commands {
+        Commands::Game {
+            action: GameAction::Add {
+                id: "custom-game".into(),
+                display_name: "Custom Game".into(),
+                executable_dir: PathBuf::from("bin"),
+                steam_app_id: None,
+                install_dir_name: None,
+                mod_dir: None,
+                nexus_domain: None,
+                proxy_dlls: vec![],
+                force: false,
+            },
+        }
+    }
+
+    fn game_remove() -> Commands {
+        Commands::Game {
+            action: GameAction::Remove {
+                id: "custom-game".into(),
+                yes: false,
+            },
+        }
+    }
+
     // ── read-only ────────────────────────────────────────────────
 
     #[test]
@@ -1383,6 +1891,52 @@ mod mutation_classification_tests {
         assert!(!command_mutates_state(&wabbajack_search()));
     }
 
+    #[test]
+    fn wabbajack_assess_is_read_only() {
+        assert!(!command_mutates_state(&wabbajack_assess()));
+    }
+
+    #[test]
+    fn skill_list_is_read_only() {
+        assert!(!command_mutates_state(&skill_list()));
+    }
+
+    #[test]
+    fn game_list_is_read_only() {
+        assert!(!command_mutates_state(&Commands::Game {
+            action: GameAction::List,
+        }));
+    }
+
+    #[test]
+    fn game_detect_is_read_only() {
+        assert!(!command_mutates_state(&Commands::Game {
+            action: GameAction::Detect {
+                install_path: PathBuf::from("/games"),
+            },
+        }));
+    }
+
+    #[test]
+    fn game_show_is_read_only() {
+        assert!(!command_mutates_state(&Commands::Game {
+            action: GameAction::Show {
+                id: "custom-game".into(),
+            },
+        }));
+    }
+
+    #[test]
+    fn game_export_is_read_only() {
+        assert!(!command_mutates_state(&Commands::Game {
+            action: GameAction::Export {
+                id: "custom-game".into(),
+                with_optiscaler: false,
+                output: None,
+            },
+        }));
+    }
+
     // ── mutating ─────────────────────────────────────────────────
 
     #[test]
@@ -1433,6 +1987,26 @@ mod mutation_classification_tests {
     #[test]
     fn wabbajack_import_archive_is_mutating() {
         assert!(command_mutates_state(&wabbajack_import()));
+    }
+
+    #[test]
+    fn wabbajack_acquire_missing_is_mutating() {
+        assert!(command_mutates_state(&wabbajack_acquire_missing()));
+    }
+
+    #[test]
+    fn skill_install_is_mutating() {
+        assert!(command_mutates_state(&skill_install()));
+    }
+
+    #[test]
+    fn game_add_is_mutating() {
+        assert!(command_mutates_state(&game_add()));
+    }
+
+    #[test]
+    fn game_remove_is_mutating() {
+        assert!(command_mutates_state(&game_remove()));
     }
 
     #[test]

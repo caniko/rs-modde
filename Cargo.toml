@@ -73,11 +73,30 @@ base64 = "0.22"
 
 # Compression
 flate2 = "1"
+lz4_flex = "0.13"
 zip = "8"
+sevenz-rust2 = { version = "0.21.0", default-features = false, features = ["util", "bzip2", "deflate", "aes256", "ppmd", "lz4", "zstd", "brotli"] }
+reflink-copy = { version = "0.1.29", features = ["tracing"] }
+zstd = { version = "0.13.3", default-features = false, features = ["zstdmt"] }
+
+# Byte buffers / caches
+bytes = "1.11.1"
+lru = "0.18.0"
+parking_lot = "0.12.5"
+dashmap = "6.1.0"
 
 # Temp files
 tempfile = "3"
 pretty_assertions = "1"
+
+# Snapshot / CLI testing
+insta = "1"
+assert_cmd = "2"
+wiremock = "0.6"
+
+# Benchmarks + property-based tests
+criterion = { version = "0.7", features = ["html_reports"] }
+proptest = "1"
 
 # OS / system
 libc = "0.2"

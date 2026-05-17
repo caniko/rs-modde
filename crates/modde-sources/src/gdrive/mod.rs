@@ -7,7 +7,7 @@ use tracing::debug;
 
 use modde_core::manifest::wabbajack::DownloadDirective;
 
-use crate::common::{ensure_parent, stream_to_file, verify_and_wrap};
+use crate::common::{ensure_parent, stream_to_file_verified};
 use crate::traits::{DownloadHandle, DownloadSource, ProgressCallback, VerifiedFile};
 
 /// Google Drive download source.
@@ -34,7 +34,13 @@ impl DownloadSource for GoogleDriveSource {
             anyhow::bail!("not a Google Drive directive");
         };
 
-        let url = format!("https://drive.google.com/uc?id={id}&export=download");
+        // Modern Google Drive flow: hit the usercontent host directly with confirm=t,
+        // which skips the interstitial virus-scan warning entirely. Falling back to
+        // the legacy `drive.google.com/uc?...` URL is left to the HTML extraction
+        // path inside `do_download` for old links that still serve the warning page.
+        let url = format!(
+            "https://drive.usercontent.google.com/download?id={id}&export=download&authuser=0&confirm=t"
+        );
 
         Ok(DownloadHandle {
             url,
@@ -55,9 +61,7 @@ impl DownloadSource for GoogleDriveSource {
 
         do_download(&self.client, &handle, dest, &progress)
             .await
-            .context("Google Drive download failed")?;
-
-        verify_and_wrap(dest, handle.expected_hash).await
+            .context("Google Drive download failed")
     }
 }
 
@@ -66,7 +70,7 @@ async fn do_download(
     handle: &DownloadHandle,
     dest: &Path,
     progress: &ProgressCallback,
-) -> Result<()> {
+) -> Result<VerifiedFile> {
     let resp = client.get(&handle.url).send().await?.error_for_status()?;
     let content_type = resp
         .headers()
@@ -89,11 +93,23 @@ async fn do_download(
             .send()
             .await?
             .error_for_status()?;
-        stream_to_file(resp, dest, handle.size_hint.unwrap_or(0), progress).await?;
-    } else {
-        stream_to_file(resp, dest, handle.size_hint.unwrap_or(0), progress).await?;
+        return stream_to_file_verified(
+            resp,
+            dest,
+            handle.expected_hash,
+            handle.size_hint.unwrap_or(0),
+            progress,
+        )
+        .await;
     }
-    Ok(())
+    stream_to_file_verified(
+        resp,
+        dest,
+        handle.expected_hash,
+        handle.size_hint.unwrap_or(0),
+        progress,
+    )
+    .await
 }
 
 /// Extract the confirm token from Google Drive's virus scan warning HTML.

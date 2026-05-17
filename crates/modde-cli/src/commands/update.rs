@@ -77,28 +77,41 @@ pub async fn handle_check(
     Ok(())
 }
 
+pub struct ApplyOptions {
+    pub profile_name: Option<String>,
+    pub game_id: Option<String>,
+    pub period: String,
+    pub dry_run: bool,
+    pub safety: ApplySafety,
+}
+
+pub struct ApplySafety {
+    pub confirm_locked: bool,
+    pub accept_breaking: bool,
+    pub yes: bool,
+}
+
 /// Download and install the newest MAIN file for every tracked mod that
 /// has a newer file on Nexus, then rewrite the profile entries to point
 /// at the fresh `(mod_id, file_id)` pair.
 ///
 /// This is the auto-update half of `modde update check`: pair them in a
 /// cron / scheduled task and the manager will keep itself current.
-pub async fn handle_apply(
-    profile_name: Option<String>,
-    game_id: Option<String>,
-    period: String,
-    dry_run: bool,
-    confirm_locked: bool,
-    accept_breaking: bool,
-    yes: bool,
-) -> Result<()> {
+pub async fn handle_apply(options: ApplyOptions) -> Result<()> {
     let pm = ProfileManager::open().context("failed to open profile database")?;
-    let mut profile = load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref())?;
+    let mut profile = load_profile_or_default(
+        &pm,
+        options.profile_name.as_deref(),
+        options.game_id.as_deref(),
+    )?;
 
     info!(
         profile = %profile.name,
         game = %profile.game_id,
-        dry_run, confirm_locked, accept_breaking, yes,
+        dry_run = options.dry_run,
+        confirm_locked = options.safety.confirm_locked,
+        accept_breaking = options.safety.accept_breaking,
+        yes = options.safety.yes,
         "applying mod updates"
     );
 
@@ -107,7 +120,7 @@ pub async fn handle_apply(
     // would silently drift the profile away from its source. Refuse
     // unless the user explicitly opts in.
     if let Some(lock) = profile.load_order_lock.as_ref() {
-        if !confirm_locked {
+        if !options.safety.confirm_locked {
             let label = match &lock.reason {
                 LockReason::Wabbajack { .. } => "Wabbajack",
                 LockReason::NexusCollection { .. } => "Nexus Collection",
@@ -118,7 +131,8 @@ pub async fn handle_apply(
                 "profile '{}' is locked ({label}); auto-updating its mods would drift it from \
                  the authoritative source. Re-run with --confirm-locked to override, or \
                  `modde profile unlock {}` first.",
-                profile.name, profile.name
+                profile.name,
+                profile.name
             );
         }
         eprintln!(
@@ -155,7 +169,7 @@ pub async fn handle_apply(
     let client = Client::new();
     let api = NexusApi::new(client.clone(), api_key.clone());
 
-    let updates = check_updates(&api, &tracked, &period).await?;
+    let updates = check_updates(&api, &tracked, &options.period).await?;
 
     if updates.is_empty() {
         println!("All {} tracked mods are up to date.", tracked.len());
@@ -164,7 +178,7 @@ pub async fn handle_apply(
 
     println!("{} mod(s) have updates available.\n", updates.len());
 
-    if dry_run {
+    if options.dry_run {
         for u in &updates {
             let installed = u.installed_version.as_deref().unwrap_or("unknown");
             println!(
@@ -188,18 +202,15 @@ pub async fn handle_apply(
     for u in &updates {
         // Recover the domain from the profile entry: ModUpdate doesn't
         // carry it, but the local `mod_id` matches an EnabledMod row.
-        let game_domain = match profile
+        let Some(game_domain) = profile
             .mods
             .iter()
             .find(|m| m.mod_id == u.mod_id)
             .and_then(|m| m.nexus_game_domain.clone())
-        {
-            Some(d) => d,
-            None => {
-                warn!(mod_id = %u.mod_id, "skipping update: missing nexus_game_domain");
-                failed += 1;
-                continue;
-            }
+        else {
+            warn!(mod_id = %u.mod_id, "skipping update: missing nexus_game_domain");
+            failed += 1;
+            continue;
         };
 
         // Pick the newest MAIN file. Mirrors `commands::install::handle_single_mod`.
@@ -247,27 +258,27 @@ pub async fn handle_apply(
         // require both the `--accept-breaking` flag (broad opt-in) and
         // a per-mod y/N confirmation (precise opt-in). `--yes` skips
         // the per-mod prompt only when `--accept-breaking` is also set.
-        if let Some(installed) = u.installed_version.as_deref() {
-            if is_breaking_bump(installed, &mod_info.version) {
-                if !accept_breaking {
-                    println!(
-                        "  skipping {}: breaking version bump {} → {}. Pass --accept-breaking \
-                         to allow it.",
-                        u.mod_id, installed, mod_info.version
-                    );
-                    failed += 1;
-                    continue;
-                }
-                let approved = if yes {
-                    true
-                } else {
-                    confirm_breaking(&u.mod_id, installed, &mod_info.version)?
-                };
-                if !approved {
-                    println!("  skipped {} (user declined breaking update).", u.mod_id);
-                    failed += 1;
-                    continue;
-                }
+        if let Some(installed) = u.installed_version.as_deref()
+            && is_breaking_bump(installed, &mod_info.version)
+        {
+            if !options.safety.accept_breaking {
+                println!(
+                    "  skipping {}: breaking version bump {} → {}. Pass --accept-breaking \
+                     to allow it.",
+                    u.mod_id, installed, mod_info.version
+                );
+                failed += 1;
+                continue;
+            }
+            let approved = if options.safety.yes {
+                true
+            } else {
+                confirm_breaking(&u.mod_id, installed, &mod_info.version)?
+            };
+            if !approved {
+                println!("  skipped {} (user declined breaking update).", u.mod_id);
+                failed += 1;
+                continue;
             }
         }
 
@@ -378,10 +389,7 @@ fn is_breaking_bump(installed: &str, latest: &str) -> bool {
 /// only `y`/`yes` (case-insensitive) approves. Anything else (including
 /// EOF) declines.
 fn confirm_breaking(mod_id: &str, installed: &str, latest: &str) -> Result<bool> {
-    print!(
-        "  [breaking] {} {} → {} — apply? [y/N] ",
-        mod_id, installed, latest
-    );
+    print!("  [breaking] {mod_id} {installed} → {latest} — apply? [y/N] ");
     io::stdout().flush().ok();
     let stdin = io::stdin();
     let mut line = String::new();

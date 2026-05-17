@@ -1,0 +1,35 @@
+---
+source: crates/modde-cli/tests/cli_help_snapshots.rs
+assertion_line: 60
+expression: "stdout(&[\"game\", \"add\", \"--help\"])"
+---
+Add or overwrite a user-defined game registration
+
+Usage: modde game add [OPTIONS] --display-name <DISPLAY_NAME> --executable-dir <EXECUTABLE_DIR> <ID>
+
+Arguments:
+  <ID>  
+
+Options:
+      --data-dir <DATA_DIR>
+          Override data directory (default: ~/.local/share/modde or $`MODDE_DATA_DIR`) [env: MODDE_DATA_DIR=]
+      --display-name <DISPLAY_NAME>
+          
+      --executable-dir <EXECUTABLE_DIR>
+          
+      --heap-profile <HEAP_PROFILE>
+          Write a DHAT heap profile. Requires the `heap-profile` cargo feature [env: MODDE_HEAP_PROFILE=]
+      --steam-app-id <STEAM_APP_ID>
+          
+      --install-dir-name <INSTALL_DIR_NAME>
+          
+      --mod-dir <MOD_DIR>
+          
+      --nexus-domain <NEXUS_DOMAIN>
+          
+      --proxy-dll <PROXY_DLLS>
+          
+      --force
+          Overwrite an existing user-defined game TOML
+  -h, --help
+          Print help

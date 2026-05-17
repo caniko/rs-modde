@@ -1,4 +1,4 @@
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Write};
 
 use anyhow::{Context, Result, bail};
 
@@ -24,7 +24,31 @@ const OP_DATA: u8 = 0x80;
 ///   - `0x60` copy: offset(u64 LE) + length(u64 LE) — copy from basis file
 ///   - `0x80` data: length(u64 LE) + literal(length bytes) — insert literal data
 pub fn apply_patch(source: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
+    let mut output = Vec::new();
+    apply_patch_to_writer(source, patch, &mut output)?;
+    Ok(output)
+}
+
+/// Apply an `OctoDiff` binary delta patch and stream the target bytes to `writer`.
+pub fn apply_patch_to_writer<W: Write>(source: &[u8], patch: &[u8], writer: &mut W) -> Result<u64> {
+    apply_patch_to_writer_limited(source, patch, writer, None)
+}
+
+/// Apply an `OctoDiff` binary delta patch and enforce an expected output size.
+///
+/// When `expected_output_bytes` is set, the writer fails before writing any
+/// operation that would exceed the manifest size and also rejects truncated
+/// output after the final operation.
+pub fn apply_patch_to_writer_limited<W: Write>(
+    source: &[u8],
+    patch: &[u8],
+    writer: &mut W,
+    expected_output_bytes: Option<u64>,
+) -> Result<u64> {
     let mut cursor = Cursor::new(patch);
+    let max_output_bytes = expected_output_bytes
+        .unwrap_or(MAX_PATCH_OUTPUT as u64)
+        .min(MAX_PATCH_OUTPUT as u64);
 
     // Read and verify magic
     let mut magic = [0u8; 9];
@@ -61,8 +85,7 @@ pub fn apply_patch(source: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
         bail!("expected '>>>' separator, got {sep:?}");
     }
 
-    // Process delta operations
-    let mut output = Vec::new();
+    let mut output_len = 0u64;
 
     loop {
         let mut op_buf = [0u8; 1];
@@ -74,33 +97,39 @@ pub fn apply_patch(source: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
 
         match op_buf[0] {
             OP_COPY => {
-                let offset =
-                    read_u64_le(&mut cursor).context("failed to read copy offset")? as usize;
-                let length =
-                    read_u64_le(&mut cursor).context("failed to read copy length")? as usize;
+                let offset = read_u64_le(&mut cursor).context("failed to read copy offset")?;
+                let length = read_u64_le(&mut cursor).context("failed to read copy length")?;
+                let end = offset
+                    .checked_add(length)
+                    .context("copy operation offset overflows")?;
 
-                if offset + length > source.len() {
+                if end > source.len() as u64 {
                     bail!(
                         "copy operation out of bounds: offset={offset}, length={length}, source_len={}",
                         source.len()
                     );
                 }
-                if output.len().saturating_add(length) > MAX_PATCH_OUTPUT {
-                    bail!("patch output exceeds maximum size of {MAX_PATCH_OUTPUT} bytes");
+                if output_len.saturating_add(length) > max_output_bytes {
+                    bail!("patch output exceeds maximum size of {max_output_bytes} bytes");
                 }
-                output.extend_from_slice(&source[offset..offset + length]);
+                let offset = usize::try_from(offset).context("copy offset does not fit usize")?;
+                let end = usize::try_from(end).context("copy end does not fit usize")?;
+                writer
+                    .write_all(&source[offset..end])
+                    .context("failed to write copied patch data")?;
+                output_len += length;
             }
             OP_DATA => {
-                let length =
-                    read_u64_le(&mut cursor).context("failed to read data length")? as usize;
-                if output.len().saturating_add(length) > MAX_PATCH_OUTPUT {
-                    bail!("patch output exceeds maximum size of {MAX_PATCH_OUTPUT} bytes");
+                let length = read_u64_le(&mut cursor).context("failed to read data length")?;
+                if output_len.saturating_add(length) > max_output_bytes {
+                    bail!("patch output exceeds maximum size of {max_output_bytes} bytes");
                 }
-                let mut data = vec![0u8; length];
-                cursor
-                    .read_exact(&mut data)
-                    .context("failed to read literal data")?;
-                output.extend_from_slice(&data);
+                let copied = std::io::copy(&mut cursor.by_ref().take(length), writer)
+                    .context("failed to write literal patch data")?;
+                if copied != length {
+                    bail!("failed to read literal data: expected {length} bytes, got {copied}");
+                }
+                output_len += length;
             }
             other => {
                 bail!("unknown OctoDiff operation type: 0x{other:02x}");
@@ -108,7 +137,13 @@ pub fn apply_patch(source: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
         }
     }
 
-    Ok(output)
+    if let Some(expected) = expected_output_bytes
+        && output_len != expected
+    {
+        bail!("patch output size mismatch: expected {expected} bytes, wrote {output_len}");
+    }
+
+    Ok(output_len)
 }
 
 /// Read a little-endian u64 from a reader.
@@ -222,6 +257,57 @@ mod tests {
         let result = apply_patch(b"", &patch).unwrap();
         assert_eq!(result.len(), 10240);
         assert!(result.iter().all(|&b| b == 0xAB));
+    }
+
+    #[test]
+    fn streaming_writer_matches_in_memory_output() {
+        let source = b"Hello, World!";
+        let copy = copy_op(0, 5);
+        let data = data_op(b" Rust");
+        let patch = build_octodiff_patch(&[(OP_COPY, &copy), (OP_DATA, &data)]);
+        let expected = apply_patch(source, &patch).unwrap();
+        let mut streamed = Vec::new();
+        let written = apply_patch_to_writer(source, &patch, &mut streamed).unwrap();
+        assert_eq!(written, expected.len() as u64);
+        assert_eq!(streamed, expected);
+    }
+
+    #[test]
+    fn streaming_writer_reports_truncated_literal() {
+        let mut literal = Vec::new();
+        literal.extend_from_slice(&8u64.to_le_bytes());
+        literal.extend_from_slice(b"abc");
+        let patch = build_octodiff_patch(&[(OP_DATA, &literal)]);
+        let mut streamed = Vec::new();
+        let result = apply_patch_to_writer(b"", &patch, &mut streamed);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn streaming_writer_rejects_output_larger_than_expected_before_writing_operation() {
+        let patch = build_octodiff_patch(&[(OP_DATA, &data_op(b"abcdef"))]);
+        let mut streamed = Vec::new();
+        let result = apply_patch_to_writer_limited(b"", &patch, &mut streamed, Some(3));
+        assert!(result.is_err());
+        assert!(streamed.is_empty());
+    }
+
+    #[test]
+    fn streaming_writer_rejects_output_smaller_than_expected() {
+        let patch = build_octodiff_patch(&[(OP_DATA, &data_op(b"abc"))]);
+        let mut streamed = Vec::new();
+        let result = apply_patch_to_writer_limited(b"", &patch, &mut streamed, Some(6));
+        assert!(result.is_err());
+        assert_eq!(streamed, b"abc");
+    }
+
+    #[test]
+    fn streaming_writer_accepts_exact_expected_output_size() {
+        let patch = build_octodiff_patch(&[(OP_DATA, &data_op(b"abc"))]);
+        let mut streamed = Vec::new();
+        let written = apply_patch_to_writer_limited(b"", &patch, &mut streamed, Some(3)).unwrap();
+        assert_eq!(written, 3);
+        assert_eq!(streamed, b"abc");
     }
 
     #[test]

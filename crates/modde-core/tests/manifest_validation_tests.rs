@@ -194,6 +194,7 @@ fn test_install_directives_from_archive() {
                 serde_json::Value::String("data/textures/sky.dds".to_string()),
             ],
             to: "Data/textures/sky.dds".to_string(),
+            size: 0,
         }],
         ..test_manifest()
     };
@@ -204,11 +205,15 @@ fn test_install_directives_from_archive() {
         InstallDirective::FromArchive {
             archive_hash,
             from,
+            inner_path,
             to,
+            size,
         } => {
             assert_eq!(*archive_hash, 12345);
             assert_eq!(from, "data/textures/sky.dds");
+            assert!(inner_path.is_none());
             assert_eq!(to, "Data/textures/sky.dds");
+            assert_eq!(*size, 0);
         }
         _ => panic!("expected FromArchive"),
     }
@@ -225,6 +230,7 @@ fn test_install_directives_patched() {
             ],
             to: "patched.esp".to_string(),
             hash: 99999,
+            size: 12345,
         }],
         ..test_manifest()
     };
@@ -235,15 +241,53 @@ fn test_install_directives_patched() {
         InstallDirective::PatchedFromArchive {
             archive_hash,
             from,
+            inner_path,
             to,
             patch_id,
+            size,
         } => {
             assert_eq!(*archive_hash, 55555);
             assert_eq!(from, "original.esp");
+            assert!(inner_path.is_none());
             assert_eq!(to, "patched.esp");
             assert!(patch_id.is_empty());
+            assert_eq!(*size, 12345);
         }
         _ => panic!("expected PatchedFromArchive"),
+    }
+}
+
+#[test]
+fn test_install_directives_nested_archive_hash_path() {
+    let manifest = WabbajackManifest {
+        directives: vec![RawDirective::FromArchive {
+            archive_hash_path: vec![
+                serde_json::Value::Number(55555.into()),
+                serde_json::Value::String("outer.bsa".to_string()),
+                serde_json::Value::String("meshes/inner.nif".to_string()),
+            ],
+            to: "mods/out/inner.nif".to_string(),
+            size: 42,
+        }],
+        ..test_manifest()
+    };
+
+    let directives = manifest.install_directives();
+    match &directives[0] {
+        InstallDirective::FromArchive {
+            archive_hash,
+            from,
+            inner_path,
+            to,
+            size,
+        } => {
+            assert_eq!(*archive_hash, 55555);
+            assert_eq!(from, "outer.bsa");
+            assert_eq!(inner_path.as_deref(), Some("meshes/inner.nif"));
+            assert_eq!(to, "mods/out/inner.nif");
+            assert_eq!(*size, 42);
+        }
+        _ => panic!("expected FromArchive"),
     }
 }
 
@@ -293,6 +337,7 @@ fn test_install_directives_unknown_filtered_out() {
             RawDirective::FromArchive {
                 archive_hash_path: vec![serde_json::Value::Number(1.into())],
                 to: "file.txt".to_string(),
+                size: 0,
             },
             RawDirective::Unknown,
         ],
@@ -309,6 +354,7 @@ fn test_install_directives_empty_archive_hash_path() {
         directives: vec![RawDirective::FromArchive {
             archive_hash_path: vec![], // empty
             to: "file.txt".to_string(),
+            size: 0,
         }],
         ..test_manifest()
     };
@@ -352,6 +398,7 @@ fn test_wabbajack_manifest_json_roundtrip() {
                 serde_json::Value::String("inner.esp".to_string()),
             ],
             to: "Data/inner.esp".to_string(),
+            size: 0,
         }],
     };
 
@@ -643,12 +690,14 @@ fn test_mixed_install_and_download_directives() {
                     serde_json::Value::String("file.txt".to_string()),
                 ],
                 to: "Data/file.txt".to_string(),
+                size: 0,
             },
             RawDirective::PatchedFromArchive {
                 archive_hash_path: vec![serde_json::Value::Number(100.into())],
                 patch_id: String::new(),
                 to: "patched.esp".to_string(),
                 hash: 999,
+                size: 0,
             },
             RawDirective::CreateBSA {
                 temp_id: "bsa1".to_string(),

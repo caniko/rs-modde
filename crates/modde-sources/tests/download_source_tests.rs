@@ -256,7 +256,7 @@ async fn test_gdrive_source_resolve() {
 
     let handle = source.resolve(&directive).await.unwrap();
     assert!(handle.url.contains("abc123xyz"));
-    assert!(handle.url.contains("drive.google.com"));
+    assert!(handle.url.contains("drive.usercontent.google.com"));
     assert_eq!(handle.expected_hash, 99999);
     assert!(handle.size_hint.is_none());
 }

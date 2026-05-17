@@ -122,6 +122,13 @@ pub enum ButtonAction {
     SubmitNewProfileDialog,
     GamePathDialogBrowse,
     CancelGamePathDialog,
+    OpenAddCustomGame,
+    BrowseAddCustomGameInstallPath,
+    AddCustomGameSubmit,
+    AddCustomGameCancel,
+    OpenManageCustomGames,
+    CloseManageCustomGames,
+    RemoveCustomGame(String),
 }
 
 impl ButtonActionDescription for ButtonAction {
@@ -345,6 +352,21 @@ impl ButtonActionDescription for ButtonAction {
             ButtonAction::CancelGamePathDialog => {
                 "Cancel setting the game path and return to the previous game selection."
             }
+            ButtonAction::OpenAddCustomGame => "Open a dialog to register a new custom game.",
+            ButtonAction::BrowseAddCustomGameInstallPath => {
+                "Choose the custom game's install directory and scan it for executables."
+            }
+            ButtonAction::AddCustomGameSubmit => {
+                "Save the custom game, reload the registry, and select it."
+            }
+            ButtonAction::AddCustomGameCancel => "Close the custom game dialog without saving.",
+            ButtonAction::OpenManageCustomGames => {
+                "Open the list of user-defined games and remove existing entries."
+            }
+            ButtonAction::CloseManageCustomGames => "Close the custom game manager.",
+            ButtonAction::RemoveCustomGame(_) => {
+                "Remove this user-defined game from the runtime registry."
+            }
         }
     }
 }
@@ -462,6 +484,13 @@ impl From<ButtonAction> for Message {
             ButtonAction::SubmitNewProfileDialog => Message::SubmitNewProfileDialog,
             ButtonAction::GamePathDialogBrowse => Message::GamePathDialogBrowse,
             ButtonAction::CancelGamePathDialog => Message::CancelGamePathDialog,
+            ButtonAction::OpenAddCustomGame => Message::OpenAddCustomGame,
+            ButtonAction::BrowseAddCustomGameInstallPath => Message::BrowseAddCustomGameInstallPath,
+            ButtonAction::AddCustomGameSubmit => Message::AddCustomGameSubmit,
+            ButtonAction::AddCustomGameCancel => Message::AddCustomGameCancel,
+            ButtonAction::OpenManageCustomGames => Message::OpenManageCustomGames,
+            ButtonAction::CloseManageCustomGames => Message::CloseManageCustomGames,
+            ButtonAction::RemoveCustomGame(id) => Message::RemoveCustomGame(id),
         }
     }
 }

@@ -1,0 +1,17 @@
+---
+source: crates/modde-cli/tests/cli_help_snapshots.rs
+assertion_line: 70
+expression: "stdout(&[\"game\", \"import\", \"--help\"])"
+---
+Import a game registration from TOML
+
+Usage: modde game import [OPTIONS] <PATH>
+
+Arguments:
+  <PATH>  
+
+Options:
+      --data-dir <DATA_DIR>          Override data directory (default: ~/.local/share/modde or $`MODDE_DATA_DIR`) [env: MODDE_DATA_DIR=]
+      --force                        
+      --heap-profile <HEAP_PROFILE>  Write a DHAT heap profile. Requires the `heap-profile` cargo feature [env: MODDE_HEAP_PROFILE=]
+  -h, --help                         Print help

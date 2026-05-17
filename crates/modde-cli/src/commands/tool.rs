@@ -169,7 +169,7 @@ pub fn handle_add_executable(
     if modde_games::resolve_game_plugin(game_id).is_none() {
         anyhow::bail!(
             "unsupported game: '{game_id}'. Supported games: {}",
-            modde_games::SUPPORTED_GAME_IDS.join(", ")
+            modde_games::supported_game_ids().join(", ")
         );
     }
     if name.trim().is_empty() {

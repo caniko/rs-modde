@@ -24,6 +24,7 @@ base64 = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 flate2 = { workspace = true }
+lz4_flex = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 rusqlite = { workspace = true }
@@ -31,6 +32,7 @@ git2 = { workspace = true }
 dirs = { workspace = true }
 zip = { workspace = true }
 fomod-oxide = { workspace = true }
+reflink-copy = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -42,3 +44,9 @@ winreg = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
+criterion = { workspace = true }
+proptest = { workspace = true }
+
+[[bench]]
+name = "vfs_deploy"
+harness = false

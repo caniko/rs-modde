@@ -816,6 +816,17 @@ fn bottom_action_bar(
         apply_readiness(entry, game_dir_configured, tool_busy, tools_loading);
     let can_revert =
         game_dir_configured && !entry.applied_files.is_empty() && !tool_busy && !tools_loading;
+    let revert_readiness = if tools_loading {
+        RevertReadiness::ToolsLoading
+    } else if tool_busy {
+        RevertReadiness::ToolBusy
+    } else if !game_dir_configured {
+        RevertReadiness::MissingGameDir
+    } else if entry.applied_files.is_empty() {
+        RevertReadiness::NoAppliedFiles
+    } else {
+        RevertReadiness::Ready
+    };
     let applied_count = entry.applied_files.len();
     let mut actions = row![
         text(format!("{applied_count} file(s) applied to game directory"))
@@ -867,12 +878,7 @@ fn bottom_action_bar(
                 .padding([6, 14])
                 .on_action_maybe(
                     can_revert.then_some(ButtonAction::RevertTool(entry.tool_id.clone())),
-                    revert_disabled_reason(
-                        game_dir_configured,
-                        entry.applied_files.is_empty(),
-                        tool_busy,
-                        tools_loading,
-                    ),
+                    revert_disabled_reason(revert_readiness),
                 ),
         ));
     container(actions.spacing(8).align_y(Alignment::Center))
@@ -899,22 +905,26 @@ fn activation_readiness(
     (false, apply_disabled_reason)
 }
 
-fn revert_disabled_reason(
-    game_dir_configured: bool,
-    no_applied_files: bool,
-    tool_busy: bool,
-    tools_loading: bool,
-) -> &'static str {
-    if tools_loading {
-        "Tool state is still loading."
-    } else if tool_busy {
-        "A tool operation is already in progress."
-    } else if !game_dir_configured {
-        "Configure the game install path before reverting files."
-    } else if no_applied_files {
-        "This tool has no applied files to revert for the current game."
-    } else {
-        "This tool cannot be reverted right now."
+#[derive(Debug, Clone, Copy)]
+enum RevertReadiness {
+    Ready,
+    ToolsLoading,
+    ToolBusy,
+    MissingGameDir,
+    NoAppliedFiles,
+}
+
+fn revert_disabled_reason(readiness: RevertReadiness) -> &'static str {
+    match readiness {
+        RevertReadiness::ToolsLoading => "Tool state is still loading.",
+        RevertReadiness::ToolBusy => "A tool operation is already in progress.",
+        RevertReadiness::MissingGameDir => {
+            "Configure the game install path before reverting files."
+        }
+        RevertReadiness::NoAppliedFiles => {
+            "This tool has no applied files to revert for the current game."
+        }
+        RevertReadiness::Ready => "This tool cannot be reverted right now.",
     }
 }
 

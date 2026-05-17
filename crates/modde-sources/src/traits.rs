@@ -70,6 +70,8 @@ pub enum AnySource {
     GitHub(crate::github::GitHubSource),
     GoogleDrive(crate::gdrive::GoogleDriveSource),
     Mega(crate::mega::MegaSource),
+    MediaFire(crate::mediafire::MediaFireSource),
+    Manual(crate::manual::ManualSource),
     Direct(crate::direct::DirectSource),
     WabbajackCdn(crate::wabbajack::cdn::WabbajackCdnSource),
 }
@@ -82,6 +84,8 @@ macro_rules! dispatch {
             AnySource::GitHub(s) => s.$method($($arg),*),
             AnySource::GoogleDrive(s) => s.$method($($arg),*),
             AnySource::Mega(s) => s.$method($($arg),*),
+            AnySource::MediaFire(s) => s.$method($($arg),*),
+            AnySource::Manual(s) => s.$method($($arg),*),
             AnySource::Direct(s) => s.$method($($arg),*),
             AnySource::WabbajackCdn(s) => s.$method($($arg),*),
         }
@@ -96,6 +100,8 @@ macro_rules! dispatch_async {
             AnySource::GitHub(s) => s.$method($($arg),*).await,
             AnySource::GoogleDrive(s) => s.$method($($arg),*).await,
             AnySource::Mega(s) => s.$method($($arg),*).await,
+            AnySource::MediaFire(s) => s.$method($($arg),*).await,
+            AnySource::Manual(s) => s.$method($($arg),*).await,
             AnySource::Direct(s) => s.$method($($arg),*).await,
             AnySource::WabbajackCdn(s) => s.$method($($arg),*).await,
         }

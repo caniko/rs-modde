@@ -761,13 +761,13 @@ pub async fn list_optiscaler_releases() -> Result<Vec<ToolReleaseSummary>> {
 #[must_use]
 pub fn normalize_optiscaler_release_config(config: &mut ToolConfig) -> bool {
     let mut changed = false;
-    if let Some(tag) = config.get_str("release_tag").map(str::to_string) {
-        if !tag.trim().is_empty() {
-            let normalized = normalize_optiscaler_release_tag(&tag);
-            if normalized != tag {
-                config.set("release_tag", serde_json::json!(normalized));
-                changed = true;
-            }
+    if let Some(tag) = config.get_str("release_tag").map(str::to_string)
+        && !tag.trim().is_empty()
+    {
+        let normalized = normalize_optiscaler_release_tag(&tag);
+        if normalized != tag {
+            config.set("release_tag", serde_json::json!(normalized));
+            changed = true;
         }
     }
     if let Some(tag) = config.get_str("release_tag").map(str::to_string) {
@@ -1620,11 +1620,11 @@ fn build_ini_with_overrides(
                 serde_json::Value::String(value) => value,
                 other => other.to_string(),
             };
-            content = set_ini_value(&content, &path, &value);
+            content = set_ini_value(&content, path.as_str(), value.as_str());
         }
     }
     for (path, value) in effective_optiscaler_ini_overrides(config) {
-        content = set_ini_value(&content, &path, &value);
+        content = set_ini_value(&content, path, value);
     }
     Ok(content)
 }

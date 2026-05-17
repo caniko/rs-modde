@@ -31,6 +31,27 @@ run *ARGS:
 gui:
     cargo run -p modde-ui
 
+# ─── Coverage ─────────────────────────────────────────────────
+
+# Run workspace coverage and print a summary table
+coverage:
+    cargo llvm-cov --workspace --all-features --summary-only
+
+# Generate HTML coverage report at target/llvm-cov/html/index.html
+coverage-html:
+    cargo llvm-cov --workspace --all-features --html
+
+# Generate lcov.info at target/llvm-cov/lcov.info
+coverage-lcov:
+    cargo llvm-cov --workspace --all-features --lcov --output-path target/llvm-cov/lcov.info
+
+# Coverage run for CI: gathers once, emits lcov + summary, fails under threshold (override with FAIL_UNDER=N)
+coverage-ci FAIL_UNDER='0':
+    mkdir -p target/llvm-cov
+    cargo llvm-cov --workspace --all-features --no-report
+    cargo llvm-cov report --lcov --output-path target/llvm-cov/lcov.info
+    cargo llvm-cov report --summary-only --fail-under-lines {{FAIL_UNDER}}
+
 # ─── Publishing ───────────────────────────────────────────────
 
 # Dry-run a cargo-release workspace release (usage: just release-dry 0.2.0)

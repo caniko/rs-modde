@@ -19,60 +19,60 @@ fn empty_manifest() -> WabbajackManifest {
 // ── Mixed directive types ───────────────────────────────────────────
 
 #[tokio::test]
-async fn test_validate_from_archive_with_matching_hash() {
+async fn test_validate_from_archive_checks_presence_only() {
     let staging = tempfile::tempdir().unwrap();
     let content = b"archive file content";
-    let file_hash = xxh3_64(content);
 
     // Create the file in staging
     tokio::fs::write(staging.path().join("output.esp"), content)
         .await
         .unwrap();
 
-    // The archive hash happens to equal the file hash for this test
     let manifest = WabbajackManifest {
         archives: vec![ArchiveEntry {
-            hash: file_hash,
+            hash: 123456,
             name: "test.zip".to_string(),
             size: 100,
             state: None,
         }],
         directives: vec![RawDirective::FromArchive {
             archive_hash_path: vec![
-                serde_json::Value::Number(serde_json::Number::from(file_hash)),
+                serde_json::Value::Number(serde_json::Number::from(123456)),
                 serde_json::Value::String("inner.esp".to_string()),
             ],
             to: "output.esp".to_string(),
+            size: 0,
         }],
         ..empty_manifest()
     };
 
     let report = validate_install(&manifest, staging.path()).await.unwrap();
     assert_eq!(report.total_files, 1);
-    // This test verifies the archive hash is used as proxy for file hash
     assert_eq!(report.verified, 1);
+    assert!(report.mismatches.is_empty());
 }
 
 #[tokio::test]
-async fn test_validate_from_archive_missing_archive_entry() {
+async fn test_validate_from_archive_missing_output() {
     let staging = tempfile::tempdir().unwrap();
 
-    // Directive references an archive hash that doesn't exist in archives list
     let manifest = WabbajackManifest {
-        archives: vec![], // No archives
+        archives: vec![],
         directives: vec![RawDirective::FromArchive {
             archive_hash_path: vec![
                 serde_json::Value::Number(99999.into()),
                 serde_json::Value::String("file.txt".to_string()),
             ],
             to: "output.txt".to_string(),
+            size: 0,
         }],
         ..empty_manifest()
     };
 
     let report = validate_install(&manifest, staging.path()).await.unwrap();
-    // Should not add to expected files since archive entry wasn't found
-    assert_eq!(report.total_files, 0);
+    assert_eq!(report.total_files, 1);
+    assert_eq!(report.verified, 0);
+    assert_eq!(report.missing, vec!["output.txt"]);
 }
 
 #[tokio::test]
@@ -110,10 +110,12 @@ async fn test_validate_mixed_from_archive_and_patched() {
                     serde_json::Value::String("data.esp".to_string()),
                 ],
                 to: "from_archive.esp".to_string(),
+                size: 0,
             },
             RawDirective::PatchedFromArchive {
                 archive_hash_path: vec![serde_json::Value::Number(0.into())],
                 patch_id: String::new(),
+                size: 0,
                 to: "patched.esp".to_string(),
                 hash: patched_hash,
             },
@@ -139,6 +141,7 @@ async fn test_validate_all_directive_types_mixed() {
             RawDirective::PatchedFromArchive {
                 archive_hash_path: vec![serde_json::Value::Number(0.into())],
                 patch_id: String::new(),
+                size: 0,
                 to: "missing.txt".to_string(),
                 hash: 12345,
             },
@@ -182,6 +185,7 @@ async fn test_validate_deeply_nested_file() {
         directives: vec![RawDirective::PatchedFromArchive {
             archive_hash_path: vec![serde_json::Value::Number(0.into())],
             patch_id: String::new(),
+            size: 0,
             to: "textures/landscape/mountains/peak.dds".to_string(),
             hash,
         }],
@@ -214,18 +218,21 @@ async fn test_validate_report_counts_are_consistent() {
             RawDirective::PatchedFromArchive {
                 archive_hash_path: vec![serde_json::Value::Number(0.into())],
                 patch_id: String::new(),
+                size: 0,
                 to: "correct.txt".to_string(),
                 hash: correct_hash,
             },
             RawDirective::PatchedFromArchive {
                 archive_hash_path: vec![serde_json::Value::Number(0.into())],
                 patch_id: String::new(),
+                size: 0,
                 to: "wrong.txt".to_string(),
                 hash: 99999,
             },
             RawDirective::PatchedFromArchive {
                 archive_hash_path: vec![serde_json::Value::Number(0.into())],
                 patch_id: String::new(),
+                size: 0,
                 to: "missing.txt".to_string(),
                 hash: 88888,
             },
@@ -258,6 +265,7 @@ async fn test_validate_mismatch_contains_both_hashes() {
         directives: vec![RawDirective::PatchedFromArchive {
             archive_hash_path: vec![serde_json::Value::Number(0.into())],
             patch_id: String::new(),
+            size: 0,
             to: "file.txt".to_string(),
             hash: 0, // Wrong expected hash
         }],
@@ -289,6 +297,7 @@ async fn test_validate_many_files() {
         directives.push(RawDirective::PatchedFromArchive {
             archive_hash_path: vec![serde_json::Value::Number(0.into())],
             patch_id: String::new(),
+            size: 0,
             to: filename,
             hash,
         });

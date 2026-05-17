@@ -18,6 +18,11 @@ pre-release-replacements = [
     { file = "../../flake.nix", search = "version = \"[0-9]+\\.[0-9]+\\.[0-9]+\";", replace = "version = \"{{version}}\";", exactly = 3 },
 ]
 
+[features]
+default = ["rar"]
+rar = ["modde-sources/rar"]
+heap-profile = ["dep:dhat"]
+
 [[bin]]
 name = "modde"
 path = "src/main.rs"
@@ -42,6 +47,8 @@ smallvec = { workspace = true }
 zip = { workspace = true }
 url = "2"
 notify = { workspace = true }
+open = { workspace = true }
+dhat = { version = "0.3.3", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
@@ -51,4 +58,7 @@ winreg = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
-assert_cmd = "2"
+assert_cmd = { workspace = true }
+insta = { workspace = true }
+wiremock = { workspace = true }
+tokio = { workspace = true }

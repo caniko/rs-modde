@@ -12,6 +12,10 @@ categories.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = []
+rar = ["dep:unrar"]
+
 [dependencies]
 modde-core = { workspace = true }
 modde-games = { workspace = true }
@@ -31,10 +35,22 @@ aes = { workspace = true }
 ctr = { workspace = true }
 base64 = { workspace = true }
 flate2 = { workspace = true }
+lz4_flex = { workspace = true }
 zip = { workspace = true }
 tempfile = { workspace = true }
 which = { workspace = true }
 smallvec = { workspace = true }
+bytes = { workspace = true }
+lru = { workspace = true }
+parking_lot = { workspace = true }
+sevenz-rust2 = { workspace = true }
+zstd = { workspace = true }
+unrar = { package = "unrar-ng", version = "0.7.7", optional = true }
+memory-admission = { git = "https://codeberg.org/caniko/rs-memory-admission.git", rev = "43c603e848ccc00af222a4ad2996b37a793385e2", default-features = false, features = ["async"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
+wiremock = { workspace = true }

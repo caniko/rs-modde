@@ -1,10 +1,15 @@
+pub mod acquire;
 pub mod bsa_repack;
 pub mod catalog;
 pub mod cdn;
+pub mod diagnostics;
+pub mod impact;
 pub mod import;
+pub mod inline;
 pub mod installer;
 pub mod manifest;
 pub mod patcher;
 pub(crate) mod preflight;
 pub mod runner;
+pub mod staging;
 pub mod validator;

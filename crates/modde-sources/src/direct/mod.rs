@@ -3,12 +3,14 @@ use std::path::Path;
 use anyhow::Result;
 use futures::StreamExt;
 use reqwest::Client;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt};
 use tracing::{debug, info};
+use xxhash_rust::xxh3::Xxh3;
+use xxhash_rust::xxh64::Xxh64;
 
 use modde_core::manifest::wabbajack::DownloadDirective;
 
-use crate::common::{ensure_parent, verify_and_wrap, with_retry};
+use crate::common::{ensure_parent, with_retry};
 use crate::mirror::resolve_html_mirrors;
 use crate::traits::{DownloadHandle, DownloadSource, ProgressCallback, VerifiedFile};
 
@@ -89,11 +91,11 @@ impl DownloadSource for DirectSource {
             })
             .await;
             match result {
-                Ok(()) => {
+                Ok(verified) => {
                     if idx > 0 {
                         info!(url = %candidate.url, "direct download mirror succeeded");
                     }
-                    return verify_and_wrap(dest, handle.expected_hash).await;
+                    return Ok(verified);
                 }
                 Err(e) => {
                     errors.push(format!("{}: {e:#}", candidate.url));
@@ -119,7 +121,7 @@ async fn download_with_resume(
     handle: &DownloadHandle,
     dest: &Path,
     progress: &ProgressCallback,
-) -> Result<()> {
+) -> Result<VerifiedFile> {
     let existing_len = tokio::fs::metadata(dest).await.map_or(0, |m| m.len());
 
     let mut req = client.get(&handle.url);
@@ -160,16 +162,47 @@ async fn download_with_resume(
         total
     };
 
+    let mut xxh64 = Xxh64::new(0);
+    let mut xxh3 = Xxh3::new();
+    if status == reqwest::StatusCode::PARTIAL_CONTENT && existing_len > 0 {
+        let mut existing = tokio::fs::File::open(dest).await?;
+        let mut buf = vec![0_u8; 1024 * 1024];
+        loop {
+            let read = existing.read(&mut buf).await?;
+            if read == 0 {
+                break;
+            }
+            xxh64.update(&buf[..read]);
+            xxh3.update(&buf[..read]);
+        }
+    }
+
     let mut stream = resp.bytes_stream();
     while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
+        xxh64.update(&chunk);
+        xxh3.update(&chunk);
         file.write_all(&chunk).await?;
         downloaded += chunk.len() as u64;
         progress(downloaded, total_size);
     }
 
     file.flush().await?;
-    Ok(())
+    let h64 = xxh64.digest();
+    if h64 == handle.expected_hash || xxh3.digest() == handle.expected_hash {
+        return Ok(VerifiedFile {
+            path: dest.to_path_buf(),
+            hash: handle.expected_hash,
+        });
+    }
+
+    let _ = tokio::fs::remove_file(dest).await;
+    anyhow::bail!(
+        "hash verification failed for {} (expected {:016x}, got xxh64 {:016x})",
+        dest.display(),
+        handle.expected_hash,
+        h64
+    );
 }
 
 #[cfg(test)]

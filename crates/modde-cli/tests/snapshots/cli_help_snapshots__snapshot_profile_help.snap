@@ -1,0 +1,31 @@
+---
+source: crates/modde-cli/tests/cli_help_snapshots.rs
+assertion_line: 50
+expression: "stdout(&[\"profile\", \"--help\"])"
+---
+Manage profiles
+
+Usage: modde profile [OPTIONS] <COMMAND>
+
+Commands:
+  list        List all profiles
+  switch      Switch to a profile (swaps saves automatically)
+  create      Create a new profile
+  delete      Delete a profile
+  try         Experiment with a profile (can be stacked, like git branches)
+  rollback    Roll back to the previous profile (undo the last `try`)
+  commit      Accept the current experiment, clearing the rollback stack
+  active      Show the active profile for a game
+  fork        Fork a profile (clone mods + saves into a new profile)
+  lock        Apply a manual profile-level load order lock
+  unlock      Clear the profile-level load order lock
+  lock-info   Show lock status for a profile
+  lock-mod    Pin an individual mod in place (per-mod lock)
+  unlock-mod  Release an individual mod's per-mod pin
+  dedup       Detect (and optionally remove) filesystem-scanner rows in a profile that duplicate mods the Wabbajack manifest already installs. See `plans/greedy-shimmying-pine.md` for background
+  help        Print this message or the help of the given subcommand(s)
+
+Options:
+      --data-dir <DATA_DIR>          Override data directory (default: ~/.local/share/modde or $`MODDE_DATA_DIR`) [env: MODDE_DATA_DIR=]
+      --heap-profile <HEAP_PROFILE>  Write a DHAT heap profile. Requires the `heap-profile` cargo feature [env: MODDE_HEAP_PROFILE=]
+  -h, --help                         Print help

@@ -1,0 +1,18 @@
+---
+source: crates/modde-cli/tests/cli_help_snapshots.rs
+assertion_line: 75
+expression: "stdout(&[\"game\", \"import-profile\", \"--help\"])"
+---
+Import OptiScaler profiles from TOML for a game
+
+Usage: modde game import-profile [OPTIONS] --for <GAME> <PATH>
+
+Arguments:
+  <PATH>  
+
+Options:
+      --data-dir <DATA_DIR>          Override data directory (default: ~/.local/share/modde or $`MODDE_DATA_DIR`) [env: MODDE_DATA_DIR=]
+      --for <GAME>                   
+      --force                        
+      --heap-profile <HEAP_PROFILE>  Write a DHAT heap profile. Requires the `heap-profile` cargo feature [env: MODDE_HEAP_PROFILE=]
+  -h, --help                         Print help

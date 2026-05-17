@@ -34,11 +34,13 @@ impl Metadata {
         }
     }
 
+    #[must_use]
     pub fn label(mut self, label: impl Into<String>) -> Self {
         self.label = Some(label.into());
         self
     }
 
+    #[must_use]
     pub fn test_id(mut self, test_id: impl Into<String>) -> Self {
         self.test_id = Some(test_id.into());
         self

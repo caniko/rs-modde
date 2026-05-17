@@ -2,9 +2,9 @@ use std::fmt::Write;
 use std::path::Path;
 
 use sha2::{Digest, Sha256};
-use tokio::io::AsyncReadExt;
-use xxhash_rust::xxh3::xxh3_64;
-use xxhash_rust::xxh64::xxh64;
+use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use xxhash_rust::xxh3::Xxh3;
+use xxhash_rust::xxh64::Xxh64;
 
 use crate::CoreError;
 use crate::error::Result;
@@ -22,8 +22,19 @@ fn hash_mismatch(path: &Path, expected: u64, actual: u64) -> CoreError {
 
 /// Compute xxHash (XXH3-64) of a file.
 pub async fn hash_file_xxhash(path: &Path) -> Result<u64> {
-    let data = tokio::fs::read(path).await?;
-    Ok(xxh3_64(&data))
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut hasher = Xxh3::new();
+    let mut buf = vec![0u8; BUF_SIZE];
+
+    loop {
+        let n = file.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+
+    Ok(hasher.digest())
 }
 
 /// Verify a file's XXH3-64 hash matches the expected value.
@@ -46,20 +57,86 @@ pub async fn verify_xxh64(path: &Path, expected: u64) -> Result<()> {
 
 /// Compute classic xxHash64 of a file (used by Wabbajack).
 pub async fn hash_file_xxh64(path: &Path) -> Result<u64> {
-    let data = tokio::fs::read(path).await?;
-    Ok(xxh64(&data, 0))
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut hasher = Xxh64::new(0);
+    let mut buf = vec![0u8; BUF_SIZE];
+
+    loop {
+        let n = file.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+
+    Ok(hasher.digest())
 }
 
 /// Verify a file's hash using Wabbajack-compatible strategy: try xxHash64 first, fall back to XXH3.
 ///
 /// This is the canonical entry point for download verification where the hash algorithm is ambiguous.
 pub async fn verify_xxhash_compat(path: &Path, expected: u64) -> Result<u64> {
-    let data = tokio::fs::read(path).await?;
-    let h64 = xxh64(&data, 0);
-    if h64 == expected || xxh3_64(&data) == expected {
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut xxh64_hasher = Xxh64::new(0);
+    let mut xxh3_hasher = Xxh3::new();
+    let mut buf = vec![0u8; BUF_SIZE];
+
+    loop {
+        let n = file.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        xxh64_hasher.update(&buf[..n]);
+        xxh3_hasher.update(&buf[..n]);
+    }
+
+    let h64 = xxh64_hasher.digest();
+    if h64 == expected || xxh3_hasher.digest() == expected {
         return Ok(expected);
     }
     Err(hash_mismatch(path, expected, h64))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompatHashMatch {
+    Xxh64,
+    Xxh3,
+}
+
+/// Copy `reader` into `writer` while computing the Wabbajack-compatible hashes.
+pub async fn copy_and_hash_compat<R, W>(
+    reader: &mut R,
+    writer: &mut W,
+    expected: u64,
+) -> Result<(u64, CompatHashMatch)>
+where
+    R: tokio::io::AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    let mut xxh64_hasher = Xxh64::new(0);
+    let mut xxh3_hasher = Xxh3::new();
+    let mut buf = vec![0u8; BUF_SIZE];
+
+    loop {
+        let n = reader.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        xxh64_hasher.update(&buf[..n]);
+        xxh3_hasher.update(&buf[..n]);
+        writer.write_all(&buf[..n]).await?;
+    }
+    writer.flush().await?;
+
+    let h64 = xxh64_hasher.digest();
+    if h64 == expected {
+        return Ok((h64, CompatHashMatch::Xxh64));
+    }
+    let h3 = xxh3_hasher.digest();
+    if h3 == expected {
+        return Ok((h3, CompatHashMatch::Xxh3));
+    }
+    Err(hash_mismatch(Path::new("<stream>"), expected, h64))
 }
 
 /// Compute SHA-256 of a file using streaming reads.
@@ -101,6 +178,8 @@ mod tests {
     use super::*;
     use std::io::Write;
     use tempfile::NamedTempFile;
+    use xxhash_rust::xxh3::xxh3_64;
+    use xxhash_rust::xxh64::xxh64;
 
     fn create_temp_file(content: &[u8]) -> NamedTempFile {
         let mut f = NamedTempFile::new().unwrap();
@@ -202,5 +281,35 @@ mod tests {
         let h1 = hash_file_xxhash(f1.path()).await.unwrap();
         let h2 = hash_file_xxhash(f2.path()).await.unwrap();
         assert_eq!(h1, h2);
+    }
+
+    #[tokio::test]
+    async fn copy_and_hash_matches_existing_helpers() {
+        let content = b"streamed hash content";
+        let expected = xxh64(content, 0);
+        let mut reader = tokio::io::BufReader::new(&content[..]);
+        let mut writer = Vec::new();
+
+        let (hash, matched) = copy_and_hash_compat(&mut reader, &mut writer, expected)
+            .await
+            .unwrap();
+
+        assert_eq!(writer, content);
+        assert_eq!(hash, expected);
+        assert_eq!(matched, CompatHashMatch::Xxh64);
+    }
+
+    #[tokio::test]
+    async fn copy_and_hash_detects_mismatch() {
+        let content = b"streamed hash content";
+        let mut reader = tokio::io::BufReader::new(&content[..]);
+        let mut writer = Vec::new();
+
+        let err = copy_and_hash_compat(&mut reader, &mut writer, 0)
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, CoreError::HashMismatch { .. }));
+        assert_eq!(writer, content);
     }
 }

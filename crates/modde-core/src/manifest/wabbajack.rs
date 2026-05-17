@@ -173,6 +173,18 @@ pub enum ArchiveState {
         #[serde(rename = "Url")]
         url: String,
     },
+    #[serde(alias = "MediaFireDownloader+State, Wabbajack.Lib")]
+    MediaFireDownloader {
+        #[serde(rename = "Url")]
+        url: String,
+    },
+    #[serde(alias = "ManualDownloader, Wabbajack.Lib")]
+    ManualDownloader {
+        #[serde(rename = "Url")]
+        url: String,
+        #[serde(default, rename = "Prompt")]
+        prompt: String,
+    },
     #[serde(alias = "HttpDownloader, Wabbajack.Lib")]
     HttpDownloader {
         #[serde(rename = "Url")]
@@ -234,9 +246,26 @@ pub enum RawDirective {
         archive_hash_path: Vec<serde_json::Value>,
         #[serde(rename = "To")]
         to: String,
+        #[serde(default, rename = "Size")]
+        size: u64,
     },
     #[serde(alias = "InlineFile, Wabbajack.Lib")]
     InlineFile {
+        #[serde(
+            rename = "Hash",
+            deserialize_with = "deserialize_b64_hash",
+            serialize_with = "serialize_b64_hash"
+        )]
+        hash: u64,
+        #[serde(rename = "Size")]
+        size: u64,
+        #[serde(rename = "SourceDataID")]
+        source_data_id: String,
+        #[serde(rename = "To")]
+        to: String,
+    },
+    #[serde(alias = "RemappedInlineFile, Wabbajack.Lib")]
+    RemappedInlineFile {
         #[serde(
             rename = "Hash",
             deserialize_with = "deserialize_b64_hash",
@@ -264,6 +293,8 @@ pub enum RawDirective {
         hash: u64,
         #[serde(rename = "PatchID")]
         patch_id: String,
+        #[serde(default, rename = "Size")]
+        size: u64,
     },
     #[serde(alias = "CreateBSA, Wabbajack.Lib")]
     CreateBSA {
@@ -302,6 +333,16 @@ pub enum DownloadDirective {
         url: String,
         hash: u64,
     },
+    MediaFire {
+        url: String,
+        hash: u64,
+    },
+    Manual {
+        url: String,
+        prompt: String,
+        hash: u64,
+        expected_name: String,
+    },
     DirectURL {
         url: String,
         headers: HashMap<String, String>,
@@ -336,6 +377,8 @@ impl DownloadDirective {
             | Self::GitHub { hash, .. }
             | Self::GoogleDrive { hash, .. }
             | Self::Mega { hash, .. }
+            | Self::MediaFire { hash, .. }
+            | Self::Manual { hash, .. }
             | Self::DirectURL { hash, .. }
             | Self::WabbajackCdn { hash, .. } => *hash,
         }
@@ -353,6 +396,10 @@ impl DownloadDirective {
             Self::GitHub { repo, .. } => format!("github:{repo}").into(),
             Self::GoogleDrive { id, .. } => format!("gdrive:{id}").into(),
             Self::Mega { url, .. } => format!("mega:{}", &url[..url.len().min(30)]).into(),
+            Self::MediaFire { url, .. } => {
+                format!("mediafire:{}", &url[..url.len().min(40)]).into()
+            }
+            Self::Manual { expected_name, .. } => format!("manual:{expected_name}").into(),
             Self::DirectURL { url, .. } => format!("http:{}", &url[..url.len().min(30)]).into(),
             Self::WabbajackCdn { url, .. } => {
                 format!("wabbajack-cdn:{}", &url[..url.len().min(30)]).into()
@@ -367,7 +414,9 @@ pub enum InstallDirective {
     FromArchive {
         archive_hash: u64,
         from: String,
+        inner_path: Option<String>,
         to: String,
+        size: u64,
     },
     InlineFile {
         source_data_id: String,
@@ -376,14 +425,49 @@ pub enum InstallDirective {
     PatchedFromArchive {
         archive_hash: u64,
         from: String,
+        inner_path: Option<String>,
         to: String,
         patch_id: String,
+        size: u64,
     },
     CreateBSA {
         temp_id: String,
         to: String,
         file_states: Vec<BSAFileState>,
     },
+}
+
+/// An install directive paired with its original manifest directive index.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexedInstallDirective {
+    pub directive_index: usize,
+    pub directive: InstallDirective,
+}
+
+/// All install directives that read from a single source archive.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArchiveInstallBatch {
+    pub archive_hash: u64,
+    pub archive_size_bytes: u64,
+    pub directives: Vec<IndexedInstallDirective>,
+}
+
+impl InstallDirective {
+    fn source_archive_hash(&self) -> Option<u64> {
+        match self {
+            Self::FromArchive { archive_hash, .. }
+            | Self::PatchedFromArchive { archive_hash, .. } => Some(*archive_hash),
+            Self::InlineFile { .. } | Self::CreateBSA { .. } => None,
+        }
+    }
+
+    fn source_inner_path(&self) -> &str {
+        match self {
+            Self::FromArchive { from, .. } | Self::PatchedFromArchive { from, .. } => from,
+            Self::InlineFile { source_data_id, .. } => source_data_id,
+            Self::CreateBSA { temp_id, .. } => temp_id,
+        }
+    }
 }
 
 /// State for a file inside a BSA/BA2 archive.
@@ -446,6 +530,16 @@ impl WabbajackManifest {
                         url: url.clone(),
                         hash: archive.hash,
                     },
+                    ArchiveState::MediaFireDownloader { url } => DownloadDirective::MediaFire {
+                        url: url.clone(),
+                        hash: archive.hash,
+                    },
+                    ArchiveState::ManualDownloader { url, prompt } => DownloadDirective::Manual {
+                        url: url.clone(),
+                        prompt: prompt.clone(),
+                        hash: archive.hash,
+                        expected_name: archive.name.clone(),
+                    },
                     ArchiveState::HttpDownloader { url, headers } => DownloadDirective::DirectURL {
                         url: url.clone(),
                         headers: headers.clone(),
@@ -479,6 +573,7 @@ impl WabbajackManifest {
                 RawDirective::FromArchive {
                     archive_hash_path,
                     to,
+                    size,
                 } => {
                     let hash = parse_hash_value(archive_hash_path.first());
                     let from = archive_hash_path
@@ -486,13 +581,22 @@ impl WabbajackManifest {
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
+                    let inner_path = archive_hash_path
+                        .get(2)
+                        .and_then(|v| v.as_str())
+                        .map(ToString::to_string);
                     Some(InstallDirective::FromArchive {
                         archive_hash: hash,
                         from,
+                        inner_path,
                         to: to.clone(),
+                        size: *size,
                     })
                 }
                 RawDirective::InlineFile {
+                    source_data_id, to, ..
+                }
+                | RawDirective::RemappedInlineFile {
                     source_data_id, to, ..
                 } => Some(InstallDirective::InlineFile {
                     source_data_id: source_data_id.clone(),
@@ -502,6 +606,7 @@ impl WabbajackManifest {
                     archive_hash_path,
                     to,
                     patch_id,
+                    size,
                     ..
                 } => {
                     let archive_hash = parse_hash_value(archive_hash_path.first());
@@ -510,11 +615,17 @@ impl WabbajackManifest {
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
+                    let inner_path = archive_hash_path
+                        .get(2)
+                        .and_then(|v| v.as_str())
+                        .map(ToString::to_string);
                     Some(InstallDirective::PatchedFromArchive {
                         archive_hash,
                         from,
+                        inner_path,
                         to: to.clone(),
                         patch_id: patch_id.clone(),
+                        size: *size,
                     })
                 }
                 RawDirective::CreateBSA {
@@ -529,6 +640,57 @@ impl WabbajackManifest {
                 RawDirective::Unknown => None,
             })
             .collect()
+    }
+
+    /// Group archive-backed install directives so each source archive's work is
+    /// scheduled together and can be drained by a batch-scoped reader.
+    #[must_use]
+    pub fn install_directives_grouped_by_archive(&self) -> Vec<ArchiveInstallBatch> {
+        let archive_size_by_hash: HashMap<u64, u64> =
+            self.archives.iter().map(|a| (a.hash, a.size)).collect();
+        let mut by_archive: HashMap<u64, Vec<IndexedInstallDirective>> = HashMap::new();
+
+        for (directive_index, directive) in self.install_directives().into_iter().enumerate() {
+            let Some(archive_hash) = directive.source_archive_hash() else {
+                continue;
+            };
+            by_archive
+                .entry(archive_hash)
+                .or_default()
+                .push(IndexedInstallDirective {
+                    directive_index,
+                    directive,
+                });
+        }
+
+        let mut batches = by_archive
+            .into_iter()
+            .map(|(archive_hash, mut directives)| {
+                directives.sort_by(|a, b| {
+                    a.directive
+                        .source_inner_path()
+                        .cmp(b.directive.source_inner_path())
+                });
+                ArchiveInstallBatch {
+                    archive_hash,
+                    archive_size_bytes: archive_size_by_hash
+                        .get(&archive_hash)
+                        .copied()
+                        .unwrap_or_default(),
+                    directives,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        batches.sort_by_key(|batch| {
+            batch
+                .directives
+                .iter()
+                .map(|directive| directive.directive_index)
+                .min()
+                .unwrap_or(usize::MAX)
+        });
+        batches
     }
 }
 
@@ -622,7 +784,8 @@ mod tests {
             [InstallDirective::FromArchive {
                 archive_hash: 1,
                 from,
-                to
+                to,
+                ..
             }] if from.is_empty() && to == "mods/Skyrim Base/Skyrim.esm"
         ));
     }
@@ -781,6 +944,123 @@ mod tests {
                 if file_states.len() == 1
                     && file_states[0].path == "textures\\architecture\\riften\\riftenrope01.dds"
                     && file_states[0].hash == 0
+        ));
+    }
+
+    #[test]
+    fn remapped_inline_file_parses_as_inline_install_directive() {
+        let json = r#"{
+            "Name": "Twisted synthetic",
+            "Author": "test",
+            "Description": "test",
+            "Game": "SkyrimSpecialEdition",
+            "Version": "1.0.0",
+            "Archives": [],
+            "Directives": [
+                {
+                    "$type": "RemappedInlineFile",
+                    "Hash": "H6Wy/QKDBVE=",
+                    "Size": 6022,
+                    "SourceDataID": "db027c84-eb75-4852-ae01-72cc75abe3a1",
+                    "To": "mods\\BodySlide and Outfit Studio\\CalienteTools\\BodySlide\\Config.xml"
+                }
+            ]
+        }"#;
+
+        let manifest: WabbajackManifest = serde_json::from_str(json).unwrap();
+        let installs = manifest.install_directives();
+        assert!(matches!(
+            installs.as_slice(),
+            [InstallDirective::InlineFile { source_data_id, to }]
+                if source_data_id == "db027c84-eb75-4852-ae01-72cc75abe3a1"
+                    && to == "mods\\BodySlide and Outfit Studio\\CalienteTools\\BodySlide\\Config.xml"
+        ));
+    }
+
+    #[test]
+    fn install_directives_grouped_by_archive_returns_one_batch_per_archive() {
+        let manifest = WabbajackManifest {
+            name: "batch synthetic".into(),
+            author: "test".into(),
+            description: "test".into(),
+            game: "SkyrimSE".into(),
+            version: "1.0.0".into(),
+            archives: vec![
+                ArchiveEntry {
+                    hash: 10,
+                    name: "a.7z".into(),
+                    size: 1024,
+                    state: None,
+                },
+                ArchiveEntry {
+                    hash: 20,
+                    name: "b.7z".into(),
+                    size: 2048,
+                    state: None,
+                },
+            ],
+            directives: vec![
+                RawDirective::FromArchive {
+                    archive_hash_path: vec![
+                        serde_json::Value::Number(10.into()),
+                        serde_json::Value::String("z-last.txt".into()),
+                    ],
+                    to: "mods/a/z-last.txt".into(),
+                    size: 0,
+                },
+                RawDirective::InlineFile {
+                    hash: 0,
+                    size: 1,
+                    source_data_id: "inline".into(),
+                    to: "mods/inline.txt".into(),
+                },
+                RawDirective::PatchedFromArchive {
+                    archive_hash_path: vec![
+                        serde_json::Value::Number(20.into()),
+                        serde_json::Value::String("only.txt".into()),
+                    ],
+                    to: "mods/b/only.txt".into(),
+                    hash: 0,
+                    patch_id: "patch".into(),
+                    size: 123,
+                },
+                RawDirective::FromArchive {
+                    archive_hash_path: vec![
+                        serde_json::Value::Number(10.into()),
+                        serde_json::Value::String("a-first.txt".into()),
+                    ],
+                    to: "mods/a/a-first.txt".into(),
+                    size: 0,
+                },
+                RawDirective::CreateBSA {
+                    temp_id: "temp".into(),
+                    to: "mods/out.bsa".into(),
+                    file_states: vec![],
+                },
+            ],
+        };
+
+        let batches = manifest.install_directives_grouped_by_archive();
+        assert_eq!(batches.len(), 2);
+        assert_eq!(batches[0].archive_hash, 10);
+        assert_eq!(batches[0].archive_size_bytes, 1024);
+        assert_eq!(batches[0].directives.len(), 2);
+        assert_eq!(batches[0].directives[0].directive_index, 3);
+        assert!(matches!(
+            &batches[0].directives[0].directive,
+            InstallDirective::FromArchive { from, .. } if from == "a-first.txt"
+        ));
+        assert_eq!(batches[0].directives[1].directive_index, 0);
+        assert!(matches!(
+            &batches[1].directives[..],
+            [IndexedInstallDirective {
+                directive_index: 2,
+                directive: InstallDirective::PatchedFromArchive {
+                    archive_hash: 20,
+                    size: 123,
+                    ..
+                }
+            }]
         ));
     }
 }

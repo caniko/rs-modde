@@ -189,9 +189,8 @@ fn detect_method(dir: &Path, probe: &InstallProbe) -> InstallMethod {
 /// outside this list (e.g. `.dll`, `.pak`, `.exe`) is *not* a config
 /// overlay even if it also contains an INI. Adding extensions here
 /// expands what's considered "user config payload" everywhere at once.
-const USER_CONFIG_EXTENSIONS: &[&str] = &[
-    "ini", "cfg", "conf", "json", "toml", "yaml", "yml", "xml",
-];
+const USER_CONFIG_EXTENSIONS: &[&str] =
+    &["ini", "cfg", "conf", "json", "toml", "yaml", "yml", "xml"];
 
 /// `true` when every regular file in `dir` (recursively) has an
 /// extension in [`USER_CONFIG_EXTENSIONS`]. Empty directories return

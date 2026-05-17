@@ -19,6 +19,7 @@ use modde_sources::nexus::cdn::generate_download_link;
 use modde_sources::wabbajack::installer::InstallProgress;
 
 use crate::InstallSource;
+use crate::commands::wabbajack::{acquire_missing, acquire_status_label};
 
 /// Build a shared HTTP client with sensible timeouts for mod downloads.
 fn build_http_client() -> Result<reqwest::Client> {
@@ -205,8 +206,92 @@ pub async fn handle(source: InstallSource) -> Result<()> {
             profile,
             game_dir,
             force,
+            no_deploy,
+            continue_on_error,
+            reset_staging,
+            skip_validate,
+            diagnostics_dir,
+            diagnostics_interval,
+            stall_warn_seconds,
+            stall_abort_seconds,
+            archive_retention,
+            missing_archive_policy,
+            acquire_missing: _acquire_missing,
+            acquire_download_dir,
+            acquire_timeout,
+            acquire_include_nexus,
+            acquire_browser_controller,
+            no_acquire_missing,
         } => {
-            handle_wabbajack(path, profile, game_dir, force).await?;
+            if !no_acquire_missing {
+                let results = acquire_missing(
+                    path.clone(),
+                    acquire_download_dir,
+                    None,
+                    None,
+                    acquire_include_nexus,
+                    acquire_browser_controller,
+                    acquire_timeout,
+                    false,
+                )
+                .await?;
+                let failed: Vec<_> = results
+                    .iter()
+                    .filter(|result| {
+                        !matches!(
+                            result.status,
+                            modde_sources::wabbajack::acquire::AcquireStatus::Imported
+                                | modde_sources::wabbajack::acquire::AcquireStatus::AlreadyPresent
+                                | modde_sources::wabbajack::acquire::AcquireStatus::DirectResolved
+                        )
+                    })
+                    .collect();
+                if !failed.is_empty()
+                    && matches!(
+                        missing_archive_policy,
+                        crate::WabbajackMissingArchivePolicyArg::Fail
+                    )
+                {
+                    let details = failed
+                        .iter()
+                        .map(|result| {
+                            format!(
+                                "{} {:016x} {}",
+                                acquire_status_label(&result.status),
+                                result.archive.hash,
+                                result.archive.name
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    anyhow::bail!(
+                        "frontloaded Wabbajack archive acquisition did not complete:\n{details}"
+                    );
+                }
+            }
+            handle_wabbajack(modde_sources::wabbajack::runner::WabbajackInstallOptions {
+                path,
+                profile_name: profile,
+                game_dir,
+                force,
+                no_deploy,
+                safety: modde_sources::wabbajack::runner::WabbajackInstallSafety {
+                    continue_on_error,
+                    reset_staging,
+                    skip_validate,
+                },
+                diagnostics: diagnostics_dir.map(|dir| {
+                    modde_sources::wabbajack::diagnostics::WabbajackDiagnosticsOptions {
+                        dir,
+                        interval: std::time::Duration::from_secs(diagnostics_interval.max(1)),
+                        stall_warn: std::time::Duration::from_secs(stall_warn_seconds.max(1)),
+                        stall_abort: std::time::Duration::from_secs(stall_abort_seconds.max(1)),
+                    }
+                }),
+                archive_retention: archive_retention.into(),
+                missing_archive_policy: missing_archive_policy.into(),
+            })
+            .await?;
         }
         InstallSource::Mod { url, profile, .. } => {
             handle_single_mod(url, profile).await?;
@@ -333,12 +418,9 @@ async fn handle_nexus_collection(
 }
 
 async fn handle_wabbajack(
-    path: PathBuf,
-    profile_name: Option<String>,
-    game_dir: Option<PathBuf>,
-    force: bool,
+    options: modde_sources::wabbajack::runner::WabbajackInstallOptions,
 ) -> Result<()> {
-    let manifest = modde_sources::wabbajack::runner::parse_wabbajack_manifest(&path)?;
+    let manifest = modde_sources::wabbajack::runner::parse_wabbajack_manifest(&options.path)?;
     println!(
         "Wabbajack modlist: {} by {} (game: {})",
         manifest.name, manifest.author, manifest.game
@@ -371,6 +453,14 @@ async fn handle_wabbajack(
                 InstallProgress::CreatingBSA { name } => {
                     println!("  Creating BSA: {name}");
                 }
+                InstallProgress::StagingAdopted {
+                    archive_batches,
+                    create_bsa,
+                } => {
+                    println!(
+                        "  Adopted existing staging: {archive_batches} archive batches, {create_bsa} BSA outputs"
+                    );
+                }
                 InstallProgress::Complete => {
                     println!("  Install pipeline complete");
                 }
@@ -382,16 +472,8 @@ async fn handle_wabbajack(
         }
     });
 
-    let summary = modde_sources::wabbajack::runner::install_wabbajack(
-        modde_sources::wabbajack::runner::WabbajackInstallOptions {
-            path: path.clone(),
-            profile_name,
-            game_dir,
-            force,
-        },
-        Some(progress_tx),
-    )
-    .await?;
+    let summary =
+        modde_sources::wabbajack::runner::install_wabbajack(options, Some(progress_tx)).await?;
     progress_handle.await?;
 
     println!(
@@ -519,40 +601,8 @@ pub async fn deploy_mo2_to_game(staging: &Path, game_dir: &Path, force: bool) ->
                     }
                 }
 
-                // Create parent directories
-                if let Some(parent) = dest.parent() {
-                    tokio::fs::create_dir_all(parent).await?;
-                }
-
-                // Remove existing file/symlink if present
-                if dest.exists() || dest.symlink_metadata().is_ok() {
-                    tokio::fs::remove_file(&dest).await.ok();
-                }
-
-                // Hardlink files — Wine can't follow symlinks, and copies waste space.
-                // Fall back to copy when staging and game dir are on different filesystems
-                // (EXDEV = cross-device link error).
-                match tokio::fs::hard_link(&entry_path, &dest).await {
-                    Ok(()) => {}
-                    Err(e) if modde_core::fs::is_cross_device_error(&e) => {
-                        tokio::fs::copy(&entry_path, &dest).await.with_context(|| {
-                            format!(
-                                "cross-filesystem copy fallback failed: {} -> {}",
-                                entry_path.display(),
-                                dest.display()
-                            )
-                        })?;
-                    }
-                    Err(e) => {
-                        return Err(e).with_context(|| {
-                            format!(
-                                "failed to hardlink {} -> {}",
-                                entry_path.display(),
-                                dest.display()
-                            )
-                        });
-                    }
-                }
+                let kind = modde_core::link::link_or_copy(&entry_path, &dest).await?;
+                tracing::debug!(src = %entry_path.display(), dst = %dest.display(), ?kind, "deployed file");
                 deployed += 1;
             }
         }

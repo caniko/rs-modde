@@ -1,0 +1,45 @@
+---
+source: crates/modde-cli/tests/cli_help_snapshots.rs
+assertion_line: 40
+expression: "stdout(&[\"--help\"])"
+---
+NixOS-native game mod manager
+
+Usage: modde [OPTIONS] <COMMAND>
+
+Commands:
+  profile      Manage profiles
+  play         Switch profile, deploy mods, and launch the game
+  deploy       Deploy mods for the active or specified profile
+  rollback     Rollback to the previous deployment
+  install      Install mods from various sources
+  mod          Manage individual mods (remove, diagnose unknown-type dossiers)
+  verify       Verify installed file integrity
+  nexus        Nexus Mods account management
+  stock        Manage vanilla game snapshots
+  fomod        FOMOD installer utilities
+  save         Manage save file assignments
+  update       Check for mod updates from Nexus
+  loot         LOOT masterlist integration (Bethesda plugin sorting)
+  tool         Run external tools with overwrite capture
+  nxm          Handle nxm:// download links from Nexus Mods
+  wabbajack    Browse, download, and generate Home Manager snippets for Wabbajack modlists
+  scan         Scan game directory for installed mods
+  collisions   Analyse mod collisions and suggest optimisations
+  diagnostics  Run diagnostics to detect common modding issues
+  export       Export mod list to CSV
+  backup       Manage mod and plugin order backups
+  detect       Detect installed games across Steam and Heroic launchers
+  game         Manage user-defined games
+  instance     Manage modde instances (multiple data directories)
+  exec         Manage named launch targets (`xEdit`, `BodySlide`, `FNIS`, etc.)
+  skill        Install and update modde-maintained Codex skills
+  import       Import existing TOML profiles into the database
+  gui          Launch the graphical user interface
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+      --data-dir <DATA_DIR>          Override data directory (default: ~/.local/share/modde or $`MODDE_DATA_DIR`) [env: MODDE_DATA_DIR=]
+      --heap-profile <HEAP_PROFILE>  Write a DHAT heap profile. Requires the `heap-profile` cargo feature [env: MODDE_HEAP_PROFILE=]
+  -h, --help                         Print help
+  -V, --version                      Print version

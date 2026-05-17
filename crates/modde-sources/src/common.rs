@@ -4,6 +4,8 @@ use anyhow::{Context, Result};
 use futures::StreamExt;
 use tokio::io::AsyncWriteExt;
 use tracing::{debug, warn};
+use xxhash_rust::xxh3::Xxh3;
+use xxhash_rust::xxh64::Xxh64;
 
 use crate::traits::{DownloadHandle, ProgressCallback, VerifiedFile};
 
@@ -31,6 +33,49 @@ pub async fn stream_to_file(
 
     file.flush().await?;
     Ok(downloaded)
+}
+
+/// Stream a response body to a file and verify Wabbajack-compatible hashes
+/// while bytes are still hot in memory.
+pub async fn stream_to_file_verified(
+    resp: reqwest::Response,
+    dest: &Path,
+    expected_hash: u64,
+    total_hint: u64,
+    progress: &ProgressCallback,
+) -> Result<VerifiedFile> {
+    let total = resp.content_length().unwrap_or(total_hint);
+    let mut file = tokio::fs::File::create(dest).await?;
+    let mut downloaded: u64 = 0;
+    let mut xxh64 = Xxh64::new(0);
+    let mut xxh3 = Xxh3::new();
+
+    let mut stream = resp.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
+        xxh64.update(&chunk);
+        xxh3.update(&chunk);
+        file.write_all(&chunk).await?;
+        downloaded += chunk.len() as u64;
+        progress(downloaded, total);
+    }
+    file.flush().await?;
+
+    let h64 = xxh64.digest();
+    if h64 == expected_hash || xxh3.digest() == expected_hash {
+        return Ok(VerifiedFile {
+            path: dest.to_path_buf(),
+            hash: expected_hash,
+        });
+    }
+
+    let _ = tokio::fs::remove_file(dest).await;
+    anyhow::bail!(
+        "hash verification failed for {} (expected {:016x}, got xxh64 {:016x})",
+        dest.display(),
+        expected_hash,
+        h64
+    );
 }
 
 /// Verify hash (xxh64 then xxh3 fallback) and return a `VerifiedFile`.
@@ -93,8 +138,14 @@ pub async fn simple_download(
 
     let resp = client.get(&handle.url).send().await?.error_for_status()?;
 
-    let downloaded = stream_to_file(resp, dest, handle.size_hint.unwrap_or(0), progress).await?;
-    debug!(bytes = downloaded, "download complete");
-
-    verify_and_wrap(dest, handle.expected_hash).await
+    let verified = stream_to_file_verified(
+        resp,
+        dest,
+        handle.expected_hash,
+        handle.size_hint.unwrap_or(0),
+        progress,
+    )
+    .await?;
+    debug!("download complete");
+    Ok(verified)
 }
