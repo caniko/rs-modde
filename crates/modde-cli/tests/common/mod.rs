@@ -61,6 +61,15 @@ impl Fixture {
             // that need them at runtime; assert_cmd resolves the binary
             // path explicitly so PATH itself doesn't pick a stale modde.
             .env("PATH", std::env::var_os("PATH").unwrap_or_default());
+        // Trust-store env vars: rustls-native-certs respects these and they
+        // are the only way the TLS init can find roots inside the Nix build
+        // sandbox (no /etc/ssl/certs/). Pass them through when the parent
+        // env sets them; harmless when unset.
+        for var in ["SSL_CERT_FILE", "SSL_CERT_DIR", "NIX_SSL_CERT_FILE"] {
+            if let Some(val) = std::env::var_os(var) {
+                cmd.env(var, val);
+            }
+        }
         cmd
     }
 }

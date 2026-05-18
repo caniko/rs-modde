@@ -145,6 +145,12 @@
           cmake
           makeWrapper
           pkg-config
+          # Test-only: a handful of decompress unit tests build 7z
+          # fixtures at runtime via Command::new("7zz"). cacert is
+          # also referenced explicitly so the closure carries it for
+          # the SSL_CERT_FILE that commonArgs sets.
+          _7zz
+          cacert
         ];
 
         buildInputs = with pkgs;

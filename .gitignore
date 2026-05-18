@@ -3,6 +3,7 @@
 *.swo
 *~
 *.wabbajack
+*.profraw
 .direnv/
 result
 docs/site/themes/
