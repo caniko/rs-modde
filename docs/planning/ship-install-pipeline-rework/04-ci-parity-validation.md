@@ -19,31 +19,41 @@ The validation targets the post-split state.
 
 ## Goal
 
-The four commands that
-[.woodpecker/check.yml](../../../.woodpecker/check.yml) runs on the
-Forgejo runner all exit 0 against the local tree. After this phase,
+The commands that
+[.forgejo/workflows/ci.yml](../../../.forgejo/workflows/ci.yml) runs on the
+Forgejo Actions runner all exit 0 against the local tree. After this phase,
 the push in Phase 5 is high-confidence to land green on CI without
 requiring a back-and-forth fixup.
 
 ## Why this matters now
 
-Woodpecker minutes on the atlas runner are bounded. Pushing a broken
+Forgejo Actions minutes on the atlas runner are bounded. Pushing a broken
 trunk burns those minutes and trains commit-spam patterns (push,
 fail, push fixup, fail, push fixup of fixup…). The local CI parity
 run takes 5–15 minutes wall clock and catches the same failure modes
 the runner would.
 
-The four commands in
-[.woodpecker/check.yml](../../../.woodpecker/check.yml) are:
+The four CI jobs in
+[.forgejo/workflows/ci.yml](../../../.forgejo/workflows/ci.yml) —
+`lint`, `test`, `build`, `flake-check` — collectively run:
 
-```yaml
-- nix develop --command cargo fmt --all -- --check
-- nix develop --command cargo clippy --workspace -- -D warnings
-- nix develop --command just coverage-ci
-- nix develop --command cargo build --workspace --release
+```sh
+# lint job
+nix develop --command cargo fmt --all -- --check
+nix develop --command cargo clippy --workspace -- -D warnings
+
+# test job
+nix develop --command just coverage-ci
+
+# build job
+nix develop --command cargo build --workspace --release
+nix build --print-build-logs .#modde .#docs .#website .#site .#flatpak-manifest
+
+# flake-check job
+nix flake check --keep-going --print-build-logs
 ```
 
-These are deliberately the same four that local validation runs.
+All six commands must succeed locally before push.
 
 ## Out of scope
 
@@ -72,14 +82,26 @@ These are deliberately the same four that local validation runs.
    ```
    command -v cargo-llvm-cov
    ```
-3. Run the four CI commands in sequence — the same order as
-   `.woodpecker/check.yml`. Inside the dev shell:
+3. Run the CI commands in the order ci.yml runs them. The `lint`,
+   `test`, and `build` (cargo half) jobs go inside `nix develop`;
+   the `nix build` and `nix flake check` steps run **outside** the
+   shell because they themselves invoke nix.
+
+   Inside the dev shell:
    ```
    cargo fmt --all -- --check
    cargo clippy --workspace -- -D warnings
    just coverage-ci
    cargo build --workspace --release
    ```
+
+   Outside the dev shell (close it first, or run from another
+   terminal):
+   ```
+   nix build --print-build-logs .#modde .#docs .#website .#site .#flatpak-manifest
+   nix flake check --keep-going --print-build-logs
+   ```
+
    Track elapsed wall time per step — a step that runs >5× slower
    than expected often indicates a cache miss (recompile from
    scratch), not a correctness issue.
@@ -105,7 +127,7 @@ These are deliberately the same four that local validation runs.
      forward.
 6. Optional: also run `cargo test --workspace --tests --no-fail-fast`
    to confirm the `1,563 / 0 / 1` baseline still holds after the
-   split. CI does *not* run this (the check.yml above is the entire
+   split. CI does *not* run this (the ci.yml above is the entire
    surface), but it's cheap insurance.
 
 ## Acceptance criteria
@@ -118,6 +140,9 @@ These are deliberately the same four that local validation runs.
 - [ ] `cargo build --workspace --release` exits 0 and produces
       `target/release/modde` (or whatever the bin name is) without
       missing-symbol errors.
+- [ ] `nix build .#modde .#docs .#website .#site .#flatpak-manifest`
+      exits 0 with all five outputs realised.
+- [ ] `nix flake check --keep-going --print-build-logs` exits 0.
 - [ ] *(Optional)* `cargo test --workspace --tests --no-fail-fast`
       reports `1,563 passed / 0 failed / 1 ignored`.
 
@@ -148,7 +173,7 @@ planned commits, never amending them.
 
 ## Reference
 
-- CI config: [.woodpecker/check.yml](../../../.woodpecker/check.yml).
+- CI config: [.forgejo/workflows/ci.yml](../../../.forgejo/workflows/ci.yml).
 - Coverage recipe: [justfile](../../../justfile) (`coverage-ci`
   recipe).
 - Memory pin reminder: `/home/can/.claude/projects/-data-nvme0-can-Projects-rs-modde/memory/feedback_impure_osxcross.md`

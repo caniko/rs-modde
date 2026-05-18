@@ -120,7 +120,7 @@ the single commit that landed the test harness.
    ```
    Wire coverage tooling, CLI test harness, and modde exec alias
 
-   - cargo-llvm-cov + just coverage* recipes; Woodpecker runs
+   - cargo-llvm-cov + just coverage* recipes; Forgejo Actions runs
      just coverage-ci with FAIL_UNDER=0 placeholder.
    - CLI integration harness: shared tests/common/mod.rs Fixture
      isolating MODDE_DATA_DIR + HOME + XDG.
@@ -140,7 +140,9 @@ the single commit that landed the test harness.
      with 4 properties.
    - REMAINING_WORK.md + TODO.md handoff docs.
 
-   Workspace test count: 1,475 → 1,553 passing.
+   Workspace test count: 1,475 → <N> passing. (Measure with
+   `cargo test --workspace --tests --no-fail-fast` after staging
+   Commit 1 but before authoring the message.)
    ```
 
 5. **Commit 2 message:**
@@ -180,7 +182,12 @@ the single commit that landed the test harness.
    memory-admission migrated to a git dep (codeberg.org pin) so
    CI and outside contributors can build.
 
-   Workspace test count: 1,553 → 1,563 passing.
+   CI migrated from Woodpecker to Forgejo Actions
+   (.forgejo/workflows/{ci,pages,release}.yml supersedes
+   .woodpecker/{check,release,site}.yml).
+
+   Workspace test count: <N from Commit 1 message> → 1,563
+   passing.
    ```
 
 6. **Stage Commit 2's content** explicitly — do *not* use
@@ -206,7 +213,7 @@ the single commit that landed the test harness.
 ## Commit 1 manifest (Session A — coverage + harness + exec alias)
 
 ```
-.woodpecker/check.yml
+.woodpecker/check.yml                                   # staged-modified; deleted in Session B (see Commit 2)
 Cargo.lock                                              # partial — Session A deps only
 Cargo.toml                                              # partial — Session A workspace deps only
 REMAINING_WORK.md                                       # post-Phase-2 reconciled version
@@ -297,8 +304,18 @@ crates/modde-ui/src/views/tools.rs
 nix/hm-module.nix
 ```
 
+Deletions (`.woodpecker/` retired in favour of `.forgejo/workflows/`):
+```
+.woodpecker/check.yml                                   # superseded by .forgejo/workflows/ci.yml
+.woodpecker/release.yml                                 # superseded by .forgejo/workflows/release.yml
+.woodpecker/site.yml                                    # superseded by .forgejo/workflows/pages.yml
+```
+
 New untracked files:
 ```
+.forgejo/workflows/ci.yml
+.forgejo/workflows/pages.yml
+.forgejo/workflows/release.yml
 .agents/skills/manual-archive-curation/SKILL.md
 .agents/skills/modde-hm-integration/SKILL.md
 .agents/skills/wabbajack-readiness/SKILL.md

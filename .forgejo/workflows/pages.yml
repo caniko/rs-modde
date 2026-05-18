@@ -1,0 +1,34 @@
+---
+# yamllint disable rule:line-length
+name: pages
+
+'on':
+  push:
+    branches:
+      - trunk
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: atlas
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@v4
+      - uses: https://github.com/cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            substituters = https://attic.candee.baby/canix https://cache.nixos.org
+            trusted-public-keys = canix:uqr0nD3I0mfj9BYfZgTZHMaDKfI2yCTtSA5JGTWKUeg= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+
+      - name: Deploy Codeberg Pages
+        env:
+          CODEBERG_TOKEN: ${{ secrets.codeberg_token }}
+        run: |
+          test -n "$CODEBERG_TOKEN"
+          git config user.name "forgejo-actions"
+          git config user.email "forgejo-actions@noreply.codeberg.org"
+          git remote add pages-origin "https://caniko:${CODEBERG_TOKEN}@codeberg.org/caniko/rs-modde.git"
+          DEPLOY_REMOTE=pages-origin nix run .#deploy-pages

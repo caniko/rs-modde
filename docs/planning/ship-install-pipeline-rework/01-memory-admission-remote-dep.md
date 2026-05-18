@@ -28,7 +28,7 @@ for read-only verification and optionally a `git push` to its
 ## Goal
 
 A fresh clone of `rs-modde` (CI runner, outside contributor, the
-Woodpecker container on atlas) can run `cargo build --workspace` with
+Forgejo Actions job on atlas) can run `cargo build --workspace` with
 no sibling repos on disk. The `memory-admission` crate resolves via
 git fetch from codeberg.org/caniko/rs-memory-admission at a pinned
 revision that matches the local sibling's behaviour.
@@ -41,7 +41,7 @@ revision that matches the local sibling's behaviour.
 memory-admission = { path = "../../../rs-memory-admission", default-features = false, features = ["async"] }
 ```
 
-The Woodpecker config runs four commands inside `nix develop`:
+The Forgejo Actions CI workflow runs the Cargo checks inside `nix develop`:
 
 ```yaml
 - nix develop --command cargo fmt --all -- --check
@@ -173,8 +173,8 @@ In sibling repo `/data/nvme0/can/Projects/rs-memory-admission`:
   audit identified the path dep as the only fresh-clone blocker.
 - Sibling repo: `ssh://git@codeberg.org/caniko/rs-memory-admission.git`
   (HTTPS-equivalent: `https://codeberg.org/caniko/rs-memory-admission`).
-- Woodpecker config:
-  [.woodpecker/check.yml](../../../.woodpecker/check.yml) — the four
+- Forgejo Actions CI workflow:
+  [.forgejo/workflows/ci.yml](../../../.forgejo/workflows/ci.yml) — the
   commands this phase unblocks.
 - Call-site that needs the dep:
   [crates/modde-sources/src/wabbajack/installer.rs:290](../../../crates/modde-sources/src/wabbajack/installer.rs#L290)

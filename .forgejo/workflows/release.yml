@@ -1,0 +1,143 @@
+---
+# yamllint disable rule:line-length
+name: release
+
+'on':
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: atlas
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@v4
+      - uses: https://github.com/cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            substituters = https://attic.candee.baby/canix https://cache.nixos.org
+            trusted-public-keys = canix:uqr0nD3I0mfj9BYfZgTZHMaDKfI2yCTtSA5JGTWKUeg= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+
+      - name: Validate tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          test "$GITHUB_REF_NAME" != "$VERSION"
+          echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+          test "$(nix eval --raw .#modde.version)" = "$VERSION"
+
+      - name: Build release artifacts
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p release
+
+          nix build .#modde --out-link linux-result
+          mkdir -p release/linux-x86_64
+          cp linux-result/bin/modde release/linux-x86_64/
+          cp linux-result/bin/modde-ui release/linux-x86_64/
+          tar czf "release/modde-${VERSION}-x86_64-linux.tar.gz" -C release/linux-x86_64 modde modde-ui
+          cp release/linux-x86_64/modde "release/modde-${VERSION}-x86_64-linux"
+          cp release/linux-x86_64/modde-ui "release/modde-ui-${VERSION}-x86_64-linux"
+
+          nix build .#modde-windows --out-link windows-result
+          mkdir -p release/windows-x86_64
+          cp windows-result/bin/modde.exe release/windows-x86_64/
+          cp windows-result/bin/modde-ui.exe release/windows-x86_64/
+          tar czf "release/modde-${VERSION}-x86_64-windows.tar.gz" -C release/windows-x86_64 modde.exe modde-ui.exe
+
+          nix build .#appimage-ui --out-link appimage-ui-result
+          cp appimage-ui-result "release/modde-ui-${VERSION}-x86_64.AppImage"
+          nix build .#appimage-cli --out-link appimage-cli-result
+          cp appimage-cli-result "release/modde-${VERSION}-x86_64.AppImage"
+
+          nix build .#flatpak-manifest --out-link flatpak-result
+          cp flatpak-result release/org.codeberg.caniko.modde.json
+
+          cd release
+          sha256sum *.tar.gz *.AppImage *.json modde-*-x86_64-linux modde-ui-*-x86_64-linux > SHA256SUMS.txt
+
+      - name: Push Nix closures to Attic
+        run: |
+          test -r "$ATTIC_TOKENS_DIR/rs-modde"
+          nix path-info -r \
+            linux-result \
+            windows-result \
+            appimage-ui-result \
+            appimage-cli-result \
+            flatpak-result \
+            > attic-paths.txt
+          nix profile install nixpkgs#attic-client
+          attic login canix https://attic.candee.baby "$(cat "$ATTIC_TOKENS_DIR/rs-modde")"
+          attic push canix $(cat attic-paths.txt)
+
+      - name: Publish Codeberg release
+        env:
+          CODEBERG_TOKEN: ${{ secrets.codeberg_token }}
+          CODEBERG_API: https://codeberg.org/api/v1
+          CODEBERG_REPO: caniko/rs-modde
+        run: |
+          test -n "$CODEBERG_TOKEN"
+          nix shell nixpkgs#curl nixpkgs#jq -c bash <<'SCRIPT'
+          set -euo pipefail
+
+          tag="$GITHUB_REF_NAME"
+          release_payload=$(
+            jq -n \
+              --arg tag "$tag" \
+              --arg name "$tag" \
+              --rawfile body CHANGELOG.md \
+              '{tag_name: $tag, target_commitish: "trunk", name: $name, body: $body, draft: false, prerelease: false}'
+          )
+
+          status=$(
+            curl -sS -o release.json -w '%{http_code}' \
+              -H "Authorization: token ${CODEBERG_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              -d "$release_payload" \
+              "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases"
+          )
+
+          if [ "$status" = "409" ]; then
+            curl -sS --fail \
+              -H "Authorization: token ${CODEBERG_TOKEN}" \
+              "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases/tags/${tag}" \
+              > release.json
+          elif [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            cat release.json
+            exit 1
+          fi
+
+          release_id="$(jq -r '.id' release.json)"
+          test "$release_id" != "null"
+
+          for file in release/*.tar.gz \
+            release/modde-*-x86_64-linux \
+            release/modde-ui-*-x86_64-linux \
+            release/*.AppImage \
+            release/org.codeberg.caniko.modde.json \
+            release/SHA256SUMS.txt; do
+            name="$(basename "$file")"
+            asset_id="$(
+              curl -sS --fail \
+                -H "Authorization: token ${CODEBERG_TOKEN}" \
+                "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases/${release_id}/assets" \
+                | jq -r --arg name "$name" '.[] | select(.name == $name) | .id' \
+                | head -n 1
+            )"
+            if [ -n "$asset_id" ]; then
+              curl -sS --fail -X DELETE \
+                -H "Authorization: token ${CODEBERG_TOKEN}" \
+                "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases/${release_id}/assets/${asset_id}"
+            fi
+            curl -sS --fail \
+              -H "Authorization: token ${CODEBERG_TOKEN}" \
+              -H 'Content-Type: application/octet-stream' \
+              --data-binary "@${file}" \
+              "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases/${release_id}/assets?name=${name}" \
+              > /dev/null
+          done
+          SCRIPT

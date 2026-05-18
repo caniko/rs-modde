@@ -45,7 +45,7 @@ work as TODO. The drift is:
   `[ ]`. INSTALL_PIPELINE_REWORK.md Phase 8 marks streaming
   verification as ✅ landed.
 - TODO.md §3.2 lists "Clippy `-D warnings` gate" as `[ ]`.
-  [.woodpecker/check.yml:7](../../../.woodpecker/check.yml#L7)
+  [.forgejo/workflows/ci.yml](../../../.forgejo/workflows/ci.yml)
   already runs it and the worktree passes clean.
 - REMAINING_WORK.md says "Workspace state at session end: **1,475
   tests passing**". Current worktree:
@@ -93,7 +93,7 @@ work as TODO. The drift is:
      `(Phase 8 streaming verify)`. If the CLI surface is partial,
      use `[~]` and name what's missing.
    - **§3.2** Clippy `-D warnings`: change to `[x]` with `(wired in
-     .woodpecker/check.yml; passing on trunk)`.
+     .forgejo/workflows/ci.yml; passing on trunk)`.
    - **§2.6** Archive-extract bench: keep `[ ]`. Add a one-line note
      that the bench target should benchmark the new native
      [decompress/](../../../crates/modde-sources/src/decompress/)

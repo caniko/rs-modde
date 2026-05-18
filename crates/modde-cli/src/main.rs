@@ -342,6 +342,7 @@ enum GameAction {
         #[arg(long)]
         force: bool,
     },
+    #[allow(clippy::doc_markdown)]
     /// Import OptiScaler profiles from TOML for a game
     ImportProfile {
         path: PathBuf,

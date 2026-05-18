@@ -118,14 +118,14 @@ Living checklist of feature, test, and infrastructure gaps. Tick items as they l
 ### 3.1 Coverage tooling
 - [x] Add `cargo-llvm-cov` to flake devShell
 - [x] `just coverage` recipe producing HTML + lcov
-- [x] Wire coverage run into Woodpecker CI
+- [x] Wire coverage run into Forgejo Actions CI
 - [ ] Publish coverage artifact / badge
 - [ ] Set baseline % and fail-under threshold (recipe accepts `FAIL_UNDER`; pick a number after first measured run)
 
 ### 3.2 CI
 - [ ] Cache cargo + nix store between runs
 - [ ] Matrix: stable + MSRV
-- [x] Clippy `-D warnings` gate (wired in `.woodpecker/check.yml`; passing on trunk)
+- [x] Clippy `-D warnings` gate (wired in `.forgejo/workflows/ci.yml`; passing on trunk)
 - [ ] `cargo deny` advisory + license gate
 - [ ] Nightly fuzz job (once fuzz targets exist)
 
