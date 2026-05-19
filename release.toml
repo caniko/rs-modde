@@ -1,7 +1,0 @@
-allow-branch = ["trunk"]
-shared-version = true
-consolidate-commits = true
-dependent-version = "upgrade"
-tag-name = "{{version}}"
-tag-message = "{{version}}"
-pre-release-commit-message = "chore: release {{version}}"
