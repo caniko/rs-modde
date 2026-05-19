@@ -884,7 +884,12 @@ mod tests {
                 let tempdir = tempfile::TempDir::new().expect("create tempdir");
                 let data_dir = tempdir.path().join("data");
                 std::fs::create_dir_all(&data_dir).expect("create data dir");
-                modde_core::paths::set_data_dir(data_dir.clone());
+                let candidate = data_dir.clone();
+                if std::panic::catch_unwind(|| modde_core::paths::set_data_dir(candidate)).is_err()
+                {
+                    std::mem::forget(tempdir);
+                    return modde_core::paths::modde_data_dir();
+                }
                 std::mem::forget(tempdir);
                 data_dir
             })
