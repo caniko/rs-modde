@@ -181,7 +181,7 @@ documentation site and presentation website to Codeberg Pages.
 Tag releases are managed through `cargo xtask release`. Run
 `cargo xtask release X.Y.Z --dry-run` to preview a workspace release, then
 `cargo xtask release X.Y.Z` to publish all workspace crates to crates.io and
-push the `vX.Y.Z` tag. Release tags build and publish Linux and Windows
+push the bare `X.Y.Z` tag. Release tags build and publish Linux and Windows
 CLI/GUI artifacts; macOS artifacts are intentionally not shipped yet.
 
 ## Website and docs

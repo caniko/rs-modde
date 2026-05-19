@@ -89,6 +89,7 @@ Include:
 
 ## Releases
 
+Release tags are bare semver names such as `0.2.0` or `1.0.0-rc.1`.
 See [docs/copr-release.md](docs/copr-release.md) for the Fedora COPR wiring (one-time setup + per-tag flow).
 
 ## License
