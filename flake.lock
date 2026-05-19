@@ -204,7 +204,8 @@
         "rust-overlay": [
           "rs-harbor",
           "rust-overlay"
-        ]
+        ],
+        "simit": "simit"
       }
     },
     "rs-harbor": {
@@ -263,6 +264,44 @@
         "owner": "oxalica",
         "repo": "rust-overlay",
         "type": "github"
+      }
+    },
+    "simit": {
+      "inputs": {
+        "crane": [
+          "rs-harbor",
+          "crane"
+        ],
+        "flake-utils": [
+          "rs-harbor",
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "rs-harbor",
+          "nixpkgs"
+        ],
+        "rs-harbor": [
+          "rs-harbor"
+        ],
+        "rust-overlay": [
+          "rs-harbor",
+          "rust-overlay"
+        ]
+      },
+      "locked": {
+        "lastModified": 1778262237,
+        "narHash": "sha256-Hf/B3ZgnBOBm6o9jW8irsEvlq8c+oZMELosqpIm/oGA=",
+        "ref": "refs/tags/0.1.6",
+        "rev": "2b692b63e045e0edcd2d53143dfeb0025d52d7b6",
+        "revCount": 7,
+        "type": "git",
+        "url": "https://codeberg.org/caniko/simit.git"
+      },
+      "original": {
+        "ref": "refs/tags/0.1.6",
+        "rev": "2b692b63e045e0edcd2d53143dfeb0025d52d7b6",
+        "type": "git",
+        "url": "https://codeberg.org/caniko/simit.git"
       }
     },
     "systems": {

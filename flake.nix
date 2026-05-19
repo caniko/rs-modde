@@ -25,6 +25,15 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    simit = {
+      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/tags/0.1.6&rev=2b692b63e045e0edcd2d53143dfeb0025d52d7b6";
+      inputs.rs-harbor.follows = "rs-harbor";
+      inputs.nixpkgs.follows = "rs-harbor/nixpkgs";
+      inputs.rust-overlay.follows = "rs-harbor/rust-overlay";
+      inputs.crane.follows = "rs-harbor/crane";
+      inputs.flake-utils.follows = "rs-harbor/flake-utils";
+    };
+
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -40,6 +49,7 @@
     nixpkgs,
     rs-harbor,
     rs-harbor-macos-sdk-pin,
+    simit,
     rust-overlay,
     flake-utils,
     nix-appimage,
@@ -63,6 +73,18 @@
 
         toolchain = rs-harbor.lib.mkToolchain {inherit pkgs;};
         inherit (toolchain) craneLib;
+        simitPackage = simit.packages.${system}.default;
+        simitCli = pkgs.writeShellApplication {
+          name = "simit";
+          text = ''
+            if [ "''${1-}" = "--version" ]; then
+              echo "simit ${simitPackage.version}"
+              exit 0
+            fi
+
+            exec ${lib.getExe' simitPackage "simit"} "$@"
+          '';
+        };
         cross = rs-harbor.lib.mkCross ({
             inherit pkgs system osxSdkVersion;
           }
@@ -650,6 +672,7 @@
               cargo-release
               cargo-llvm-cov
               toolchain.rustToolchain
+              simitCli
               _7zz
               unrar
               zola
