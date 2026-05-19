@@ -90,6 +90,66 @@ Path to a file containing the Nexus Mods API key. Compatible with sops-nix secre
 - **Type:** `null` or `path`
 - **Default:** `null`
 
+#### `profiles.<name>.tools.<id>`
+
+Per-profile tool configuration for a single tool ID.
+
+- **Type:** submodule
+- **Default:** `{}`
+
+Supported tool IDs:
+
+| Tool ID | Description |
+|---------|-------------|
+| `mangohud` | Performance HUD overlay |
+| `vkbasalt` | Vulkan post-processing |
+| `gamemode` | System performance tuning |
+| `reshade` | D3D/OpenGL post-processing for Wine-backed games |
+| `optiscaler` | DLSS / FSR / XeSS upscaling |
+| `proton` | Proton runtime selection and DLL overrides |
+
+The `settings.<key>` option is generated from the Rust tool schema in
+`crates/modde-games/src/tools/<tool>.rs` via `settings_schema()`.
+
+| Option | mangohud | vkbasalt | gamemode | reshade | optiscaler | proton |
+|--------|----------|----------|----------|---------|------------|--------|
+| `enable` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `settings.<key>` | free-form | typed | typed | typed | free-form | free-form |
+| `applyOnActivation` | n/a | n/a | n/a | ✓ | ✓ | n/a |
+| `release` | n/a | n/a | n/a | n/a | ✓ | n/a |
+| `profile` | n/a | n/a | n/a | n/a | ✓ | n/a |
+
+`settings.<key>` accepts the tool-specific schema for the typed tools
+(`vkbasalt`, `gamemode`, and `reshade`) and free-form values for the other
+tools. The generated typed values and defaults come from the corresponding Rust
+`settings_schema()` definitions.
+
+`release` is currently supported only by `optiscaler`. The matrix above is
+sourced from `nix/release-supporting-tools.nix`; if that file changes, update
+this reference.
+
+`applyOnActivation` re-runs the tool after configuration during Home Manager
+activation.
+
+`profile` selects an OptiScaler preset for the current game. It is only valid
+for `optiscaler`, and the available values depend on the game. For
+`stellar-blade`, the current preset is `community-dxgi`.
+
+When a release-backed tool needs an already-downloaded archive, you can provide
+`path` instead of `url` + `hash`. This is useful with `requireFile`:
+
+```nix
+tools.optiscaler.release = {
+  tag = "v1.0";
+  asset = "OptiScaler.7z";
+  path = pkgs.requireFile {
+    name = "OptiScaler.7z";
+    sha256 = "...";
+    url = "https://github.com/...";
+  };
+};
+```
+
 ## Example configuration
 
 ```nix
@@ -107,6 +167,30 @@ programs.modde = {
         url = "https://example.com/living-skyrim.wabbajack";
         hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
       };
+      tools = {
+        vkbasalt = {
+          enable = true;
+          settings = {
+            enableOnLaunch = true;
+            casSharpness = 0.4;
+          };
+        };
+        gamemode.enable = true;
+        optiscaler = {
+          enable = true;
+          applyOnActivation = true;
+          profile = "community-dxgi";
+          release = {
+            tag = "v1.0";
+            asset = "OptiScaler.7z";
+            path = pkgs.requireFile {
+              name = "OptiScaler.7z";
+              sha256 = "...";
+              url = "https://github.com/...";
+            };
+          };
+        };
+      };
     };
 
     cyberpunk-mods = {
@@ -119,6 +203,11 @@ programs.modde = {
   };
 };
 ```
+
+For the `optiscaler` block above, `applyOnActivation = true` writes the
+release asset into the game directory every time Home Manager switches to the
+profile. Use it when you want the pin to stay in sync automatically; leave it
+off if you prefer manual activation.
 
 ## First install flow
 

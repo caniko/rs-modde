@@ -5,7 +5,159 @@ flake: {
   ...
 }: let
   cfg = config.programs.modde;
-  profileType = lib.types.submodule ({name, ...}: {
+  toolSchema = import ./tool-schema.nix;
+  optiscalerProfilesByGame = import ./optiscaler-profiles.nix;
+  releaseSupportingToolIds = import ./release-supporting-tools.nix;
+  knownToolIds = [
+    "mangohud"
+    "vkbasalt"
+    "gamemode"
+    "reshade"
+    "optiscaler"
+    "proton"
+  ];
+  typedToolIds = [
+    "gamemode"
+    "vkbasalt"
+    "reshade"
+  ];
+  freeformToolSettingType = lib.types.oneOf [
+    lib.types.bool
+    lib.types.int
+    lib.types.float
+    lib.types.str
+    (lib.types.listOf lib.types.str)
+  ];
+  freeformToolSettingsType = lib.types.attrsOf freeformToolSettingType;
+  releaseToolType = lib.types.submodule {
+    options = {
+      tag = lib.mkOption {
+        type = lib.types.str;
+        description = "Release tag to pin.";
+      };
+      asset = lib.mkOption {
+        type = lib.types.str;
+        description = "Release asset name.";
+      };
+      url = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Download URL for the pinned release asset.";
+      };
+      hash = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Fixed-output hash for the pinned release asset.";
+      };
+      path = lib.mkOption {
+        type = lib.types.nullOr (lib.types.either lib.types.path lib.types.str);
+        default = null;
+        description = "Local path to an already-downloaded release asset.";
+      };
+    };
+  };
+  nixBaseTypeFromSpec = spec:
+    if spec.type == "bool" || spec.type == "tri_state_bool"
+    then lib.types.bool
+    else if spec.type == "int"
+    then lib.types.int
+    else if spec.type == "float"
+    then lib.types.float
+    else if spec.type == "text" || spec.type == "path"
+    then lib.types.str
+    else if spec.type == "enum"
+    then lib.types.enum spec.values
+    else throw "programs.modde: unsupported generated tool schema type '${spec.type}'";
+  optiscalerProfilesForGame = game: optiscalerProfilesByGame.${game} or [];
+  validateTypedSetting = toolId: key: spec: value:
+    if value == null
+    then null
+    else if spec.type == "bool" || spec.type == "tri_state_bool"
+    then
+      if builtins.isBool value
+      then value
+      else throw "programs.modde.profiles.<name>.tools.${toolId}.settings.${key}: expected bool"
+    else if spec.type == "int"
+    then
+      if builtins.isInt value
+      then value
+      else throw "programs.modde.profiles.<name>.tools.${toolId}.settings.${key}: expected int"
+    else if spec.type == "float"
+    then
+      if builtins.isFloat value || builtins.isInt value
+      then value
+      else throw "programs.modde.profiles.<name>.tools.${toolId}.settings.${key}: expected float"
+    else if spec.type == "text" || spec.type == "path"
+    then
+      if builtins.isString value
+      then value
+      else throw "programs.modde.profiles.<name>.tools.${toolId}.settings.${key}: expected string"
+    else if spec.type == "enum"
+    then
+      if builtins.isString value && lib.elem value spec.values
+      then value
+      else throw "programs.modde.profiles.<name>.tools.${toolId}.settings.${key}: expected one of ${lib.concatStringsSep ", " spec.values}"
+    else throw "programs.modde: unsupported generated tool schema type '${spec.type}'";
+  toolType = toolId: {game, ...}: {
+    options =
+      {
+        enable = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Whether the tool should be enabled for this profile.";
+        };
+
+        applyOnActivation = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Whether to apply the tool after configuration during activation.";
+        };
+
+        release = lib.mkOption {
+          type = lib.types.nullOr releaseToolType;
+          default = null;
+          description = "Pinned release asset for release-backed tools.";
+        };
+      }
+      // (
+        if lib.elem toolId typedToolIds
+        then {
+          settings = lib.mapAttrs (key: spec:
+            lib.mkOption {
+              type = lib.types.nullOr (nixBaseTypeFromSpec spec);
+              default = spec.default;
+              description = spec.description;
+              apply = validateTypedSetting toolId key spec;
+            }
+          ) (toolSchema.${toolId} or {});
+        }
+        else {
+          settings = lib.mkOption {
+            type = freeformToolSettingsType;
+            default = {};
+            description = "Free-form tool settings passed through to modde.";
+          };
+        }
+      )
+      // (
+        if toolId == "optiscaler"
+        then {
+          profile = lib.mkOption {
+            type =
+              let profilesForGame = optiscalerProfilesForGame game;
+              in lib.types.nullOr (
+                if profilesForGame == []
+                then lib.types.str
+                else lib.types.enum profilesForGame
+              );
+            default = null;
+            description = "OptiScaler per-game profile preset.";
+          };
+        }
+        else {}
+      );
+  };
+  profileType = lib.types.submodule ({name, config, ...}: {
     options = {
       game = lib.mkOption {
         type = lib.types.str;
@@ -112,6 +264,28 @@ flake: {
         default = null;
         description = "Nexus Collection source (mutually exclusive with wabbajackList).";
       };
+
+      tools = lib.mkOption {
+        type = lib.types.submodule {
+          options = lib.genAttrs knownToolIds (toolId:
+            let
+              toolSubmodule = lib.types.submoduleWith {
+                modules = [(toolType toolId)];
+                specialArgs = {
+                  game = config.game;
+                };
+              };
+            in
+              lib.mkOption {
+                type = lib.types.nullOr toolSubmodule;
+                default = null;
+                description = "Per-tool configuration for ${toolId}.";
+              }
+          );
+        };
+        default = {};
+        description = "Per-tool configuration for this profile.";
+      };
     };
   });
   profileAssertions =
@@ -141,9 +315,46 @@ flake: {
                 resolvedHash = resolveManualArchiveHash key archive;
               }
             )
-            profile.wabbajackList.manualArchives
+              profile.wabbajackList.manualArchives
             else [];
           resolvedManualArchiveHashes = map (entry: entry.resolvedHash) manualArchiveEntries;
+          configuredTools = lib.filterAttrs (_toolId: toolCfg: toolCfg != null) profile.tools;
+          toolAssertions = lib.concatMapAttrs (
+            toolId: toolCfg: let
+              hasRelease = toolCfg.release != null;
+              releasePath = hasRelease && toolCfg.release.path != null;
+              releaseUrl = hasRelease && toolCfg.release.url != null;
+              releaseHash = hasRelease && toolCfg.release.hash != null;
+              hasUrlHash = hasRelease && releaseUrl && releaseHash;
+              hasAnyUrlHash = hasRelease && (releaseUrl || releaseHash);
+              hasPartialUrlHash =
+                hasRelease
+                && (releaseUrl != releaseHash)
+                && !hasUrlHash
+                && !releasePath;
+              supportsRelease = lib.elem toolId releaseSupportingToolIds;
+              optiscalerProfiles = optiscalerProfilesForGame profile.game;
+            in {
+              "${name}-${toolId}-release-supported" = {
+                assertion = !hasRelease || supportsRelease;
+                message = "programs.modde.profiles.${name}.tools.${toolId}.release: ${toolId} does not support release pinning.";
+              };
+              "${name}-${toolId}-release-source" = {
+                assertion = !hasRelease || (!(releasePath && hasAnyUrlHash) && (releasePath || hasUrlHash));
+                message = "programs.modde.profiles.${name}.tools.${toolId}.release: release.path is mutually exclusive with release.url + release.hash.";
+              };
+              "${name}-${toolId}-release-url-hash" = {
+                assertion = !hasPartialUrlHash;
+                message = "programs.modde.profiles.${name}.tools.${toolId}.release: release.url and release.hash must be set together.";
+              };
+            }
+            // lib.optionalAttrs (toolId == "optiscaler" && optiscalerProfiles == []) {
+              "${name}-optiscaler-profile-registered" = {
+                assertion = toolCfg.profile == null;
+                message = "programs.modde.profiles.${name}.tools.optiscaler.profile: no profiles registered for game ${profile.game}.";
+              };
+            }
+          ) configuredTools;
         in {
           "${name}-exclusive-source" = {
             assertion = !(profile.wabbajackList != null && profile.nexusCollection != null);
@@ -182,9 +393,104 @@ flake: {
             message = "programs.modde.profiles.${name}: manualArchives entries resolve to duplicate hashes.";
           };
         }
+        // toolAssertions
       )
       cfg.profiles
     );
+  renderToolSettingValue = value:
+    if builtins.isBool value
+    then if value then "true" else "false"
+    else if builtins.isInt value
+    then toString value
+    else if builtins.isFloat value
+    then toString value
+    else if builtins.isString value
+    then value
+    else lib.concatStringsSep "," value;
+  renderTypedToolSettingValue = toolId: key: value: let
+    spec = toolSchema.${toolId}.${key};
+    mismatch = expected:
+      throw "programs.modde.profiles.<name>.tools.${toolId}.settings.${key}: expected ${expected}";
+  in
+    if spec.type == "bool" || spec.type == "tri_state_bool"
+    then if builtins.isBool value then renderToolSettingValue value else mismatch "bool"
+    else if spec.type == "int"
+    then if builtins.isInt value then renderToolSettingValue value else mismatch "int"
+    else if spec.type == "float"
+    then
+      if builtins.isFloat value || builtins.isInt value
+      then renderToolSettingValue value
+      else mismatch "float"
+    else if spec.type == "text" || spec.type == "path"
+    then if builtins.isString value then renderToolSettingValue value else mismatch "string"
+    else if spec.type == "enum"
+    then
+      if builtins.isString value && lib.elem value spec.values
+      then renderToolSettingValue value
+      else mismatch "one of ${lib.concatStringsSep ", " spec.values}"
+    else renderToolSettingValue value;
+  toolActivation = name: profile: let
+    gameArg = lib.escapeShellArg profile.game;
+    configuredTools = lib.filterAttrs (_toolId: toolCfg: toolCfg != null) profile.tools;
+    renderToolActivation = toolId: toolCfg: let
+      toolArg = lib.escapeShellArg toolId;
+      releaseSnippet =
+        lib.optionalString (toolCfg.release != null) (
+          let
+            assetSrc =
+              if toolCfg.release.path != null
+              then toolCfg.release.path
+              else
+                pkgs.fetchurl {
+                  inherit (toolCfg.release) url hash;
+                  name = toolCfg.release.asset;
+                };
+          in ''
+            modde tool install-release-from-path ${toolArg} --game ${gameArg} --tag ${lib.escapeShellArg toolCfg.release.tag} --asset ${lib.escapeShellArg toolCfg.release.asset} ${lib.escapeShellArg (toString assetSrc)} || echo "modde: tool install-release-from-path failed for ${toolId}/${name}"
+          ''
+        );
+      renderSettingValue =
+        if lib.elem toolId typedToolIds
+        then key: value: renderTypedToolSettingValue toolId key value
+        else _key: value: renderToolSettingValue value;
+      filteredSettings =
+        lib.filterAttrs (key: value: key != "_game_id" && key != "optiscaler_profile" && value != null) toolCfg.settings
+        // lib.optionalAttrs (toolId == "optiscaler" && toolCfg.profile != null) {
+          optiscaler_profile = toolCfg.profile;
+        };
+      settingsArgs =
+        lib.concatStringsSep " "
+        (lib.mapAttrsToList (
+            key: value: lib.escapeShellArg "${key}=${renderSettingValue key value}"
+          )
+          filteredSettings);
+      configureWarnings =
+        lib.concatStringsSep "\n" (
+          lib.optional (builtins.hasAttr "_game_id" toolCfg.settings) ''
+            echo "modde: tool configure ignored reserved key _game_id for ${toolId}/${name}"
+          ''
+          ++ lib.optional (builtins.hasAttr "optiscaler_profile" toolCfg.settings) ''
+            echo "modde: tool configure ignored reserved key optiscaler_profile for ${toolId}/${name}"
+          ''
+        );
+      configureCall =
+        lib.optionalString (settingsArgs != "") ''
+          modde tool configure ${toolArg} --game ${gameArg} -- ${settingsArgs} || echo "modde: tool configure failed for ${toolId}/${name}"
+        '';
+      configureSnippet = lib.concatStringsSep "\n" (lib.optional (configureWarnings != "") configureWarnings ++ lib.optional (configureCall != "") configureCall);
+    in if toolCfg.enable == false
+    then ''
+      modde tool disable ${toolArg} --game ${gameArg} || echo "modde: tool disable failed for ${toolId}/${name}"
+    ''
+    else ''
+      ${releaseSnippet}
+      modde tool enable ${toolArg} --game ${gameArg} || echo "modde: tool enable failed for ${toolId}/${name}"
+      ${configureSnippet}
+      ${lib.optionalString toolCfg.applyOnActivation ''
+        modde tool apply ${toolArg} --game ${gameArg} || echo "modde: tool apply failed for ${toolId}/${name}"
+      ''}
+    '';
+  in lib.concatStringsSep "\n" (lib.mapAttrsToList renderToolActivation configuredTools);
   profileActivation = name: profile: let
     nameArg = lib.escapeShellArg name;
     gameArg = lib.escapeShellArg profile.game;
@@ -251,11 +557,13 @@ flake: {
           modde install wabbajack ${modlistArg} --profile ${nameArg}${gameDirArg} --missing-archive-policy ${missingPolicyArg}
         fi
         modde deploy ${deployArgs} || echo "modde: deploy failed for '${name}'"
+        ${toolActivation name profile}
       fi
     ''
     else ''
       echo "modde: deploying profile '${name}' for game '${profile.game}'"
       modde deploy ${deployArgs} || echo "modde: deploy failed for '${name}'"
+      ${toolActivation name profile}
     '';
 in {
   options.programs.modde = {
