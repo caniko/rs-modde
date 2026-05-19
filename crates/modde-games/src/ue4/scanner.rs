@@ -18,6 +18,11 @@ pub static STELLAR_BLADE_SCANNER: Ue4Scanner = Ue4Scanner {
     project_name: "SB",
 };
 
+pub static SUBNAUTICA2_SCANNER: Ue4Scanner = Ue4Scanner {
+    game_id: "subnautica2",
+    project_name: "Subnautica2",
+};
+
 const UE4_GROUP_EXTENSIONS: &[&str] = &["pak", "ucas", "utoc"];
 
 impl Ue4Scanner {

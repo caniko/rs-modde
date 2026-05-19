@@ -134,6 +134,7 @@ pub const SUPPORTED_GAME_IDS: &[&str] = &[
     "oblivion-remastered",
     "bannerlord",
     "witcher3",
+    "subnautica2",
 ];
 
 pub static GAME_REGISTRY: &[GameRegistration] = &[
@@ -422,6 +423,26 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         scanner: Some(&crate::witcher3::scanner::WITCHER3_SCANNER),
         save_tracker: Some(&crate::witcher3::saves::WITCHER3_SAVE_TRACKER),
         collision_classifier: Some(witcher_collision_classifier),
+        optiscaler_profiles: &[],
+    },
+    GameRegistration {
+        game_id: "subnautica2",
+        display_name: "Subnautica 2",
+        engine: EngineFamily::Unreal4,
+        launcher: LauncherIds {
+            steam_app_id: Some("1962700"),
+            steam_dir: Some("Subnautica2"),
+            heroic_gog_app_id: None,
+            heroic_epic_app_id: None,
+        },
+        wabbajack_names: &[],
+        nexus_domain: Some("subnautica2"),
+        nexus_game_id: None,
+        supports_save_profiles: true,
+        plugin: &crate::ue4::SUBNAUTICA2,
+        scanner: Some(&crate::ue4::scanner::SUBNAUTICA2_SCANNER),
+        save_tracker: Some(&crate::ue4::saves::SUBNAUTICA2_SAVE_TRACKER),
+        collision_classifier: Some(ue4_collision_classifier),
         optiscaler_profiles: &[],
     },
 ];

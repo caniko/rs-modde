@@ -34,6 +34,7 @@ This table is intentionally conservative:
 | The Elder Scrolls IV: Oblivion Remastered | `oblivion-remastered` | `Partial` | Yes | Yes | `Done` |
 | Mount & Blade II: Bannerlord | `bannerlord` | `Partial` | Yes | Yes | `Done` |
 | The Witcher 3: Wild Hunt | `witcher3` | `Partial` | Yes | Yes | `Done` |
+| Subnautica 2 | `subnautica2` | `Partial` | Yes | Yes | `Done` |
 
 ## Wabbajack game mapping
 

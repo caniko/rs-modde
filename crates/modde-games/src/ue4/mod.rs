@@ -158,6 +158,15 @@ pub const STELLAR_BLADE: Ue4Game = Ue4Game::new(
 )
 .with_save_profiles(true);
 
+pub const SUBNAUTICA2: Ue4Game = Ue4Game::new(
+    "subnautica2",
+    "Subnautica 2",
+    "1962700",
+    "Subnautica2",
+    Some("subnautica2"),
+)
+.with_save_profiles(true);
+
 pub(crate) const STELLAR_BLADE_OPTISCALER_PROFILES: &[OptiScalerProfile] = &[OptiScalerProfile {
     id: "community-dxgi",
     name: "Community tested dxgi.dll",
