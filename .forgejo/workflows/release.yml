@@ -30,6 +30,34 @@ jobs:
           echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
           test "$(nix eval --raw .#modde.version)" = "$VERSION"
 
+      - name: Rewrite modde.spec Version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "0,/^Version:.*$/s//Version:        ${VERSION}/" modde.spec
+          grep '^Version:' modde.spec
+
+      - name: Build SRPM for COPR
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          git archive --format=tar.gz --prefix=rs-modde/ -o "rs-modde-v${VERSION}.tar.gz" HEAD
+
+          nix shell nixpkgs#rpm nixpkgs#cargo nixpkgs#rustc -c bash <<'SCRIPT'
+          set -euo pipefail
+
+          cargo xtask copr vendor
+          cargo xtask copr vendor-check
+
+          rm -rf srpms
+          mkdir -p srpms
+          rpmbuild -bs modde.spec \
+            --define "_sourcedir $(pwd)" \
+            --define "_srcrpmdir $(pwd)/srpms"
+
+          set -- srpms/*.src.rpm
+          test "$#" -eq 1
+          ls -l "$1"
+          SCRIPT
+
       - name: Build release artifacts
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
@@ -141,3 +169,25 @@ jobs:
               > /dev/null
           done
           SCRIPT
+
+      - name: Push SRPM to COPR
+        env:
+          COPR_LOGIN: ${{ secrets.copr_login }}
+          COPR_USERNAME: ${{ secrets.copr_username }}
+          COPR_TOKEN: ${{ secrets.copr_token }}
+          COPR_PROJECT: caniko/rs-modde
+        run: |
+          if [ -z "$COPR_LOGIN" ] || [ -z "$COPR_USERNAME" ] || [ -z "$COPR_TOKEN" ]; then
+            echo "COPR credentials are not configured; skipping COPR upload."
+            exit 0
+          fi
+          mkdir -p ~/.config
+          cat > ~/.config/copr <<EOF
+          [copr-cli]
+          login = ${COPR_LOGIN}
+          username = ${COPR_USERNAME}
+          token = ${COPR_TOKEN}
+          copr_url = https://copr.fedorainfracloud.org
+          EOF
+          chmod 600 ~/.config/copr
+          copr-cli build --nowait "${COPR_PROJECT}" srpms/*.src.rpm

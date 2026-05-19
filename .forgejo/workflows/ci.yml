@@ -37,7 +37,7 @@ jobs:
             substituters = https://attic.candee.baby/canix https://cache.nixos.org
             trusted-public-keys = canix:uqr0nD3I0mfj9BYfZgTZHMaDKfI2yCTtSA5JGTWKUeg= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
       - name: Run coverage tests
-        run: nix develop --command just coverage-ci
+        run: nix develop --command cargo xtask coverage --ci --fail-under 0
 
   build:
     runs-on: atlas
