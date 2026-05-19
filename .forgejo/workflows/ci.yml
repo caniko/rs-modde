@@ -72,3 +72,27 @@ jobs:
             trusted-public-keys = canix:uqr0nD3I0mfj9BYfZgTZHMaDKfI2yCTtSA5JGTWKUeg= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
       - name: Check flake outputs
         run: nix flake check --keep-going --print-build-logs
+
+  release-dry-run:
+    runs-on: atlas
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: https://github.com/cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            substituters = https://attic.candee.baby/canix https://cache.nixos.org
+            trusted-public-keys = canix:uqr0nD3I0mfj9BYfZgTZHMaDKfI2yCTtSA5JGTWKUeg= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+      - name: Verify simit availability
+        run: nix develop --command simit --version
+      - name: Dry-run a patch release through xtask
+        run: nix develop --command cargo xtask release patch --dry-run -m "ci smoke"
+      - name: Verify dry-run left the working tree clean
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::simit release --dry-run modified the working tree"
+            git status --porcelain
+            exit 1
+          fi

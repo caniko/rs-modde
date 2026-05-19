@@ -92,6 +92,16 @@ Include:
 Release tags are bare semver names such as `0.2.0` or `1.0.0-rc.1`.
 See [docs/copr-release.md](docs/copr-release.md) for the Fedora COPR wiring (one-time setup + per-tag flow).
 
+### Release tooling
+
+- Run releases through `cargo xtask release {patch|minor|major|prerelease} -m "<message>"`.
+- The xtask wrapper delegates to `simit release` from the devShell.
+- Tags are bare semver with no `v` prefix; `.forgejo/workflows/release.yml` triggers on `[0-9]*`.
+- Keep the `## [Unreleased]` heading in `CHANGELOG.md` exactly as-is so simit can update it.
+- rs-modde does not run `simit init-ci --check` or `simit init-flake --check`.
+- Those checks would treat this repo's bespoke `atlas` workflows and rs-harbor-driven flake as drift.
+- The rationale and revisit conditions live in [docs/planning/simit-integration/DECISION.md](docs/planning/simit-integration/DECISION.md).
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under GPL-3.0-only.
