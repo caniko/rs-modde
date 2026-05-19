@@ -245,7 +245,7 @@
             flatpak-manifest =
               (rs-harbor.lib.mkFlatpakManifest {
                 inherit pkgs;
-                appId = "org.codeberg.caniko.modde";
+                appId = "com.tartanoglu.modde";
                 pname = "modde-ui";
                 desktopFile = builtins.readFile ./dist/modde-ui.desktop;
                 finishArgs = [

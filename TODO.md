@@ -115,6 +115,9 @@ Living checklist of feature, test, and infrastructure gaps. Tick items as they l
 
 ## 3. Infrastructure
 
+### Packaging — flatpak
+- [x] Flatpak app ID namespace settled as `com.tartanoglu.modde`; Phase 05 keeps the Flathub path open by using the controlled `tartanoglu.com` domain.
+
 ### 3.1 Coverage tooling
 - [x] Add `cargo-llvm-cov` to flake devShell
 - [x] `just coverage` recipe producing HTML + lcov

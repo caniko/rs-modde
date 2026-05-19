@@ -55,7 +55,7 @@ jobs:
           cp appimage-cli-result "release/modde-${VERSION}-x86_64.AppImage"
 
           nix build .#flatpak-manifest --out-link flatpak-result
-          cp flatpak-result release/org.codeberg.caniko.modde.json
+          cp flatpak-result release/com.tartanoglu.modde.json
 
           cd release
           sha256sum *.tar.gz *.AppImage *.json modde-*-x86_64-linux modde-ui-*-x86_64-linux > SHA256SUMS.txt
@@ -118,7 +118,7 @@ jobs:
             release/modde-*-x86_64-linux \
             release/modde-ui-*-x86_64-linux \
             release/*.AppImage \
-            release/org.codeberg.caniko.modde.json \
+            release/com.tartanoglu.modde.json \
             release/SHA256SUMS.txt; do
             name="$(basename "$file")"
             asset_id="$(

@@ -3,5 +3,5 @@ Type=Application
 Name=Modde
 Comment=Cross-platform game mod manager
 Exec=modde-ui
-Icon=org.codeberg.caniko.modde
+Icon=com.tartanoglu.modde
 Categories=Game;Utility;
