@@ -1,6 +1,6 @@
 [package]
 name = "modde-sources"
-version = "0.1.0"
+version = "0.2.0"
 description = "Download source implementations for modde"
 edition.workspace = true
 license.workspace = true

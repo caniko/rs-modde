@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-19
+
 ### Added
 
 - **Skyrim/Wabbajack**: Support Wabbajack `GameFileSourceDownloader` entries used by Legends of the Frost, with local game-file verification through `--game-dir`.

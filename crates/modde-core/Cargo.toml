@@ -1,6 +1,6 @@
 [package]
 name = "modde-core"
-version = "0.1.0"
+version = "0.2.0"
 description = "Core types and logic for the modde mod manager"
 edition.workspace = true
 license.workspace = true
