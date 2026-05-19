@@ -26,7 +26,7 @@
     };
 
     simit = {
-      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/tags/0.1.6&rev=2b692b63e045e0edcd2d53143dfeb0025d52d7b6";
+      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=0908c75763668a0270aeec2ed4f0060ad0b402e8";
       inputs.rs-harbor.follows = "rs-harbor";
       inputs.nixpkgs.follows = "rs-harbor/nixpkgs";
       inputs.rust-overlay.follows = "rs-harbor/rust-overlay";
@@ -359,6 +359,81 @@
               ];
             })
           .config;
+          hmModuleEvalExpr = profilesFile: ''
+            let
+              pkgs = import "${toString nixpkgs}" {
+                system = "x86_64-linux";
+                overlays = [ (import "${toString rust-overlay}") ];
+              };
+              lib = pkgs.lib;
+              hmLib = lib.extend (_final: _prev: {
+                hm.dag.entryAfter = _deps: text: text;
+              });
+              evalHm = profiles:
+                (hmLib.evalModules {
+                  specialArgs = { inherit pkgs; };
+                  modules = [
+                    ({lib, ...}: {
+                      options = {
+                        assertions = lib.mkOption {
+                          type = lib.types.listOf lib.types.attrs;
+                          default = [];
+                        };
+                        home.packages = lib.mkOption {
+                          type = lib.types.listOf lib.types.package;
+                          default = [];
+                        };
+                        home.activation = lib.mkOption {
+                          type = lib.types.attrsOf lib.types.str;
+                          default = {};
+                        };
+                      };
+                    })
+                    (import ./nix/hm-module.nix {
+                      packages."x86_64-linux".modde = pkgs.hello;
+                    })
+                    {
+                      programs.modde = {
+                        enable = true;
+                        package = pkgs.hello;
+                        profiles = profiles;
+                      };
+                    }
+                  ];
+                }).config;
+            in let
+              result = evalHm (builtins.fromJSON (builtins.readFile ${profilesFile}));
+            in builtins.deepSeq result.assertions (
+              builtins.deepSeq result.home.activation.modde-deploy true
+            )
+          '';
+          mkHmModuleFailureCheck = {
+            name,
+            profiles,
+            expected,
+          }: let
+            profilesFile = pkgs.writeText "modde-hm-module-${name}.json" (builtins.toJSON profiles);
+          in pkgs.runCommand "modde-hm-module-${name}" {nativeBuildInputs = [pkgs.nix pkgs.gnugrep pkgs.coreutils];} ''
+            set -euo pipefail
+            export HOME="$TMPDIR/home"
+            mkdir -p "$HOME"
+            mkdir -p nix
+            cp ${./nix/hm-module.nix} nix/hm-module.nix
+            cp ${./nix/tool-schema.nix} nix/tool-schema.nix
+            cp ${./nix/optiscaler-profiles.nix} nix/optiscaler-profiles.nix
+            cp ${./nix/release-supporting-tools.nix} nix/release-supporting-tools.nix
+            cat > expr.nix <<'EOF'
+            ${hmModuleEvalExpr profilesFile}
+            EOF
+            if nix-instantiate --eval --show-trace expr.nix >stdout 2>stderr; then
+              echo "expected fixture ${name} to fail"
+              cat stdout
+              cat stderr
+              exit 1
+            fi
+            grep -Fq ${lib.escapeShellArg expected} stderr
+            touch "$out"
+          '';
           activationReady =
             (evalHm {
               lotf = {
@@ -496,6 +571,160 @@
           .home
           .activation
           .modde-deploy;
+          activationTypedTools =
+            (evalHm {
+              tooling = {
+                game = "test game";
+                tools = {
+                  vkbasalt = {
+                    enable = true;
+                    settings = {
+                      enableOnLaunch = true;
+                      casSharpness = 0.4;
+                    };
+                  };
+                  reshade = {
+                    enable = true;
+                    applyOnActivation = true;
+                    settings = {
+                      dll_name = "d3d11.dll";
+                    };
+                  };
+                };
+              };
+            })
+          .home
+          .activation
+          .modde-deploy;
+          activationOptiscalerRelease =
+            (evalHm {
+              blade = {
+                game = "stellar-blade";
+                tools.optiscaler = {
+                  enable = true;
+                  release = {
+                    tag = "v1.0";
+                    asset = "OptiScaler.7z";
+                    url = "file://${./LICENSE}";
+                    hash = "sha256-OXLcl0T2SZ8Pmy2/dmlvKuetivmyPd5m1q+Gyd+zaYY=";
+                  };
+                };
+              };
+            })
+          .home
+          .activation
+          .modde-deploy;
+          activationOptiscalerProfile =
+            (evalHm {
+              blade = {
+                game = "stellar-blade";
+                tools.optiscaler = {
+                  enable = true;
+                  profile = "community-dxgi";
+                };
+              };
+            })
+          .home
+          .activation
+          .modde-deploy;
+          mangohudReleaseAssertions =
+            (evalHm {
+              invalid = {
+                game = "test game";
+                tools.mangohud.release = {
+                  tag = "v1.0";
+                  asset = "MangoHud.7z";
+                  url = "https://example.test/mangohud.7z";
+                  hash = lib.fakeHash;
+                };
+              };
+            })
+          .assertions;
+          mangohudReleaseFails =
+            if
+              lib.any (
+                assertion:
+                  !assertion.assertion
+                  && assertion.message
+                  == "programs.modde.profiles.invalid.tools.mangohud.release: mangohud does not support release pinning."
+              )
+              mangohudReleaseAssertions
+            then "false"
+            else "true";
+          releasePathAndUrlAssertions =
+            (evalHm {
+              invalid = {
+                game = "test game";
+                tools.optiscaler.release = {
+                  tag = "v1.0";
+                  asset = "OptiScaler.7z";
+                  url = "https://example.test/o.7z";
+                  path = "${./LICENSE}";
+                };
+              };
+            })
+          .assertions;
+          releasePathAndUrlFails =
+            if
+              lib.any (
+                assertion:
+                  !assertion.assertion
+                  && lib.hasInfix "mutually exclusive" assertion.message
+              )
+              releasePathAndUrlAssertions
+            then "false"
+            else "true";
+          optiscalerBadProfileEval =
+            builtins.tryEval (
+              builtins.deepSeq
+                ((evalHm {
+                  invalid = {
+                    game = "stellar-blade";
+                    tools.optiscaler = {
+                      enable = true;
+                      profile = "nonexistent";
+                    };
+                  };
+                })
+                .home
+                .activation
+                .modde-deploy)
+                true
+            );
+          typedUnknownKeyEval =
+            builtins.tryEval (
+              builtins.deepSeq
+                ((evalHm {
+                  invalid = {
+                    game = "test game";
+                    tools.vkbasalt = {
+                      enable = true;
+                      settings.cas_sharpness = 0.4;
+                    };
+                  };
+                })
+                .home
+                .activation
+                .modde-deploy)
+                true
+            );
+          typedWrongTypeEval =
+            builtins.tryEval (
+              builtins.deepSeq
+                ((evalHm {
+                  invalid = {
+                    game = "test game";
+                    tools.vkbasalt = {
+                      enable = true;
+                      settings.casSharpness = "fast";
+                    };
+                  };
+                })
+                .home
+                .activation
+                .modde-deploy)
+                true
+            );
           badAssertions =
             (evalHm {
               invalid = {
@@ -515,25 +744,20 @@
             if (builtins.elemAt badAssertions 0).assertion
             then "true"
             else "false";
-          unknownToolAssertions =
-            (evalHm {
-              invalid = {
-                game = "skyrim-se";
-                tools.notatool.enable = true;
-              };
-            })
-          .assertions;
-          unknownToolFails =
-            if
-              lib.any (
-                assertion:
-                  !assertion.assertion
-                  && assertion.message
-                  == "programs.modde.profiles.invalid.tools.notatool: unknown tool 'notatool'. Known tool IDs: mangohud, vkbasalt, gamemode, reshade, optiscaler, proton"
-              )
-              unknownToolAssertions
-            then "false"
-            else "true";
+          unknownToolEval =
+            builtins.tryEval (
+              builtins.deepSeq
+                ((evalHm {
+                  invalid = {
+                    game = "skyrim-se";
+                    tools.notatool.enable = true;
+                  };
+                })
+                .home
+                .activation
+                .modde-deploy)
+                true
+            );
           readableManualWithoutHashAssertions =
             (evalHm {
               invalid = {
@@ -591,6 +815,13 @@
             then "false"
             else "true";
         in {
+          tool-schema-fresh = pkgs.runCommand "modde-tool-schema-fresh" {} ''
+            ${modde}/bin/modde dev export-tool-schema --out "$TMPDIR/tool-schema.nix"
+            diff -u ${./nix/tool-schema.nix} "$TMPDIR/tool-schema.nix"
+            diff -u ${./nix/optiscaler-profiles.nix} "$TMPDIR/optiscaler-profiles.nix"
+            diff -u ${./nix/release-supporting-tools.nix} "$TMPDIR/release-supporting-tools.nix"
+            touch "$out"
+          '';
           hm-module = pkgs.runCommand "modde-hm-module-check" {} ''
             cat > ready <<'EOF'
             ${activationReady}
@@ -654,12 +885,163 @@
             ! grep -q "modde tool configure vkbasalt" disabled-tool
             ! grep -q "modde tool apply vkbasalt" disabled-tool
 
+            cat > typed-tools <<'EOF'
+            ${activationTypedTools}
+            EOF
+            grep -q "modde tool enable vkbasalt --game 'test game'" typed-tools
+            grep -q "enableOnLaunch=true" typed-tools
+            grep -q "casSharpness=0.4" typed-tools
+            ! grep -q "toggleKey=" typed-tools
+            grep -q "modde tool configure reshade --game 'test game' -- 'dll_name=d3d11.dll'" typed-tools
+            grep -q "modde tool apply reshade --game 'test game'" typed-tools
+
+            cat > optiscaler-release <<'EOF'
+            ${activationOptiscalerRelease}
+            EOF
+            grep -q "modde tool install-release-from-path optiscaler --game stellar-blade --tag v1.0 --asset OptiScaler.7z" optiscaler-release
+            grep -q "/nix/store/" optiscaler-release
+            grep -q "modde tool enable optiscaler --game stellar-blade" optiscaler-release
+
+            cat > optiscaler-profile <<'EOF'
+            ${activationOptiscalerProfile}
+            EOF
+            grep -q "modde tool configure optiscaler --game stellar-blade -- 'optiscaler_profile=community-dxgi'" optiscaler-profile
+
             test "${mutualExclusionFails}" = "false"
-            test "${unknownToolFails}" = "false"
+            test "${if unknownToolEval.success then "true" else "false"}" = "false"
             test "${readableManualWithoutHashFails}" = "false"
             test "${duplicateManualHashFails}" = "false"
+            test "${mangohudReleaseFails}" = "false"
+            test "${releasePathAndUrlFails}" = "false"
+            test "${if optiscalerBadProfileEval.success then "true" else "false"}" = "false"
+            test "${if typedUnknownKeyEval.success then "true" else "false"}" = "false"
+            test "${if typedWrongTypeEval.success then "true" else "false"}" = "false"
             touch "$out"
           '';
+          hm-module-tools = pkgs.runCommand "modde-hm-module-tools-check" {} ''
+            cat > tools <<'EOF'
+            ${(evalHm {
+              skyrim = {
+                game = "skyrim-se";
+                gameDir = "/games/Skyrim Special Edition";
+                wabbajackList = {
+                  url = "file://${./LICENSE}";
+                  hash = "sha256-OXLcl0T2SZ8Pmy2/dmlvKuetivmyPd5m1q+Gyd+zaYY=";
+                };
+                tools = {
+                  vkbasalt = {
+                    enable = true;
+                    settings = {
+                      enableOnLaunch = true;
+                      casSharpness = 0.4;
+                    };
+                  };
+                  gamemode.enable = true;
+                };
+              };
+              blade = {
+                game = "stellar-blade";
+                tools.optiscaler = {
+                  enable = true;
+                  applyOnActivation = true;
+                  profile = "community-dxgi";
+                  release = {
+                    tag = "v1.0";
+                    asset = "OptiScaler.7z";
+                    path = "${pkgs.writeText "OptiScaler.7z" "fake OptiScaler release archive"}";
+                  };
+                };
+              };
+            })
+            .home
+            .activation
+            .modde-deploy}
+            EOF
+            grep -q "modde deploy --profile skyrim --game skyrim-se" tools
+            grep -q "modde tool enable vkbasalt --game skyrim-se" tools
+            grep -q "modde tool configure vkbasalt --game skyrim-se --" tools
+            grep -q "enableOnLaunch=true" tools
+            grep -q "casSharpness=0.4" tools
+            grep -q "modde tool enable gamemode --game skyrim-se" tools
+            grep -q "modde tool install-release-from-path optiscaler --game stellar-blade --tag v1.0 --asset OptiScaler.7z" tools
+            grep -q "/nix/store/" tools
+            grep -q "modde tool configure optiscaler --game stellar-blade --" tools
+            grep -q "optiscaler_profile=community-dxgi" tools
+            grep -q "modde tool apply optiscaler --game stellar-blade" tools
+            touch "$out"
+          '';
+          hm-module-tools-unknown-tool =
+            mkHmModuleFailureCheck {
+              name = "unknown-tool";
+              expected = "does not exist";
+              profiles = {
+                invalid = {
+                  game = "skyrim-se";
+                  tools.notatool.enable = true;
+                };
+              };
+            };
+          hm-module-tools-unknown-setting =
+            mkHmModuleFailureCheck {
+              name = "unknown-setting";
+              expected = "does not exist";
+              profiles = {
+                invalid = {
+                  game = "test game";
+                  tools.vkbasalt = {
+                    enable = true;
+                    settings.cas_sharpness = true;
+                  };
+                };
+              };
+            };
+          hm-module-tools-wrong-type =
+            mkHmModuleFailureCheck {
+              name = "wrong-type";
+              expected = "not of type";
+              profiles = {
+                invalid = {
+                  game = "test game";
+                  tools.vkbasalt = {
+                    enable = true;
+                    settings.casSharpness = "fast";
+                  };
+                };
+              };
+            };
+          hm-module-tools-unsupported-release =
+            pkgs.runCommand "modde-hm-module-unsupported-release" {} ''
+              cat > assertions.json <<'EOF'
+              ${builtins.toJSON
+                (evalHm {
+                  invalid = {
+                    game = "test game";
+                    tools.mangohud.release = {
+                      tag = "v1.0";
+                      asset = "MangoHud.7z";
+                      path = "${pkgs.writeText "MangoHud.7z" "fake MangoHud release archive"}";
+                    };
+                  };
+                })
+                .assertions}
+              EOF
+              grep -q "does not support release pinning" assertions.json
+              touch "$out"
+            '';
+          hm-module-tools-bad-profile =
+            mkHmModuleFailureCheck {
+              name = "bad-profile";
+              expected = "singular enum";
+              profiles = {
+                invalid = {
+                  game = "stellar-blade";
+                  tools.optiscaler = {
+                    enable = true;
+                    profile = "nonexistent";
+                  };
+                };
+              };
+            };
         };
 
         devShells = rs-harbor.lib.mkDevShells {
