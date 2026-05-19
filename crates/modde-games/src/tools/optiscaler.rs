@@ -877,10 +877,7 @@ pub fn install_optiscaler_release_asset_from_path(
 ) -> Result<PathBuf> {
     let normalized_tag = normalize_optiscaler_release_tag(tag);
     if !is_installable_release_asset(asset_name) {
-        anyhow::bail!(
-            "selected asset '{}' is not a supported archive (.zip or .7z)",
-            asset_name
-        );
+        anyhow::bail!("selected asset '{asset_name}' is not a supported archive (.zip or .7z)");
     }
 
     let cache_dir = cached_release_dir(&normalized_tag);

@@ -16,6 +16,15 @@
 not begin before phases 02 and 03 are merged; the integration test in step 7 will fail
 otherwise.
 
+**Workspace-state precondition** (added after the first execution attempt blocked on
+this): `nix flake check` must already be green against the pre-phase `trunk`. If the
+working tree carries pre-existing in-flight changes that aren't part of this phase —
+absolute-path Cargo deps, untracked source files referenced from tracked code, or
+workspace members that exist only on disk and not in git — the flake-check acceptance
+gate below will fail for reasons orthogonal to Phase 04. Resolve those first; they're
+not this phase's scope. See the "Pitfalls" section for the specific failure modes
+observed (the detritus path-dep, the untracked `modde-xtask` directory).
+
 ## Goal
 
 `cargo xtask release <BUMP> [--dry-run]` (where `<BUMP>` is `patch | minor | major |
