@@ -19,23 +19,27 @@ cd rs-modde
 # Enter the dev shell (provides all dependencies)
 nix develop
 
+# Project-local cargo alias: `cargo xtask ...` runs `crates/modde-xtask`.
+# It depends on the flake-pinned `harbor-xtask` git crate, so a fresh
+# checkout may fetch rs-harbor.
+
 # Build
 cargo build --workspace
 
 # Run tests
-cargo test --workspace
+cargo xtask test
 
 # Run clippy
-cargo clippy --workspace
+cargo xtask lint
 
 # Format check
-cargo fmt --all -- --check
+cargo xtask check
 
 # Run the GUI directly with development logging
-just gui
+cargo xtask gui
 
 # Override GUI logging when needed
-RUST_LOG=modde_ui=trace,modde_core=debug just gui
+RUST_LOG=modde_ui=trace,modde_core=debug cargo xtask gui
 ```
 
 ### Project Structure
@@ -54,7 +58,7 @@ crates/
 1. Fork the repository on Codeberg
 2. Create a feature branch from `trunk`
 3. Make your changes
-4. Ensure `cargo test --workspace`, `cargo clippy --workspace`, and `cargo fmt --check` pass
+4. Ensure `cargo xtask check` passes
 5. Submit a pull request
 
 ### Code Style
@@ -82,6 +86,10 @@ Include:
 - Operating system and distribution
 - Steps to reproduce
 - Expected vs actual behavior
+
+## Releases
+
+See [docs/copr-release.md](docs/copr-release.md) for the Fedora COPR wiring (one-time setup + per-tag flow).
 
 ## License
 

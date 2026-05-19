@@ -178,11 +178,11 @@ coverage tests, Rust release builds, Nix package builds, and `nix flake check`
 on every push and pull request. Pushes to `trunk` also build and deploy the
 documentation site and presentation website to Codeberg Pages.
 
-Tag releases are managed with `cargo-release`. Run `just release-dry X.Y.Z` to
-preview a workspace release, then `just release X.Y.Z` to publish all workspace
-crates to crates.io and push the `vX.Y.Z` tag. Release tags build and publish
-Linux and Windows CLI/GUI artifacts; macOS artifacts are intentionally not
-shipped yet.
+Tag releases are managed through `cargo xtask release`. Run
+`cargo xtask release X.Y.Z --dry-run` to preview a workspace release, then
+`cargo xtask release X.Y.Z` to publish all workspace crates to crates.io and
+push the `vX.Y.Z` tag. Release tags build and publish Linux and Windows
+CLI/GUI artifacts; macOS artifacts are intentionally not shipped yet.
 
 ## Website and docs
 

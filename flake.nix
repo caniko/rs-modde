@@ -242,12 +242,13 @@
             inherit modde docs website site;
             default = modde;
 
-            flatpak-manifest =
-              (rs-harbor.lib.mkFlatpakManifest {
+            flatpak-manifest = let
+              flatpakManifest = rs-harbor.lib.mkFlatpakManifest {
                 inherit pkgs;
                 appId = "com.tartanoglu.modde";
                 pname = "modde-ui";
                 desktopFile = builtins.readFile ./dist/modde-ui.desktop;
+                icon = ./dist/com.tartanoglu.modde.png;
                 finishArgs = [
                   "--share=ipc"
                   "--share=network"
@@ -256,7 +257,34 @@
                   "--device=dri"
                   "--socket=pulseaudio"
                 ];
-              }).manifestPath;
+              };
+              flatpakManifestJson = builtins.fromJSON flatpakManifest.manifestText;
+              flatpakModule = builtins.elemAt flatpakManifestJson.modules 0;
+              flatpakAppId = flatpakManifestJson."app-id";
+              metainfoPath = builtins.toString ./dist/com.tartanoglu.modde.metainfo.xml;
+              flatpakManifestWithMetainfo =
+                flatpakManifestJson
+                // {
+                  modules = [
+                    (flatpakModule
+                      // {
+                        "build-commands" =
+                          flatpakModule."build-commands"
+                          ++ [
+                            "install -Dm644 ${builtins.baseNameOf metainfoPath} /app/share/metainfo/${flatpakAppId}.metainfo.xml"
+                          ];
+                        sources =
+                          flatpakModule.sources
+                          ++ [
+                            {
+                              type = "file";
+                              path = metainfoPath;
+                            }
+                          ];
+                      })
+                  ];
+                };
+            in pkgs.writeText "modde-ui-flatpak-manifest.json" (builtins.toJSON flatpakManifestWithMetainfo);
           }
           // lib.optionalAttrs pkgs.stdenv.isLinux {
             appimage-cli = rs-harbor.lib.mkAppImage {
@@ -414,6 +442,38 @@
           .home
           .activation
           .modde-deploy;
+          activationTools =
+            (evalHm {
+              tooling = {
+                game = "test game";
+                tools = {
+                  mangohud = {
+                    enable = true;
+                    settings = {
+                      enable_vsync = false;
+                      fps_limit = 60;
+                    };
+                  };
+                  reshade = {
+                    enable = true;
+                    applyOnActivation = true;
+                  };
+                };
+              };
+            })
+          .home
+          .activation
+          .modde-deploy;
+          activationDisabledTool =
+            (evalHm {
+              tooling = {
+                game = "test game";
+                tools.vkbasalt.enable = false;
+              };
+            })
+          .home
+          .activation
+          .modde-deploy;
           badAssertions =
             (evalHm {
               invalid = {
@@ -433,6 +493,25 @@
             if (builtins.elemAt badAssertions 0).assertion
             then "true"
             else "false";
+          unknownToolAssertions =
+            (evalHm {
+              invalid = {
+                game = "skyrim-se";
+                tools.notatool.enable = true;
+              };
+            })
+          .assertions;
+          unknownToolFails =
+            if
+              lib.any (
+                assertion:
+                  !assertion.assertion
+                  && assertion.message
+                  == "programs.modde.profiles.invalid.tools.notatool: unknown tool 'notatool'. Known tool IDs: mangohud, vkbasalt, gamemode, reshade, optiscaler, proton"
+              )
+              unknownToolAssertions
+            then "false"
+            else "true";
           readableManualWithoutHashAssertions =
             (evalHm {
               invalid = {
@@ -535,7 +614,26 @@
             grep -q "abcdef0123456789 (Readable Archive Name.7z)" manual-archives
             grep -q -- "--missing-archive-policy omit-mods" manual-archives
 
+            cat > tools <<'EOF'
+            ${activationTools}
+            EOF
+            grep -q "modde deploy --profile tooling --game 'test game'" tools
+            grep -q "modde tool enable mangohud --game 'test game'" tools
+            grep -q "modde tool configure mangohud --game 'test game' --" tools
+            grep -q "enable_vsync=false" tools
+            grep -q "fps_limit=60" tools
+            ! grep -q "modde tool apply mangohud --game 'test game'" tools
+            grep -q "modde tool apply reshade --game 'test game'" tools
+
+            cat > disabled-tool <<'EOF'
+            ${activationDisabledTool}
+            EOF
+            grep -q "modde tool disable vkbasalt --game 'test game'" disabled-tool
+            ! grep -q "modde tool configure vkbasalt" disabled-tool
+            ! grep -q "modde tool apply vkbasalt" disabled-tool
+
             test "${mutualExclusionFails}" = "false"
+            test "${unknownToolFails}" = "false"
             test "${readableManualWithoutHashFails}" = "false"
             test "${duplicateManualHashFails}" = "false"
             touch "$out"
@@ -549,7 +647,6 @@
 
           packages = with pkgs;
             [
-              just
               cargo-release
               cargo-llvm-cov
               toolchain.rustToolchain
