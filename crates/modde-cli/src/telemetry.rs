@@ -20,18 +20,15 @@ fn data_dir() -> anyhow::Result<PathBuf> {
 
 fn persistent_install_id_in(dir: PathBuf) -> anyhow::Result<Uuid> {
     let path = dir.join(INSTALL_ID_FILE);
-    match read_install_id(&path)? {
-        Some(id) => Ok(id),
-        None => {
-            fs::create_dir_all(&dir).with_context(|| {
-                format!("failed to create telemetry data dir {}", dir.display())
-            })?;
-            let id = Uuid::new_v4();
-            fs::write(&path, format!("{id}\n")).with_context(|| {
-                format!("failed to write telemetry install id {}", path.display())
-            })?;
-            Ok(id)
-        }
+    if let Some(id) = read_install_id(&path)? {
+        Ok(id)
+    } else {
+        fs::create_dir_all(&dir)
+            .with_context(|| format!("failed to create telemetry data dir {}", dir.display()))?;
+        let id = Uuid::new_v4();
+        fs::write(&path, format!("{id}\n"))
+            .with_context(|| format!("failed to write telemetry install id {}", path.display()))?;
+        Ok(id)
     }
 }
 

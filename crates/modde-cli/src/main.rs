@@ -1145,8 +1145,8 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse();
     #[cfg(feature = "remote-telemetry")]
-    if cli.debug_panic {
-        panic!("remote telemetry debug panic");
+    {
+        assert!(!cli.debug_panic, "remote telemetry debug panic");
     }
 
     let _heap_profiler = start_heap_profiler(cli.heap_profile.as_deref())?;
