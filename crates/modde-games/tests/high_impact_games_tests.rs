@@ -125,7 +125,7 @@ fn stardew_scanner_discovers_smapi_mods() {
 
     assert_eq!(mods.len(), 1);
     assert_eq!(mods[0].mod_id, "smapi/BetterRanching");
-    assert!((mods[0].confidence - 0.98).abs() < f32::EPSILON);
+    assert!((mods[0].confidence - 0.98).abs() < f64::EPSILON);
 }
 
 #[test]

@@ -1051,7 +1051,6 @@
 
           packages = with pkgs;
             [
-              cargo-release
               cargo-llvm-cov
               toolchain.rustToolchain
               simitCli
