@@ -762,6 +762,38 @@ pub async fn handle_install_release(
     Ok(())
 }
 
+/// Install a specific release asset for a release-backed tool from a local path.
+pub async fn handle_install_release_from_path(
+    tool_id: &str,
+    game_id: &str,
+    tag: &str,
+    asset: &str,
+    path: PathBuf,
+) -> Result<()> {
+    let tool = modde_games::tools::resolve_tool(tool_id)
+        .ok_or_else(|| anyhow::anyhow!("unknown tool: '{tool_id}'"))?;
+    if !tool.supports_releases() {
+        anyhow::bail!("{} does not support release selection", tool.display_name());
+    }
+
+    let db = ModdeDb::open().context("failed to open database")?;
+    let config = load_tool_config_or_default(&db, game_id, tool_id, tool)?;
+    let config = tool
+        .install_release_from_path(game_id, config, tag, asset, path)
+        .await?;
+    let settings_json = serde_json::to_string(&config.settings)?;
+    db.save_tool_config(game_id, tool_id, config.enabled, &settings_json)?;
+
+    println!(
+        "Installed {} {} ({}) for {}",
+        tool.display_name(),
+        tag,
+        asset,
+        game_id
+    );
+    Ok(())
+}
+
 fn load_tool_config_or_default(
     db: &ModdeDb,
     game_id: &str,

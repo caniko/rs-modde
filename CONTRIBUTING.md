@@ -35,6 +35,9 @@ cargo xtask lint
 # Format check
 cargo xtask check
 
+# Regenerate the committed Nix tool schema
+just export-tool-schema
+
 # Run the GUI directly with development logging
 cargo xtask gui
 
@@ -67,6 +70,7 @@ crates/
 - Workspace-wide clippy pedantic warnings are enforced
 - Use `thiserror` for error types, `anyhow` for CLI/application errors
 - Prefer small, focused commits with clear messages
+- `nix/tool-schema.nix` is generated via `just export-tool-schema`; do not hand-edit it
 
 ### Adding Game Support
 

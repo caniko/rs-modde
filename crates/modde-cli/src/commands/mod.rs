@@ -11,6 +11,7 @@ pub mod install;
 pub mod instance;
 pub mod loot;
 pub mod nexus;
+pub mod nix_schema;
 pub mod nxm;
 pub mod play;
 pub mod profile;

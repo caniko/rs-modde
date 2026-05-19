@@ -1,10 +1,18 @@
 use std::path::PathBuf;
+#[cfg(feature = "remote-telemetry")]
+use std::{env, time::Duration};
 
+#[cfg(feature = "remote-telemetry")]
+use anyhow::Context;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
+#[cfg(feature = "remote-telemetry")]
+use tracing_subscriber::prelude::*;
 
 mod commands;
+#[cfg(feature = "remote-telemetry")]
+mod telemetry;
 
 #[derive(Parser)]
 #[command(name = "modde", version, about = "NixOS-native game mod manager")]
@@ -17,12 +25,22 @@ struct Cli {
     #[arg(long, global = true, env = "MODDE_HEAP_PROFILE")]
     heap_profile: Option<PathBuf>,
 
+    /// Panic after startup to smoke test remote telemetry crash capture.
+    #[cfg(feature = "remote-telemetry")]
+    #[arg(long, global = true, hide = true)]
+    debug_panic: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
 
 #[derive(Subcommand)]
 enum Commands {
+    #[command(hide = true)]
+    Dev {
+        #[command(subcommand)]
+        action: DevAction,
+    },
     /// Manage profiles
     Profile {
         #[command(subcommand)]
@@ -259,6 +277,15 @@ enum ExecAction {
         profile: Option<String>,
         #[arg(last = true)]
         args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum DevAction {
+    #[command(hide = true)]
+    ExportToolSchema {
+        #[arg(long, default_value = "nix/tool-schema.nix")]
+        out: PathBuf,
     },
 }
 
@@ -895,6 +922,19 @@ enum ToolAction {
         #[arg(long)]
         asset: String,
     },
+    /// Install a specific release asset from a local path for a release-backed tool
+    InstallReleaseFromPath {
+        /// Tool ID
+        tool_id: String,
+        #[arg(long)]
+        game: String,
+        #[arg(long)]
+        tag: String,
+        #[arg(long)]
+        asset: String,
+        /// Local path to the already-downloaded asset
+        path: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1089,11 +1129,26 @@ enum SaveAction {
 }
 
 fn main() -> Result<()> {
+    #[cfg(not(feature = "remote-telemetry"))]
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
+    #[cfg(feature = "remote-telemetry")]
+    let telemetry_runtime = tokio::runtime::Runtime::new()?;
+    #[cfg(feature = "remote-telemetry")]
+    let _telemetry_runtime_guard = telemetry_runtime.enter();
+    #[cfg(feature = "remote-telemetry")]
+    init_tracing()?;
+    #[cfg(feature = "remote-telemetry")]
+    init_remote_telemetry(&telemetry_runtime)?;
+
     let cli = Cli::parse();
+    #[cfg(feature = "remote-telemetry")]
+    if cli.debug_panic {
+        panic!("remote telemetry debug panic");
+    }
+
     let _heap_profiler = start_heap_profiler(cli.heap_profile.as_deref())?;
 
     if let Some(dir) = cli.data_dir.clone() {
@@ -1117,6 +1172,120 @@ fn main() -> Result<()> {
         let _ = modde_core::ipc::notify_refresh();
     }
     result
+}
+
+#[cfg(feature = "remote-telemetry")]
+fn init_tracing() -> Result<()> {
+    let fmt_layer = tracing_subscriber::fmt::layer();
+    let filter = EnvFilter::from_default_env();
+    let registry = tracing_subscriber::registry().with(filter).with(fmt_layer);
+
+    if let Some(config) = remote_telemetry_config()? {
+        let layer = detritus::Layer::builder()
+            .endpoint(config.endpoint.clone())
+            .token(config.token.clone())
+            .source(config.source.clone())
+            .queue_dir(config.logs_dir.clone())
+            .build()
+            .context("failed to initialize remote telemetry tracing layer")?;
+
+        registry
+            .with(layer)
+            .try_init()
+            .context("failed to initialize tracing subscriber")?;
+    } else {
+        registry
+            .try_init()
+            .context("failed to initialize tracing subscriber")?;
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "remote-telemetry")]
+#[derive(Clone)]
+struct RemoteTelemetryConfig {
+    endpoint: url::Url,
+    token: secrecy::SecretString,
+    source: detritus::SourceId,
+    logs_dir: PathBuf,
+    crashes_dir: PathBuf,
+}
+
+#[cfg(feature = "remote-telemetry")]
+fn remote_telemetry_config() -> Result<Option<RemoteTelemetryConfig>> {
+    let Some(endpoint) = env::var("RS_MODDE_TELEMETRY_ENDPOINT").ok() else {
+        return Ok(None);
+    };
+    let Some(token) = env::var("RS_MODDE_TELEMETRY_TOKEN").ok() else {
+        return Ok(None);
+    };
+
+    let endpoint = url::Url::parse(&endpoint).context("invalid RS_MODDE_TELEMETRY_ENDPOINT")?;
+    let source = detritus::SourceId {
+        project: "rs-modde".to_owned(),
+        platform: target_platform(),
+        version: env!("CARGO_PKG_VERSION").to_owned(),
+        install_id: telemetry::persistent_install_id()?,
+    };
+    let telemetry_dir = telemetry::telemetry_dir()?;
+
+    Ok(Some(RemoteTelemetryConfig {
+        endpoint,
+        token: secrecy::SecretString::from(token),
+        source,
+        logs_dir: telemetry_dir.join("logs"),
+        crashes_dir: telemetry_dir.join("crashes"),
+    }))
+}
+
+#[cfg(feature = "remote-telemetry")]
+fn init_remote_telemetry(runtime: &tokio::runtime::Runtime) -> Result<()> {
+    let Some(config) = remote_telemetry_config()? else {
+        return Ok(());
+    };
+
+    detritus::install_panic_hook(detritus::PanicHookConfig {
+        endpoint: config.endpoint.clone(),
+        token: config.token.clone(),
+        source: config.source.clone(),
+        spool_dir: config.crashes_dir.clone(),
+        kind: detritus::PanicKind::PanicTarball,
+        build: detritus_protocol::BuildInfo {
+            git_sha: option_env!("MODDE_GIT_SHA").unwrap_or("unknown").to_owned(),
+            profile: option_env!("PROFILE").unwrap_or("unknown").to_owned(),
+            target_triple: target_platform(),
+        },
+        context: serde_json::json!({}),
+        context_files: Vec::new(),
+        sent_retention_days: 90,
+    })
+    .context("failed to install remote telemetry panic hook")?;
+
+    let ship_result = runtime.block_on(async {
+        tokio::time::timeout(
+            Duration::from_secs(3),
+            detritus::ship_pending_crashes(
+                &config.crashes_dir,
+                config.endpoint.clone(),
+                config.token.clone(),
+            ),
+        )
+        .await
+    });
+
+    match ship_result {
+        Ok(Ok(_)) => {}
+        Ok(Err(error)) => tracing::warn!(%error, "failed to ship pending remote telemetry crashes"),
+        Err(_) => tracing::warn!("timed out shipping pending remote telemetry crashes"),
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "remote-telemetry")]
+fn target_platform() -> String {
+    format!("{}-{}", env::consts::ARCH, env::consts::OS)
 }
 
 #[cfg(feature = "heap-profile")]
@@ -1144,6 +1313,9 @@ fn start_heap_profiler(path: Option<&std::path::Path>) -> Result<Option<()>> {
 fn run_command(cli: Cli) -> Result<()> {
     // Sync commands that don't need the tokio runtime
     match cli.command {
+        Commands::Dev {
+            action: DevAction::ExportToolSchema { out },
+        } => return commands::nix_schema::handle_export(&out),
         Commands::Profile { action } => return commands::profile::handle(action),
         Commands::Scan {
             game,
@@ -1450,6 +1622,18 @@ fn run_command(cli: Cli) -> Result<()> {
                 } => {
                     commands::tool::handle_install_release(&tool_id, &game, &tag, &asset).await?;
                 }
+                ToolAction::InstallReleaseFromPath {
+                    tool_id,
+                    game,
+                    tag,
+                    asset,
+                    path,
+                } => {
+                    commands::tool::handle_install_release_from_path(
+                        &tool_id, &game, &tag, &asset, path,
+                    )
+                    .await?;
+                }
                 ToolAction::List { .. }
                 | ToolAction::Status { .. }
                 | ToolAction::Enable { .. }
@@ -1479,6 +1663,7 @@ fn run_command(cli: Cli) -> Result<()> {
             Commands::Wabbajack { action } => commands::wabbajack::handle(action).await?,
             // Already handled above
             Commands::Profile { .. }
+            | Commands::Dev { .. }
             | Commands::Scan { .. }
             | Commands::Detect
             | Commands::Game { .. }
@@ -1505,7 +1690,8 @@ fn run_command(cli: Cli) -> Result<()> {
 fn command_mutates_state(cmd: &Commands) -> bool {
     match cmd {
         // Pure read paths.
-        Commands::Detect
+        Commands::Dev { .. }
+        | Commands::Detect
         | Commands::Diagnostics { .. }
         | Commands::Export { .. }
         | Commands::Verify { .. }

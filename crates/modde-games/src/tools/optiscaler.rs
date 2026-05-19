@@ -750,6 +750,25 @@ impl GameTool for OptiScaler {
             Ok(config)
         })
     }
+
+    fn install_release_from_path<'a>(
+        &'a self,
+        _game_id: &'a str,
+        mut config: ToolConfig,
+        tag: &'a str,
+        asset: &'a str,
+        path: PathBuf,
+    ) -> ToolReleaseInstallFuture<'a> {
+        Box::pin(async move {
+            install_optiscaler_release_asset_from_path(tag, asset, &path)?;
+            let normalized_tag = normalize_optiscaler_release_tag(tag);
+            apply_optiscaler_release_selection(&mut config, &normalized_tag, asset);
+            if config.get_bool("enable_optipatcher") {
+                install_latest_optipatcher().await?;
+            }
+            Ok(config)
+        })
+    }
 }
 
 pub async fn list_optiscaler_releases() -> Result<Vec<ToolReleaseSummary>> {
@@ -847,6 +866,33 @@ pub async fn install_optiscaler_release_asset(tag: &str, asset_name: &str) -> Re
     std::fs::create_dir_all(&cache_dir)?;
     let archive_path = cache_dir.join(&asset.name);
     download_release_asset(asset, &archive_path).await?;
+    extract_optiscaler_archive_flat(&archive_path, &cache_dir)?;
+    Ok(cache_dir)
+}
+
+pub fn install_optiscaler_release_asset_from_path(
+    tag: &str,
+    asset_name: &str,
+    path: &Path,
+) -> Result<PathBuf> {
+    let normalized_tag = normalize_optiscaler_release_tag(tag);
+    if !is_installable_release_asset(asset_name) {
+        anyhow::bail!(
+            "selected asset '{}' is not a supported archive (.zip or .7z)",
+            asset_name
+        );
+    }
+
+    let cache_dir = cached_release_dir(&normalized_tag);
+    std::fs::create_dir_all(&cache_dir)?;
+    let archive_path = cache_dir.join(asset_name);
+    std::fs::copy(path, &archive_path).with_context(|| {
+        format!(
+            "failed to copy release asset {} to {}",
+            path.display(),
+            archive_path.display()
+        )
+    })?;
     extract_optiscaler_archive_flat(&archive_path, &cache_dir)?;
     Ok(cache_dir)
 }

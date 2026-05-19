@@ -6,6 +6,7 @@ members = [
     "crates/modde-games",
     "crates/modde-ui",
     "crates/modde-cli",
+    "crates/modde-xtask",
 ]
 
 [workspace.package]
@@ -42,6 +43,10 @@ anyhow = "1"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+detritus = { package = "detritus-client", git = "https://codeberg.org/caniko/rs-detritus.git", rev = "b23ab20e9d584c5c4fe04ac86b2ed4cad1b2486e", default-features = false }
+detritus-protocol = { git = "https://codeberg.org/caniko/rs-detritus.git", rev = "b23ab20e9d584c5c4fe04ac86b2ed4cad1b2486e", default-features = false }
+secrecy = "0.10"
+uuid = { version = "1.10", features = ["v4", "serde"] }
 
 # Hashing
 xxhash-rust = { version = "0.8", features = ["xxh3", "xxh64"] }
@@ -123,6 +128,7 @@ rfd = "0.17"
 
 # Open files/URLs with default system handler
 open = "5"
+url = "2"
 
 # CLI
 clap = { version = "4", features = ["derive", "env"] }

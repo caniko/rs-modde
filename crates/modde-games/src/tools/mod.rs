@@ -587,6 +587,20 @@ pub trait GameTool: Send + Sync {
             )
         })
     }
+
+    /// Install a selected release asset from a local path and return the updated per-game config.
+    fn install_release_from_path<'a>(
+        &'a self,
+        _game_id: &'a str,
+        _config: ToolConfig,
+        _tag: &'a str,
+        _asset: &'a str,
+        _path: PathBuf,
+    ) -> ToolReleaseInstallFuture<'a> {
+        Box::pin(async {
+            anyhow::bail!("{} does not support release pinning", self.display_name())
+        })
+    }
 }
 
 // ── Registry ───────────────────────────────────────────────────────────────
@@ -633,6 +647,8 @@ pub(crate) fn which(binary: &str) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::io::Write;
+    use std::sync::OnceLock;
 
     #[test]
     fn plain_select_options_use_value_as_label() {
@@ -853,6 +869,59 @@ mod tests {
                 "GE-Proton10-33".to_string(),
                 "GE-Proton10-32".to_string(),
             ]
+        );
+    }
+
+    fn ensure_test_data_dir() -> std::path::PathBuf {
+        static DATA_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
+        DATA_DIR
+            .get_or_init(|| {
+                let default_dir = modde_core::paths::data_dir().join("modde");
+                if modde_core::paths::modde_data_dir() != default_dir {
+                    return modde_core::paths::modde_data_dir();
+                }
+
+                let tempdir = tempfile::TempDir::new().expect("create tempdir");
+                let data_dir = tempdir.path().join("data");
+                std::fs::create_dir_all(&data_dir).expect("create data dir");
+                modde_core::paths::set_data_dir(data_dir.clone());
+                std::mem::forget(tempdir);
+                data_dir
+            })
+            .clone()
+    }
+
+    #[tokio::test]
+    async fn optiscaler_install_release_from_path_extracts_local_archive() {
+        let _ = ensure_test_data_dir();
+        let tempdir = tempfile::TempDir::new().expect("create tempdir");
+        let archive_path = tempdir.path().join("OptiScaler.zip");
+        let file = std::fs::File::create(&archive_path).expect("create archive");
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file("OptiScaler.dll", zip::write::FileOptions::<()>::default())
+            .expect("start file");
+        zip.write_all(b"dll-bytes").expect("write dll");
+        zip.finish().expect("finish archive");
+
+        let tool = super::resolve_tool("optiscaler").expect("optiscaler tool should resolve");
+        let config = tool.default_config();
+        let updated = tool
+            .install_release_from_path(
+                "stellar-blade",
+                config,
+                "v1.0",
+                "OptiScaler.zip",
+                archive_path,
+            )
+            .await
+            .expect("install from path");
+
+        assert_eq!(updated.get_str("release_tag"), Some("official:v1.0"));
+        assert_eq!(updated.get_str("release_asset"), Some("OptiScaler.zip"));
+        assert!(
+            super::optiscaler::cached_release_dir("official:v1.0")
+                .join("OptiScaler.dll")
+                .exists()
         );
     }
 }

@@ -767,135 +767,6 @@
       advanced = false;
       values = [ "auto" "0" "1" "2" ];
     };
-    "ini_overrides.FrameGen.AllowedFrameAhead" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.DebugView" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.DepthValidNow" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.DisableHudless" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.DisableUI" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.DrawUIOverFG" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.Enabled" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.FGInput" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.FGOutput" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.FTInput" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.HudlessValidNow" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.OnlyAcceptFirstHudless" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.PreserveSwapChain" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.RectHeight" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.RectLeft" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.RectTop" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.RectWidth" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.SkipReset" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.SkipResizeBuffers" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.FrameGen.UIPremultipliedAlpha" = {
-      type = "float";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-      min = 0;
-      max = 10;
-      step = 0.05;
-    };
-    "ini_overrides.FrameGen.VelocityValidNow" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
     "ini_overrides.Menu.Scale" = {
       type = "float";
       default = null;
@@ -917,24 +788,6 @@
       default = null;
       description = "OptiScaler OverrideNvapiDll override.";
       advanced = false;
-    };
-    "ini_overrides.Upscalers.Dx11Upscaler" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.Upscalers.Dx12Upscaler" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
-    };
-    "ini_overrides.Upscalers.VulkanUpscaler" = {
-      type = "text";
-      default = null;
-      description = "OptiScaler.ini override.";
-      advanced = true;
     };
     "ini_overrides.fakenvapi.enable_trace_logs" = {
       type = "tri_state_bool";
@@ -1147,7 +1000,7 @@
       default = null;
       description = "Installed or requested GEProton version.";
       advanced = false;
-      values = [ "latest" "GE-Proton10-29" "GE-Proton10-30" "GE-Proton10-32" "GE-Proton10-34" ];
+      values = [ "latest" ];
     };
     "staging_shared_memory" = {
       type = "bool";
