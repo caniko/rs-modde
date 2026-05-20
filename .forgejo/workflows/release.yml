@@ -57,6 +57,17 @@ jobs:
           ls -l "$1"
           SCRIPT
 
+      - name: Generate third-party license report
+        run: |
+          mkdir -p release
+          nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#gcc -c bash <<'SCRIPT'
+          set -euo pipefail
+          export CARGO_INSTALL_ROOT="$PWD/.cargo-tools"
+          export PATH="$CARGO_INSTALL_ROOT/bin:$PATH"
+          cargo install --locked cargo-about --version 0.9.0 --features cli
+          cargo about generate --output-file release/THIRD_PARTY_LICENSES.html about-template.hbs
+          SCRIPT
+
       - name: Build release artifacts
         run: |
           VERSION="$GITHUB_REF_NAME"
@@ -85,7 +96,7 @@ jobs:
           cp flatpak-result release/com.tartanoglu.modde.json
 
           cd release
-          sha256sum *.tar.gz *.AppImage *.json modde-*-x86_64-linux modde-ui-*-x86_64-linux > SHA256SUMS.txt
+          sha256sum *.tar.gz *.AppImage *.json THIRD_PARTY_LICENSES.html modde-*-x86_64-linux modde-ui-*-x86_64-linux > SHA256SUMS.txt
 
       - name: Push Nix closures to Attic
         run: |
@@ -146,6 +157,7 @@ jobs:
             release/modde-ui-*-x86_64-linux \
             release/*.AppImage \
             release/com.tartanoglu.modde.json \
+            release/THIRD_PARTY_LICENSES.html \
             release/SHA256SUMS.txt; do
             name="$(basename "$file")"
             asset_id="$(
