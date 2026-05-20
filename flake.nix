@@ -140,12 +140,17 @@
           version = "0.1.0";
           src = lib.fileset.toSource {
             root = ./.;
-            fileset = lib.fileset.maybeMissing ./website;
+            fileset = lib.fileset.unions [
+              ./website
+              ./docs/capability-matrix.toml
+            ];
           };
           nativeBuildInputs = [pkgs.zola];
           phases = ["buildPhase" "installPhase"];
           buildPhase = ''
             cp -r --no-preserve=mode $src/website site
+            mkdir -p site/data
+            cp $src/docs/capability-matrix.toml site/data/capability-matrix.toml
             cd site
             zola build
           '';

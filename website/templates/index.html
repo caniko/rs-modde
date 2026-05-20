@@ -4,12 +4,15 @@
 
 {% block content %}
 <section class="hero">
+  {% if section.extra.logo %}
+  <img src="{{ section.extra.logo }}" alt="{{ section.title }} logo" class="hero-logo">
+  {% endif %}
   <h1>{{ section.title }}</h1>
   <p class="tagline">{{ section.extra.tagline }}</p>
   <p class="subtitle">{{ section.extra.subtitle }}</p>
   <div class="hero-actions">
-    <a href="{{ config.base_url }}/docs/getting-started/installation/" class="btn btn-primary">Get started</a>
-    <a href="{{ config.base_url }}/comparison/" class="btn btn-secondary">Compare to MO2</a>
+    <a href="{{ section.extra.primary_cta.href }}" class="btn btn-primary">{{ section.extra.primary_cta.label }}</a>
+    <a href="{{ section.extra.secondary_cta.href }}" class="btn btn-secondary">{{ section.extra.secondary_cta.label }}</a>
   </div>
 </section>
 
@@ -24,8 +27,13 @@
   </div>
 </section>
 
-<section class="quick-install">
-  <h2>Quick install</h2>
-  <pre><code>nix run codeberg:caniko/rs-modde</code></pre>
+<section class="landing-content">
+  {{ section.content | safe }}
+</section>
+
+<section class="landing-content" id="supported-games">
+  <h2>Supported Games</h2>
+  <p>The table below is rendered from the canonical <a href="https://codeberg.org/caniko/rs-modde/src/branch/trunk/docs/capability-matrix.toml"><code>docs/capability-matrix.toml</code></a> source file.</p>
+  {% include "shortcodes/games.html" %}
 </section>
 {% endblock %}
