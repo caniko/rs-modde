@@ -73,6 +73,8 @@
 
         toolchain = rs-harbor.lib.mkToolchain {inherit pkgs;};
         inherit (toolchain) craneLib;
+        cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+        moddeVersion = cargoToml.workspace.package.version or cargoToml.package.version;
         simitPackage = simit.packages.${system}.default;
         simitCli = pkgs.writeShellApplication {
           name = "simit";
@@ -115,7 +117,7 @@
         # Documentation site built with Zola + AdiDoks theme
         docs = pkgs.stdenv.mkDerivation {
           pname = "modde-docs";
-          version = "0.1.0";
+          version = moddeVersion;
           src = lib.fileset.toSource {
             root = ./.;
             fileset = lib.fileset.maybeMissing ./docs/site;
@@ -137,7 +139,7 @@
         # Presentation website built with Zola (custom templates)
         website = pkgs.stdenv.mkDerivation {
           pname = "modde-website";
-          version = "0.1.0";
+          version = moddeVersion;
           src = lib.fileset.toSource {
             root = ./.;
             fileset = lib.fileset.unions [
@@ -202,7 +204,7 @@
 
         commonArgs = {
           pname = "modde";
-          version = "0.1.0";
+          version = moddeVersion;
           inherit src nativeBuildInputs buildInputs;
           strictDeps = true;
           SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
