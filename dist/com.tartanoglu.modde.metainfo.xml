@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.tartanoglu.modde</id>
+  <name>modde</name>
+  <summary>NixOS-native game mod manager</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <developer id="com.tartanoglu">
+    <name>Can Tartanoglu</name>
+  </developer>
+  <description>
+    <p>
+      modde is a declarative, NixOS-friendly mod manager for PC games.
+      It handles Bethesda titles (Skyrim, Fallout, Starfield), Cyberpunk
+      2077, Stellar Blade, and integrates with Wabbajack, Nexus Mods,
+      FOMOD, and BAIN installers without requiring a Windows VM.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.tartanoglu.modde.desktop</launchable>
+  <url type="homepage">https://modde.rs</url>
+  <url type="bugtracker">https://codeberg.org/caniko/rs-modde/issues</url>
+  <url type="vcs-browser">https://codeberg.org/caniko/rs-modde</url>
+  <categories>
+    <category>Game</category>
+    <category>Utility</category>
+  </categories>
+  <screenshots>
+    <!-- TODO: replace with real screenshots once GUI captures are available -->
+    <screenshot type="default">
+      <caption>Mod list view</caption>
+      <image>https://modde.rs/screenshots/mod-list.png</image>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <!-- Top entry mirrors CHANGELOG.md's most recent version + date -->
+    <release version="0.2.0" date="2026-05-19"/>
+    <release version="0.1.0" date="2026-04-13"/>
+  </releases>
+</component>
