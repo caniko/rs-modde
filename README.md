@@ -111,6 +111,41 @@ nix develop . -c cargo build --release
 
 Use `nix develop . -c cargo test --workspace` for authoritative validation. A plain `cargo test --workspace` outside the Nix shell is not a reliable signal because `openssl-sys` will fail to locate OpenSSL on an unprepared host.
 
+### macOS
+
+modde ships ad-hoc-signed macOS binaries (no Apple Developer ID, no notarization - we don't pay Apple). The first time you run a downloaded binary, macOS will quarantine it and Gatekeeper will refuse to launch it. Clear the quarantine attribute once, then run normally:
+
+```bash
+tar xzf modde-<version>-aarch64-darwin.tar.gz
+xattr -dr com.apple.quarantine modde modde-ui
+./modde --help
+```
+
+The `xattr -dr` step removes the "downloaded from the internet" flag that triggers Gatekeeper. The binaries are still ad-hoc signed, so subsequent runs work without further intervention.
+
+If you'd rather have notarized binaries, that requires an Apple Developer ID ($99/yr). [Open an issue][issues] if you want to fund or contribute notarization.
+
+### Windows
+
+modde's Windows `.exe` artifacts are unsigned (we don't have an EV code-signing certificate). On first run, Windows SmartScreen will pop a blue dialog saying "Windows protected your PC". Click **More info**, then **Run anyway**.
+
+The binaries are deterministically built on our infrastructure (see `.forgejo/workflows/release.yml`) and the `SHA256SUMS.txt` shipped alongside each release lets you verify the download. If you'd like signed binaries, see the note in the macOS section - same constraint.
+
+## Privacy
+
+### Telemetry
+
+modde has a `remote-telemetry` Cargo feature in `modde-cli`. It is **opt-in** (off by default in published builds) and currently a **no-op stub** - the feature compiles a `detritus` client, but no live endpoint is configured. Nothing is sent anywhere today.
+
+When/if a telemetry backend is stood up, this README and the CHANGELOG will document:
+
+- exactly what is collected,
+- the opt-in flag,
+- the endpoint URL,
+- the data retention policy.
+
+Until then: assume modde sends nothing. If you want to confirm, `cargo tree -e features` will show whether `remote-telemetry` is active in your build (it isn't, unless you explicitly enabled it).
+
 ## Home-Manager Module
 
 A NixOS home-manager module is included for declarative mod profile configuration:
@@ -212,3 +247,5 @@ See [SECURITY.md](SECURITY.md) for the security policy.
 ## License
 
 GPL-3.0-only
+
+[issues]: https://codeberg.org/caniko/rs-modde/issues
