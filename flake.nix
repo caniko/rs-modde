@@ -314,6 +314,43 @@
                   ];
                 };
             in pkgs.writeText "modde-ui-flatpak-manifest.json" (builtins.toJSON flatpakManifestWithMetainfo);
+
+            homebrew-formula = let
+              versionField = moddeVersion;
+              baseUrl = "https://codeberg.org/caniko/rs-modde/releases/download";
+              archiveUrl = arch: os:
+                "${baseUrl}/${versionField}/modde-${versionField}-${arch}-${os}.tar.gz";
+              formula = rs-harbor.lib.mkHomebrewFormula {
+                inherit pkgs;
+                name = "modde";
+                version = versionField;
+                description = "Cross-platform game mod manager";
+                homepage = "https://modde.tartanoglu.com";
+                license = "GPL-3.0-only";
+                platforms = {
+                  darwin_arm = {
+                    url = archiveUrl "aarch64" "darwin";
+                    sha256 = ":no_check";
+                  };
+                  darwin_intel = {
+                    url = archiveUrl "x86_64" "darwin";
+                    sha256 = ":no_check";
+                  };
+                  linux_arm = {
+                    url = archiveUrl "aarch64" "linux";
+                    sha256 = ":no_check";
+                  };
+                  linux_intel = {
+                    url = archiveUrl "x86_64" "linux";
+                    sha256 = ":no_check";
+                  };
+                };
+                binaries = ["modde" "modde-ui"];
+                testBlock = ''
+                  system "#{bin}/modde", "--version"
+                '';
+              };
+            in formula.formulaPath;
           }
           // lib.optionalAttrs pkgs.stdenv.isLinux {
             appimage-cli = rs-harbor.lib.mkAppImage {
