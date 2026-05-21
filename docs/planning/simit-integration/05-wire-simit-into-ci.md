@@ -104,6 +104,7 @@ is a good outcome. The right call is to write down "we're not using it" once.
              exit 1
            fi
    ```
+   Note: the `install-nix-action` step is superseded by `../purge-github-references/02-drop-install-nix-action.md`; keep this snippet as historical planning context.
    `fetch-depth: 0` is required because simit's git preflight reads the full
    history to check tag-existence and HEAD signing state; the default shallow
    clone breaks that.
