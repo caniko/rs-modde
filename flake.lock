@@ -294,11 +294,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1779178337,
-        "narHash": "sha256-Li/4FkvFVy78tTpnj8GgVHGEk4osTAk0a7stajs+P28=",
+        "lastModified": 1779355832,
+        "narHash": "sha256-BHYGnZHRPPHkfxKG7kVzCl0fk+zZ3AkxPrtWtSTM0nQ=",
         "ref": "refs/heads/main",
-        "rev": "6d7f27d99966c23210cc49392822167e29569433",
-        "revCount": 40,
+        "rev": "f72691cd07276b7d8e334dc4d0a2e2528bbb77ac",
+        "revCount": 42,
         "type": "git",
         "url": "https://codeberg.org/caniko/rs-harbor.git"
       },
