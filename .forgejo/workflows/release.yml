@@ -8,7 +8,7 @@ name: release
       - '[0-9]*'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ gitea.workflow }}-${{ gitea.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -25,19 +25,19 @@ jobs:
 
       - name: Validate tag
         run: |
-          VERSION="$GITHUB_REF_NAME"
+          VERSION="$GITEA_REF_NAME"
           echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
           test "$(nix eval --raw .#modde.version)" = "$VERSION"
 
       - name: Rewrite modde.spec Version
         run: |
-          VERSION="$GITHUB_REF_NAME"
+          VERSION="$GITEA_REF_NAME"
           sed -i "0,/^Version:.*$/s//Version:        ${VERSION}/" modde.spec
           grep '^Version:' modde.spec
 
       - name: Build SRPM for COPR
         run: |
-          VERSION="$GITHUB_REF_NAME"
+          VERSION="$GITEA_REF_NAME"
           git archive --format=tar.gz --prefix=rs-modde/ -o "rs-modde-${VERSION}.tar.gz" HEAD
 
           nix shell nixpkgs#rpm nixpkgs#cargo nixpkgs#rustc -c bash <<'SCRIPT'
@@ -70,7 +70,7 @@ jobs:
 
       - name: Build release artifacts
         run: |
-          VERSION="$GITHUB_REF_NAME"
+          VERSION="$GITEA_REF_NAME"
           mkdir -p release
 
           nix build .#modde --out-link linux-result
@@ -122,7 +122,7 @@ jobs:
           nix shell nixpkgs#curl nixpkgs#jq -c bash <<'SCRIPT'
           set -euo pipefail
 
-          tag="$GITHUB_REF_NAME"
+          tag="$GITEA_REF_NAME"
           release_payload=$(
             jq -n \
               --arg tag "$tag" \
