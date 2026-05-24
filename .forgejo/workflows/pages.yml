@@ -8,7 +8,7 @@ name: pages
       - trunk
 
 concurrency:
-  group: ${{ gitea.workflow }}-${{ gitea.ref }}
+  group: ${{ codeberg.workflow }}-${{ codeberg.ref }}
   cancel-in-progress: true
 
 jobs:

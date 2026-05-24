@@ -129,6 +129,8 @@ pub enum ButtonAction {
     OpenManageCustomGames,
     CloseManageCustomGames,
     RemoveCustomGame(String),
+    OpenUpdateReleasePage,
+    DismissUpdateBanner,
 }
 
 impl ButtonActionDescription for ButtonAction {
@@ -367,6 +369,12 @@ impl ButtonActionDescription for ButtonAction {
             ButtonAction::RemoveCustomGame(_) => {
                 "Remove this user-defined game from the runtime registry."
             }
+            ButtonAction::OpenUpdateReleasePage => {
+                "Open the latest modde release page in your browser."
+            }
+            ButtonAction::DismissUpdateBanner => {
+                "Hide this update notification for the current session."
+            }
         }
     }
 }
@@ -491,6 +499,8 @@ impl From<ButtonAction> for Message {
             ButtonAction::OpenManageCustomGames => Message::OpenManageCustomGames,
             ButtonAction::CloseManageCustomGames => Message::CloseManageCustomGames,
             ButtonAction::RemoveCustomGame(id) => Message::RemoveCustomGame(id),
+            ButtonAction::OpenUpdateReleasePage => Message::OpenUpdateReleasePage,
+            ButtonAction::DismissUpdateBanner => Message::DismissUpdateBanner,
         }
     }
 }

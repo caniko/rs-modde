@@ -14,6 +14,29 @@ use modde_sources::nexus::updates::{TrackedMod, check_updates};
 
 use super::load_profile_or_default;
 
+pub async fn handle_product_check() -> Result<()> {
+    let settings = modde_core::settings::AppSettings::load();
+    if !modde_core::update_check::update_checks_enabled(&settings) {
+        println!("modde update checks are disabled.");
+        return Ok(());
+    }
+
+    match modde_core::update_check::check_latest_uncached(&settings).await? {
+        Some(update) => {
+            println!(
+                "modde {} is available (current: {}).",
+                update.latest_version, update.current_version
+            );
+            println!("{}", update.release_url);
+        }
+        None => {
+            println!("modde {} is up to date.", env!("CARGO_PKG_VERSION"));
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn handle_check(
     profile_name: Option<String>,
     game_id: Option<String>,

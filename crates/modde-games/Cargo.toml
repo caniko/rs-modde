@@ -3,11 +3,27 @@ name = "modde-games"
 version = "0.2.0"
 description = "Game plugin implementations for modde"
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
+license-file = "../../LICENSE"
 repository.workspace = true
 authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
+readme = "../../README.md"
+documentation = "https://docs.rs/modde-games"
+include = [
+    "../../LICENSE",
+    "../../README.md",
+    "CHANGELOG.md",
+    "Cargo.toml",
+    "src/**",
+    "tests/**",
+]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

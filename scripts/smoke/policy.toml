@@ -1,0 +1,12 @@
+# Release smoke policy.
+#
+# The driver treats every smoke script failure as blocking. Individual scripts may
+# downgrade style-only diagnostics to warnings when the release artifact itself
+# still rebuilds, installs, and reports the expected version.
+
+[blocking]
+default = true
+
+[warning]
+lintian = "Debian packaging style diagnostics only; install/runtime failures remain blocking."
+rpmlint = "RPM packaging style diagnostics only; rebuild/install/runtime failures remain blocking."

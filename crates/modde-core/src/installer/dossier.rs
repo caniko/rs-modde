@@ -1,7 +1,7 @@
 //! Unknown-mod dossier writer.
 //!
 //! When [`analyze`](super::analyze::analyze) returns
-//! [`InstallMethod::Unknown`](super::types::InstallMethod::Unknown) or
+//! [`InstallMethod::Unknown`] or
 //! [`execute`](super::execute::execute) surfaces
 //! [`InstallerError::UnknownMethod`](super::types::InstallerError::UnknownMethod),
 //! the caller dumps a dossier so a Claude Code skill can extend the

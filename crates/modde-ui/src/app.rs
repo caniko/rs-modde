@@ -158,6 +158,7 @@ pub struct Modde {
     pub compact_mod_list: bool,
     /// Sidebar groups the user has collapsed for this session.
     pub collapsed_sidebar_groups: HashSet<SidebarGroup>,
+    pub update_available: Option<modde_core::update_check::UpdateInfo>,
 }
 
 fn load_hidden_files(
@@ -3692,6 +3693,9 @@ pub enum Message {
 
     // Misc
     Noop,
+    UpdateCheckLoaded(Result<Option<modde_core::update_check::UpdateInfo>, String>),
+    OpenUpdateReleasePage,
+    DismissUpdateBanner,
 }
 
 // ─── Application Logic ──────────────────────────────────────────
@@ -3781,6 +3785,7 @@ impl Modde {
             ],
             compact_mod_list: false,
             collapsed_sidebar_groups: HashSet::from([SidebarGroup::General]),
+            update_available: None,
         };
         app.refresh_nexus_api_key_state();
 
@@ -3796,7 +3801,20 @@ impl Modde {
             app.accept_game_selection(game_id, None);
         }
 
-        (app, window::oldest().map(Message::GotWindowId))
+        (
+            app,
+            Task::batch([
+                window::oldest().map(Message::GotWindowId),
+                Task::perform(
+                    async {
+                        modde_core::update_check::check_latest()
+                            .await
+                            .map_err(|error| error.to_string())
+                    },
+                    Message::UpdateCheckLoaded,
+                ),
+            ]),
+        )
     }
 
     fn title(&self) -> String {
@@ -3812,6 +3830,27 @@ impl Modde {
             Message::ExternalRefresh => {
                 self.reload_profile();
                 self.status_message = "Refreshed from external change".to_string();
+            }
+            Message::UpdateCheckLoaded(result) => match result {
+                Ok(update) => {
+                    self.update_available = update;
+                }
+                Err(error) => {
+                    tracing::debug!(%error, "GUI update check failed");
+                }
+            },
+            Message::OpenUpdateReleasePage => {
+                if let Some(update) = self.update_available.clone() {
+                    return Task::perform(
+                        async move {
+                            let _ = open::that(update.release_url);
+                        },
+                        |()| Message::Noop,
+                    );
+                }
+            }
+            Message::DismissUpdateBanner => {
+                self.update_available = None;
             }
 
             // ── Navigation ───────────────────────────────────────
@@ -7057,12 +7096,26 @@ impl Modde {
 
         let status_bar = container(text(&self.status_message).size(12)).padding(5);
 
-        let main_layout = column![
-            title_bar,
-            row![sidebar, content].spacing(0).height(Length::Fill),
-            status_bar,
-        ]
-        .spacing(0);
+        let update_banner = self
+            .update_available
+            .as_ref()
+            .map(crate::components::update_banner::view);
+
+        let body: Element<Message> = if let Some(update_banner) = update_banner {
+            column![
+                update_banner,
+                row![sidebar, content].spacing(0).height(Length::Fill)
+            ]
+            .spacing(0)
+            .into()
+        } else {
+            row![sidebar, content]
+                .spacing(0)
+                .height(Length::Fill)
+                .into()
+        };
+
+        let main_layout = column![title_bar, body, status_bar,].spacing(0);
 
         let mut base: Element<Message> = container(main_layout)
             .width(Length::Fill)
@@ -7438,6 +7491,7 @@ mod tests {
             ],
             compact_mod_list: false,
             collapsed_sidebar_groups: HashSet::from([SidebarGroup::General]),
+            update_available: None,
         }
     }
 

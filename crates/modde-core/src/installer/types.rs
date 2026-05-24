@@ -150,8 +150,8 @@ impl InstallMethod {
     }
 }
 
-/// A complete install description produced by [`analyze`](super::analyze) and
-/// consumed by [`execute`](super::execute).
+/// A complete install description produced by [`super::analyze::analyze`] and
+/// consumed by [`super::execute::execute`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstallPlan {
     pub method: InstallMethod,
@@ -238,8 +238,8 @@ impl InstallStatus {
     }
 }
 
-/// Errors raised by [`analyze`](super::analyze) and
-/// [`execute`](super::execute).
+/// Errors raised by [`super::analyze::analyze`] and
+/// [`super::execute::execute`].
 #[derive(Debug, thiserror::Error)]
 pub enum InstallerError {
     #[error("I/O error during install: {0}")]

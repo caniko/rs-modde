@@ -1,7 +1,7 @@
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
-use git2::{IndexAddOption, Repository, Signature};
+use git2::{IndexAddOption, Repository, RepositoryInitOptions, Signature};
 use sha2::{Digest, Sha256};
 use tracing::info;
 
@@ -318,7 +318,9 @@ impl<'a> SaveManager<'a> {
         }
 
         std::fs::create_dir_all(&vault_path)?;
-        let repo = Repository::init(&vault_path)
+        let mut opts = RepositoryInitOptions::new();
+        opts.external_template(false).initial_head("main");
+        let repo = Repository::init_opts(&vault_path, &opts)
             .map_err(|e| CoreError::SaveVaultError(format!("failed to init vault: {e}")))?;
 
         // Create an initial empty commit on `main` so we have a root

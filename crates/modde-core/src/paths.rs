@@ -41,6 +41,27 @@ pub fn config_dir() -> PathBuf {
     dirs::config_dir().unwrap_or_else(|| home_dir().join(".config"))
 }
 
+/// Platform-aware cache directory.
+///
+/// - Linux: `$XDG_CACHE_HOME` or `~/.cache`
+/// - macOS: `~/Library/Caches`
+/// - Windows: `%LOCALAPPDATA%`
+#[must_use]
+pub fn cache_dir() -> PathBuf {
+    #[cfg(target_os = "linux")]
+    if let Ok(xdg) = std::env::var("XDG_CACHE_HOME") {
+        return PathBuf::from(xdg);
+    }
+
+    dirs::cache_dir().unwrap_or_else(|| home_dir().join(".cache"))
+}
+
+/// Root of modde's non-essential cache files: `<cache_dir>/modde/`.
+#[must_use]
+pub fn modde_cache_dir() -> PathBuf {
+    cache_dir().join("modde")
+}
+
 /// Root of all modde data: `<data_dir>/modde/` or the overridden path.
 pub fn modde_data_dir() -> PathBuf {
     if let Some(dir) = DATA_DIR_OVERRIDE.get() {

@@ -1,8 +1,8 @@
 //! Mod installer pipeline.
 //!
 //! Turns a downloaded archive into a staged mod directory + DB manifest.
-//! See [`types`] for the data model and [`analyze`] for the detection
-//! pipeline; [`execute`] stages files into the store, and [`dossier`]
+//! See [`types`] for the data model and [`analyze()`] for the detection
+//! pipeline; [`execute()`] stages files into the store, and [`dossier`]
 //! handles the unknown-type escalation path.
 
 pub mod analyze;

@@ -247,7 +247,7 @@ pub fn build_full_conflict_map(
 /// Analyse a conflict map to produce a full collision report.
 ///
 /// `priority_order` lists mods from lowest to highest priority (same as
-/// [`ResolvedLoadOrder::order`]). `hidden` contains `(mod_id, rel_path)`
+/// [`crate::resolver::ResolvedLoadOrder::order`]). `hidden` contains `(mod_id, rel_path)`
 /// pairs that have been hidden by the user.
 pub fn analyze_collisions(
     conflict_map: &ConflictMap,

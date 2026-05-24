@@ -99,12 +99,68 @@ See [docs/copr-release.md](docs/copr-release.md) for the Fedora COPR wiring (one
 ### Release tooling
 
 - Run releases through `cargo xtask release {patch|minor|major|prerelease} -m "<message>"`.
-- The xtask wrapper delegates to `simit release` from the devShell.
+- The xtask wrapper delegates to `simit release` from the devShell. For a new minor release candidate, use `cargo xtask release minor --pre rc.1 -m "Release 1.0.0-rc.1"`; for the next RC on an already-prerelease version, use `cargo xtask release prerelease --pre rc.2 -m "Release 1.0.0-rc.2"`.
 - Tags are bare semver with no `v` prefix; `.forgejo/workflows/release.yml` triggers on `[0-9]*`.
+- Stable tags must match `X.Y.Z`. Prerelease tags must match `X.Y.Z-rc.N`, `X.Y.Z-beta.N`, or `X.Y.Z-alpha.N`.
+- Every tag must have a matching `## [X.Y.Z] - YYYY-MM-DD` or `## [X.Y.Z-rc.N] - YYYY-MM-DD` heading in `CHANGELOG.md` before CI will build.
+- Prerelease tags run the full build, signing, smoke, Codeberg release, Attic push, and COPR upload, but Codeberg marks them as prereleases. Stable-only channels are skipped: crates.io, Homebrew, AUR `modde-bin`, winget, Scoop, and Flathub.
+- COPR prereleases publish to `caniko/rs-modde-testing`; create that COPR project before the first RC tag.
 - Keep the `## [Unreleased]` heading in `CHANGELOG.md` exactly as-is so simit can update it.
 - rs-modde does not run `simit init-ci --check` or `simit init-flake --check`.
 - Those checks would treat this repo's bespoke `atlas` workflows and rs-harbor-driven flake as drift.
-- The rationale and revisit conditions live in [docs/planning/simit-integration/DECISION.md](docs/planning/simit-integration/DECISION.md).
+- The rationale, revisit conditions, and other non-obvious choices live in [docs/architecture-decisions.md](docs/architecture-decisions.md).
+
+### Hotfix release
+
+Hotfixes ship from the last good release tag, not from `trunk`, when `trunk`
+contains unrelated or unfinished work.
+
+```sh
+git fetch --tags origin
+git switch -c hotfix/0.2.0 0.2.0
+git cherry-pick <fix-commit>
+cargo xtask check
+cargo xtask release patch -m "Release 0.2.1"
+git push origin hotfix/0.2.0 0.2.1
+```
+
+For a hotfix on a prerelease line, use `cargo xtask release prerelease --pre
+rc.2 -m "Release 0.3.0-rc.2"`. No back-merge from `trunk` is required to
+publish a hotfix. After the release is out, either cherry-pick the fix back to
+`trunk` or open a follow-up PR that explains why the fix is hotfix-only.
+
+### Release announcements
+
+Stable tags announce after the Codeberg release is created. Prerelease tags do
+not announce. Configure these Forgejo secrets to enable announcements:
+
+- `MASTODON_TOKEN` and `MASTODON_BASE_URL`, for example `https://fosstodon.org`
+- `MATRIX_TOKEN`, `MATRIX_HOMESERVER`, and `MATRIX_ROOM`
+
+When any of those secrets are absent, CI logs a skip and keeps the release
+running. The announcement body includes the Codeberg release URL and the first
+five lines from the matching `CHANGELOG.md` section.
+
+### Yank / withdraw a release
+
+Use this drill when a published stable release must be pulled. Announce the
+withdrawal first if users may already have downloaded artifacts.
+
+```sh
+VERSION=0.2.1
+```
+
+- crates.io: `cargo yank --version "$VERSION" -p modde-cli`; repeat for every published crate at that version.
+- Codeberg release: delete or mark the release draft-only from the Codeberg UI, then delete the tag only if the tag itself is invalid: `git push origin ":refs/tags/${VERSION}"`.
+- Homebrew tap: in `caniko/homebrew-modde`, revert the formula bump commit with `git revert <commit> && git push`.
+- AUR: revert the affected package repo commit and push. Use `git push --force-with-lease` only if the bad commit must disappear from the AUR history.
+- winget: comment `Withdrawn: modde ${VERSION}` on the generated PR and close it. If merged, open a removal/revert PR in `microsoft/winget-pkgs`.
+- Scoop: revert the bucket manifest bump in `caniko/scoop-modde` and push.
+- Flathub: close the release PR if unmerged. If merged, open a `revert/${VERSION}` PR against `flathub/com.tartanoglu.modde`.
+- COPR: find the build id with `copr-cli list-builds caniko/rs-modde --output-format json`, then run `copr-cli delete-build <build-id>`. Use `caniko/rs-modde-testing` for prerelease builds.
+
+After rollback, add a `CHANGELOG.md` note under `Unreleased` that names the
+withdrawn version and points to the fixed follow-up release.
 
 ## License
 

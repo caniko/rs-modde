@@ -22,6 +22,24 @@ pub struct AppSettings {
     pub theme: String,
     #[serde(default)]
     pub selected_game: Option<String>,
+    #[serde(default)]
+    pub update_check: UpdateCheckSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCheckSettings {
+    #[serde(default = "default_update_check_enabled")]
+    pub enabled: bool,
+}
+
+const fn default_update_check_enabled() -> bool {
+    true
+}
+
+impl Default for UpdateCheckSettings {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -11,10 +11,10 @@ no-default-features = false
 
 [advisories]
 version = 2
+unmaintained = "all"
 yanked = "warn"
 ignore = [
-  # RUSTSEC-2024-0436: transitive through iced/wgpu/image; no patched release available yet.
-  "RUSTSEC-2024-0436",
+  { id = "RUSTSEC-2024-0436", reason = "Transitive through iced/wgpu/image; no patched release available yet. Remove once iced/wgpu can move to a fixed image stack." },
 ]
 
 [licenses]

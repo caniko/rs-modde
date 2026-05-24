@@ -740,6 +740,9 @@ enum UpdateAction {
         /// Time period to check: "1d", "1w", or "1m"
         #[arg(long, default_value = "1w")]
         period: String,
+        /// Check Nexus-tracked profile mods instead of modde itself.
+        #[arg(long)]
+        mods: bool,
     },
     /// Download and install the latest MAIN file for any tracked mod
     /// in the profile that has a newer version on Nexus.
@@ -1166,10 +1169,14 @@ fn main() -> Result<()> {
     // running GUI(s). Read-only commands skip the notify so we don't
     // spam GUIs on `modde profile show` or `modde update check`.
     let mutates_state = command_mutates_state(&cli.command);
+    let lazy_update_check = !mutates_state && command_runs_lazy_product_update_check(&cli.command);
 
     let result = run_command(cli);
     if mutates_state && result.is_ok() {
         let _ = modde_core::ipc::notify_refresh();
+    }
+    if lazy_update_check && result.is_ok() {
+        maybe_print_product_update_notice();
     }
     result
 }
@@ -1544,7 +1551,14 @@ fn run_command(cli: Cli) -> Result<()> {
                     profile,
                     game,
                     period,
-                } => commands::update::handle_check(profile, game, period).await?,
+                    mods,
+                } => {
+                    if mods || profile.is_some() || game.is_some() {
+                        commands::update::handle_check(profile, game, period).await?;
+                    } else {
+                        commands::update::handle_product_check().await?;
+                    }
+                }
                 UpdateAction::Apply {
                     profile,
                     game,
@@ -1779,6 +1793,40 @@ fn command_mutates_state(cmd: &Commands) -> bool {
     }
 }
 
+fn command_runs_lazy_product_update_check(cmd: &Commands) -> bool {
+    !matches!(
+        cmd,
+        Commands::Gui
+            | Commands::Dev { .. }
+            | Commands::Update {
+                action: UpdateAction::Check { .. }
+            }
+    )
+}
+
+fn maybe_print_product_update_notice() {
+    let settings = modde_core::settings::AppSettings::load();
+    if !modde_core::update_check::update_checks_enabled(&settings) {
+        return;
+    }
+
+    let Ok(runtime) = tokio::runtime::Runtime::new() else {
+        return;
+    };
+    match runtime.block_on(modde_core::update_check::check_latest_with_settings(
+        &settings,
+    )) {
+        Ok(Some(update)) => {
+            eprintln!(
+                "modde update available: {} (current: {}) - {}",
+                update.latest_version, update.current_version, update.release_url
+            );
+        }
+        Ok(None) => {}
+        Err(error) => tracing::debug!(%error, "product update check failed"),
+    }
+}
+
 #[cfg(test)]
 mod mutation_classification_tests {
     //! Tests for [`command_mutates_state`].
@@ -1829,6 +1877,7 @@ mod mutation_classification_tests {
                 profile: None,
                 game: None,
                 period: "1w".into(),
+                mods: false,
             },
         }
     }

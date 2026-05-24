@@ -4,4 +4,4 @@ Name=Modde
 Comment=Cross-platform game mod manager
 Exec=modde-ui
 Icon=com.tartanoglu.modde
-Categories=Game;Utility;
+Categories=Game;

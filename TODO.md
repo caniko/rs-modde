@@ -7,7 +7,7 @@ Living checklist of feature, test, and infrastructure gaps. Tick items as they l
 ## 1. Feature gaps
 
 ### HM module tool coverage
-- [x] Phase 01 decision: hybrid `profiles.<name>.tools` shape, tool activation after `modde deploy`, and eager Nix-pinned release assets. See `docs/planning/hm-module-tool-coverage`.
+- [x] Phase 01 decision: hybrid `profiles.<name>.tools` shape, tool activation after `modde deploy`, and eager Nix-pinned release assets. See [docs/architecture-decisions.md](docs/architecture-decisions.md#home-manager-programsmoddeprofilesnametools-contract).
 
 ### 1.1 modde-cli
 - [x] Executable management — named executables registry (`executable_configs` table; upsert on `(game_id, name)`)

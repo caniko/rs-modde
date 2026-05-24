@@ -26,7 +26,7 @@
     };
 
     simit = {
-      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=0908c75763668a0270aeec2ed4f0060ad0b402e8";
+      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=5ebd4e63e66a3226243ff49f6319f92e88738501";
       inputs.rs-harbor.follows = "rs-harbor";
       inputs.nixpkgs.follows = "rs-harbor/nixpkgs";
       inputs.rust-overlay.follows = "rs-harbor/rust-overlay";
@@ -235,6 +235,86 @@
         windowsTarget = "x86_64-pc-windows-gnu";
         buildPlatformSuffix =
           lib.strings.toLower pkgs.pkgsBuildHost.stdenv.hostPlatform.rust.cargoEnvVarTarget;
+        aarch64LinuxTarget = "aarch64-unknown-linux-gnu";
+        aarch64LinuxTargetSuffix =
+          lib.strings.replaceStrings ["-"] ["_"] aarch64LinuxTarget;
+        pkgsAarch64Linux = pkgs.pkgsCross.aarch64-multiplatform;
+        toolchainAarch64 = rs-harbor.lib.mkToolchain {pkgs = pkgsAarch64Linux;};
+        craneLibAarch64 = toolchainAarch64.craneLib;
+        darwinSigtool = pkgs.darwin.sigtool;
+        signDarwinBinaries = ''
+          for bin in "$out"/bin/*; do
+            if [ -f "$bin" ]; then
+              ${lib.getExe' darwinSigtool "codesign"} --sign - --force "$bin"
+            fi
+          done
+        '';
+        mkDarwinUnavailable = name:
+          pkgs.runCommand name {} ''
+            echo "ERROR: ${name} requires osxcross on x86_64-linux with a realized macOS SDK." >&2
+            exit 1
+          '';
+        darwinNativeBuildInputs = nativeBuildInputs ++ [darwinSigtool];
+        darwinArgs = pname:
+          commonArgs
+          // lib.optionalAttrs (cross.osxcrossRustHelpers != null) cross.osxcrossRustHelpers.commonEnv
+          // {
+            inherit pname;
+            buildInputs = [];
+            nativeBuildInputs = darwinNativeBuildInputs;
+            PKG_CONFIG_ALLOW_CROSS = "1";
+            cargoBuildExtraArgs = "--workspace";
+            doCheck = false;
+            postInstall = signDarwinBinaries;
+          };
+        darwinCrossBuilderX86 =
+          if cross.osxcrossRustHelpers != null
+          then
+            cross.osxcrossRustHelpers.mkCrossBuilder {
+              inherit craneLib;
+              target = "x86_64-apple-darwin";
+            }
+          else null;
+        darwinCrossBuilderArm =
+          if cross.osxcrossRustHelpers != null
+          then
+            cross.osxcrossRustHelpers.mkCrossBuilder {
+              inherit craneLib;
+              target = "aarch64-apple-darwin";
+            }
+          else null;
+        darwinX86Args = darwinArgs "modde-darwin-x86_64";
+        darwinArmArgs = darwinArgs "modde-darwin-aarch64";
+        aarch64LinuxBuildInputs = with pkgsAarch64Linux; [
+          openssl
+          dbus
+          wayland
+          libxkbcommon
+          vulkan-loader
+        ];
+        aarch64LinuxNativeBuildInputs =
+          nativeBuildInputs
+          ++ [
+            pkgsAarch64Linux.stdenv.cc
+          ];
+        aarch64LinuxArgs =
+          commonArgs
+          // {
+            pname = "modde-aarch64-linux";
+            buildInputs = aarch64LinuxBuildInputs;
+            nativeBuildInputs = aarch64LinuxNativeBuildInputs;
+            CARGO_BUILD_TARGET = aarch64LinuxTarget;
+            CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER =
+              "${pkgsAarch64Linux.stdenv.cc}/bin/${pkgsAarch64Linux.stdenv.cc.targetPrefix}cc";
+            "CC_${aarch64LinuxTargetSuffix}" =
+              "${pkgsAarch64Linux.stdenv.cc}/bin/${pkgsAarch64Linux.stdenv.cc.targetPrefix}cc";
+            "CXX_${aarch64LinuxTargetSuffix}" =
+              "${pkgsAarch64Linux.stdenv.cc}/bin/${pkgsAarch64Linux.stdenv.cc.targetPrefix}c++";
+            PKG_CONFIG_ALLOW_CROSS = "1";
+            depsBuildBuild = [pkgsAarch64Linux.stdenv.cc];
+            cargoBuildExtraArgs = "--workspace";
+            doCheck = false;
+          };
         windowsBuildInputs = with pkgs.pkgsCross.mingwW64; [
           openssl
           windows.pthreads
@@ -265,55 +345,110 @@
           // {
             cargoArtifacts = windowsCargoArtifacts;
           });
+        aarch64LinuxCargoArtifacts = craneLibAarch64.buildDepsOnly aarch64LinuxArgs;
+        modde-aarch64-linux = craneLibAarch64.buildPackage (aarch64LinuxArgs
+          // {
+            cargoArtifacts = aarch64LinuxCargoArtifacts;
+          });
+        darwinX86CargoArtifacts =
+          if darwinCrossBuilderX86 != null
+          then darwinCrossBuilderX86.buildDepsOnly darwinX86Args
+          else null;
+        modde-darwin-x86_64 =
+          if darwinCrossBuilderX86 != null
+          then darwinCrossBuilderX86.buildPackage (darwinX86Args
+            // {
+              cargoArtifacts = darwinX86CargoArtifacts;
+            })
+          else mkDarwinUnavailable "modde-darwin-x86_64";
+        darwinArmCargoArtifacts =
+          if darwinCrossBuilderArm != null
+          then darwinCrossBuilderArm.buildDepsOnly darwinArmArgs
+          else null;
+        modde-darwin-aarch64 =
+          if darwinCrossBuilderArm != null
+          then darwinCrossBuilderArm.buildPackage (darwinArmArgs
+            // {
+              cargoArtifacts = darwinArmCargoArtifacts;
+            })
+          else mkDarwinUnavailable "modde-darwin-aarch64";
       in {
         packages =
           {
             inherit modde docs website site;
             default = modde;
+            rs-harbor = rs-harbor.packages.${system}.rs-harbor;
+
+            flatpak-cargo-generator = let
+              flatpakCargoGeneratorPy = pkgs.fetchurl {
+                url = "https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/96e2fe8bf7d2e5791ca1bdce2dba373f1e27c425/cargo/flatpak-cargo-generator.py";
+                hash = "sha256-s3PIqxoFN47F2O0GRcexJ7zsfS96F5hpT7xifVcNhWw=";
+              };
+              python = pkgs.python3.withPackages (ps: [
+                ps.aiohttp
+                ps.pyyaml
+                ps.tomlkit
+              ]);
+            in
+              pkgs.writeShellApplication {
+                name = "flatpak-cargo-generator";
+                runtimeInputs = [python];
+                text = ''
+                  exec python3 ${flatpakCargoGeneratorPy} "$@"
+                '';
+              };
 
             flatpak-manifest = let
-              flatpakManifest = rs-harbor.lib.mkFlatpakManifest {
-                inherit pkgs;
-                appId = "com.tartanoglu.modde";
-                pname = "modde-ui";
-                desktopFile = builtins.readFile ./dist/modde-ui.desktop;
-                icon = ./dist/com.tartanoglu.modde.png;
-                finishArgs = [
-                  "--share=ipc"
-                  "--share=network"
-                  "--socket=x11"
+              flatpakAppId = "com.tartanoglu.modde";
+              releaseSourceUrl =
+                "https://codeberg.org/caniko/rs-modde/releases/download/${moddeVersion}/rs-modde-${moddeVersion}.tar.gz";
+              flatpakManifest = {
+                "app-id" = flatpakAppId;
+                runtime = "org.freedesktop.Platform";
+                "runtime-version" = "24.08";
+                sdk = "org.freedesktop.Sdk";
+                "sdk-extensions" = ["org.freedesktop.Sdk.Extension.rust-stable"];
+                command = "modde-ui";
+                "finish-args" = [
                   "--socket=wayland"
+                  "--socket=fallback-x11"
+                  "--share=network"
+                  "--filesystem=home"
                   "--device=dri"
-                  "--socket=pulseaudio"
+                  "--talk-name=org.freedesktop.secrets"
+                ];
+                modules = [
+                  {
+                    name = "modde";
+                    buildsystem = "simple";
+                    "build-options" = {
+                      "append-path" = "/usr/lib/sdk/rust-stable/bin";
+                      env = {
+                        CARGO_HOME = "/run/build/modde/cargo";
+                        CARGO_NET_OFFLINE = "true";
+                      };
+                    };
+                    "build-commands" = [
+                      "install -Dm0644 cargo/config .cargo/config.toml"
+                      "cargo --offline fetch --locked --manifest-path Cargo.toml --verbose"
+                      "cargo build --offline --release --locked --bin modde-ui --verbose"
+                      "install -Dm0755 target/release/modde-ui \${FLATPAK_DEST}/bin/modde-ui"
+                      "install -Dm0644 dist/modde-ui.desktop \${FLATPAK_DEST}/share/applications/\${FLATPAK_ID}.desktop"
+                      "install -Dm0644 dist/com.tartanoglu.modde.png \${FLATPAK_DEST}/share/icons/hicolor/512x512/apps/\${FLATPAK_ID}.png"
+                      "install -Dm0644 dist/com.tartanoglu.modde.metainfo.xml \${FLATPAK_DEST}/share/metainfo/\${FLATPAK_ID}.metainfo.xml"
+                    ];
+                    sources = [
+                      {
+                        type = "archive";
+                        url = releaseSourceUrl;
+                        sha256 = "@SOURCE_TARBALL_SHA256@";
+                      }
+                      "cargo-sources.json"
+                    ];
+                  }
                 ];
               };
-              flatpakManifestJson = builtins.fromJSON flatpakManifest.manifestText;
-              flatpakModule = builtins.elemAt flatpakManifestJson.modules 0;
-              flatpakAppId = flatpakManifestJson."app-id";
-              metainfoPath = builtins.toString ./dist/com.tartanoglu.modde.metainfo.xml;
-              flatpakManifestWithMetainfo =
-                flatpakManifestJson
-                // {
-                  modules = [
-                    (flatpakModule
-                      // {
-                        "build-commands" =
-                          flatpakModule."build-commands"
-                          ++ [
-                            "install -Dm644 ${builtins.baseNameOf metainfoPath} /app/share/metainfo/${flatpakAppId}.metainfo.xml"
-                          ];
-                        sources =
-                          flatpakModule.sources
-                          ++ [
-                            {
-                              type = "file";
-                              path = metainfoPath;
-                            }
-                          ];
-                      })
-                  ];
-                };
-            in pkgs.writeText "modde-ui-flatpak-manifest.json" (builtins.toJSON flatpakManifestWithMetainfo);
+            in pkgs.writeText "com.tartanoglu.modde.json" (builtins.toJSON flatpakManifest);
 
             homebrew-formula = let
               versionField = moddeVersion;
@@ -363,6 +498,9 @@
               program = "${modde}/bin/modde-ui";
               pname = "modde-ui";
             };
+            inherit modde-aarch64-linux;
+            inherit modde-darwin-aarch64;
+            inherit modde-darwin-x86_64;
             inherit modde-windows;
           };
 
@@ -1128,12 +1266,62 @@
             };
           in "${script}/bin/deploy-pages";
         };
+
+        apps.release-smoke = {
+          type = "app";
+          program = let
+            script = pkgs.writeShellApplication {
+              name = "release-smoke";
+              runtimeInputs = with pkgs; [
+                appstream
+                coreutils
+                cosign
+                debootstrap
+                dnf5
+                dpkg
+                file
+                findutils
+                flatpak
+                flatpak-builder
+                git
+                gnugrep
+                gnutar
+                grype
+                gzip
+                jq
+                minisign
+                osslsigncode
+                podman
+                qemu
+                rpm
+                unzip
+                wineWow64Packages.stable
+              ];
+              text = ''
+                repo="''${MODDE_SOURCE_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+                exec "$repo/scripts/smoke/run-smoke.sh" "$@"
+              '';
+            };
+          in "${script}/bin/release-smoke";
+        };
       });
   in
     {
       homeManagerModules.modde = import ./nix/hm-module.nix self;
       lib = {
         inherit mkOutputs;
+      };
+      simitConfig = {
+        release.smoke.command = "nix run .#release-smoke --";
+        homebrew = {
+          tap_url = "https://codeberg.org/caniko/homebrew-modde.git";
+          download_repo = "caniko/rs-modde";
+          binaries = ["modde" "modde-ui"];
+          description = "Cross-platform game mod manager";
+          homepage = "https://modde.tartanoglu.com";
+          license = "GPL-3.0-only";
+          archive_pattern = "modde-{version}-{arch}-{os}.tar.gz";
+        };
       };
     }
     // mkOutputs {};

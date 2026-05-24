@@ -7,7 +7,7 @@ name: ci
   pull_request:
 
 concurrency:
-  group: ${{ gitea.workflow }}-${{ gitea.ref }}
+  group: ${{ codeberg.workflow }}-${{ codeberg.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -36,8 +36,10 @@ jobs:
             experimental-features = nix-command flakes
             substituters = https://attic.candee.baby/canix https://cache.nixos.org
             trusted-public-keys = canix:uqr0nD3I0mfj9BYfZgTZHMaDKfI2yCTtSA5JGTWKUeg= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
-      - name: cargo deny
-        run: nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#cargo-deny -c cargo deny check
+      - name: Check supply-chain policy
+        run: |
+          nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#cargo-deny -c \
+            cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses
 
   test:
     runs-on: atlas

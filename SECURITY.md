@@ -24,3 +24,164 @@ modde handles:
 - Network requests to mod hosting services
 
 Security-relevant areas include API key storage, archive extraction (zip-slip prevention), and symlink handling (path traversal prevention).
+
+## Verifying Releases
+
+Every release is built from a GPG-signed Git tag. Release CI verifies the tag
+against `keys/maintainers.gpg` before publishing artifacts.
+
+Download the artifact you want, `SHA256SUMS.txt`, and
+`SHA256SUMS.txt.minisig` from the same Codeberg release. Verify the signed
+checksum manifest first:
+
+```sh
+minisign -Vm SHA256SUMS.txt -p keys/minisign.pub
+sha256sum -c SHA256SUMS.txt --ignore-missing
+```
+
+The minisign public key is pinned in `keys/minisign.pub`. If this key changes,
+treat the release as a key-rotation event and verify the new key from an
+independent maintainer-controlled channel before trusting it.
+
+Tarballs, AppImages, and source RPMs also ship with Sigstore signatures and
+SLSA provenance:
+
+```sh
+cosign verify-blob \
+  --bundle modde-<version>-x86_64-linux.tar.gz.cosign.bundle \
+  --certificate-identity-regexp '.*caniko/rs-modde.*' \
+  --certificate-oidc-issuer-regexp '.*' \
+  modde-<version>-x86_64-linux.tar.gz
+
+cosign verify-blob-attestation \
+  --bundle modde-<version>-x86_64-linux.tar.gz.intoto.bundle \
+  --type slsaprovenance1 \
+  --certificate-identity-regexp '.*caniko/rs-modde.*' \
+  --certificate-oidc-issuer-regexp '.*' \
+  modde-<version>-x86_64-linux.tar.gz
+```
+
+The attestation payload is also published as
+`modde-<version>-x86_64-linux.tar.gz.intoto.jsonl` for review tooling. Its SLSA
+predicate records the source Git commit, `flake.lock` digest, release workflow
+digest, and the `https://attic.candee.baby/canix` substituter trust root used
+for release builds.
+
+If Forgejo Actions OIDC is accepted by Sigstore, CI uses keyless Fulcio/Rekor
+signing. If that is unavailable, CI falls back to the `COSIGN_PRIVATE_KEY` and
+`COSIGN_PASSWORD` Forgejo secrets; the release audit report records this
+deviation. Minisign key rotation requires generating a new offline keypair,
+updating `keys/minisign.pub`, replacing the Forgejo `MINISIGN_SECRET_KEY` and
+`MINISIGN_PASSWORD` secrets, and publishing a signed release note that names
+both the old and new public keys.
+
+## Windows Code Signing
+
+Windows release artifacts are Authenticode-signed after the Nix
+`modde-windows` build and before tar/zip packaging, checksum generation, and
+Sigstore signing. The Nix output itself remains unsigned because private
+certificate material must not enter the Nix store; the user-facing Windows
+artifacts are the files in the Codeberg release.
+
+The selected CI path for the current Forgejo `atlas` runner is a publicly
+trusted Authenticode certificate exported as a PKCS#12 bundle and supplied only
+through Forgejo secrets:
+
+- `WINDOWS_SIGNING_PFX`: base64-encoded `.p12` / `.pfx` certificate bundle
+- `WINDOWS_SIGNING_PASS`: passphrase for the certificate bundle
+- `WINDOWS_SIGNING_SUBJECT`: exact expected signer subject substring, such as
+  the certificate's `CN=...`
+
+Azure Artifact Signing, formerly Azure Trusted Signing, remains the preferred
+future direction once a Windows signing runner exists. Microsoft's supported
+Artifact Signing integration uses Windows SignTool with the Artifact Signing
+dlib, and the official action is Windows-runner-only. The Linux `atlas` runner
+therefore uses `osslsigncode` instead of pretending the Azure flow can run
+there today.
+
+When the Windows signing secrets are absent, CI emits a warning and publishes
+unsigned Windows artifacts so pull requests and non-signing dry runs keep
+passing. A production release should treat that warning as a release blocker.
+
+Verify a signed release on Linux:
+
+```sh
+tar xzf modde-<version>-x86_64-windows.tar.gz
+osslsigncode verify -in modde.exe
+osslsigncode verify -in modde-ui.exe
+```
+
+Verify on Windows PowerShell:
+
+```powershell
+Get-AuthenticodeSignature .\modde.exe
+Get-AuthenticodeSignature .\modde-ui.exe
+```
+
+Both commands should report `Status : Valid`. The signer subject must match the
+`WINDOWS_SIGNING_SUBJECT` value configured for release CI and recorded in the
+release notes for that certificate generation.
+
+Certificate rotation procedure:
+
+1. Order or renew the public CA Authenticode certificate before the old
+   certificate expires. For an OV certificate, start at least 60 days before
+   expiry so Windows SmartScreen reputation can overlap.
+2. Export the new certificate chain and private key as a password-protected
+   PKCS#12 file, then encode it without line wrapping:
+   `base64 -w0 modde-code-signing.p12`.
+3. Replace the Forgejo `WINDOWS_SIGNING_PFX`, `WINDOWS_SIGNING_PASS`, and
+   `WINDOWS_SIGNING_SUBJECT` secrets together. Do not commit the certificate,
+   private key, passphrase, or decoded bundle.
+4. Run a dry release or throwaway tag and confirm `osslsigncode verify` passes
+   on both staged `.exe` files and on the extracted tarball contents.
+5. On a fresh Windows 11 machine, confirm `Get-AuthenticodeSignature` reports
+   `Valid` and that the displayed signer matches `WINDOWS_SIGNING_SUBJECT`.
+6. Keep the old certificate valid until the new certificate has shipped and,
+   for OV certificates, has accumulated SmartScreen reputation. Timestamped
+   releases use `http://timestamp.digicert.com` so already-shipped signatures
+   remain valid after normal certificate expiry.
+
+Signed Windows binaries are intentionally not bit-reproducible because
+Authenticode injects a timestamped signature after the Nix build. Linux and
+unsigned Nix artifacts can still be rebuilt from source; Windows users should
+verify both the signed checksum manifest and the Authenticode signature.
+
+MSIX packaging is deferred to a separate distribution enhancement.
+
+## Inspecting the SBOM
+
+Each Codeberg release includes machine-readable software bills of materials:
+
+- `modde-<version>.cdx.json`: CycloneDX JSON generated from the workspace `Cargo.lock`
+- `modde-<version>.spdx.json`: SPDX 2.3 JSON generated from the workspace `Cargo.lock`
+
+Scan the CycloneDX SBOM with Grype:
+
+```sh
+grype "sbom:modde-<version>.cdx.json"
+```
+
+Or scan either SBOM with OSV-Scanner:
+
+```sh
+osv-scanner scan --sbom=modde-<version>.cdx.json
+osv-scanner scan --sbom=modde-<version>.spdx.json
+```
+
+Release CI also runs `cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses`; vulnerable Rust dependencies fail the release unless an explicit `deny.toml` advisory ignore documents the temporary exception.
+
+## Announcement Credentials
+
+Release announcements use dedicated Forgejo secrets. Create narrow tokens for
+the announcement account only; never reuse a maintainer's personal token.
+
+- Mastodon: create an application token for the `@modde@fosstodon.org` account
+  with `write:statuses`, then set `MASTODON_TOKEN` and `MASTODON_BASE_URL`.
+- Matrix: create or rotate an access token for the release bot account, invite
+  that account to the release room, then set `MATRIX_TOKEN`,
+  `MATRIX_HOMESERVER`, and `MATRIX_ROOM`.
+
+If a token is suspected to be exposed, revoke it at the upstream service, rotate
+the Forgejo secret, and re-run only the announcement step manually if the
+release itself already published correctly.

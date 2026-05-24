@@ -24,7 +24,7 @@ use crate::commands::wabbajack::{acquire_missing, acquire_status_label};
 /// Build a shared HTTP client with sensible timeouts for mod downloads.
 fn build_http_client() -> Result<reqwest::Client> {
     reqwest::Client::builder()
-        .timeout(std::time::Duration::from_mins(5))
+        .timeout(std::time::Duration::from_secs(5 * 60))
         .connect_timeout(std::time::Duration::from_secs(30))
         .build()
         .context("failed to build HTTP client")

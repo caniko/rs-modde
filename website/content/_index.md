@@ -4,7 +4,7 @@ description = "NixOS-native game mod manager — no Windows VM required."
 template = "index.html"
 
 [extra]
-tagline = "Declarative, cross-platform mod management for PC games."
+tagline = "Mod profiles as code — Wabbajack-native, equally at home on Linux, macOS, and Windows."
 subtitle = "Install Wabbajack modlists, Nexus Collections, and individual mods without giving up reproducibility, Linux support, or a clean game directory."
 logo = "/logo.svg"
 primary_cta = { label = "Install", href = "#install" }

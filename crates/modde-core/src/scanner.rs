@@ -411,8 +411,8 @@ pub struct DuplicateReport {
 /// The `mod_id_to_footprint` closure is the game-specific bridge: it
 /// maps a filesystem-scanner `mod_id` (e.g. `cet/ImmersiveHealing`) back
 /// to the directory or file the mod owns in the game install. For
-/// Cyberpunk 2077 this is
-/// [`modde_games::cyberpunk::scanner::mod_id_footprint`]. Profiles
+/// Cyberpunk 2077 this is `modde_games::cyberpunk::scanner::mod_id_footprint`.
+/// Profiles
 /// spanning multiple games aren't supported — each profile is tied to
 /// a single game via `profile.game_id`, so callers wire up a
 /// per-game closure.

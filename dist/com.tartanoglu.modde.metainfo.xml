@@ -17,20 +17,12 @@
     </p>
   </description>
   <launchable type="desktop-id">com.tartanoglu.modde.desktop</launchable>
-  <url type="homepage">https://modde.rs</url>
+  <url type="homepage">https://codeberg.org/caniko/rs-modde</url>
   <url type="bugtracker">https://codeberg.org/caniko/rs-modde/issues</url>
   <url type="vcs-browser">https://codeberg.org/caniko/rs-modde</url>
   <categories>
     <category>Game</category>
-    <category>Utility</category>
   </categories>
-  <screenshots>
-    <!-- TODO: replace with real screenshots once GUI captures are available -->
-    <screenshot type="default">
-      <caption>Mod list view</caption>
-      <image>https://modde.rs/screenshots/mod-list.png</image>
-    </screenshot>
-  </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
     <!-- Top entry mirrors CHANGELOG.md's most recent version + date -->

@@ -127,9 +127,9 @@ If you'd rather have notarized binaries, that requires an Apple Developer ID ($9
 
 ### Windows
 
-modde's Windows `.exe` artifacts are unsigned (we don't have an EV code-signing certificate). On first run, Windows SmartScreen will pop a blue dialog saying "Windows protected your PC". Click **More info**, then **Run anyway**.
+modde's Windows `.exe` artifacts are signed in release CI when the Authenticode certificate secrets are configured. Until the first public certificate is issued, CI warns and publishes unsigned artifacts for dry runs.
 
-The binaries are deterministically built on our infrastructure (see `.forgejo/workflows/release.yml`) and the `SHA256SUMS.txt` shipped alongside each release lets you verify the download. If you'd like signed binaries, see the note in the macOS section - same constraint.
+The binaries are deterministically built on our infrastructure (see `.forgejo/workflows/release.yml`) before the post-build Authenticode signing step. Verify the signed checksum manifest first, then use `Get-AuthenticodeSignature .\modde.exe` on Windows; `SECURITY.md` documents the expected signer check and certificate rotation procedure.
 
 ## Privacy
 

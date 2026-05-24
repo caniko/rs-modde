@@ -20,6 +20,7 @@ pub mod save;
 pub mod scanner;
 pub mod settings;
 pub mod stock;
+pub mod update_check;
 pub mod vfs;
 
 pub use collision::{CollisionClassifier, CollisionReport, CollisionSeverity, FileOrigin};

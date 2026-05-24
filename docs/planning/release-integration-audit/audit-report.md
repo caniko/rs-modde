@@ -6,6 +6,14 @@ Scope read: `.forgejo/workflows/release.yml`, `.forgejo/workflows/ci.yml`, `.for
 
 `simit.toml` is absent in this tree. That is not a blocker for this audit because the active simit-facing release configuration is in `flake.nix` under `simitConfig`. If a later phase requires a standalone `simit.toml`, the upstream producer is `simit init-*` or the maintainer's simit configuration migration; validate with `test -f simit.toml` plus `nix eval .#simitConfig`.
 
+## Windows Authenticode Decision
+
+Chosen path for Phase 05c: **Option C, public CA Authenticode certificate as a PKCS#12 Forgejo secret, signed with `osslsigncode` on the Linux `atlas` runner**.
+
+Rationale: Option A, Azure Trusted Signing / Azure Artifact Signing, is still the preferred future security model because Microsoft manages the key material and provides base SmartScreen reputation. It is not the current implementation because Microsoft's supported Artifact Signing integration uses Windows SignTool plus the Artifact Signing dlib, and the official action is Windows-runner-only. The available Forgejo runner label for this repo is Linux `atlas`, so wiring the Azure flow here would require a new Windows signing runner or a separate signing service. Option B, EV via token/HSM, has the same runner/tooling problem unless the CA provides a Linux-compatible remote signing interface. Option C is the only path that fits the current CI topology without putting hardware tokens on the runner.
+
+Remaining external input: the maintainer must obtain the public CA certificate and record the exact issued signer subject in `WINDOWS_SIGNING_SUBJECT`. Until `WINDOWS_SIGNING_PFX` and `WINDOWS_SIGNING_PASS` are configured, CI warns and leaves Windows EXEs unsigned so PR and dry-run pipelines still pass. Production releases should treat that warning as a release blocker.
+
 ## Emitted Artifacts
 
 The release workflow triggers on tags matching `[0-9]*`, validates SemVer-ish tag syntax, requires `nix eval --raw .#modde.version` to equal the tag, and then builds/publishes from the current tag checkout.
@@ -15,28 +23,34 @@ The release workflow triggers on tags matching `[0-9]*`, validates SemVer-ish ta
 | `release/THIRD_PARTY_LICENSES.html` | HTML license report | All | `cargo-about`, not a flake output | Codeberg release asset | Unsigned; covered by unsigned `SHA256SUMS.txt` only |
 | `release/linux-x86_64/modde` | ELF executable staging file | Linux x86_64 | `.#modde` | Not uploaded directly; staging input for tarball/raw copy | Unsigned |
 | `release/linux-x86_64/modde-ui` | ELF executable staging file | Linux x86_64 | `.#modde` | Not uploaded directly; staging input for tarball/raw copy | Unsigned |
-| `release/modde-<version>-x86_64-linux.tar.gz` | tar.gz archive | Linux x86_64 | `.#modde` | Codeberg release asset; Homebrew tap `linux_intel` | Unsigned |
+| `release/modde-<version>-x86_64-linux.tar.gz` | tar.gz archive | Linux x86_64 | `.#modde` | Codeberg release asset; Homebrew tap `linux_intel` | Signed by cosign blob signature; SLSA attestation emitted |
 | `release/modde-<version>-x86_64-linux` | Raw ELF executable | Linux x86_64 CLI | `.#modde` | Codeberg release asset | Unsigned |
 | `release/modde-ui-<version>-x86_64-linux` | Raw ELF executable | Linux x86_64 GUI | `.#modde` | Codeberg release asset | Unsigned |
 | `release/linux-aarch64/modde` | ELF executable staging file | Linux aarch64 | `.#modde-aarch64-linux` | Not uploaded directly; staging input for tarball/raw copy | Unsigned |
 | `release/linux-aarch64/modde-ui` | ELF executable staging file | Linux aarch64 | `.#modde-aarch64-linux` | Not uploaded directly; staging input for tarball/raw copy | Unsigned |
-| `release/modde-<version>-aarch64-linux.tar.gz` | tar.gz archive | Linux aarch64 | `.#modde-aarch64-linux` | Codeberg release asset; Homebrew tap `linux_arm` | Unsigned |
+| `release/modde-<version>-aarch64-linux.tar.gz` | tar.gz archive | Linux aarch64 | `.#modde-aarch64-linux` | Codeberg release asset; Homebrew tap `linux_arm` | Signed by cosign blob signature; SLSA attestation emitted |
 | `release/modde-<version>-aarch64-linux` | Raw ELF executable | Linux aarch64 CLI | `.#modde-aarch64-linux` | Codeberg release asset | Unsigned |
 | `release/modde-ui-<version>-aarch64-linux` | Raw ELF executable | Linux aarch64 GUI | `.#modde-aarch64-linux` | Codeberg release asset | Unsigned |
-| `release/windows-x86_64/modde.exe` | PE executable staging file | Windows x86_64 CLI | `.#modde-windows` | Not uploaded directly; staging input for tarball | Unsigned; no Authenticode |
-| `release/windows-x86_64/modde-ui.exe` | PE executable staging file | Windows x86_64 GUI | `.#modde-windows` | Not uploaded directly; staging input for tarball | Unsigned; no Authenticode |
-| `release/modde-<version>-x86_64-windows.tar.gz` | tar.gz archive containing `.exe` files | Windows x86_64 | `.#modde-windows` | Codeberg release asset | Unsigned; contained EXEs unsigned |
+| `release/windows-x86_64/modde.exe` | PE executable staging file | Windows x86_64 CLI | `.#modde-windows` plus post-build signing | Staging input for Windows tar/zip/raw copy | Authenticode-signed with `WINDOWS_SIGNING_PFX` when configured; otherwise CI warns and leaves unsigned |
+| `release/windows-x86_64/modde-ui.exe` | PE executable staging file | Windows x86_64 GUI | `.#modde-windows` plus post-build signing | Staging input for Windows tar/zip/raw copy | Authenticode-signed with `WINDOWS_SIGNING_PFX` when configured; otherwise CI warns and leaves unsigned |
+| `release/modde-<version>-x86_64-windows.tar.gz` | tar.gz archive containing `.exe` files | Windows x86_64 | `.#modde-windows` plus post-build signing | Codeberg release asset | Archive signed by cosign blob signature; SLSA attestation emitted; contained EXEs are Authenticode-signed when Windows signing secrets exist |
+| `release/modde-<version>-x86_64-windows.zip` | zip archive containing `.exe` files | Windows x86_64 | `.#modde-windows` plus post-build signing | Codeberg release asset; winget/Scoop input | Archive signed by cosign blob signature; SLSA attestation emitted; contained EXEs are Authenticode-signed when Windows signing secrets exist |
+| `release/modde-<version>-x86_64-windows.exe` | Raw PE executable | Windows x86_64 CLI | `.#modde-windows` plus post-build signing | Codeberg release asset | Authenticode-signed when Windows signing secrets exist; signed by cosign blob signature |
+| `release/modde-ui-<version>-x86_64-windows.exe` | Raw PE executable | Windows x86_64 GUI | `.#modde-windows` plus post-build signing | Codeberg release asset | Authenticode-signed when Windows signing secrets exist; signed by cosign blob signature |
 | `release/darwin-x86_64/modde` | Mach-O executable staging file | macOS x86_64 CLI | `.#modde-darwin-x86_64` | Not uploaded directly; staging input for tarball | Ad-hoc signed only via `codesign --sign -`; no Developer ID; no notarization |
 | `release/darwin-x86_64/modde-ui` | Mach-O executable staging file | macOS x86_64 GUI | `.#modde-darwin-x86_64` | Not uploaded directly; staging input for tarball | Ad-hoc signed only; no Developer ID; no notarization |
-| `release/modde-<version>-x86_64-darwin.tar.gz` | tar.gz archive | macOS x86_64 | `.#modde-darwin-x86_64` | Codeberg release asset; Homebrew tap `darwin_intel` | Archive unsigned; contained binaries ad-hoc signed only; not notarized |
+| `release/modde-<version>-x86_64-darwin.tar.gz` | tar.gz archive | macOS x86_64 | `.#modde-darwin-x86_64` | Codeberg release asset; Homebrew tap `darwin_intel` | Archive signed by cosign blob signature; SLSA attestation emitted; contained binaries ad-hoc signed only; not notarized |
 | `release/darwin-aarch64/modde` | Mach-O executable staging file | macOS aarch64 CLI | `.#modde-darwin-aarch64` | Not uploaded directly; staging input for tarball | Ad-hoc signed only; no Developer ID; no notarization |
 | `release/darwin-aarch64/modde-ui` | Mach-O executable staging file | macOS aarch64 GUI | `.#modde-darwin-aarch64` | Not uploaded directly; staging input for tarball | Ad-hoc signed only; no Developer ID; no notarization |
-| `release/modde-<version>-aarch64-darwin.tar.gz` | tar.gz archive | macOS aarch64 | `.#modde-darwin-aarch64` | Codeberg release asset; Homebrew tap `darwin_arm` | Archive unsigned; contained binaries ad-hoc signed only; not notarized |
-| `release/modde-ui-<version>-x86_64.AppImage` | AppImage | Linux x86_64 GUI | `.#appimage-ui` | Codeberg release asset | Unsigned; no AppImageUpdate signature; no `.zsync` |
-| `release/modde-<version>-x86_64.AppImage` | AppImage | Linux x86_64 CLI | `.#appimage-cli` | Codeberg release asset | Unsigned; no AppImageUpdate signature; no `.zsync` |
+| `release/modde-<version>-aarch64-darwin.tar.gz` | tar.gz archive | macOS aarch64 | `.#modde-darwin-aarch64` | Codeberg release asset; Homebrew tap `darwin_arm` | Archive signed by cosign blob signature; SLSA attestation emitted; contained binaries ad-hoc signed only; not notarized |
+| `release/modde-ui-<version>-x86_64.AppImage` | AppImage | Linux x86_64 GUI | `.#appimage-ui` | Codeberg release asset | Signed by cosign blob signature; SLSA attestation emitted; no AppImageUpdate signature; no `.zsync` |
+| `release/modde-<version>-x86_64.AppImage` | AppImage | Linux x86_64 CLI | `.#appimage-cli` | Codeberg release asset | Signed by cosign blob signature; SLSA attestation emitted; no AppImageUpdate signature; no `.zsync` |
 | `release/com.tartanoglu.modde.json` | Flatpak manifest JSON | Linux desktop | `.#flatpak-manifest` | Codeberg release asset only | Unsigned manifest; no Flathub submission/build artifact |
-| `release/SHA256SUMS.txt` | SHA-256 checksum manifest | All release assets matched by workflow globs | Generated after artifact copy | Codeberg release asset | Unsigned |
-| `srpms/*.src.rpm` | Fedora source RPM | Fedora/COPR source build | `cargo xtask copr vendor` + `rpmbuild -bs modde.spec` | COPR project `caniko/rs-modde` when COPR secrets exist | Not in `release/`; no signature recorded in workflow; no `rpmlint` gate |
+| `release/SHA256SUMS.txt` | SHA-256 checksum manifest | All release assets matched by workflow globs | Generated after artifact copy | Codeberg release asset | Signed with minisign as `SHA256SUMS.txt.minisig` |
+| `release/SHA256SUMS.txt.minisig` | minisign detached signature | `SHA256SUMS.txt` | `MINISIGN_SECRET_KEY` Forgejo secret | Codeberg release asset | Verifies against `keys/minisign.pub` |
+| `release/*.cosign.bundle` | Sigstore blob signature bundle | Tarballs, ZIPs, AppImages, SRPM, raw Windows EXEs | cosign keyless OIDC or `COSIGN_PRIVATE_KEY` fallback | Codeberg release asset | Verifiable with `cosign verify-blob`; Windows EXE bundles cover the Authenticode-signed bytes when signing is configured |
+| `release/*.intoto.jsonl` / `release/*.intoto.bundle` | SLSA v1 provenance attestation and verification bundle | Tarballs, ZIPs, AppImages, SRPM, raw Windows EXEs | cosign attest-blob | Codeberg release asset | Predicate records Git commit, `flake.lock`, workflow digest, and Attic substituter |
+| `release/*.src.rpm` | Fedora source RPM | Fedora/COPR source build | `cargo xtask copr vendor` + `rpmbuild -bs modde.spec` | Codeberg release asset and COPR project `caniko/rs-modde` when COPR secrets exist | Signed by cosign blob signature; SLSA attestation emitted; no RPM signature |
 | `attic-paths.txt` | Nix closure path list | Build cache metadata | `nix path-info -r` over flake build result links | Not uploaded; used to push closures to Attic `canix` cache | Not signed or published |
 
 Flake outputs not published as release assets: `.#docs`, `.#website`, `.#site`, `.#homebrew-formula`, `.#rs-harbor`, checks, dev shells, `apps.deploy-pages`, and `homeManagerModules.modde`. `.#site` is published separately by the `pages` workflow on `trunk`, not by the tag release workflow. `.#homebrew-formula` exists but the tag workflow uses `nix run .#rs-harbor -- brew bump` directly rather than uploading the flake's formula output.
@@ -57,12 +71,12 @@ Release assets not directly derived from pinned flake outputs: `THIRD_PARTY_LICE
 | Flatpak / Flathub | Website says manifest only, no installable remote; AppStream/desktop files checked in | Workflow uploads `com.tartanoglu.modde.json` only | Manifest shipped, channel missing | High | 04, 08 |
 | Cargo install / crates.io for library crates | README says `cargo install modde-cli`; README says `cargo xtask release X.Y.Z` publishes workspace crates | Crate manifests have publish metadata but no release workflow step; `modde-xtask` is `publish = false`; binary crates are not marked `publish = false` | Advertised, not proven shipped | High | 07 |
 | macOS direct download | README documents quarantine workaround and explicitly says no Developer ID/notarization | Workflow emits darwin tarballs and Homebrew uses them | Shipped but broken/degraded for normal Gatekeeper UX | Critical | 06 |
-| Windows direct download | README documents unsigned EXE SmartScreen workaround | Workflow emits Windows tarball only | Shipped but unsigned and not packaged for native installers | High | 05, 08 |
+| Windows direct download | README documents release-CI Authenticode signing and verification | Workflow emits Windows tarball, zip, and raw EXE assets; Authenticode step signs when Windows signing secrets exist | Shipped; final trust depends on maintainer-provided public CA certificate secrets | Medium | 05, 08 |
 | Website download cards | Website currently says most artifacts are not published yet | Workflow now publishes those artifacts on tags | Site is stale relative to workflow | Medium | 09 |
 | `.deb` / APT | Not claimed | No `.deb`, no APT repository | Missing expected Linux channel | Medium | 04 |
 | winget | Not claimed | No manifest or publish automation | Missing expected Windows channel | Medium | 05 |
 | Scoop | Not claimed | No bucket manifest or publish automation | Missing expected Windows channel | Medium | 05 |
-| Authenticode | README explicitly says Windows artifacts are unsigned | No `signtool`, `osslsigncode`, Azure Trusted Signing, or certificate flow | Missing signing channel | High | 05 |
+| Authenticode | `SECURITY.md` documents Windows code signing | Release workflow signs staged Windows EXEs with `osslsigncode` when `WINDOWS_SIGNING_PFX` and `WINDOWS_SIGNING_PASS` exist, then repackages tar/zip/raw assets | CI path present; blocked on maintainer obtaining public CA certificate and exact signer subject | Medium | 05 |
 | Flathub submission | Not claimed as live; website placeholder | No Flathub repository PR/update automation | Missing expected Linux desktop channel | High | 04 |
 | MacPorts | Not claimed | No Portfile or publish workflow | Missing secondary macOS package manager | Low | 06 |
 | Docker / OCI | Not claimed | No image build or registry publish | Missing optional headless CLI channel | Low | 04 or 09 |
@@ -72,11 +86,11 @@ Release assets not directly derived from pinned flake outputs: `THIRD_PARTY_LICE
 
 | Artifact / control | Present? | Evidence | Gap | Severity | Phase |
 |---|---:|---|---|---|---|
-| `SHA256SUMS.txt` | Yes | Release workflow runs `sha256sum ... > SHA256SUMS.txt` | Checksum file is unsigned, so a release-asset compromise can replace binaries and checksums together | High | 02 |
-| signed checksums | No | No `minisign`, `gpg --detach-sign`, or equivalent | Need `SHA256SUMS.txt.minisig` or equivalent and public verification docs | High | 02 |
-| GPG-signed tag enforcement | No | Validate step checks tag text and package version only | Workflow accepts unsigned tags matching `[0-9]*` | High | 02 |
-| minisign/cosign artifact signatures | No | Search found no `minisign` or `cosign` usage | No detached artifact signatures or transparency-log verification | High | 02 |
-| SLSA provenance | No | Search found no SLSA/provenance generation | No build provenance for binaries, AppImages, manifests, or SRPM | High | 02 |
+| `SHA256SUMS.txt` | Yes | Release workflow runs `sha256sum ... > SHA256SUMS.txt` | Covered by `SHA256SUMS.txt.minisig`; ensure `keys/minisign.pub` is committed before release | Low | 02 |
+| signed checksums | Yes | Release workflow runs `minisign -S` and verifies `SHA256SUMS.txt.minisig` against `keys/minisign.pub` | Requires `MINISIGN_SECRET_KEY`, `MINISIGN_PASSWORD`, and committed public key | Low | 02 |
+| GPG-signed tag enforcement | Yes | Validate step imports `keys/maintainers.gpg` into a temporary keyring and runs `git verify-tag "$CODEBERG_REF_NAME"` | Maintainer keyring must be rotated intentionally when signer set changes | Low | 02 |
+| minisign/cosign artifact signatures | Partly | Checksums use minisign; tarballs, AppImages, and SRPM use `cosign sign-blob --bundle` | Forgejo OIDC to Sigstore must be proven in a dry-run release; workflow falls back to `COSIGN_PRIVATE_KEY` if configured | Medium | 02 |
+| SLSA provenance | Partly | Release workflow emits `*.intoto.jsonl` and `*.intoto.bundle` through `cosign attest-blob --type slsaprovenance1` | Predicate is hand-authored for Forgejo and should be reviewed by downstream channel maintainers | Medium | 02 |
 | SBOM CycloneDX/SPDX | No | Search found no `cargo-sbom`, `cyclonedx`, `spdx`, or `syft` generation | `THIRD_PARTY_LICENSES.html` is a license report, not an SBOM | High | 03 |
 | Human-readable third-party license report | Yes | `cargo about generate` emits `THIRD_PARTY_LICENSES.html` | Should remain, but must not be treated as SBOM coverage | Low | 03 |
 | `cargo deny` policy | Partly | CI has a `cargo deny` job; `deny.toml` exists | Release workflow does not gate on `cargo deny`; advisory policy includes an ignored RUSTSEC with comment | Medium | 03 |
@@ -88,14 +102,14 @@ Release assets not directly derived from pinned flake outputs: `THIRD_PARTY_LICE
 
 | Check | Current state | Gap | Severity | Phase |
 |---|---|---|---|---|
-| Tag/version validation | `Validate tag` checks SemVer-ish tag and `.#modde.version` equality | Does not check CHANGELOG section, signed tag, or release branch policy | Medium | 02, 09 |
+| Tag/version validation | `Validate tag` checks SemVer-ish tag, `.#modde.version` equality, and GPG-signed tag validity | Does not check CHANGELOG section or release branch policy | Medium | 09 |
 | Artifact smoke tests | No release-path extraction/execution before publish | Tarballs, raw binaries, AppImages, Windows EXEs, and macOS artifacts are pushed without runtime smoke | High | 08 |
 | AppImage integrity/update validation | AppImages are copied from flake outputs | No `appimagetool --runtime-file` integrity check, no signature, no `.zsync`/AppImageUpdate channel | Medium | 08 |
 | AppStream validation | `dist/com.tartanoglu.modde.metainfo.xml` exists | No `appstreamcli validate --strict`; screenshot URLs are placeholders | Medium | 08 |
 | Desktop file validation | `dist/modde-ui.desktop` exists | No `desktop-file-validate` gate | Medium | 08 |
 | Flatpak builder lint | Manifest is generated and uploaded | No `flatpak-builder`, `flatpak-builder-lint`, or Flathub review smoke | High | 04, 08 |
 | SRPM lint/rebuild | SRPM is built and submitted to COPR | No `rpmlint`, no local/mock rebuild smoke before COPR upload | Medium | 08 |
-| Windows verification | Windows tarball is built | No Wine smoke; no Authenticode verification; no installer manifest validation | High | 05, 08 |
+| Windows verification | Windows tarball/zip/raw EXEs are built; Authenticode path verifies with `osslsigncode` when signing secrets exist | No Wine smoke; no Windows `Get-AuthenticodeSignature` gate; unsigned fallback still allowed for PR/dry-run workflows | Medium | 05, 08 |
 | macOS verification | Darwin binaries are ad-hoc signed in Nix output | No Developer ID verification, notarization log, `spctl` check, or macOS-host smoke | Critical | 06, 08 |
 | SBOM/vulnerability scan | CI runs `cargo deny`; no SBOM | No `grype`/`osv-scanner` gate against generated SBOMs | Medium | 03, 08 |
 | Publish ordering | Build, checksum, Attic, Codeberg, Homebrew, COPR happen in one job | No smoke/signature gate between build and external publishing | High | 08 |
@@ -113,6 +127,52 @@ Release assets not directly derived from pinned flake outputs: `THIRD_PARTY_LICE
 | Website/download synchronization | Website install cards intentionally say many artifacts are not downloadable | Workflow now publishes those assets, so site can lag release reality | Medium | 09 |
 | External channel skip semantics | Homebrew/COPR skip when secrets missing; Codeberg release fails when token missing | No single release summary that records which optional channels actually published | Medium | 09 |
 
+## Phase 04c Flathub Submission State
+
+The `.#flatpak-manifest` output now emits a source-build Flatpak manifest for
+`com.tartanoglu.modde` using `org.freedesktop.Platform//24.08`,
+`org.freedesktop.Sdk`, and `org.freedesktop.Sdk.Extension.rust-stable`. The
+manifest uses the release source tarball `rs-modde-<version>.tar.gz` plus
+`cargo-sources.json`; release CI patches the source tarball SHA-256 into
+`release/com.tartanoglu.modde.json` and generates `release/cargo-sources.json`
+from the same `Cargo.lock` with a pinned `flatpak-cargo-generator.py`.
+
+Flathub linter status is still blocked locally because this environment does
+not provide `flatpak` or `flatpak-builder-lint`. The validation command to run
+on a Flatpak-capable host is:
+
+```bash
+flatpak install -y flathub org.flatpak.Builder
+flatpak run --command=flathub-build org.flatpak.Builder --install release/com.tartanoglu.modde.json
+flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest release/com.tartanoglu.modde.json
+flatpak run com.tartanoglu.modde
+```
+
+No linter exceptions are approved yet. If `flatpak-builder-lint` reports an
+exception-only finding, record the exact check name, linter output, and reviewer
+justification here before submission.
+
+Initial Flathub submission PR URL: not available yet. The required upstream
+artifact is at least one real, hosted Linux screenshot referenced from
+`dist/com.tartanoglu.modde.metainfo.xml`; the current screenshot URL is a
+placeholder and `appstreamcli validate --explain` reports it as unreachable in
+this environment. The upstream producer is a GUI screenshot capture from a
+current Linux build, published at a stable tag or commit URL. Regenerate by
+launching `modde-ui` on Linux, capturing the app window, committing the PNG under
+the website/static screenshot path or another durable public location, and
+updating the MetaInfo `<image>` URL. Validate with:
+
+```bash
+appstreamcli validate --explain dist/com.tartanoglu.modde.metainfo.xml
+```
+
+After the initial PR is accepted and Flathub creates
+`flathub/com.tartanoglu.modde`, set the Forgejo secret `FLATHUB_TOKEN` to a
+GitHub PAT with write access to that repository. The release workflow will then
+push `release/<version>` and open an update PR containing
+`com.tartanoglu.modde.json` and `cargo-sources.json`; it skips cleanly when the
+secret is unset.
+
 ## Required Secrets
 
 Current release workflow credentials:
@@ -120,41 +180,36 @@ Current release workflow credentials:
 | Secret / credential | Required by | Current behavior when missing | Notes |
 |---|---|---|---|
 | `secrets.codeberg_token` -> `CODEBERG_TOKEN` | Codeberg release create/update and asset upload | Fails release (`test -n "$CODEBERG_TOKEN"`) | Also used by `pages.yml` for Codeberg Pages, outside tag release |
+| `secrets.MINISIGN_SECRET_KEY` -> `MINISIGN_SECRET_KEY` | minisign signature for `SHA256SUMS.txt` | Fails release (`test -n`) | Secret key is written to a `0600` temp file and removed by trap |
+| `secrets.MINISIGN_PASSWORD` -> `MINISIGN_PASSWORD` | Unlock minisign secret key | Fails release (`test -n`) | Piped to minisign stdin; not echoed |
+| Forgejo OIDC (`enable-openid-connect: true`) | Preferred keyless cosign signing and SLSA attestation | Falls back only if `COSIGN_PRIVATE_KEY` is configured | Must be proven against Sigstore Fulcio/Rekor in a dry-run tag release |
+| `secrets.COSIGN_PRIVATE_KEY` -> `COSIGN_PRIVATE_KEY` | Optional fallback cosign signing key | Required only if keyless OIDC fails | Use only as documented deviation from keyless |
+| `secrets.COSIGN_PASSWORD` -> `COSIGN_PASSWORD` | Optional cosign key password | Required only when fallback key is password-protected | Consumed by cosign |
+| `secrets.WINDOWS_SIGNING_PFX` -> `WINDOWS_SIGNING_PFX` | Optional Authenticode signing of Windows EXEs | Warns and leaves Windows EXEs unsigned when missing | Base64-encoded PKCS#12 bundle; decoded only to a `0600` temp file |
+| `secrets.WINDOWS_SIGNING_PASS` -> `WINDOWS_SIGNING_PASS` | Unlock Authenticode PKCS#12 bundle | Warns and leaves Windows EXEs unsigned when missing | Written to a `0600` temp file and consumed by `osslsigncode -readpass` |
+| `secrets.WINDOWS_SIGNING_SUBJECT` -> `WINDOWS_SIGNING_SUBJECT` | Optional signer subject guardrail | Skips subject matching when missing | Set to the exact issued subject substring, for example `CN=...`; do not guess before certificate issuance |
 | Runner file `$ATTIC_TOKENS_DIR/rs-modde` | Attic closure push to `https://attic.candee.baby/canix` | Fails release (`test -r`) | Not a Forgejo secret expression, but still a required credential on the atlas runner |
 | `secrets.homebrew_tap_token` -> `HOMEBREW_TAP_TOKEN` | Push to `caniko/homebrew-modde` | Skips Homebrew tap update | Token comment says Codeberg access token scoped to tap with `write:repository` |
 | `secrets.copr_login` -> `COPR_LOGIN` | COPR CLI config | Skips COPR upload if any COPR credential missing | Fedora COPR |
 | `secrets.copr_username` -> `COPR_USERNAME` | COPR CLI config | Skips COPR upload if any COPR credential missing | Fedora COPR |
 | `secrets.copr_token` -> `COPR_TOKEN` | COPR CLI config | Skips COPR upload if any COPR credential missing | Fedora COPR |
 
-Additional credentials phases 02-09 will need:
+Additional credentials later phases will need:
 
 | Secret / credential | Channel/control | Phase |
 |---|---|---|
-| `MINISIGN_SECRET_KEY` | Sign `SHA256SUMS.txt` | 02 |
-| `MINISIGN_PASSWORD` | Unlock minisign secret key | 02 |
-| `COSIGN_PRIVATE_KEY` | Optional fallback if Forgejo keyless OIDC is unavailable | 02 |
-| `COSIGN_PASSWORD` | Optional cosign key password | 02 |
-| Forgejo job OIDC / `id-token: write` equivalent | Keyless cosign and SLSA provenance, if supported | 02 |
-| Maintainer GPG public keys committed to repo | `git verify-tag` trust root | 02 |
 | `APT_REPO_GPG_KEY` | Sign Debian/APT repository metadata and packages | 04 |
 | `AUR_SSH_KEY` | Push `modde`, `modde-git`, and `modde-bin` PKGBUILDs to AUR | 04 |
 | `FLATHUB_TOKEN` | Open/update Flathub app repository PR or publish branch | 04 |
 | `WINGET_PAT` | Push winget manifests / PR to `microsoft/winget-pkgs` via bot fork | 05 |
 | `SCOOP_BUCKET_TOKEN` | Push `caniko/scoop-modde` bucket updates | 05 |
-| `AZURE_TENANT_ID` | Azure Trusted Signing option for Authenticode | 05 |
-| `AZURE_CLIENT_ID` | Azure Trusted Signing option for Authenticode | 05 |
-| `AZURE_CLIENT_SECRET` | Azure Trusted Signing fallback without OIDC | 05 |
-| `AZURE_TRUSTED_SIGNING_ENDPOINT` | Azure Trusted Signing endpoint | 05 |
-| `AZURE_TRUSTED_SIGNING_ACCOUNT` | Azure Trusted Signing account | 05 |
-| `AZURE_TRUSTED_SIGNING_PROFILE` | Azure Trusted Signing certificate profile | 05 |
-| `WINDOWS_SIGNING_PFX` | Alternative PKCS#12 Authenticode cert | 05 |
-| `WINDOWS_SIGNING_PASS` | Alternative PKCS#12 passphrase | 05 |
+| Azure Artifact Signing account/profile credentials | Deferred replacement for PKCS#12 Authenticode once a Windows signing runner exists | 05 |
 | `MACOS_DEVELOPER_ID_P12_BASE64` | Developer ID Application certificate | 06 |
 | `MACOS_DEVELOPER_ID_PASSWORD` | Developer ID cert passphrase | 06 |
 | `MACOS_NOTARY_KEY_P8_BASE64` | App Store Connect notary API key | 06 |
 | `MACOS_NOTARY_KEY_ID` | App Store Connect notary key ID | 06 |
 | `MACOS_NOTARY_ISSUER_ID` | App Store Connect notary issuer ID | 06 |
-| `CARGO_REGISTRY_TOKEN` | crates.io publish or post-flight verification needing auth | 07 |
+| `CRATES_IO_API_TOKEN` | crates.io publish or post-flight verification needing auth | 07 |
 | `MASTODON_TOKEN` | Release announcement automation | 09 |
 | `MATRIX_TOKEN` | Release announcement automation | 09 |
 | `MATRIX_ROOM` | Release announcement target room | 09 |
@@ -164,11 +219,10 @@ Additional credentials phases 02-09 will need:
 | Severity | Gap | Evidence | Phase |
 |---|---|---|---|
 | Critical | macOS notarization is absent; macOS artifacts are not Developer ID signed or notarized | `flake.nix` ad-hoc signs with `codesign --sign -`; README documents Gatekeeper quarantine workaround; no `notarytool`/`rcodesign` release step | 06 |
-| High | Unsigned checksums and unsigned release assets | `SHA256SUMS.txt` exists but no minisign/GPG/cosign signatures | 02 |
-| High | No GPG-signed tag enforcement | `Validate tag` only checks tag syntax and `.#modde.version` | 02 |
-| High | No SLSA provenance | No SLSA/cosign attestation generation | 02 |
+| Medium | Sigstore keyless path is unproven on Forgejo Actions | Workflow enables OIDC and falls back to `COSIGN_PRIVATE_KEY`, but Fulcio/Rekor acceptance must be validated by dry-run tag release | 02 |
+| Medium | `keys/minisign.pub` must be supplied from the offline minisign keypair | Workflow and docs require the public key, but the repo must receive the maintainer-generated key before release | 02 |
 | High | No SBOM despite license report | `cargo-about` emits HTML licenses; no CycloneDX/SPDX generator | 03 |
-| High | Windows EXEs are unsigned | README says SmartScreen workaround; workflow has no Authenticode signing | 05 |
+| Medium | Windows Authenticode is wired but not operational until certificate issuance | Workflow signs with `osslsigncode` when `WINDOWS_SIGNING_PFX` and `WINDOWS_SIGNING_PASS` exist; exact `WINDOWS_SIGNING_SUBJECT` must come from the CA-issued certificate | 05 |
 | High | Release publishes before smoke verification | Workflow pushes Attic, Codeberg, Homebrew, and COPR immediately after build/checksum | 08 |
 | High | Flatpak channel stops at manifest upload | `.#flatpak-manifest` uploaded as JSON; no Flathub submission/build/lint | 04 |
 | High | crates.io install claim is not backed by audited publish flow | README advertises `cargo install modde-cli`; release workflow has no crates.io publish or verification | 07 |
