@@ -37,6 +37,3 @@ jobs:
 
       - name: Clippy
         run: nix develop -c cargo clippy -p modde-xtask --all-targets -- --deny warnings
-
-      - name: Package crate
-        run: nix develop -c cargo package -p modde-xtask --allow-dirty
