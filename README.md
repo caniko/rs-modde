@@ -7,14 +7,14 @@ Documentation: <https://caniko.codeberg.page/rs-modde/docs/>
 
 ## Supported games
 
-| Game           | Current status                                                           |
-| -------------- | ------------------------------------------------------------------------ |
-| Skyrim SE/AE   | `Done`: plugins, VFS, LOOT sorting, diagnostics, save tracking           |
-| Fallout 4      | `Done`: plugins, VFS, LOOT sorting, diagnostics, save tracking           |
-| Fallout 76     | `Partial`: plugins, VFS, BA2 scanning; saves are effectively server-side |
-| Starfield      | `Partial`: plugins, VFS, diagnostics, save tracking                      |
-| Cyberpunk 2077 | `Done`: REDmod, CET, TweakXL, scripts, conflict detection                |
-| Stellar Blade  | `Partial`: UE4/UE5-style deployment, scanning, conflicts, save tracking  |
+| Game | Current status |
+| --- | --- |
+| Skyrim SE/AE | `Done`: plugins, VFS, LOOT sorting, diagnostics, save tracking |
+| Fallout 4 | `Done`: plugins, VFS, LOOT sorting, diagnostics, save tracking |
+| Fallout 76 | `Partial`: plugins, VFS, BA2 scanning; saves are effectively server-side |
+| Starfield | `Partial`: plugins, VFS, diagnostics, save tracking |
+| Cyberpunk 2077 | `Done`: REDmod, CET, TweakXL, scripts, conflict detection |
+| Stellar Blade | `Partial`: UE4/UE5-style deployment, scanning, conflicts, save tracking |
 
 Games are auto-detected via Steam (Proton) and Heroic (GOG, Epic) launchers.
 The canonical status baseline for these claims lives in `docs/capability-matrix.toml`.
