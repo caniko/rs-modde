@@ -11,14 +11,14 @@ The current truthful scope is narrower than MO2: tool state, generated configs, 
 
 ## Supported tools
 
-| Tool ID | Description |
-|---------|-------------|
-| `mangohud` | Performance monitoring overlay (FPS, CPU, GPU, frame times) |
-| `vkbasalt` | Vulkan post-processing layer (sharpening, CAS, FXAA) |
-| `gamemode` | Feral GameMode daemon for performance optimization |
-| `reshade` | ReShade post-processing shader framework |
-| `optiscaler` | DLSS/FSR upscaling framework |
-| `proton` | Per-game Proton, Wine prefix, environment, and DLL override settings |
+| Tool ID      | Description                                                          |
+| ------------ | -------------------------------------------------------------------- |
+| `mangohud`   | Performance monitoring overlay (FPS, CPU, GPU, frame times)          |
+| `vkbasalt`   | Vulkan post-processing layer (sharpening, CAS, FXAA)                 |
+| `gamemode`   | Feral GameMode daemon for performance optimization                   |
+| `reshade`    | ReShade post-processing shader framework                             |
+| `optiscaler` | DLSS/FSR upscaling framework                                         |
+| `proton`     | Per-game Proton, Wine prefix, environment, and DLL override settings |
 
 ## Checking tool status
 
@@ -89,6 +89,7 @@ modde tool run /path/to/xedit --game skyrim-se -- -quickautoclean
 ```
 
 This:
+
 1. Snapshots the mod directory before the tool runs
 2. Runs the tool with the game directory as working directory
 3. Snapshots after the tool exits

@@ -84,12 +84,14 @@ If the mod fingerprint of the snapshot doesn't match your current profile, modde
 modde computes a SHA-256 fingerprint from the sorted list of enabled mods classified as "save-breaking" for each game. Two profiles with the same save-breaking mods produce the same fingerprint.
 
 This fingerprint is stored in each save snapshot as a git commit trailer:
+
 ```
 Mod-Fingerprint: a1b2c3d4e5f6
 Save-Breaking-Mods: mod_a, mod_b, mod_c
 ```
 
 When restoring, modde compares fingerprints and reports:
+
 - **Compatible**: Fingerprints match — safe to restore
 - **No fingerprint**: Pre-fingerprint snapshot — restore at your own risk
 - **Mismatch**: Lists which mods were added or removed

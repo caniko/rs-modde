@@ -35,6 +35,7 @@ modde scan --game skyrim-se \
 ```
 
 This:
+
 1. Parses the `.wabbajack` manifest
 2. Matches manifest archives against on-disk files
 3. Imports matched mods with their Wabbajack metadata

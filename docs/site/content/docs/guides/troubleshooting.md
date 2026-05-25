@@ -13,6 +13,7 @@ modde detect
 ```
 
 If your game doesn't appear:
+
 - Verify the game is installed via a supported launcher
 - For Steam, ensure the game's `appmanifest_*.acf` file exists in your Steam library
 - For Heroic, check that the game appears in `~/.config/heroic/GamesConfig/`
@@ -79,6 +80,7 @@ modde nexus auth
 ### Symlink errors
 
 If deployment fails with symlink errors:
+
 - Check that the target game directory exists and is writable
 - Ensure no other process has locked files in the game directory
 - Verify the staging directory at `~/.local/share/modde/staging/<profile>/` is intact

@@ -75,6 +75,7 @@ crates/
 ### Adding Game Support
 
 Game plugins implement traits in `crates/modde-games/src/traits.rs`:
+
 - `GamePlugin` for game detection, paths, and configuration
 - `ModScanner` for filesystem-based mod discovery
 - `SaveTracker` for save file management
@@ -86,6 +87,7 @@ See `crates/modde-games/src/cyberpunk/` for a complete example.
 Please file issues on the [Codeberg issue tracker](https://codeberg.org/caniko/rs-modde/issues).
 
 Include:
+
 - modde version (`modde --version`)
 - Operating system and distribution
 - Steps to reproduce

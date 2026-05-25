@@ -2,7 +2,7 @@
 
 Multi-phase plan to rebuild modde's Wabbajack install pipeline so that
 large modlists (Twisted Skyrim, Lorerim, Nordic Souls, Living Skyrim)
-install in *slow-and-steady* mode on commodity hardware: 16 GB RAM, no
+install in _slow-and-steady_ mode on commodity hardware: 16 GB RAM, no
 swap thrash, predictable disk usage, no host-wide stalls.
 
 The current pipeline can hit 30+ GB resident, 8 GB swap, 4 TB peak
@@ -19,16 +19,16 @@ The plan is "done" when, on a 16 GB / 1 TB SSD reference box, installing
 **Twisted Skyrim** (~6,000 archives, ~250 GB downloads, ~700 GB
 deployed) satisfies:
 
-| Metric | Current (observed) | Target | Stretch |
-| --- | --- | --- | --- |
-| Peak modde RSS | 30+ GB (cgroup-bounded) | < 2 GB | < 512 MB |
-| Peak `7zz`/decoder RSS | unbounded | n/a (native, in-process) | — |
-| Peak disk over downloads | +3.8 TB tmp | + (downloads × 1.05) | downloads only |
-| Apply throughput | 12–230 dirs/min | > 5,000 dirs/min | > 20,000 dirs/min |
-| Wall-clock for full install | unbounded (never finished) | < 6 h | < 2 h |
-| Host swap usage during install | 11 GB peak | 0 | 0 |
-| Cache fraction during install | 75% of host RAM | < 30% | < 10% |
-| Page-fault thrash events | 1+ per session | 0 | 0 |
+| Metric                         | Current (observed)         | Target                   | Stretch           |
+| ------------------------------ | -------------------------- | ------------------------ | ----------------- |
+| Peak modde RSS                 | 30+ GB (cgroup-bounded)    | < 2 GB                   | < 512 MB          |
+| Peak `7zz`/decoder RSS         | unbounded                  | n/a (native, in-process) | —                 |
+| Peak disk over downloads       | +3.8 TB tmp                | + (downloads × 1.05)     | downloads only    |
+| Apply throughput               | 12–230 dirs/min            | > 5,000 dirs/min         | > 20,000 dirs/min |
+| Wall-clock for full install    | unbounded (never finished) | < 6 h                    | < 2 h             |
+| Host swap usage during install | 11 GB peak                 | 0                        | 0                 |
+| Cache fraction during install  | 75% of host RAM            | < 30%                    | < 10%             |
+| Page-fault thrash events       | 1+ per session             | 0                        | 0                 |
 
 These are the targets the rest of the document is justified by.
 
@@ -38,7 +38,7 @@ Before the phases, the four root causes we are correcting:
 
 1. **Subprocess-per-file decompression.** modde shells out to `7zz` once
    per install directive. Twisted Skyrim has 681,301 directives. Each
-   `execve` re-mmaps the archive, re-parses headers, and (for *solid*
+   `execve` re-mmaps the archive, re-parses headers, and (for _solid_
    7z archives) re-decompresses everything before the requested file.
    Worst case: extracting 200 files from a solid archive does 200 full
    decompressions.
@@ -93,7 +93,7 @@ extraction. Synthetic and fixture tests pass; full Twisted Skyrim
 runtime metrics remain operational validation, not CI acceptance for
 this pass.
 
-**Goal:** every archive is opened *once* during apply. All directives
+**Goal:** every archive is opened _once_ during apply. All directives
 that read from it run while the decoder is hot. Eliminates the
 solid-archive amplification entirely.
 
@@ -174,7 +174,6 @@ falling back to a subprocess. The 7z reader uses
 `sevenz_rust2::ArchiveReader::for_each_entries`, not `read_file`, so
 solid archives are traversed once per batch.
 
-
 **Goal:** replace the per-file `7zz e -so` subprocess with in-process
 streaming decoders. One decoder per archive batch (phase 1), no
 forking, no `Vec<u8>` capture of subprocess stdout.
@@ -187,13 +186,13 @@ overhead.
 
 ### Crate matrix
 
-| Format | Crate | Notes |
-| --- | --- | --- |
-| zip | already `zip = "*"` | Streaming per-entry already correct. |
-| 7z | `sevenz-rust2` | Pure Rust, no `unsafe`, supports LZMA/LZMA2/BCJ/BZip2/Deflate. The maintained fork of `sevenz-rust`. |
-| rar | `unrar-ng = "0.7.7"` behind crate alias `unrar` | Optional feature only; no subprocess fallback. Version `0.5.x` is yanked upstream. |
-| BSA / BA2 | `modde_core::bethesda_archive` (already native) | Keep. |
-| zstd | `zstd = "0.13.3"` | Phase 7a compressed staging; built with `zstdmt`. |
+| Format    | Crate                                           | Notes                                                                                                |
+| --------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| zip       | already `zip = "*"`                             | Streaming per-entry already correct.                                                                 |
+| 7z        | `sevenz-rust2`                                  | Pure Rust, no `unsafe`, supports LZMA/LZMA2/BCJ/BZip2/Deflate. The maintained fork of `sevenz-rust`. |
+| rar       | `unrar-ng = "0.7.7"` behind crate alias `unrar` | Optional feature only; no subprocess fallback. Version `0.5.x` is yanked upstream.                   |
+| BSA / BA2 | `modde_core::bethesda_archive` (already native) | Keep.                                                                                                |
+| zstd      | `zstd = "0.13.3"`                               | Phase 7a compressed staging; built with `zstdmt`.                                                    |
 
 7z is the dominant format on Nexus; covering it well is most of the win.
 
@@ -722,13 +721,13 @@ While phases land incrementally, operators can already:
   list is ready for validated deploy or only partial staging.
 - For a rescue/stage-only run while archives are still missing, use
   `modde install wabbajack --no-deploy --continue-on-error --skip-validate
-  <list.wabbajack> --game-dir <game-dir>`. This preserves the live game
+<list.wabbajack> --game-dir <game-dir>`. This preserves the live game
   directory and lets the next run resume from adopted sentinels.
 - Use `--reset-staging` only when deliberately throwing away the
   profile's staging directory. The default path rescues existing files
   in place.
 - Wrap installs in `systemd-run --user --scope -p MemoryHigh=24G -p
-  MemorySwapMax=4G -p IOWeight=50 -- modde install wabbajack ...` to
+MemorySwapMax=4G -p IOWeight=50 -- modde install wabbajack ...` to
   contain blast radius.
 - Set `MODDE_APPLY_MAX_IN_FLIGHT=8` until phase 1 lands.
 - Set `MODDE_APPLY_RAM_FRACTION=0.5` until phase 2 lands.

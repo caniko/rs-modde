@@ -5,14 +5,15 @@ document gives each unticked item enough context for someone (or the next
 agent) to pick it up cold without re-deriving the design.
 
 Items are grouped by **how far they are from "ready to write code"** —
-*Tractable* (clear path, just type it), *Needs design* (decisions first),
-*Blocked* (waiting on prerequisite work).
+_Tractable_ (clear path, just type it), _Needs design_ (decisions first),
+_Blocked_ (waiting on prerequisite work).
 
 ---
 
 ## Tractable next steps
 
 ### Coverage baseline & badge (§3.1)
+
 - **What's done:** `cargo-llvm-cov` is in the devShell, `just coverage*`
   recipes are live, Forgejo Actions runs `just coverage-ci` with
   `FAIL_UNDER=0`.
@@ -25,6 +26,7 @@ Items are grouped by **how far they are from "ready to write code"** —
   to Forgejo releases) and add the upload step.
 
 ### Manifest parser proptest (§2.1)
+
 - **What's there to model after:**
   [crates/modde-core/tests/resolver_proptest.rs](crates/modde-core/tests/resolver_proptest.rs).
 - **Target:** `WabbajackManifest` round-trip — generate a minimal
@@ -34,6 +36,7 @@ Items are grouped by **how far they are from "ready to write code"** —
   and existing fixtures in [3077.wabbajack](3077.wabbajack).
 
 ### Concurrent VFS deploy stress test (§2.1, §1.2)
+
 - **Why:** the symlink farm uses `tokio::fs` ops; current tests are
   serial. Real deploy under heavy load (e.g. 50k files, multiple
   profiles concurrently calling `materialize` against overlapping
@@ -47,9 +50,10 @@ Items are grouped by **how far they are from "ready to write code"** —
   trait so tests can inject `EEXIST` / `ENOSPC` and assert recovery.
 
 ### CLI install/update happy paths (§2.4)
+
 - **What's done:** failure-path coverage in
   [crates/modde-cli/tests/cli_install_mod.rs](crates/modde-cli/tests/cli_install_mod.rs)
-  + the wiremock harness pattern.
+  - the wiremock harness pattern.
 - **`modde install mod` happy path** — needs:
   1. Mock `/games/{domain}/mods/{id}.json`, `/users/validate.json`
      (premium=true), `/games/.../files/{fid}/download_link.json`
@@ -65,9 +69,10 @@ Items are grouped by **how far they are from "ready to write code"** —
   `/games/{domain}/mods/updated.json` to advertise a newer file_id and
   assert the row is rewritten. **Sharp edge:** `update apply` runs
   interactive `y/N` prompts on breaking semver; pass `--yes
-  --accept-breaking` to bypass.
+--accept-breaking` to bypass.
 
 ### Collision-detection bench (§2.6)
+
 - **What to bench:** `ConflictMap::register` + `resolved_conflicts`
   in [crates/modde-core/src/resolver/mod.rs](crates/modde-core/src/resolver/mod.rs).
 - **Pattern to follow:** copy
@@ -77,6 +82,7 @@ Items are grouped by **how far they are from "ready to write code"** —
   conflict path).
 
 ### Archive-extract bench (§2.6)
+
 - Targets: the native `modde-sources::decompress` readers. Three
   formats: zip (have fixtures), 7z (need a small fixture), BSA/BA2
   (Bethesda).
@@ -85,6 +91,7 @@ Items are grouped by **how far they are from "ready to write code"** —
   creation outside the timed region.
 
 ### Resumable Wabbajack apply/import (§1.4)
+
 - **What's done:** the install-pipeline rework landed resumable
   apply/import semantics for Wabbajack archive store entries; existing
   entries survive process restarts and are hash-verified before trust.
@@ -92,6 +99,7 @@ Items are grouped by **how far they are from "ready to write code"** —
   Phase 9.
 
 ### `modde scan` UI button (§1.6)
+
 - Add an entry in the actions panel (see `crates/modde-ui/src/app.rs`
   near the existing `Detect` / `Deploy` buttons). Hooks into the
   same `commands::scan::handle` the CLI uses.
@@ -101,10 +109,11 @@ Items are grouped by **how far they are from "ready to write code"** —
 ## Needs design / discussion before coding
 
 ### Multi-instance flag wiring (§1.1)
+
 - TODO bullet: "`--instance` flag wired through every command."
 - **Open question:** today instance switching uses
   `modde instance switch <name>` which writes the active instance to
-  a registry file, then *all subsequent commands* read from it. A
+  a registry file, then _all subsequent commands_ read from it. A
   `--instance` flag would override per-invocation, but every command
   would need to honour it before any path-resolving code runs.
   Options:
@@ -119,6 +128,7 @@ Items are grouped by **how far they are from "ready to write code"** —
   cached state escapes the override.
 
 ### MO2-portable instance subcommands (§1.1)
+
 - TODO calls for `instance create / clone / delete / list`. `create`
   and `list` exist; `clone` and `delete` don't. **Clone semantics**
   need a decision:
@@ -130,6 +140,7 @@ Items are grouped by **how far they are from "ready to write code"** —
   across instances.
 
 ### `GenericGame` config-driven definition (§1.2)
+
 - The trait exists in `modde-games` (used by
   `cyberpunk`, `gamebryo`, etc. via the registry). Exposing it
   user-facing means a TOML/JSON spec in
@@ -142,19 +153,21 @@ Items are grouped by **how far they are from "ready to write code"** —
   declaratively vs. what stays Rust-only.
 
 ### Merged-VFS browser (§1.2)
+
 - Three sub-items: archive content visibility, hidden-file filters,
   origin tagging. All read-only views over the existing
   `SymlinkFarm.links` map plus the `installed_mod_files` table.
 - **Hidden-file filters** are partially there — `SymlinkFarm::build`
   already takes `hidden: Option<&HashSet<(String, String)>>`. The
-  missing piece is a UI/CLI surface to *toggle* hidden state and
+  missing piece is a UI/CLI surface to _toggle_ hidden state and
   persist it (probably a `hidden_files` table keyed by
   `(profile_id, mod_id, rel_path)`).
 - **Origin tagging:** the resolver's `ConflictMap` already knows
   every provider for every path. Surface that in a `modde tree
-  --profile <name>` command.
+--profile <name>` command.
 
 ### Mod-info dialog tabs (§1.5)
+
 - Four TODO items, one dialog. The current dialog is a single-pane
   view in `crates/modde-ui/src/mod_info.rs` (or similar). Expanding
   to tabs (file tree, image preview, conflicts, metadata/Nexus) is
@@ -166,6 +179,7 @@ Items are grouped by **how far they are from "ready to write code"** —
   by browse tiles) plus an Iced image widget — straightforward.
 
 ### "Problems" diagnostics panel (§1.5)
+
 - Two TODO items: detection panel + guided fixes. Detection is what
   `modde diagnostics` already produces; the panel just displays it.
   **Guided fixes** are the harder part — each diagnostic needs a
@@ -224,12 +238,12 @@ failures.
 
 ## How to find what's where
 
-| Area | Entry point |
-|------|-------------|
-| Test fixtures | [crates/modde-cli/tests/common/mod.rs](crates/modde-cli/tests/common/mod.rs) |
-| Wiremock pattern | [crates/modde-cli/tests/cli_nexus_status.rs](crates/modde-cli/tests/cli_nexus_status.rs) |
-| Bench scaffolding | [crates/modde-core/benches/vfs_deploy.rs](crates/modde-core/benches/vfs_deploy.rs) |
-| Proptest scaffolding | [crates/modde-core/tests/resolver_proptest.rs](crates/modde-core/tests/resolver_proptest.rs) |
-| Coverage recipes | [justfile](justfile) (search `coverage`) |
+| Area                    | Entry point                                                                                                |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Test fixtures           | [crates/modde-cli/tests/common/mod.rs](crates/modde-cli/tests/common/mod.rs)                               |
+| Wiremock pattern        | [crates/modde-cli/tests/cli_nexus_status.rs](crates/modde-cli/tests/cli_nexus_status.rs)                   |
+| Bench scaffolding       | [crates/modde-core/benches/vfs_deploy.rs](crates/modde-core/benches/vfs_deploy.rs)                         |
+| Proptest scaffolding    | [crates/modde-core/tests/resolver_proptest.rs](crates/modde-core/tests/resolver_proptest.rs)               |
+| Coverage recipes        | [justfile](justfile) (search `coverage`)                                                                   |
 | Nexus base-URL override | [crates/modde-sources/src/nexus/mod.rs](crates/modde-sources/src/nexus/mod.rs) (`base_url`, `graphql_url`) |
-| Mod scanner design | [SCANNER_DESIGN.md](SCANNER_DESIGN.md) |
+| Mod scanner design      | [SCANNER_DESIGN.md](SCANNER_DESIGN.md)                                                                     |

@@ -13,12 +13,12 @@ categories.workspace = true
 readme = "../../README.md"
 documentation = "https://docs.rs/modde-sources"
 include = [
-    "../../LICENSE",
-    "../../README.md",
-    "CHANGELOG.md",
-    "Cargo.toml",
-    "src/**",
-    "tests/**",
+  "../../LICENSE",
+  "../../README.md",
+  "CHANGELOG.md",
+  "Cargo.toml",
+  "src/**",
+  "tests/**",
 ]
 
 [package.metadata.docs.rs]
@@ -62,7 +62,9 @@ parking_lot = { workspace = true }
 sevenz-rust2 = { workspace = true }
 zstd = { workspace = true }
 unrar = { package = "unrar-ng", version = "0.7.7", optional = true }
-memory-admission = { version = "0.1.6", git = "https://codeberg.org/caniko/rs-memory-admission.git", rev = "43c603e848ccc00af222a4ad2996b37a793385e2", default-features = false, features = ["async"] }
+memory-admission = { version = "0.1.6", git = "https://codeberg.org/caniko/rs-memory-admission.git", rev = "43c603e848ccc00af222a4ad2996b37a793385e2", default-features = false, features = [
+  "async",
+] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }

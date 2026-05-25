@@ -85,6 +85,7 @@ Profiles can be locked to prevent accidental reordering.
 ### Automatic locks
 
 Locks are applied automatically when installing from:
+
 - **Wabbajack modlists** — locked with the manifest hash for provenance
 - **Nexus Collections** — locked with the collection slug and version
 - **TOML imports** — locked with the source file path
@@ -135,6 +136,7 @@ modde profile commit --game skyrim-se
 ```
 
 The stack works like this:
+
 ```
 Active = Profile A
 try B   → Stack = [A],    Active = B

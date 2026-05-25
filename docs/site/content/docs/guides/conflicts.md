@@ -19,6 +19,7 @@ modde collisions --profile my-skyrim --all
 ```
 
 The report shows:
+
 - **Collision pairs**: Which mods conflict, with severity (`CRITICAL`, `MAJOR`, `COSMETIC`) and file count
 - **Per-file details**: File path, loser vs winner, and whether the file is loose or from an archive
 - **Shadowed mods**: Mods where every file is overridden by another mod
@@ -26,11 +27,11 @@ The report shows:
 
 ### Severity levels
 
-| Level | Meaning | Examples |
-|-------|---------|---------|
-| Critical | Will cause game issues | BSA/BA2 overwrites, plugin conflicts |
-| Major | Likely visible problems | Texture and mesh conflicts |
-| Cosmetic | Minor visual differences | Optional textures, minor overlaps |
+| Level    | Meaning                  | Examples                             |
+| -------- | ------------------------ | ------------------------------------ |
+| Critical | Will cause game issues   | BSA/BA2 overwrites, plugin conflicts |
+| Major    | Likely visible problems  | Texture and mesh conflicts           |
+| Cosmetic | Minor visual differences | Optional textures, minor overlaps    |
 
 ### Suggesting hides
 
@@ -75,6 +76,7 @@ modde loot validate --game skyrim-se
 ```
 
 Detects:
+
 - **Form 43 plugins**: Old Skyrim (LE) format plugins in SSE — causes crashes
 - **Missing masters**: Plugins that require other plugins not in your load order
 

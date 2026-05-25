@@ -48,11 +48,11 @@ Controls what Home Manager activation does for this profile.
 - **Type:** `"auto"`, `"await-game"`, or `"disabled"`
 - **Default:** `"auto"`
 
-| Value | Behavior |
-|-------|----------|
-| `"auto"` | Install/deploy when prerequisites are present; otherwise print an awaiting message |
-| `"await-game"` | Always skip install/deploy and print the next setup step |
-| `"disabled"` | Skip all activation work for the profile |
+| Value          | Behavior                                                                           |
+| -------------- | ---------------------------------------------------------------------------------- |
+| `"auto"`       | Install/deploy when prerequisites are present; otherwise print an awaiting message |
+| `"await-game"` | Always skip install/deploy and print the next setup step                           |
+| `"disabled"`   | Skip all activation work for the profile                                           |
 
 #### `profiles.<name>.wabbajackList`
 
@@ -61,10 +61,10 @@ Wabbajack modlist source. Mutually exclusive with `nexusCollection`.
 - **Type:** `null` or submodule
 - **Default:** `null`
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `url` | `null` or `str` | URL to the `.wabbajack` modlist file |
-| `hash` | `null` or `str` | Nix fetch hash for the `.wabbajack` file |
+| Option | Type                     | Description                                                       |
+| ------ | ------------------------ | ----------------------------------------------------------------- |
+| `url`  | `null` or `str`          | URL to the `.wabbajack` modlist file                              |
+| `hash` | `null` or `str`          | Nix fetch hash for the `.wabbajack` file                          |
 | `path` | `null`, `path`, or `str` | Local or Nix store path to an already available `.wabbajack` file |
 
 Set exactly one source: either `path`, or both `url` and `hash`. Use `path`
@@ -78,9 +78,9 @@ Nexus Collection source. Mutually exclusive with `wabbajackList`.
 - **Type:** `null` or submodule
 - **Default:** `null`
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `slug` | `str` | Nexus Collection slug |
+| Option    | Type  | Description                   |
+| --------- | ----- | ----------------------------- |
+| `slug`    | `str` | Nexus Collection slug         |
 | `version` | `str` | Collection version to install |
 
 ### `programs.modde.nexus.apiKeyFile`
@@ -99,25 +99,25 @@ Per-profile tool configuration for a single tool ID.
 
 Supported tool IDs:
 
-| Tool ID | Description |
-|---------|-------------|
-| `mangohud` | Performance HUD overlay |
-| `vkbasalt` | Vulkan post-processing |
-| `gamemode` | System performance tuning |
-| `reshade` | D3D/OpenGL post-processing for Wine-backed games |
-| `optiscaler` | DLSS / FSR / XeSS upscaling |
-| `proton` | Proton runtime selection and DLL overrides |
+| Tool ID      | Description                                      |
+| ------------ | ------------------------------------------------ |
+| `mangohud`   | Performance HUD overlay                          |
+| `vkbasalt`   | Vulkan post-processing                           |
+| `gamemode`   | System performance tuning                        |
+| `reshade`    | D3D/OpenGL post-processing for Wine-backed games |
+| `optiscaler` | DLSS / FSR / XeSS upscaling                      |
+| `proton`     | Proton runtime selection and DLL overrides       |
 
 The `settings.<key>` option is generated from the Rust tool schema in
 `crates/modde-games/src/tools/<tool>.rs` via `settings_schema()`.
 
-| Option | mangohud | vkbasalt | gamemode | reshade | optiscaler | proton |
-|--------|----------|----------|----------|---------|------------|--------|
-| `enable` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `settings.<key>` | free-form | typed | typed | typed | free-form | free-form |
-| `applyOnActivation` | n/a | n/a | n/a | ✓ | ✓ | n/a |
-| `release` | n/a | n/a | n/a | n/a | ✓ | n/a |
-| `profile` | n/a | n/a | n/a | n/a | ✓ | n/a |
+| Option              | mangohud  | vkbasalt | gamemode | reshade | optiscaler | proton    |
+| ------------------- | --------- | -------- | -------- | ------- | ---------- | --------- |
+| `enable`            | ✓         | ✓        | ✓        | ✓       | ✓          | ✓         |
+| `settings.<key>`    | free-form | typed    | typed    | typed   | free-form  | free-form |
+| `applyOnActivation` | n/a       | n/a      | n/a      | ✓       | ✓          | n/a       |
+| `release`           | n/a       | n/a      | n/a      | n/a     | ✓          | n/a       |
+| `profile`           | n/a       | n/a      | n/a      | n/a     | ✓          | n/a       |
 
 `settings.<key>` accepts the tool-specific schema for the typed tools
 (`vkbasalt`, `gamemode`, and `reshade`) and free-form values for the other

@@ -21,28 +21,28 @@ Profile {
 
 ### EnabledMod Fields
 
-| Field | Type | Purpose |
-|-------|------|---------|
-| `mod_id` | String | Unique identifier |
-| `enabled` | bool | Toggle without removing |
-| `version` | Option<String> | Installed version |
-| `fomod_config` | Option<String> | Stored FOMOD selections |
-| `nexus_mod_id` | Option<i64> | Nexus tracking for updates |
-| `nexus_file_id` | Option<i64> | Nexus file tracking |
-| `nexus_game_domain` | Option<String> | Game domain for API |
-| `installed_timestamp` | Option<i64> | For update comparison |
-| `category_id` | Option<i64> | Category assignment |
-| `notes` | Option<String> | User notes |
-| `tags` | Option<String> | JSON array of tags |
+| Field                 | Type           | Purpose                    |
+| --------------------- | -------------- | -------------------------- |
+| `mod_id`              | String         | Unique identifier          |
+| `enabled`             | bool           | Toggle without removing    |
+| `version`             | Option<String> | Installed version          |
+| `fomod_config`        | Option<String> | Stored FOMOD selections    |
+| `nexus_mod_id`        | Option<i64>    | Nexus tracking for updates |
+| `nexus_file_id`       | Option<i64>    | Nexus file tracking        |
+| `nexus_game_domain`   | Option<String> | Game domain for API        |
+| `installed_timestamp` | Option<i64>    | For update comparison      |
+| `category_id`         | Option<i64>    | Category assignment        |
+| `notes`               | Option<String> | User notes                 |
+| `tags`                | Option<String> | JSON array of tags         |
 
 ### Key Files
 
-| File | Purpose |
-|------|---------|
-| `crates/modde-core/src/profile/mod.rs` | Profile, EnabledMod, ProfileManager |
-| `crates/modde-core/src/db.rs` | SQLite persistence, CRUD, categories |
-| `crates/modde-core/src/resolver/mod.rs` | Load order DAG, ConflictMap |
-| `crates/modde-cli/src/commands/profile.rs` | CLI profile commands |
+| File                                       | Purpose                              |
+| ------------------------------------------ | ------------------------------------ |
+| `crates/modde-core/src/profile/mod.rs`     | Profile, EnabledMod, ProfileManager  |
+| `crates/modde-core/src/db.rs`              | SQLite persistence, CRUD, categories |
+| `crates/modde-core/src/resolver/mod.rs`    | Load order DAG, ConflictMap          |
+| `crates/modde-cli/src/commands/profile.rs` | CLI profile commands                 |
 
 ### Experiment Mode (Try/Rollback/Commit)
 
@@ -61,12 +61,14 @@ Each try/rollback automatically swaps saves.
 ### Categories & Organization
 
 **Schema (V2):**
+
 - `mod_categories(id, profile_id, name, color, sort_index)` — collapsible groups
 - `profile_mods.category_id` — assign mods to categories
 - `profile_mods.notes` — per-mod notes
 - `profile_mods.tags` — JSON array of tag strings
 
 **DB Methods:**
+
 - `create_category()`, `update_category()`, `delete_category()`, `list_categories()`
 - `set_mod_category()`, `set_mod_notes()`, `set_mod_tags()`
 
@@ -95,34 +97,34 @@ On profile activation, INIs are swapped automatically alongside saves.
 
 ## MO2 Feature Comparison
 
-| MO2 Feature | modde | Notes |
-|-------------|-------|-------|
-| Profile system with mod lists | **Done** | SQLite-backed, richer metadata |
-| Profile switching | **Done** | Save-aware with fingerprint tracking |
-| Independent mod priority ordering | **Done** | `sort_index` in DB |
-| Per-profile INI files | **Done** | `ini_profiles.rs`, auto-swap |
-| Per-profile save games | **Done** | Git-backed vault with auto-swap |
-| Experiment/try mode | **Done** | Stackable — unique to modde |
-| Profile forking | **Done** | Clone mods + rules + saves |
-| Mod categories | **Done** | DB-backed with colors |
-| Collapsible separators with aggregated child info | -- | MO2 separators collapse/expand and show combined flags |
-| Separator scrollbar markers | -- | MO2 draws colored marks on scrollbar at separator positions |
-| Per-mod notes | **Done** | `notes` field on EnabledMod |
-| Per-mod tags | **Done** | JSON array in `tags` field |
-| Per-row notes color | -- | MO2 lets you color-code individual mod rows via Notes column |
-| "Send to..." priority system | -- | MO2: send to separator, first/last conflict, specific priority |
-| Three-state filters (show/hide/only) | -- | DB supports it, UI not wired |
-| AND/OR filter logic | -- | MO2 supports AND/OR mode across filter criteria |
-| Inverted filters | -- | MO2 can invert each filter criterion independently |
-| Group-by modes (category, Nexus ID) | -- | MO2 mod list can be grouped by category or shared Nexus ID |
-| Content type icons per mod | -- | MO2 shows icons for textures, meshes, scripts, etc. in each mod |
-| Flags column (invalid, backup, foreign, etc.) | -- | MO2 shows ~12 status flag icons per mod |
-| Mod author / uploader columns | -- | MO2 tracks author and uploader separately |
-| Install time column | -- | MO2 records when each mod was installed |
-| CSV export | -- | MO2 exports configurable columns/rows |
-| "Mark as converted/working" | -- | MO2 dismisses alternate-game warnings for ported mods |
-| "Ignore missing data" | -- | MO2 dismisses invalid-data warnings |
-| Mod backup/restore | -- | MO2 backs up individual mod directories, restores on demand |
-| Reinstall mod from original archive | -- | MO2 re-runs the installer from the stored archive |
-| Compact/detailed list views | -- | MO2 has toggle for denser list display |
-| Keyboard shortcuts (A-Z jump, F2 rename, etc.) | -- | MO2 has extensive mod list keyboard shortcuts |
+| MO2 Feature                                       | modde    | Notes                                                           |
+| ------------------------------------------------- | -------- | --------------------------------------------------------------- |
+| Profile system with mod lists                     | **Done** | SQLite-backed, richer metadata                                  |
+| Profile switching                                 | **Done** | Save-aware with fingerprint tracking                            |
+| Independent mod priority ordering                 | **Done** | `sort_index` in DB                                              |
+| Per-profile INI files                             | **Done** | `ini_profiles.rs`, auto-swap                                    |
+| Per-profile save games                            | **Done** | Git-backed vault with auto-swap                                 |
+| Experiment/try mode                               | **Done** | Stackable — unique to modde                                     |
+| Profile forking                                   | **Done** | Clone mods + rules + saves                                      |
+| Mod categories                                    | **Done** | DB-backed with colors                                           |
+| Collapsible separators with aggregated child info | --       | MO2 separators collapse/expand and show combined flags          |
+| Separator scrollbar markers                       | --       | MO2 draws colored marks on scrollbar at separator positions     |
+| Per-mod notes                                     | **Done** | `notes` field on EnabledMod                                     |
+| Per-mod tags                                      | **Done** | JSON array in `tags` field                                      |
+| Per-row notes color                               | --       | MO2 lets you color-code individual mod rows via Notes column    |
+| "Send to..." priority system                      | --       | MO2: send to separator, first/last conflict, specific priority  |
+| Three-state filters (show/hide/only)              | --       | DB supports it, UI not wired                                    |
+| AND/OR filter logic                               | --       | MO2 supports AND/OR mode across filter criteria                 |
+| Inverted filters                                  | --       | MO2 can invert each filter criterion independently              |
+| Group-by modes (category, Nexus ID)               | --       | MO2 mod list can be grouped by category or shared Nexus ID      |
+| Content type icons per mod                        | --       | MO2 shows icons for textures, meshes, scripts, etc. in each mod |
+| Flags column (invalid, backup, foreign, etc.)     | --       | MO2 shows ~12 status flag icons per mod                         |
+| Mod author / uploader columns                     | --       | MO2 tracks author and uploader separately                       |
+| Install time column                               | --       | MO2 records when each mod was installed                         |
+| CSV export                                        | --       | MO2 exports configurable columns/rows                           |
+| "Mark as converted/working"                       | --       | MO2 dismisses alternate-game warnings for ported mods           |
+| "Ignore missing data"                             | --       | MO2 dismisses invalid-data warnings                             |
+| Mod backup/restore                                | --       | MO2 backs up individual mod directories, restores on demand     |
+| Reinstall mod from original archive               | --       | MO2 re-runs the installer from the stored archive               |
+| Compact/detailed list views                       | --       | MO2 has toggle for denser list display                          |
+| Keyboard shortcuts (A-Z jump, F2 rename, etc.)    | --       | MO2 has extensive mod list keyboard shortcuts                   |

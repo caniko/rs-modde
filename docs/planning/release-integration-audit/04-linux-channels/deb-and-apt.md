@@ -5,6 +5,7 @@
 > Routine packaging work: a `cargo-deb` manifest in each binary crate, two `.deb` builds in the release job, and a reprepro/aptly script that publishes a Codeberg-hosted APT repo. The judgement calls (split modde vs modde-ui into two packages? what to do about `libssl3` ABI across Debian/Ubuntu?) are well-precedented; `medium` is enough.
 
 ## Working tree
+
 - `crates/modde-cli/Cargo.toml` — add `[package.metadata.deb]`.
 - `crates/modde-ui/Cargo.toml` — add `[package.metadata.deb]` with X11/Wayland depends.
 - `.forgejo/workflows/release.yml` — add deb build + APT publish steps.
@@ -12,20 +13,24 @@
 - New: `dist/apt/conf/distributions` — reprepro config.
 
 ## Goal
+
 1. Two `.deb` packages per architecture: `modde_<v>_amd64.deb` (CLI) and `modde-ui_<v>_amd64.deb` (GUI). Same for `arm64`.
 2. Packages uploaded as Codeberg release assets, signed (Phase 02 cosign + minisign).
 3. APT repo at `https://modde.tartanoglu.com/apt/` (served via Codeberg Pages or the existing website host) with `stable` suite, signed `Release` file using a dedicated **repo GPG key** (separate from maintainer key).
 4. Install docs add `apt`-based install (curl key → add source → `apt install modde`).
 
 ## Why
-`.deb` is the dominant Linux desktop install method (Ubuntu, Mint, Debian, Pop!_OS); shipping only Fedora SRPM via COPR leaves the largest segment without a native package. AUR covers Arch users only. Flatpak (phase 04c) covers desktop GUI but not the CLI.
+
+`.deb` is the dominant Linux desktop install method (Ubuntu, Mint, Debian, Pop!\_OS); shipping only Fedora SRPM via COPR leaves the largest segment without a native package. AUR covers Arch users only. Flatpak (phase 04c) covers desktop GUI but not the CLI.
 
 ## Out of scope
+
 - Submitting to official Debian/Ubuntu repos — high bar (DD sponsorship, multi-year cycle); explicitly defer.
 - `.snap` packaging — separate channel; document as deferred in audit report, not in this phase.
 - Mirroring the APT repo to a CDN — single-origin is fine for now.
 
 ## Plan
+
 1. Add `[package.metadata.deb]` to `crates/modde-cli/Cargo.toml`:
    ```toml
    [package.metadata.deb]
@@ -60,6 +65,7 @@
 7. Add install docs section: `curl -fsSL https://modde.tartanoglu.com/apt/key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/modde.gpg && echo "deb [signed-by=/etc/apt/keyrings/modde.gpg] https://modde.tartanoglu.com/apt stable main" | sudo tee /etc/apt/sources.list.d/modde.list && sudo apt update && sudo apt install modde`.
 
 ## Acceptance criteria
+
 - [ ] `cargo deb -p modde-cli` and `cargo deb -p modde-ui` produce valid `.deb` artifacts locally that pass `lintian --fail-on warning` (or `--info` for warnings allowed; document the chosen bar).
 - [ ] Release workflow uploads `modde_<v>_amd64.deb`, `modde_<v>_arm64.deb`, `modde-ui_<v>_amd64.deb`, `modde-ui_<v>_arm64.deb` to the Codeberg release.
 - [ ] `https://modde.tartanoglu.com/apt/dists/stable/Release` and `Release.gpg` resolve, and `apt update && apt install modde` works on a Debian 12 + Ubuntu 24.04 container.
@@ -67,6 +73,7 @@
 - [ ] `docs/site/content/docs/getting-started/installation.md` has a working "Debian/Ubuntu (apt)" section.
 
 ## Files likely touched
+
 - `crates/modde-cli/Cargo.toml`, `crates/modde-ui/Cargo.toml`
 - `.forgejo/workflows/release.yml`
 - `scripts/publish-apt.sh` (new)
@@ -75,12 +82,14 @@
 - `SECURITY.md`
 
 ## Pitfalls
+
 - `cargo-deb`'s `depends` autodetection misses runtime deps loaded via `dlopen` (Vulkan loader). Hand-list them.
 - Cross-arch `.deb`: `cargo deb --target aarch64-...` requires `dpkg-buildpackage` to know about the foreign arch; safer to use `dpkg-deb -b` on a staged tree built from the nix `modde-aarch64-linux` output.
 - `libssl3` ABI: Debian 11 ships libssl1.1, Debian 12+ ships libssl3. Either vendor OpenSSL via `openssl-sys`'s `vendored` feature for the deb build, or skip Debian 11 explicitly. Recommend: vendored OpenSSL for deb build to avoid the ABI matrix.
-- The APT `Release` file must be signed *with* the same key whose fingerprint is in `key.gpg`; mismatched keys produce `NO_PUBKEY` errors that are confusing to debug.
+- The APT `Release` file must be signed _with_ the same key whose fingerprint is in `key.gpg`; mismatched keys produce `NO_PUBKEY` errors that are confusing to debug.
 
 ## Reference
+
 - `cargo-deb`: https://github.com/kornelski/cargo-deb
 - reprepro: https://salsa.debian.org/debian/reprepro
 - Phase 01 audit report — Linux gap list.

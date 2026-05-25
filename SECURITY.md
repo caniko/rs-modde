@@ -3,7 +3,7 @@
 ## Supported Versions
 
 | Version | Supported |
-|---------|-----------|
+| ------- | --------- |
 | 0.1.x   | Yes       |
 
 ## Reporting a Vulnerability
@@ -19,6 +19,7 @@ We will acknowledge receipt within 48 hours and aim to release a fix within 7 da
 ## Scope
 
 modde handles:
+
 - Nexus Mods API keys (stored via modde config, system keyring, or sops-nix)
 - Local filesystem operations (symlinks, file copies)
 - Network requests to mod hosting services

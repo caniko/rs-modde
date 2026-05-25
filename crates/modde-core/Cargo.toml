@@ -13,13 +13,13 @@ categories.workspace = true
 readme = "../../README.md"
 documentation = "https://docs.rs/modde-core"
 include = [
-    "../../LICENSE",
-    "../../README.md",
-    "CHANGELOG.md",
-    "Cargo.toml",
-    "benches/**",
-    "src/**",
-    "tests/**",
+  "../../LICENSE",
+  "../../README.md",
+  "CHANGELOG.md",
+  "Cargo.toml",
+  "benches/**",
+  "src/**",
+  "tests/**",
 ]
 
 [package.metadata.docs.rs]

@@ -110,11 +110,11 @@ chunk metadata endpoint.
 
 Missing required artifacts:
 
-| Archive | Munged authored-file id | Required because |
-| --- | --- | --- |
-| `Legends of the Frost - DynDOLOD Output 2.5.1.7z` | `Legends of the Frost - DynDOLOD Output 2.5.1.7z_d08ce1cb-b109-4d6f-890d-5fa4e1b5241d` | The `.wabbajack` manifest references this archive as an install input. |
+| Archive                                              | Munged authored-file id                                                                   | Required because                                                       |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `Legends of the Frost - DynDOLOD Output 2.5.1.7z`    | `Legends of the Frost - DynDOLOD Output 2.5.1.7z_d08ce1cb-b109-4d6f-890d-5fa4e1b5241d`    | The `.wabbajack` manifest references this archive as an install input. |
 | `Legends of the Frost - Facegen (Snow Elves) 2.4.7z` | `Legends of the Frost - Facegen (Snow Elves) 2.4.7z_54879af0-ac8d-498d-8921-c70080fc3001` | The `.wabbajack` manifest references this archive as an install input. |
-| `Legends of the Frost - Facegen CC 2.4.7z` | `Legends of the Frost - Facegen CC 2.4.7z_e7c989b3-4a88-4b2b-9c74-f744d3a74548` | The `.wabbajack` manifest references this archive as an install input. |
+| `Legends of the Frost - Facegen CC 2.4.7z`           | `Legends of the Frost - Facegen CC 2.4.7z_e7c989b3-4a88-4b2b-9c74-f744d3a74548`           | The `.wabbajack` manifest references this archive as an install input. |
 
 Validation command for each missing artifact:
 
@@ -159,13 +159,13 @@ authored-files inputs.
 
 The previously identified follow-up features are now implemented:
 
-| Feature | Status | Validation |
-| --- | --- | --- |
-| Wabbajack authored-file availability preflight | Implemented | `cargo test -p modde-sources wabbajack_authored_preflight` |
-| Missing authored-artifact remediation output | Implemented | `cargo test -p modde-sources missing_authored_file_error` |
-| User-supplied local archive import | Implemented | `cargo test -p modde-sources wabbajack_archive_import` and `cargo test -p modde-cli cli_wabbajack_import_archive` |
-| Resume-friendly authored-file chunks | Implemented | `cargo test -p modde-sources authored_files_resume` |
-| Synthetic late-stage Wabbajack fixture | Implemented | `cargo test -p modde-sources synthetic_wabbajack_pipeline` |
+| Feature                                        | Status      | Validation                                                                                                        |
+| ---------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| Wabbajack authored-file availability preflight | Implemented | `cargo test -p modde-sources wabbajack_authored_preflight`                                                        |
+| Missing authored-artifact remediation output   | Implemented | `cargo test -p modde-sources missing_authored_file_error`                                                         |
+| User-supplied local archive import             | Implemented | `cargo test -p modde-sources wabbajack_archive_import` and `cargo test -p modde-cli cli_wabbajack_import_archive` |
+| Resume-friendly authored-file chunks           | Implemented | `cargo test -p modde-sources authored_files_resume`                                                               |
+| Synthetic late-stage Wabbajack fixture         | Implemented | `cargo test -p modde-sources synthetic_wabbajack_pipeline`                                                        |
 
 Local archive import is explicit and hash-gated:
 
@@ -202,7 +202,7 @@ probe, either:
 2. Publish a newer LoTF `.wabbajack` manifest that references available authored
    files.
 3. Import exact local copies of the three archives with `modde wabbajack
-   import-archive`, then rerun the isolated synthetic probe.
+import-archive`, then rerun the isolated synthetic probe.
 
 ## Codeberg Issue Update Draft
 

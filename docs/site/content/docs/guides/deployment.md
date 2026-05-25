@@ -17,6 +17,7 @@ The deployment pipeline has three phases:
 modde resolves the load order and builds a map of relative file paths to their source locations. For each file path, the mod with the highest priority (latest in load order) wins. Hidden files and profile-level overrides are applied during this phase.
 
 **Priority order** (highest to lowest):
+
 1. Profile overrides directory
 2. Later mods in the load order
 3. Earlier mods in the load order

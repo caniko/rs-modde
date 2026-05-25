@@ -7,14 +7,14 @@ Documentation: <https://caniko.codeberg.page/rs-modde/docs/>
 
 ## Supported games
 
-| Game | Current status |
-|------|----------------|
-| Skyrim SE/AE | `Done`: plugins, VFS, LOOT sorting, diagnostics, save tracking |
-| Fallout 4 | `Done`: plugins, VFS, LOOT sorting, diagnostics, save tracking |
-| Fallout 76 | `Partial`: plugins, VFS, BA2 scanning; saves are effectively server-side |
-| Starfield | `Partial`: plugins, VFS, diagnostics, save tracking |
-| Cyberpunk 2077 | `Done`: REDmod, CET, TweakXL, scripts, conflict detection |
-| Stellar Blade | `Partial`: UE4/UE5-style deployment, scanning, conflicts, save tracking |
+| Game           | Current status                                                           |
+| -------------- | ------------------------------------------------------------------------ |
+| Skyrim SE/AE   | `Done`: plugins, VFS, LOOT sorting, diagnostics, save tracking           |
+| Fallout 4      | `Done`: plugins, VFS, LOOT sorting, diagnostics, save tracking           |
+| Fallout 76     | `Partial`: plugins, VFS, BA2 scanning; saves are effectively server-side |
+| Starfield      | `Partial`: plugins, VFS, diagnostics, save tracking                      |
+| Cyberpunk 2077 | `Done`: REDmod, CET, TweakXL, scripts, conflict detection                |
+| Stellar Blade  | `Partial`: UE4/UE5-style deployment, scanning, conflicts, save tracking  |
 
 Games are auto-detected via Steam (Proton) and Heroic (GOG, Epic) launchers.
 The canonical status baseline for these claims lives in `docs/capability-matrix.toml`.
@@ -35,13 +35,13 @@ The canonical status baseline for these claims lives in `docs/capability-matrix.
 
 ## Architecture
 
-| Crate | Purpose |
-|-------|---------|
-| `modde-core` | SQLite database, VFS/symlink farm, profiles, collision detection, save management, load order resolver |
-| `modde-games` | Game plugins (Bethesda, Cyberpunk, Stellar Blade), trait system, launcher detection, overlay tools |
+| Crate           | Purpose                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------- |
+| `modde-core`    | SQLite database, VFS/symlink farm, profiles, collision detection, save management, load order resolver        |
+| `modde-games`   | Game plugins (Bethesda, Cyberpunk, Stellar Blade), trait system, launcher detection, overlay tools            |
 | `modde-sources` | Download backends (Nexus, Wabbajack, GitHub, MEGA, etc.), archive extraction, FOMOD, and partial BAIN support |
-| `modde-cli` | 24 top-level commands with 60+ subcommands covering the full modding workflow |
-| `modde-ui` | Iced GUI with reachable Downloads, Data Files, Diagnostics, and Tools views |
+| `modde-cli`     | 24 top-level commands with 60+ subcommands covering the full modding workflow                                 |
+| `modde-ui`      | Iced GUI with reachable Downloads, Data Files, Diagnostics, and Tools views                                   |
 
 ## Usage
 
@@ -199,12 +199,12 @@ imports = [ inputs.modde.homeManagerModules.modde ];
 
 ## Platform Support
 
-| Platform | Status |
-|----------|--------|
-| Linux (NixOS) | Primary target, fully supported |
-| Linux (other) | Supported via Cargo or Nix |
-| macOS | Experimental (builds but untested) |
-| Windows | Experimental (release artifacts are built but untested) |
+| Platform      | Status                                                  |
+| ------------- | ------------------------------------------------------- |
+| Linux (NixOS) | Primary target, fully supported                         |
+| Linux (other) | Supported via Cargo or Nix                              |
+| macOS         | Experimental (builds but untested)                      |
+| Windows       | Experimental (release artifacts are built but untested) |
 
 ## CI
 

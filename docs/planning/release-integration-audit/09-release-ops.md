@@ -5,6 +5,7 @@
 > Cluster of operational concerns: pre-release / RC tags, hotfix branch policy, automated announcement webhooks (Mastodon, Matrix), CHANGELOG-vs-tag enforcement, in-app update notifications. Each is small; together they're the long tail of "release works in practice, not just in theory". Medium because no single piece is hard but the policy decisions (RC versioning, who can hotfix from main vs from a release branch) want a real opinion.
 
 ## Working tree
+
 - `.forgejo/workflows/release.yml` — branch logic for pre-release tags.
 - `crates/modde-core/src/` — in-app update check module.
 - `crates/modde-ui/src/` — UI surface for "update available" banner.
@@ -13,6 +14,7 @@
 - `simit.toml` — verify simit handles RC tagging.
 
 ## Goal
+
 1. **Pre-release / RC channel**: tags matching `[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+` (or `-beta.N`, `-alpha.N`) trigger the full release pipeline but mark the Codeberg release as `prerelease: true` and skip the Homebrew tap, AUR `modde-bin`, winget, Scoop, Flathub, and crates.io publishes (those are stable-only). COPR's `--nowait` build still runs but lands in a `rs-modde-testing` project rather than `rs-modde`.
 2. **Hotfix policy**: documented in CONTRIBUTING.md. For a stable release N that needs a patch, branch from the tag (`hotfix/<v>`), cherry-pick fixes, tag `<v>.N+1`, run the same release flow. No back-merge from `main`/`trunk` required to publish a hotfix.
 3. **Announcement automation**: post to Mastodon (`@modde@fosstodon.org` or similar) + Matrix room on each non-prerelease tag, with release URL + first 5 lines of CHANGELOG section for that version.
@@ -21,14 +23,17 @@
 6. **Yank / rollback drill**: documented procedure for pulling a bad release across all channels (cargo yank, delete Codeberg release, revert Homebrew tap commit, untag AUR, abandon winget PR, withdraw Flathub PR, COPR `delete-build`).
 
 ## Why
-Phases 02–08 give a *correct* release. This phase makes the release *operable*. RC channel lets contributors test pre-release without ad-hoc tarballs. Hotfix policy avoids "we have to ship from main with the half-finished feature". Announcements move users off "manually check the release page" loop. In-app update check is the most common feature request for any local app.
+
+Phases 02–08 give a _correct_ release. This phase makes the release _operable_. RC channel lets contributors test pre-release without ad-hoc tarballs. Hotfix policy avoids "we have to ship from main with the half-finished feature". Announcements move users off "manually check the release page" loop. In-app update check is the most common feature request for any local app.
 
 ## Out of scope
+
 - Auto-updating in place (downloading and replacing the running binary). Notification-only.
 - Telemetry beyond version-check (no usage stats, no crash reports here — separate decision).
 - Backport policy across multiple stable lines (`1.x` + `2.x` simultaneously) — defer; per memory `project_versioning_policy.md`, the project does major-anytime SemVer without long stable branches.
 
 ## Plan
+
 1. **RC channel**:
    - Adjust `release.yml`'s `Validate tag` step to accept pre-release suffixes: `^[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$`.
    - Compute `IS_PRERELEASE` shell var; pass to Codeberg release JSON as `prerelease: $IS_PRERELEASE`.
@@ -62,6 +67,7 @@ Phases 02–08 give a *correct* release. This phase makes the release *operable*
    - Per channel: explicit command + caveats. e.g., "Homebrew tap: `git revert -1 HEAD && git push`. AUR: `aur git push --force-with-lease`. winget: comment 'Withdrawn' on the PR. Flathub: open a `revert/<v>` PR. crates.io: `cargo yank --version <v> -p <crate>`."
 
 ## Acceptance criteria
+
 - [ ] Tagging `0.0.0-rc.1` produces a Codeberg release marked `prerelease: true`, with only Codeberg + Attic + COPR-testing publishes running (no Homebrew/AUR/winget/Scoop/Flathub/crates.io).
 - [ ] Tagging `0.0.0` (no suffix) runs the full publish set.
 - [ ] CHANGELOG-missing tag fails the workflow at the validation step with a clear error.
@@ -72,6 +78,7 @@ Phases 02–08 give a *correct* release. This phase makes the release *operable*
 - [ ] `CONTRIBUTING.md` has explicit "Hotfix release" and "Yank / withdraw a release" sections with per-channel commands.
 
 ## Files likely touched
+
 - `.forgejo/workflows/release.yml`
 - `CONTRIBUTING.md`
 - `crates/modde-core/src/update_check.rs` (new)
@@ -80,6 +87,7 @@ Phases 02–08 give a *correct* release. This phase makes the release *operable*
 - `simit.toml` (verify RC handling)
 
 ## Pitfalls
+
 - In-app update check is the easiest spot to accidentally introduce telemetry. Be strict: no user-agent fingerprinting beyond `modde/<version>`, no IP logging beyond what Codeberg's TLS terminator already does, no opt-out-disabled telemetry shipping alongside it.
 - Cache file write must be atomic (write to temp + rename) so a concurrent CLI + UI doesn't corrupt it.
 - Mastodon API tokens are per-account-per-app; document creation in `SECURITY.md`.
@@ -87,6 +95,7 @@ Phases 02–08 give a *correct* release. This phase makes the release *operable*
 - `simit release` may or may not handle RC tags; verify before relying on it (per `feedback_use_simit.md` memory, simit is preferred but its RC support hasn't been validated for this project).
 
 ## Reference
+
 - Mastodon API: https://docs.joinmastodon.org/methods/statuses/#create
 - Matrix client-server API: https://spec.matrix.org/v1.10/client-server-api/
 - User memory `project_versioning_policy.md`, `feedback_use_simit.md`.

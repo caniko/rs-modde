@@ -76,13 +76,13 @@ pub fn resolve_mod_scanner(game_id: &str) -> Option<&'static dyn ModScanner>;
 
 Scans these Cyberpunk-specific mod locations:
 
-| Directory | Grouping strategy |
-|-----------|------------------|
-| `bin/x64/plugins/cyber_engine_tweaks/mods/` | Each subdirectory = one CET mod |
-| `r6/scripts/` | Each subdirectory = one REDscript mod |
-| `r6/tweaks/` | Each subdirectory = one TweakXL mod |
-| `archive/pc/mod/` | Each `.archive` file = one mod |
-| `mods/` | Each subdirectory = one REDmod (parse `info.json` for metadata) |
+| Directory                                   | Grouping strategy                                               |
+| ------------------------------------------- | --------------------------------------------------------------- |
+| `bin/x64/plugins/cyber_engine_tweaks/mods/` | Each subdirectory = one CET mod                                 |
+| `r6/scripts/`                               | Each subdirectory = one REDscript mod                           |
+| `r6/tweaks/`                                | Each subdirectory = one TweakXL mod                             |
+| `archive/pc/mod/`                           | Each `.archive` file = one mod                                  |
+| `mods/`                                     | Each subdirectory = one REDmod (parse `info.json` for metadata) |
 
 For REDmod mods, parse `info.json` to extract name/version. For CET mods, check for `init.lua` as confidence signal.
 
@@ -105,6 +105,7 @@ pub fn discovered_to_enabled(discovered: &DiscoveredMod) -> EnabledMod;
 ```
 
 Algorithm:
+
 1. `manifest.install_directives()` → group `FromArchive`/`PatchedFromArchive` by `archive_hash`
 2. Normalize `to` paths: `.replace('\\', "/").to_lowercase()`
 3. For each archive: `present_count / total_count >= threshold` → emit `DiscoveredMod`
@@ -119,6 +120,7 @@ modde scan --game <id> [--game-dir <path>] [--manifest <.wabbajack>] [--import-t
 ```
 
 Handler flow:
+
 1. Resolve scanner via `resolve_mod_scanner(&game)`, bail if unsupported
 2. Resolve install dir from `--game-dir` or `GamePlugin::detect_install()`
 3. Build case-insensitive file index of game directory (walkdir, lowercased paths → `HashSet<String>`)
@@ -133,6 +135,7 @@ Handler flow:
 **New file: `crates/modde-games/src/bethesda/scanner.rs`**
 
 Data-driven `BethesdaScanner` struct (like `BethesdaGame`):
+
 - Scans `Data/` for `.esp`/`.esm`/`.esl` plugins
 - Groups each plugin + companion `.bsa`/`.ba2` as one mod
 - Reads `plugins.txt` for enabled/disabled status
@@ -145,6 +148,7 @@ Data-driven `BethesdaScanner` struct (like `BethesdaGame`):
 **File: `crates/modde-cli/src/commands/tool.rs:120-128`** — Hardcoded Bethesda tool list.
 
 **Fix:** Add to `GamePlugin`:
+
 ```rust
 fn external_tools(&self) -> &[(&str, &[&str])] { &[] }
 ```
@@ -154,6 +158,7 @@ fn external_tools(&self) -> &[(&str, &[&str])] { &[] }
 **File: `crates/modde-cli/src/commands/loot.rs:110-117`** — Hardcoded `match game_id`.
 
 **Fix:** Add to `GamePlugin`:
+
 ```rust
 fn steam_app_id(&self) -> Option<&str> { None }
 fn my_games_dir(&self) -> Option<&str> { None }
@@ -172,22 +177,22 @@ Deploy is implemented in both `deploy.rs` and `app.rs`. Extract shared `modde_co
 
 ## Files Summary
 
-| File | Action |
-|------|--------|
-| `crates/modde-games/src/traits.rs` | Add `ModScanner` trait, types, helpers, extend `GamePlugin` |
-| `crates/modde-games/src/lib.rs` | Add `resolve_mod_scanner()`, export new types |
-| `crates/modde-games/src/cyberpunk/scanner.rs` | **New** — Cyberpunk scanner implementation |
-| `crates/modde-games/src/cyberpunk/mod.rs` | Add `pub mod scanner;` |
-| `crates/modde-games/src/bethesda/scanner.rs` | **New** — Bethesda scanner implementation |
-| `crates/modde-games/src/bethesda/mod.rs` | Add `pub mod scanner;` |
-| `crates/modde-core/src/scanner.rs` | **New** — Wabbajack manifest matching + `discovered_to_enabled()` |
-| `crates/modde-core/src/lib.rs` | Add `pub mod scanner;` |
-| `crates/modde-cli/src/commands/scan.rs` | **New** — `modde scan` CLI command |
-| `crates/modde-cli/src/commands/mod.rs` | Add `pub mod scan;` |
-| `crates/modde-cli/src/main.rs` | Add `Scan` variant, wire handler |
-| `crates/modde-cli/src/commands/tool.rs` | Migrate hardcoded tools → trait |
-| `crates/modde-cli/src/commands/loot.rs` | Migrate hardcoded game mapping → trait |
-| `crates/modde-games/src/tools/optiscaler.rs` | Use `executable_dir()` instead of hardcoded path |
+| File                                          | Action                                                            |
+| --------------------------------------------- | ----------------------------------------------------------------- |
+| `crates/modde-games/src/traits.rs`            | Add `ModScanner` trait, types, helpers, extend `GamePlugin`       |
+| `crates/modde-games/src/lib.rs`               | Add `resolve_mod_scanner()`, export new types                     |
+| `crates/modde-games/src/cyberpunk/scanner.rs` | **New** — Cyberpunk scanner implementation                        |
+| `crates/modde-games/src/cyberpunk/mod.rs`     | Add `pub mod scanner;`                                            |
+| `crates/modde-games/src/bethesda/scanner.rs`  | **New** — Bethesda scanner implementation                         |
+| `crates/modde-games/src/bethesda/mod.rs`      | Add `pub mod scanner;`                                            |
+| `crates/modde-core/src/scanner.rs`            | **New** — Wabbajack manifest matching + `discovered_to_enabled()` |
+| `crates/modde-core/src/lib.rs`                | Add `pub mod scanner;`                                            |
+| `crates/modde-cli/src/commands/scan.rs`       | **New** — `modde scan` CLI command                                |
+| `crates/modde-cli/src/commands/mod.rs`        | Add `pub mod scan;`                                               |
+| `crates/modde-cli/src/main.rs`                | Add `Scan` variant, wire handler                                  |
+| `crates/modde-cli/src/commands/tool.rs`       | Migrate hardcoded tools → trait                                   |
+| `crates/modde-cli/src/commands/loot.rs`       | Migrate hardcoded game mapping → trait                            |
+| `crates/modde-games/src/tools/optiscaler.rs`  | Use `executable_dir()` instead of hardcoded path                  |
 
 ## Implementation Order
 

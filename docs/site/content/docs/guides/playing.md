@@ -29,11 +29,11 @@ modde play my-skyrim --game skyrim-se
 
 ## Skipping steps
 
-| Flag | Effect |
-|------|--------|
-| `--no-switch` | Skip profile switch (deploy + launch the active profile) |
-| `--no-deploy` | Skip deployment (switch + launch without redeploying) |
-| `--no-capture` | Skip save auto-capture after game exit |
+| Flag           | Effect                                                   |
+| -------------- | -------------------------------------------------------- |
+| `--no-switch`  | Skip profile switch (deploy + launch the active profile) |
+| `--no-deploy`  | Skip deployment (switch + launch without redeploying)    |
+| `--no-capture` | Skip save auto-capture after game exit                   |
 
 ## Steam vs Heroic
 

@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/modde-core",
-    "crates/modde-sources",
-    "crates/modde-games",
-    "crates/modde-ui",
-    "crates/modde-cli",
-    "crates/modde-xtask",
+  "crates/modde-core",
+  "crates/modde-sources",
+  "crates/modde-games",
+  "crates/modde-ui",
+  "crates/modde-cli",
+  "crates/modde-xtask",
 ]
 
 [workspace.package]
@@ -29,12 +29,12 @@ serde_yaml_ng = "0.10"
 
 # Async
 tokio = { version = "1", features = [
-    "macros",
-    "rt-multi-thread",
-    "fs",
-    "io-util",
-    "net",
-    "time",
+  "macros",
+  "rt-multi-thread",
+  "fs",
+  "io-util",
+  "net",
+  "time",
 ] }
 futures = "0.3"
 
@@ -62,11 +62,11 @@ petgraph = "0.8"
 
 # HTTP
 reqwest = { version = "0.13.2", default-features = false, features = [
-    "rustls",
-    "stream",
-    "json",
-    "form",
-    "cookies",
+  "rustls",
+  "stream",
+  "json",
+  "form",
+  "cookies",
 ] }
 semver = "1"
 
@@ -83,7 +83,16 @@ base64 = "0.22"
 flate2 = "1"
 lz4_flex = "0.13"
 zip = "8"
-sevenz-rust2 = { version = "0.21.0", default-features = false, features = ["util", "bzip2", "deflate", "aes256", "ppmd", "lz4", "zstd", "brotli"] }
+sevenz-rust2 = { version = "0.21.0", default-features = false, features = [
+  "util",
+  "bzip2",
+  "deflate",
+  "aes256",
+  "ppmd",
+  "lz4",
+  "zstd",
+  "brotli",
+] }
 reflink-copy = { version = "0.1.29", features = ["tracing"] }
 zstd = { version = "0.13.3", default-features = false, features = ["zstdmt"] }
 
@@ -114,7 +123,7 @@ winreg = "0.56"
 
 # Filesystem watch (inotify/kqueue)
 notify = { version = "8", default-features = false, features = [
-    "macos_kqueue",
+  "macos_kqueue",
 ] }
 
 # Database

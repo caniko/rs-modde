@@ -11,11 +11,13 @@ modde has deep Bethesda-specific support: plugin load order management, LOOT mas
 **Key file:** `crates/modde-games/src/bethesda/plugins_txt.rs`
 
 Reads/writes the standard Bethesda `plugins.txt` format:
+
 - `*PluginName.esp` = enabled
 - `PluginName.esp` = disabled
 - Lines starting with `#` = comments
 
 Proton path resolution:
+
 ```
 ~/.local/share/Steam/steamapps/compatdata/<APP_ID>/pfx/drive_c/users/steamuser/AppData/Local/<GAME_FOLDER>/plugins.txt
 ```
@@ -60,6 +62,7 @@ CLI: `modde loot sort --game skyrim-se`
 Binary parser that reads only the first ~1KB of each plugin:
 
 **TES4 Record Header (24 bytes):**
+
 ```
 [4] Signature ("TES4")
 [4] Data size
@@ -71,11 +74,13 @@ Binary parser that reads only the first ~1KB of each plugin:
 ```
 
 **Extracted Data:**
+
 - `version` — Form 43 (0.94, Oldrim) vs Form 44 (1.70, SSE)
 - `record_flags` — ESM/ESL flags
 - `masters` — MAST sub-records listing required master files
 
 **Validation Warnings:**
+
 - `Form43` — Oldrim-format plugin in SSE (causes CTDs)
 - `MissingMaster` — Required master not in active load order (crash on load)
 
@@ -86,6 +91,7 @@ CLI: `modde loot validate --game skyrim-se`
 **Key file:** `crates/modde-games/src/bethesda/archives.rs`
 
 Archives are deployed as-is (not extracted) since Bethesda engines load them natively:
+
 - `is_archive(path)` — checks `.bsa`/`.ba2` extension
 - `staging_path()` — places archives directly into Data directory
 
@@ -93,42 +99,42 @@ Archives are deployed as-is (not extracted) since Bethesda engines load them nat
 
 Extension-based classification for Bethesda games:
 
-| Category | Extensions |
-|----------|-----------|
-| Save-breaking | `.esp`, `.esm`, `.esl`, `.pex`, `.dll`, `.psc` |
-| Cosmetic | `.nif`, `.bsa`, `.ba2`, `.dds`, `.png`, `.tga`, `.jpg`, `.hkx`, `.fuz`, `.wav`, `.xwm`, `.swf`, `.ini`, `.json` |
+| Category      | Extensions                                                                                                      |
+| ------------- | --------------------------------------------------------------------------------------------------------------- |
+| Save-breaking | `.esp`, `.esm`, `.esl`, `.pex`, `.dll`, `.psc`                                                                  |
+| Cosmetic      | `.nif`, `.bsa`, `.ba2`, `.dds`, `.png`, `.tga`, `.jpg`, `.hkx`, `.fuz`, `.wav`, `.xwm`, `.swf`, `.ini`, `.json` |
 
 ### Game Instances
 
-| Game ID | Steam App ID | My Games Dir |
-|---------|-------------|-------------|
-| `skyrim-se` | 489830 | Skyrim Special Edition |
-| `skyrim-ae` | 489830 | Skyrim Special Edition |
-| `fallout4` | 377160 | Fallout4 |
-| `fallout76` | 1151340 | Fallout 76 |
-| `starfield` | 1716740 | Starfield |
+| Game ID     | Steam App ID | My Games Dir           |
+| ----------- | ------------ | ---------------------- |
+| `skyrim-se` | 489830       | Skyrim Special Edition |
+| `skyrim-ae` | 489830       | Skyrim Special Edition |
+| `fallout4`  | 377160       | Fallout4               |
+| `fallout76` | 1151340      | Fallout 76             |
+| `starfield` | 1716740      | Starfield              |
 
 ## MO2 Feature Comparison
 
-| MO2 Feature | modde | Notes |
-|-------------|-------|-------|
-| Plugin load order management | **Done** | plugins.txt read/write + DB |
-| Dual-pane (mod priority vs plugin order) | **Done** | Separate `plugin_order` table |
-| LOOT integration (auto-sort) | **Done** | Pure Rust masterlist parser |
-| LOOT sorting reports | Partial | Rules printed to terminal, no rich report |
-| Form 43 detection | **Done** | Binary header parsing |
-| Missing master detection | **Done** | Header master list vs active plugins |
-| ESM/ESL flag detection | **Done** | Record flags parsing |
-| BSA/BA2 archive deploy | **Done** | Archives placed as-is into Data/ |
-| Plugin list columns (priority, mod index, form version, author) | -- | MO2 has 8 columns in plugin list |
-| BSA/BA2 conflict detection (files inside archives) | **Done** | Archive contents are indexed into the collision map |
-| BSA/BA2 content preview/browser | -- | MO2 can list files inside archives |
-| BSA/BA2 packing tool | -- | MO2 has archive packer |
-| Archives tab (BSA load order management) | -- | MO2 has a dedicated Archives right-pane tab |
-| Archive invalidation (auto-generate) | -- | MO2 generates invalidation files per-profile |
-| BSA back-dating (force loose wins) | -- | MO2 changes archive timestamps |
-| "Lock load order" for plugins | -- | MO2 can pin plugins to resist LOOT re-sorting |
-| Plugin load order backup/restore | **Done** | Backups now round-trip real plugin order and enabled state |
-| Optional ESPs (move to optional/ subfolder) | -- | MO2's mod info dialog has Optional ESPs tab |
-| Per-mod INI tweaks (INI Files tab in mod info) | -- | MO2 edits .ini files bundled inside mods |
-| Problems/diagnostics system | Partial | Shared CLI/UI diagnostics exist, but not a full MO2-style problems framework |
+| MO2 Feature                                                     | modde    | Notes                                                                        |
+| --------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------- |
+| Plugin load order management                                    | **Done** | plugins.txt read/write + DB                                                  |
+| Dual-pane (mod priority vs plugin order)                        | **Done** | Separate `plugin_order` table                                                |
+| LOOT integration (auto-sort)                                    | **Done** | Pure Rust masterlist parser                                                  |
+| LOOT sorting reports                                            | Partial  | Rules printed to terminal, no rich report                                    |
+| Form 43 detection                                               | **Done** | Binary header parsing                                                        |
+| Missing master detection                                        | **Done** | Header master list vs active plugins                                         |
+| ESM/ESL flag detection                                          | **Done** | Record flags parsing                                                         |
+| BSA/BA2 archive deploy                                          | **Done** | Archives placed as-is into Data/                                             |
+| Plugin list columns (priority, mod index, form version, author) | --       | MO2 has 8 columns in plugin list                                             |
+| BSA/BA2 conflict detection (files inside archives)              | **Done** | Archive contents are indexed into the collision map                          |
+| BSA/BA2 content preview/browser                                 | --       | MO2 can list files inside archives                                           |
+| BSA/BA2 packing tool                                            | --       | MO2 has archive packer                                                       |
+| Archives tab (BSA load order management)                        | --       | MO2 has a dedicated Archives right-pane tab                                  |
+| Archive invalidation (auto-generate)                            | --       | MO2 generates invalidation files per-profile                                 |
+| BSA back-dating (force loose wins)                              | --       | MO2 changes archive timestamps                                               |
+| "Lock load order" for plugins                                   | --       | MO2 can pin plugins to resist LOOT re-sorting                                |
+| Plugin load order backup/restore                                | **Done** | Backups now round-trip real plugin order and enabled state                   |
+| Optional ESPs (move to optional/ subfolder)                     | --       | MO2's mod info dialog has Optional ESPs tab                                  |
+| Per-mod INI tweaks (INI Files tab in mod info)                  | --       | MO2 edits .ini files bundled inside mods                                     |
+| Problems/diagnostics system                                     | Partial  | Shared CLI/UI diagnostics exist, but not a full MO2-style problems framework |

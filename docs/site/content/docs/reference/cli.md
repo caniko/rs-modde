@@ -6,8 +6,8 @@ weight = 10
 
 ## Global flags
 
-| Flag | Description |
-|------|-------------|
+| Flag                | Description                                                                    |
+| ------------------- | ------------------------------------------------------------------------------ |
 | `--data-dir <path>` | Override data directory (default: `~/.local/share/modde` or `$MODDE_DATA_DIR`) |
 
 ---
@@ -24,8 +24,8 @@ List all profiles.
 modde profile list [--game <id>]
 ```
 
-| Flag | Description |
-|------|-------------|
+| Flag     | Description       |
+| -------- | ----------------- |
 | `--game` | Filter by game ID |
 
 ### `profile create`
@@ -92,8 +92,8 @@ Clone a profile including its mods, load order rules, and saves.
 modde profile fork <source> <name> --game <id> [--unlock]
 ```
 
-| Flag | Description |
-|------|-------------|
+| Flag       | Description                                                 |
+| ---------- | ----------------------------------------------------------- |
 | `--unlock` | Strip profile-level lock and all per-mod pins from the fork |
 
 ### `profile lock`
@@ -144,10 +144,10 @@ Detect filesystem-scanner rows that duplicate Wabbajack manifest entries.
 modde profile dedup <name> [--game <id>] [--manifest <path>] [--apply]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--manifest` | Path to a `.wabbajack` file as the authoritative reference |
-| `--apply` | Actually delete leaked rows (without this flag, dry-run only) |
+| Flag         | Description                                                   |
+| ------------ | ------------------------------------------------------------- |
+| `--manifest` | Path to a `.wabbajack` file as the authoritative reference    |
+| `--apply`    | Actually delete leaked rows (without this flag, dry-run only) |
 
 ---
 
@@ -159,10 +159,10 @@ Switch profile, deploy mods, and launch the game.
 modde play [profile] --game <id> [--no-deploy] [--no-switch] [--no-capture]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--no-deploy` | Skip mod deployment |
-| `--no-switch` | Skip profile switch |
+| Flag           | Description                            |
+| -------------- | -------------------------------------- |
+| `--no-deploy`  | Skip mod deployment                    |
+| `--no-switch`  | Skip profile switch                    |
 | `--no-capture` | Skip save auto-capture after game exit |
 
 ---
@@ -199,11 +199,11 @@ Install from a Wabbajack modlist.
 modde install wabbajack <path> [--profile <name>] [--game-dir <path>] [--force]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--profile` | Target profile (created if it doesn't exist) |
-| `--game-dir` | Game installation directory |
-| `--force` | Force full reinstall, skipping preflight checks |
+| Flag         | Description                                     |
+| ------------ | ----------------------------------------------- |
+| `--profile`  | Target profile (created if it doesn't exist)    |
+| `--game-dir` | Game installation directory                     |
+| `--force`    | Force full reinstall, skipping preflight checks |
 
 ### `install nexus-collection`
 
@@ -221,8 +221,8 @@ Install a single mod from Nexus.
 modde install mod <url> [--profile <name>] [--fomod-config <path>]
 ```
 
-| Flag | Description |
-|------|-------------|
+| Flag             | Description                                                                        |
+| ---------------- | ---------------------------------------------------------------------------------- |
 | `--fomod-config` | Path to a FOMOD declarative config (TOML or JSON) for non-interactive installation |
 
 ---
@@ -546,9 +546,9 @@ Generate a declarative FOMOD config template from a mod's `ModuleConfig.xml`.
 modde fomod generate <mod_path> [--all] [--format <fmt>]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--all` | Include all plugins (not just defaults) |
+| Flag       | Description                                       |
+| ---------- | ------------------------------------------------- |
+| `--all`    | Include all plugins (not just defaults)           |
 | `--format` | Output format: `toml` (default), `json`, or `nix` |
 
 ### `fomod apply`
@@ -577,14 +577,14 @@ Scan a game directory for installed mods.
 modde scan --game <id> [--game-dir <path>] [--manifest <path>] [--import-to <profile>] [--threshold <0.0-1.0>] [--dry-run] [--prune-duplicates]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--game-dir` | auto-detected | Game installation path |
-| `--manifest` | — | `.wabbajack` file for manifest matching |
-| `--import-to` | — | Import discovered mods into this profile |
-| `--threshold` | `0.5` | Minimum file presence fraction for a match |
-| `--dry-run` | — | Report only, don't write to database |
-| `--prune-duplicates` | — | Remove filesystem-scanner rows covered by the manifest (requires `--manifest` and `--import-to`) |
+| Flag                 | Default       | Description                                                                                      |
+| -------------------- | ------------- | ------------------------------------------------------------------------------------------------ |
+| `--game-dir`         | auto-detected | Game installation path                                                                           |
+| `--manifest`         | —             | `.wabbajack` file for manifest matching                                                          |
+| `--import-to`        | —             | Import discovered mods into this profile                                                         |
+| `--threshold`        | `0.5`         | Minimum file presence fraction for a match                                                       |
+| `--dry-run`          | —             | Report only, don't write to database                                                             |
+| `--prune-duplicates` | —             | Remove filesystem-scanner rows covered by the manifest (requires `--manifest` and `--import-to`) |
 
 ---
 
@@ -596,10 +596,10 @@ Analyse mod file collisions.
 modde collisions [--profile <name>] [--game <id>] [--all] [--suggest-hides]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--all` | Show all collisions including cosmetic ones |
-| `--suggest-hides` | Suggest hide commands for redundant files |
+| Flag              | Description                                 |
+| ----------------- | ------------------------------------------- |
+| `--all`           | Show all collisions including cosmetic ones |
+| `--suggest-hides` | Suggest hide commands for redundant files   |
 
 ---
 

@@ -13,6 +13,7 @@ Each entry: the decision, why it was made, and the conditions under which it sho
 **Why.** simit standardizes semver bumps, CHANGELOG promotion, commit, and tag across the maintainer's Rust projects. Centralizing that flow prevents per-project drift. The xtask binary owns rs-modde-specific bindings (RPM spec rewrite, COPR vendor tarball) that simit does not model.
 
 **Conventions.**
+
 - Tags are bare semver: `0.2.0`, `1.0.0-rc.1`. No `v` prefix. `.forgejo/workflows/release.yml` triggers on `[0-9]*`.
 - Keep `## [Unreleased]` in `CHANGELOG.md` exactly as-is — simit's promotion logic looks for that literal heading.
 - Major versions are cut whenever they make sense per SemVer; there is no 1.0 milestone and no "save up breaking changes" policy.
@@ -26,10 +27,12 @@ Each entry: the decision, why it was made, and the conditions under which it sho
 **Decision.** rs-modde does **not** run `simit init-ci --check` or `simit init-flake --check`. The Forgejo workflows and `flake.nix` are intentionally hand-maintained.
 
 **Why.**
+
 - The simit CI generator emits a generic `ci.yaml` / `publish-crate.yaml` that does not model: `.#flatpak-manifest`, `.#appimage-*`, `.#modde-windows`, `.#docs` builds; the Attic closure push; `nix flake check --keep-going --print-build-logs`; the self-hosted `atlas` runner; or `cargo xtask coverage --ci`. Running `--check` would report all of that intentional customization as drift.
 - The flake is rs-harbor-driven and wires cross-compilation (Windows, aarch64-linux, macOS x86_64/aarch64 via osxcross), the Zola `website`/`docs` outputs, Flatpak/AppImage packaging, and a simit-pinned devShell. `init-flake --check` would treat the heavily-customized flake as drift from a vanilla crane template.
 
 **Revisit when.** Any one of:
+
 - simit gains enough configurability to express the extra jobs, Attic push, coverage gate, and `atlas` runner without local patching.
 - rs-harbor publishes an `mkSimitCi` helper (or equivalent) that lets simit generate CI which preserves the current requirements.
 - rs-modde deliberately simplifies its CI/flake so the simit defaults become the intended source of truth.
@@ -43,6 +46,7 @@ Each entry: the decision, why it was made, and the conditions under which it sho
 The `rs-harbor` CLI does **not** gain top-level `release` / `copr` / `docs` subcommands — those would couple the shared binary to downstream project layouts.
 
 **Why.**
+
 - Project-specific bindings (RPM spec path `modde.spec`; workspace crate list; Zola roots `docs/site` and `website`; Nix package names `modde`/`site`/`modde-windows`/`appimage-*`/`flatpak-manifest`; COPR source archive URL) cannot live in a shared CLI without polluting its compatibility surface.
 - The library API is synchronous (`std::process::Command` shell-outs; `anyhow::Result`). No async runtime introduced; matches existing rs-harbor style.
 
@@ -71,6 +75,7 @@ The `rs-harbor` CLI does **not** gain top-level `release` / `copr` / `docs` subc
 **Why.** `ToolConfig.settings` is stored as a JSON blob in SQLite — the type-safety contract is at evaluation time, not at storage. Strict typing for tools with sprawling or contextual settings (114 mangohud knobs, 33 proton knobs, OptiScaler's dynamic per-game fields) buys little and costs schema churn.
 
 **Activation contract.**
+
 - Tool activation runs **after** `modde install` / `modde deploy`. Install/deploy is the prerequisite surface; tool writes land last.
 - For each enabled tool: HM unconditionally calls idempotent `modde tool enable`, then `modde tool configure` when `settings` is non-empty.
 - `modde tool apply` runs only when `applyOnActivation = true`. It is repeatable but mutates the game directory and rewrites the applied-files manifest.
