@@ -23,6 +23,7 @@ jobs:
     env:
       NIX_CONFIG: "experimental-features = nix-command flakes"
       XDG_CACHE_HOME: "/tmp/.cache"
+      CARGO_HOME: "/tmp/.cargo"
     steps:
       - name: Checkout
         uses: https://code.forgejo.org/actions/checkout@v4
@@ -58,6 +59,9 @@ jobs:
           gpg --batch --import keys/maintainers.gpg
           git fetch --force --tags origin "refs/tags/${tag}:refs/tags/${tag}"
           git verify-tag "$tag"
+
+      - name: Add cargo bin to PATH
+        run: echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
 
       - name: Build package
         run: nix build
