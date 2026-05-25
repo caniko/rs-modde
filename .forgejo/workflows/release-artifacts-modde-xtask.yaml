@@ -19,7 +19,7 @@ concurrency:
 jobs:
   build:
     enable-openid-connect: true
-    runs-on: atlas
+    runs-on: atlas-nix-trusted
     steps:
       - name: Checkout
         uses: https://code.forgejo.org/actions/checkout@v4
