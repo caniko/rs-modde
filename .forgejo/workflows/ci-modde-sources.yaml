@@ -26,7 +26,7 @@ jobs:
         run: nix develop -c cargo install cargo-deny --locked --version 0.18.3
 
       - name: Deny dependency policy
-        run: nix develop -c cargo deny check
+        run: nix develop -c cargo deny check bans licenses sources
 
       - name: Clippy
         run: nix develop -c cargo clippy -p modde-sources --all-targets -- --deny warnings
