@@ -10,7 +10,7 @@ allow = [
   "BSL-1.0",
   "CDLA-Permissive-2.0",
   "CC0-1.0",
-  "GPL-3.0-only",
+  "GPL-3.0",
   "ISC",
   "LicenseRef-UFL-1.0",
   "MIT",
