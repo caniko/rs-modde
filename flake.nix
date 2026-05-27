@@ -19,6 +19,14 @@
     rust-overlay.follows = "rs-harbor/rust-overlay";
     crane.follows = "rs-harbor/crane";
     flake-utils.follows = "rs-harbor/flake-utils";
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    git-hooks = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     nix-appimage = {
       url = "github:ralismark/nix-appimage";
@@ -26,7 +34,7 @@
     };
 
     simit = {
-      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=5ebd4e63e66a3226243ff49f6319f92e88738501";
+      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=e9cf448dcaa9000e5341274e8d23febf17666833";
       inputs.rs-harbor.follows = "rs-harbor";
       inputs.nixpkgs.follows = "rs-harbor/nixpkgs";
       inputs.rust-overlay.follows = "rs-harbor/rust-overlay";
@@ -52,6 +60,8 @@
     simit,
     rust-overlay,
     flake-utils,
+    treefmt-nix,
+    git-hooks,
     nix-appimage,
     adidoks,
     ...
@@ -73,6 +83,7 @@
 
         toolchain = rs-harbor.lib.mkToolchain {inherit pkgs;};
         inherit (toolchain) craneLib;
+        rustToolchain = toolchain.rustToolchain;
         cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         moddeVersion = cargoToml.workspace.package.version or cargoToml.package.version;
         simitPackage = simit.packages.${system}.default;
@@ -212,6 +223,14 @@
         };
 
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        treefmtEval = treefmt-nix.lib.evalModule pkgs (import ./nix/treefmt.nix);
+        pre-commit-check = git-hooks.lib.${system}.run {
+          src = ./.;
+          hooks = import ./nix/pre-commit.nix {
+            inherit pkgs rustToolchain;
+            treefmtWrapper = treefmtEval.config.build.wrapper;
+          };
+        };
 
         modde = craneLib.buildPackage (commonArgs
           // {
@@ -502,6 +521,8 @@
             inherit modde-darwin-x86_64;
             inherit modde-windows;
           };
+
+        formatter = treefmtEval.config.build.wrapper;
 
         checks = let
           hmLib = lib.extend (_final: _prev: {
@@ -993,6 +1014,7 @@
             then "false"
             else "true";
         in {
+          formatting = treefmtEval.config.build.check self;
           tool-schema-fresh = pkgs.runCommand "modde-tool-schema-fresh" {} ''
             ${modde}/bin/modde dev export-tool-schema --out "$TMPDIR/tool-schema.nix"
             diff -u ${./nix/tool-schema.nix} "$TMPDIR/tool-schema.nix"
@@ -1241,12 +1263,14 @@
           packages = with pkgs;
             [
               cargo-llvm-cov
-              toolchain.rustToolchain
+              rustToolchain
               simitCli
               _7zz
+              pre-commit
               unrar
               zola
             ]
+            ++ pre-commit-check.enabledPackages
             ++ nativeBuildInputs
             ++ buildInputs;
 
@@ -1255,6 +1279,8 @@
           };
 
           extraShellHook = ''
+            ${pre-commit-check.shellHook}
+
             # Set up adidoks theme symlink for local docs development
             if [ -d docs/site ]; then
               mkdir -p docs/site/themes
@@ -1319,6 +1345,12 @@
         inherit mkOutputs;
       };
       simitConfig = {
+        flake = {
+          mode = "custom";
+          toolchain_binding = "toolchain.rustToolchain";
+          package_binding = "modde";
+          pre_commit_shell_hook = false;
+        };
         release.smoke.command = "nix run .#release-smoke --";
         homebrew = {
           tap_url = "https://codeberg.org/caniko/homebrew-modde.git";

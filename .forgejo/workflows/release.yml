@@ -25,14 +25,14 @@ name: release
 # Runner credential:
 # - $ATTIC_TOKENS_DIR/rs-modde: Attic token file for the canix cache.
 
-'on':
+"on":
   push:
     tags:
-      - '[0-9]*'
+      - "[0-9]*"
   workflow_dispatch:
     inputs:
       force_publish:
-        description: 'Bypass release smoke checks and continue to publish. Use only for audited emergency releases.'
+        description: "Bypass release smoke checks and continue to publish. Use only for audited emergency releases."
         required: false
         default: false
         type: boolean

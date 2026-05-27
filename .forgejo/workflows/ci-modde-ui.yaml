@@ -35,6 +35,9 @@ jobs:
       - name: Deny dependency policy
         run: nix develop -c cargo deny check bans licenses sources
 
+      - name: Build docs
+        run: nix develop -c cargo doc -p modde-ui --no-deps --all-features
+
       - name: Clippy
         run: nix develop -c cargo clippy -p modde-ui --all-targets -- --deny warnings
 

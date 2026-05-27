@@ -2,7 +2,7 @@
 # yamllint disable rule:line-length
 name: pages
 
-'on':
+"on":
   push:
     branches:
       - trunk
