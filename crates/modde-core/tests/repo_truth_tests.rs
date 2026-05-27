@@ -47,6 +47,21 @@ fn assert_contains(haystack: &str, needle: &str, context: &str) {
     );
 }
 
+fn collapse_ws(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+// Markdown tables are reformatted by prettier with column-aligned padding, so
+// substring matches must ignore intra-cell whitespace runs.
+fn assert_contains_loose(haystack: &str, needle: &str, context: &str) {
+    let h = collapse_ws(haystack);
+    let n = collapse_ws(needle);
+    assert!(
+        h.contains(&n),
+        "{context} should contain (whitespace-insensitive) `{needle}`, but it did not"
+    );
+}
+
 #[test]
 fn capability_matrix_captures_the_expected_baseline() {
     let matrix = load_capability_matrix();
@@ -80,7 +95,7 @@ fn public_docs_match_capability_matrix_for_critical_statuses() {
     let comparison = read_repo_file("website/templates/comparison.html");
 
     let starfield = matrix.games.get("starfield").unwrap();
-    assert_contains(
+    assert_contains_loose(
         &readme,
         &format!("| {} | `{}`:", starfield.display_name, starfield.overall),
         "README supported games table",
@@ -90,7 +105,7 @@ fn public_docs_match_capability_matrix_for_critical_statuses() {
         "docs/capability-matrix.toml",
         "README capability note",
     );
-    assert_contains(
+    assert_contains_loose(
         &supported_games,
         &format!(
             "| {} | `starfield` | `{}` | Yes | Yes | `{}` |",
@@ -113,7 +128,7 @@ fn public_docs_match_capability_matrix_for_critical_statuses() {
             .features
             .get(feature_id)
             .unwrap_or_else(|| panic!("missing feature entry: {feature_id}"));
-        assert_contains(
+        assert_contains_loose(
             &coverage,
             &format!("| {} | `{}` |", feature.label, feature.status),
             "MO2 coverage audit",
