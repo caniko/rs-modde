@@ -69,7 +69,7 @@ pub async fn handle(
 
     // 3. Deploy mods
     if !no_deploy {
-        super::deploy::handle(Some(target_profile.clone()), Some(game_id.clone())).await?;
+        super::deploy::handle(Some(target_profile.clone()), Some(game_id.clone()), false).await?;
     }
 
     // 4. Detect launcher and launch

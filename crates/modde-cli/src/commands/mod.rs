@@ -10,6 +10,7 @@ pub mod import;
 pub mod install;
 pub mod instance;
 pub mod loot;
+pub mod merge;
 pub mod nexus;
 pub mod nix_schema;
 pub mod nxm;

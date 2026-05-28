@@ -68,6 +68,9 @@ enum Commands {
         profile: Option<String>,
         #[arg(long)]
         game: Option<String>,
+        /// Print the deploy plan without touching the game directory.
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Rollback to the previous deployment
     Rollback {
@@ -178,6 +181,11 @@ enum Commands {
         #[arg(long)]
         suggest_hides: bool,
     },
+    /// Inspect and resolve file merge sessions
+    Merge {
+        #[command(subcommand)]
+        action: MergeAction,
+    },
     /// Run diagnostics to detect common modding issues
     Diagnostics {
         #[arg(long)]
@@ -278,6 +286,59 @@ enum ExecAction {
         #[arg(last = true)]
         args: Vec<String>,
     },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum MergeAction {
+    /// List merge sessions for a profile.
+    List {
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+    },
+    /// Open a merge session with a merge driver.
+    Open {
+        merge_group: String,
+        #[arg(long = "with")]
+        driver: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+    },
+    /// Validate a merge session's result.txt without publishing it.
+    Validate {
+        merge_group: String,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+    },
+    /// Accept the current load-order winner as the result.
+    AcceptWinner {
+        merge_group: String,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+    },
+    /// Configure Witcher 3 merge support.
+    #[command(name = "witcher3")]
+    Witcher3 {
+        #[command(subcommand)]
+        action: MergeWitcher3Action,
+    },
+    /// List registered merge drivers.
+    Drivers,
+}
+
+#[derive(Subcommand, Clone)]
+pub enum MergeWitcher3Action {
+    /// Register a user-provided vanilla scripts/config cache.
+    SetVanilla { dir: PathBuf },
+    /// Print the registered vanilla scripts/config cache.
+    ShowVanilla,
 }
 
 #[derive(Subcommand)]
@@ -1356,6 +1417,7 @@ fn run_command(cli: Cli) -> Result<()> {
         Commands::Backup { action } => {
             return commands::backup::handle(action);
         }
+        Commands::Merge { action } => return commands::merge::handle(action),
         Commands::Detect => return commands::detect::handle(),
         Commands::Game {
             action: GameAction::List,
@@ -1496,7 +1558,11 @@ fn run_command(cli: Cli) -> Result<()> {
                 no_switch,
                 no_capture,
             } => commands::play::handle(profile, game, no_deploy, no_switch, no_capture).await?,
-            Commands::Deploy { profile, game } => commands::deploy::handle(profile, game).await?,
+            Commands::Deploy {
+                profile,
+                game,
+                dry_run,
+            } => commands::deploy::handle(profile, game, dry_run).await?,
             Commands::Collisions {
                 profile,
                 game,
@@ -1683,6 +1749,7 @@ fn run_command(cli: Cli) -> Result<()> {
             | Commands::Import
             | Commands::Instance { .. }
             | Commands::Backup { .. }
+            | Commands::Merge { .. }
             | Commands::Diagnostics { .. }
             | Commands::Export { .. }
             | Commands::Fomod { .. }
@@ -1709,6 +1776,15 @@ fn command_mutates_state(cmd: &Commands) -> bool {
         | Commands::Export { .. }
         | Commands::Verify { .. }
         | Commands::Collisions { .. }
+        | Commands::Merge {
+            action:
+                MergeAction::Drivers
+                | MergeAction::List { .. }
+                | MergeAction::Validate { .. }
+                | MergeAction::Witcher3 {
+                    action: MergeWitcher3Action::ShowVanilla,
+                },
+        }
         | Commands::Gui => false,
 
         Commands::Game { action } => {
@@ -1781,15 +1857,19 @@ fn command_mutates_state(cmd: &Commands) -> bool {
         // Backup capture/restore mutates the data dir.
         Commands::Backup { .. } => true,
 
+        // Merge open/accept/publish updates merge sessions or merged mod output.
+        Commands::Merge { .. } => true,
+
         // Everything below is unambiguously mutating.
         Commands::Profile { .. }
         | Commands::Scan { .. }
         | Commands::Import
         | Commands::Fomod { .. }
         | Commands::Install { .. }
-        | Commands::Deploy { .. }
         | Commands::Rollback { .. }
         | Commands::Play { .. } => true,
+
+        Commands::Deploy { dry_run, .. } => !dry_run,
     }
 }
 
@@ -2249,6 +2329,16 @@ mod mutation_classification_tests {
         assert!(command_mutates_state(&Commands::Deploy {
             profile: None,
             game: None,
+            dry_run: false,
+        }));
+    }
+
+    #[test]
+    fn deploy_dry_run_is_not_mutating() {
+        assert!(!command_mutates_state(&Commands::Deploy {
+            profile: None,
+            game: None,
+            dry_run: true,
         }));
     }
 

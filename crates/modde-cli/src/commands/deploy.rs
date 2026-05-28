@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use tracing::{info, warn};
@@ -8,6 +8,7 @@ use modde_core::collision;
 use modde_core::db::decode_install_method;
 use modde_core::fs::{symlink_async, walk_files_relative};
 use modde_core::installer::InstallMethod;
+use modde_core::merge::{MERGED_MOD_ID, merged_mod_root};
 use modde_core::paths;
 use modde_core::profile::{ProfileManager, ProfileSource};
 use modde_core::resolver::{self, ConflictMap, ModId};
@@ -15,7 +16,11 @@ use modde_core::vfs::SymlinkFarm;
 
 use super::load_profile_or_default;
 
-pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Result<()> {
+pub async fn handle(
+    profile_name: Option<String>,
+    game_id: Option<String>,
+    dry_run: bool,
+) -> Result<()> {
     let pm = ProfileManager::open().context("failed to open profile database")?;
 
     let profile = load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref())?;
@@ -79,7 +84,7 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
         return Ok(());
     }
 
-    let resolved = resolver::resolve(&profile).context("failed to resolve load order")?;
+    let mut resolved = resolver::resolve(&profile).context("failed to resolve load order")?;
 
     println!("Load order: {} enabled mods", resolved.order.len());
 
@@ -88,7 +93,7 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     // Build archive-aware conflict map using the collision system.
     let classifier = modde_games::resolve_collision_classifier(&profile.game_id);
 
-    let conflict_map = if let Some(ref cls) = classifier {
+    let mut conflict_map = if let Some(ref cls) = classifier {
         collision::build_full_conflict_map(&store, &resolved.order, cls.as_ref())
             .context("failed to build conflict map")?
             .conflict_map
@@ -109,12 +114,29 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
         cm
     };
 
+    if let Some(profile_id) = profile.id {
+        let sessions = pm
+            .db()
+            .list_merge_sessions(profile_id)
+            .context("failed to load merge sessions")?;
+        resolver::inject_merged_mod(
+            &mut resolved.order,
+            &mut conflict_map,
+            &sessions,
+            &merged_mod_root(name),
+        );
+    }
+
     // Walk store files for the symlink farm (still needs absolute paths).
     let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
     let mut conflict_count: usize = 0;
     let mut missing_mods = Vec::new();
     for mod_id in &resolved.order {
-        let mod_dir_path = store.join(mod_id.as_str());
+        let mod_dir_path = if mod_id.as_str() == MERGED_MOD_ID {
+            merged_mod_root(name)
+        } else {
+            store.join(mod_id.as_str())
+        };
         if !mod_dir_path.exists() {
             missing_mods.push(mod_id.clone());
             continue;
@@ -185,6 +207,25 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
 
     let total_files = farm.links.len();
 
+    if dry_run {
+        println!("Dry run: deploy plan for profile: {name}");
+        println!(
+            "  Game: {} ({})",
+            game_plugin.display_name(),
+            profile.game_id
+        );
+        println!("  Install dir: {}", install_dir.display());
+        println!("  Mod dir: {}", game_mod_dir.display());
+        println!("  Total files: {total_files}");
+        println!("  Conflicts resolved: {conflict_count}");
+        let mut links = farm.links.iter().collect::<Vec<_>>();
+        links.sort_by(|(left, _), (right, _)| left.cmp(right));
+        for (rel_path, source) in links {
+            println!("{}", dry_run_link_line(rel_path, source, &mod_files));
+        }
+        return Ok(());
+    }
+
     let farm = farm
         .materialize()
         .await
@@ -252,6 +293,32 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     }
 
     Ok(())
+}
+
+fn source_mod_for_link<'a>(
+    rel_path: &str,
+    source: &Path,
+    mod_files: &'a HashMap<ModId, Vec<(String, PathBuf)>>,
+) -> Option<&'a ModId> {
+    mod_files.iter().find_map(|(mod_id, files)| {
+        files
+            .iter()
+            .any(|(candidate_rel, candidate_source)| {
+                candidate_rel == rel_path && candidate_source == source
+            })
+            .then_some(mod_id)
+    })
+}
+
+fn dry_run_link_line(
+    rel_path: &str,
+    source: &Path,
+    mod_files: &HashMap<ModId, Vec<(String, PathBuf)>>,
+) -> String {
+    let source_mod = source_mod_for_link(rel_path, source, mod_files)
+        .map(ModId::as_str)
+        .unwrap_or("<unknown>");
+    format!("  {rel_path} <- {source_mod} ({})", source.display())
 }
 
 /// Deploy mods whose [`InstallMethod`] routes them to a plugin-supplied
@@ -337,3 +404,22 @@ async fn deploy_alt_target_mods(
 
 // Re-export deploy_mo2_to_game for use in this module's Wabbajack path.
 use super::install::deploy_mo2_to_game;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deploy_dry_run_reports_merged_source() {
+        let source = PathBuf::from("/tmp/modde/profiles/test/__merged__/scripts/foo.ws");
+        let mut mod_files = HashMap::new();
+        mod_files.insert(
+            ModId::from(MERGED_MOD_ID),
+            vec![("scripts/foo.ws".to_string(), source.clone())],
+        );
+
+        let line = dry_run_link_line("scripts/foo.ws", &source, &mod_files);
+
+        assert!(line.contains("scripts/foo.ws <- __merged__"));
+    }
+}

@@ -26,6 +26,7 @@ Commands:
   wabbajack    Browse, download, and generate Home Manager snippets for Wabbajack modlists
   scan         Scan game directory for installed mods
   collisions   Analyse mod collisions and suggest optimisations
+  merge        Inspect and resolve file merge sessions
   diagnostics  Run diagnostics to detect common modding issues
   export       Export mod list to CSV
   backup       Manage mod and plugin order backups

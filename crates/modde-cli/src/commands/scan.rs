@@ -290,6 +290,7 @@ pub fn handle(
         let existing_ids: HashSet<String> = profile.mods.iter().map(|m| m.mod_id.clone()).collect();
         let new_mods: Vec<EnabledMod> = all_mods
             .into_iter()
+            .filter(|m| !modde_core::scanner::is_reserved_scanner_mod_id(&m.mod_id))
             .filter(|m| !existing_ids.contains(&m.mod_id))
             .collect();
 
