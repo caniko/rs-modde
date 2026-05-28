@@ -1243,6 +1243,7 @@
               cargo-llvm-cov
               toolchain.rustToolchain
               simitCli
+              just
               _7zz
               unrar
               zola
