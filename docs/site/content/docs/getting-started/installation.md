@@ -79,13 +79,13 @@ flatpak install flathub com.tartanoglu.modde
 
 ## Debian / Ubuntu (apt)
 
-The signed apt repository at <https://modde.tartanoglu.com/apt/> serves
+The signed apt repository at <https://caniko.codeberg.page/rs-modde-apt/> serves
 amd64 and arm64 `.deb` packages on every stable release. Pin the repository
 key by fingerprint so an attacker can't swap the served key:
 
 ```bash
 sudo install -d -m 0755 /etc/apt/keyrings
-curl -fsSL https://modde.tartanoglu.com/apt/key.gpg.asc \
+curl -fsSL https://caniko.codeberg.page/rs-modde-apt/key.gpg.asc \
   | gpg --dearmor \
   | sudo tee /etc/apt/keyrings/modde.gpg >/dev/null
 
@@ -93,7 +93,7 @@ curl -fsSL https://modde.tartanoglu.com/apt/key.gpg.asc \
 gpg --show-keys --with-colons /etc/apt/keyrings/modde.gpg \
   | awk -F: '/^fpr:/ {print $10; exit}'
 
-echo "deb [signed-by=/etc/apt/keyrings/modde.gpg] https://modde.tartanoglu.com/apt stable main" \
+echo "deb [signed-by=/etc/apt/keyrings/modde.gpg] https://caniko.codeberg.page/rs-modde-apt stable main" \
   | sudo tee /etc/apt/sources.list.d/modde.list
 
 sudo apt update

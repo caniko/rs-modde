@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Build a signed apt repository tree from release/*.deb and push it to
-# caniko/modde-apt for Codeberg-hosted serving at
-# https://modde.tartanoglu.com/apt/.
+# caniko/rs-modde-apt over SSH for Codeberg Pages serving.
 #
 # The script is idempotent for a given tag: rebuilding the same set of .deb
 # files re-creates the same Packages/Release files (modulo Release timestamps).
@@ -12,31 +11,42 @@
 #   APT_REPO_GPG_KEY          ascii-armored secret key for the apt repository
 #   APT_REPO_GPG_KEY_ID       long-form key id or fingerprint that reprepro
 #                             references via SignWith (e.g. D18B...E408)
-#   APT_REPO_PUSH_TOKEN       Codeberg token with write access to caniko/modde-apt
-#   APT_REPO_REMOTE           git remote URL (default: caniko/modde-apt on Codeberg)
+#   APT_REPO_SSH_KEY          ed25519 private key with write deploy-key access
+#                             to caniko/rs-modde-apt
 #
 # Optional:
 #   APT_REPO_GPG_PASSPHRASE   if the apt key is password-protected
+#   APT_REPO_REMOTE           git remote URL
+#                             (default: rs-modde-apt on Codeberg over SSH)
+#   APT_REPO_BRANCH           branch to publish
+#                             (default: pages)
 #
 # Behavior:
-# - When APT_REPO_GPG_KEY or APT_REPO_PUSH_TOKEN is unset, the script logs a
-#   warning and exits 0. Use this to keep tag pushes green before the apt repo
-#   has been bootstrapped (mirrors Homebrew/Scoop/Flathub gate semantics).
+# - When required apt secrets are unset, the script logs warnings and exits 0.
+#   Use this to keep tag pushes green before the apt repo has been bootstrapped
+#   (mirrors Homebrew/Scoop/Flathub gate semantics).
 # - When secrets are present, the script:
 #     1. Imports the secret key into a throwaway GNUPGHOME.
-#     2. Stages every release/*.deb into a fresh reprepro tree under work/apt.
-#     3. Commits dists/ + pool/ + key.gpg.asc to the modde-apt repo and pushes.
+#     2. Loads the SSH deploy key into a throwaway ssh-agent.
+#     3. Stages every release/*.deb into a fresh reprepro tree under work/apt.
+#     4. Commits dists/ + pool/ + key.gpg.asc to the apt repo and force-pushes
+#        the Pages-serving branch with lease protection.
 set -euo pipefail
 
 VERSION="${VERSION:?VERSION must be set to the release tag}"
-APT_REPO_REMOTE="${APT_REPO_REMOTE:-https://codeberg.org/caniko/modde-apt.git}"
+APT_REPO_REMOTE="${APT_REPO_REMOTE:-ssh://git@codeberg.org/caniko/rs-modde-apt.git}"
+APT_REPO_BRANCH="${APT_REPO_BRANCH:-pages}"
 
+missing_secret=0
 if [ -z "${APT_REPO_GPG_KEY:-}" ] || [ -z "${APT_REPO_GPG_KEY_ID:-}" ]; then
   echo "::warning::APT_REPO_GPG_KEY / APT_REPO_GPG_KEY_ID unset; skipping apt publish."
-  exit 0
+  missing_secret=1
 fi
-if [ -z "${APT_REPO_PUSH_TOKEN:-}" ]; then
-  echo "::warning::APT_REPO_PUSH_TOKEN unset; skipping apt publish."
+if [ -z "${APT_REPO_SSH_KEY:-}" ]; then
+  echo "::warning::APT_REPO_SSH_KEY unset; skipping apt publish."
+  missing_secret=1
+fi
+if [ "$missing_secret" -ne 0 ]; then
   exit 0
 fi
 
@@ -47,7 +57,7 @@ if [ ! -e "${debs[0]}" ]; then
 fi
 
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+trap 'rm -rf "$work"; [ -n "${SSH_AGENT_PID:-}" ] && ssh-agent -k >/dev/null 2>&1 || true' EXIT
 chmod 700 "$work"
 
 GNUPGHOME="$work/gpg"
@@ -59,33 +69,37 @@ export GNUPGHOME
 printf '%s' "$APT_REPO_GPG_KEY" | gpg --batch --import 2>&1 | sed 's/^/gpg: /'
 echo "${APT_REPO_GPG_KEY_ID}:6:" | gpg --batch --import-ownertrust
 
+eval "$(ssh-agent -s)"
+ssh_key="$work/id_ed25519"
+printf '%s\n' "$APT_REPO_SSH_KEY" > "$ssh_key"
+chmod 600 "$ssh_key"
+ssh-add "$ssh_key" >/dev/null
+
+ssh_known="$work/known_hosts"
+cat > "$ssh_known" <<'KNOWN'
+# codeberg.org host keys (Ed25519). Source: https://docs.codeberg.org/security/ssh-fingerprint/
+codeberg.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIVIC02vnjFyL+I4RHfvIGNtOgJMe769VTF1VR4EB3ZB
+KNOWN
+chmod 600 "$ssh_known"
+
+export GIT_SSH_COMMAND="ssh -i $ssh_key -o IdentitiesOnly=yes -o UserKnownHostsFile=$ssh_known -o StrictHostKeyChecking=yes"
+
 # reprepro needs the per-config tree at $work/apt; conf/distributions is
 # checked into rs-modde at dist/apt/conf/distributions and is the canonical
 # repo definition.
 mkdir -p "$work/apt/conf"
 cp dist/apt/conf/distributions "$work/apt/conf/distributions"
 
-passphrase_args=()
-if [ -n "${APT_REPO_GPG_PASSPHRASE:-}" ]; then
-  passphrase_file="$work/passphrase"
-  printf '%s' "$APT_REPO_GPG_PASSPHRASE" > "$passphrase_file"
-  chmod 600 "$passphrase_file"
-  passphrase_args=(--gnupg-home "$GNUPGHOME" --ask-passphrase --passphrase-file "$passphrase_file")
-fi
-
 for deb in "${debs[@]}"; do
   echo "reprepro: includedeb stable $deb"
   reprepro -b "$work/apt" includedeb stable "$deb"
 done
 
-# Stage the published tree in a git checkout of the apt repo, replace the
-# served subdirectory, and push.
-remote_with_token="$(printf '%s' "$APT_REPO_REMOTE" | sed "s#https://#https://caniko:${APT_REPO_PUSH_TOKEN}@#")"
-
 git_checkout="$work/checkout"
-git clone --depth 1 "$remote_with_token" "$git_checkout"
+git clone --depth 1 --branch "$APT_REPO_BRANCH" "$APT_REPO_REMOTE" "$git_checkout"
 
-# Wipe previous tree but keep .git and a top-level README the bucket repo owns.
+# Wipe the tree but keep .git and a single human-edited README the pages
+# repo owns (Phase 01 seeded it).
 find "$git_checkout" -mindepth 1 -maxdepth 1 \
   -not -name .git \
   -not -name README.md \
@@ -96,10 +110,9 @@ cp -r "$work/apt/pool"  "$git_checkout/pool"
 cp dist/apt/key.gpg.asc "$git_checkout/key.gpg.asc"
 
 cat > "$git_checkout/.codebergpages.toml" <<'TOML'
-# Codeberg Pages serves this repository at https://modde.tartanoglu.com/apt/
-# when the website CNAME forwards /apt/ to caniko.codeberg.page/modde-apt.
-# Bootstrap details live in CONTRIBUTING.md ("crates.io publish policy" → apt
-# section) in the rs-modde repo.
+# Codeberg Pages serves this branch as the rs-modde apt repository.
+# The rs-modde release workflow rewrites this tree on every stable tag
+# via scripts/publish-apt.sh.
 TOML
 
 cd "$git_checkout"
@@ -113,4 +126,4 @@ fi
 git -c user.name='modde release bot' \
     -c user.email='release-bot@modde.tartanoglu.com' \
     commit -m "apt: publish modde ${VERSION}"
-git push origin HEAD:refs/heads/main
+git push --force-with-lease origin "HEAD:refs/heads/${APT_REPO_BRANCH}"

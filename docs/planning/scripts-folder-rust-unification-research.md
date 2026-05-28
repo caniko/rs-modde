@@ -24,7 +24,7 @@ one `smoke/` subdirectory:
 | Path | LOC | Purpose |
 | ---- | --- | ------- |
 | [scripts/deploy-pages.sh](../../scripts/deploy-pages.sh) | 60 | Build `.#site` via Nix and force-push it to the `pages` branch on `origin` (or `DEPLOY_REMOTE`) for Codeberg Pages. |
-| [scripts/publish-apt.sh](../../scripts/publish-apt.sh) | 116 | Stage all `release/*.deb` files into a reprepro tree, sign with the apt-repo GPG key, then commit + push the rendered `dists/` and `pool/` to `caniko/modde-apt` on Codeberg. |
+| [scripts/publish-apt.sh](../../scripts/publish-apt.sh) | 116 | Stage all `release/*.deb` files into a reprepro tree, sign with the apt-repo GPG key, then commit + push the rendered `dists/` and `pool/` to `caniko/rs-modde-apt` on Codeberg. |
 | [scripts/update-3077-fixture.sh](../../scripts/update-3077-fixture.sh) | 4 | One-line wrapper around `cargo run -p modde-sources --bin update-wabbajack-fixture -- 3077`. |
 | [scripts/update-lotf-fixture.sh](../../scripts/update-lotf-fixture.sh) | 4 | One-line wrapper around `cargo run -p modde-sources --bin update-wabbajack-fixture -- lotf`. |
 | [scripts/smoke/run-smoke.sh](../../scripts/smoke/run-smoke.sh) | 64 | Discovery driver: iterates `scripts/smoke/smoke-*.sh`, captures stdout/stderr per script, writes `release/smoke-report.txt`. |
@@ -175,7 +175,7 @@ These are non-negotiable durable behaviors the rewrite must keep:
    compatible until every workflow file is updated atomically. (Or commit
    a workflow-side update in the same PR — see Risks.)
 6. **APT publish gate semantics**: when `APT_REPO_GPG_KEY`,
-   `APT_REPO_GPG_KEY_ID`, or `APT_REPO_PUSH_TOKEN` is unset, the publish
+   `APT_REPO_GPG_KEY_ID`, or `APT_REPO_SSH_KEY` is unset, the publish
    step must `exit 0` with a `::warning::` annotation, not fail. This
    matches Homebrew/Scoop/Flathub gate semantics and keeps tag pushes
    green before the repo is bootstrapped.
@@ -332,7 +332,7 @@ shippable.
 - Implement `crates/modde-xtask/src/commands/publish_apt.rs` (or fold
   into `harbor-xtask` if reusable).
 - Inputs: env vars `VERSION`, `APT_REPO_GPG_KEY`, `APT_REPO_GPG_KEY_ID`,
-  `APT_REPO_PUSH_TOKEN`, optional `APT_REPO_GPG_PASSPHRASE`,
+  `APT_REPO_SSH_KEY`, optional `APT_REPO_GPG_PASSPHRASE`,
   optional `APT_REPO_REMOTE`. Same gate semantics: missing key or token
   → log warning, exit 0.
 - External tools called via `Command`: `gpg --batch --import`,

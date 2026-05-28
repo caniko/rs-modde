@@ -16,7 +16,7 @@
 
 1. Two `.deb` packages per architecture: `modde_<v>_amd64.deb` (CLI) and `modde-ui_<v>_amd64.deb` (GUI). Same for `arm64`.
 2. Packages uploaded as Codeberg release assets, signed (Phase 02 cosign + minisign).
-3. APT repo at `https://modde.tartanoglu.com/apt/` (served via Codeberg Pages or the existing website host) with `stable` suite, signed `Release` file using a dedicated **repo GPG key** (separate from maintainer key).
+3. APT repo at `https://caniko.codeberg.page/rs-modde-apt/` (served via Codeberg Pages or the existing website host) with `stable` suite, signed `Release` file using a dedicated **repo GPG key** (separate from maintainer key).
 4. Install docs add `apt`-based install (curl key → add source → `apt install modde`).
 
 ## Why
@@ -62,13 +62,13 @@
    SCRIPT
    ```
    Then rsync `dist/apt/{dists,pool}` to the website-hosting target. If the website is served from Codeberg Pages (separate repo), push the apt tree into that repo on a new branch.
-7. Add install docs section: `curl -fsSL https://modde.tartanoglu.com/apt/key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/modde.gpg && echo "deb [signed-by=/etc/apt/keyrings/modde.gpg] https://modde.tartanoglu.com/apt stable main" | sudo tee /etc/apt/sources.list.d/modde.list && sudo apt update && sudo apt install modde`.
+7. Add install docs section: `curl -fsSL https://caniko.codeberg.page/rs-modde-apt/key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/modde.gpg && echo "deb [signed-by=/etc/apt/keyrings/modde.gpg] https://caniko.codeberg.page/rs-modde-apt stable main" | sudo tee /etc/apt/sources.list.d/modde.list && sudo apt update && sudo apt install modde`.
 
 ## Acceptance criteria
 
 - [ ] `cargo deb -p modde-cli` and `cargo deb -p modde-ui` produce valid `.deb` artifacts locally that pass `lintian --fail-on warning` (or `--info` for warnings allowed; document the chosen bar).
 - [ ] Release workflow uploads `modde_<v>_amd64.deb`, `modde_<v>_arm64.deb`, `modde-ui_<v>_amd64.deb`, `modde-ui_<v>_arm64.deb` to the Codeberg release.
-- [ ] `https://modde.tartanoglu.com/apt/dists/stable/Release` and `Release.gpg` resolve, and `apt update && apt install modde` works on a Debian 12 + Ubuntu 24.04 container.
+- [ ] `https://caniko.codeberg.page/rs-modde-apt/dists/stable/Release` and `Release.gpg` resolve, and `apt update && apt install modde` works on a Debian 12 + Ubuntu 24.04 container.
 - [ ] APT repo GPG key fingerprint is documented in `SECURITY.md` separately from the maintainer/minisign keys.
 - [ ] `docs/site/content/docs/getting-started/installation.md` has a working "Debian/Ubuntu (apt)" section.
 

@@ -135,22 +135,26 @@ The Debian/APT publish flow is wired through
 stable tag the workflow assembles a reprepro tree from `release/*.deb`, signs
 the `Release` files with the dedicated apt repo key
 (`CCFE4A8461DF8778F5227684B6DB8F177A951E1B`), and pushes the rebuilt
-`dists/` + `pool/` + `key.gpg.asc` tree to `caniko/modde-apt`, which Codeberg
-Pages serves at <https://modde.tartanoglu.com/apt/>.
+`dists/` + `pool/` + `key.gpg.asc` tree to `caniko/rs-modde-apt` over SSH,
+which Codeberg Pages serves at
+<https://caniko.codeberg.page/rs-modde-apt/>.
 
 Bootstrap state (one-time, maintainer setup):
 
-1. Create the `caniko/modde-apt` Codeberg repository and enable Codeberg
-   Pages so it serves at the project's `/apt/` URL.
-2. Install the four Forgejo secrets `APT_REPO_GPG_KEY`,
-   `APT_REPO_GPG_KEY_ID`, `APT_REPO_PUSH_TOKEN`, and (if the key is
-   password-protected) `APT_REPO_GPG_PASSPHRASE`.
-3. Push a throwaway prerelease tag, watch the release workflow's `Publish
-APT repository` step run, and verify the tree at
-   `https://modde.tartanoglu.com/apt/dists/stable/Release` resolves and is
-   signed by the pinned key.
+1. Create the `caniko/rs-modde-apt` Codeberg repository with a `pages` branch
+   serving through Codeberg Pages, as described in Phase 01 of the APT channel
+   bootstrap plan.
+2. Install the per-repository SSH deploy key with write access and wire the
+   canix-managed `modde_apt_repo_ssh_key` runner credential, as described in
+   Phase 02 of the APT channel bootstrap plan.
+3. Install the Forgejo secrets `APT_REPO_GPG_KEY`, `APT_REPO_GPG_KEY_ID`, and
+   (if the key is password-protected) `APT_REPO_GPG_PASSPHRASE`.
+4. Push a throwaway prerelease tag, watch the release workflow's `Publish APT
+   repository` step run, and verify the tree at
+   `https://caniko.codeberg.page/rs-modde-apt/dists/stable/Release` resolves
+   and is signed by the pinned key.
 
-When any of the four secrets is missing the workflow logs `::warning::` and
+When any required apt secret is missing the workflow logs `::warning::` and
 skips apt publish so tarball/AppImage releases continue to land; the gate
 mirrors how Homebrew, Scoop, and Flathub skip cleanly.
 
@@ -223,7 +227,7 @@ Current release workflow credentials:
 | `secrets.modde_apt_repo_gpg_key` -> `APT_REPO_GPG_KEY`               | Sign Debian/APT `Release` files via reprepro            | Skips apt publish; tarball/AppImage release continues | Ascii-armored ed25519 secret key; fingerprint `CCFE4A8461DF8778F5227684B6DB8F177A951E1B`                  |
 | `secrets.modde_apt_repo_gpg_key_id` -> `APT_REPO_GPG_KEY_ID`         | Identify the apt key to reprepro `SignWith`             | Skips apt publish                                     | Long-form fingerprint matching the value committed in `dist/apt/conf/distributions`                       |
 | `secrets.modde_apt_repo_gpg_passphrase` -> `APT_REPO_GPG_PASSPHRASE` | Unlock `APT_REPO_GPG_KEY` if password-protected         | Required only if the apt key has a password           | Empty when the apt key was generated with `%no-protection`                                                |
-| `secrets.modde_apt_repo_push_token` -> `APT_REPO_PUSH_TOKEN`         | Push `caniko/modde-apt` Pages repository                | Skips apt publish                                     | Codeberg access token scoped to `caniko/modde-apt` with `write:repository`                                |
+| `secrets.modde_apt_repo_ssh_key` -> `APT_REPO_SSH_KEY`               | Push rebuilt apt tree to `caniko/rs-modde-apt` over SSH | Skips apt publish; tarball/AppImage release continues | Ed25519 private key; matching public key registered as a Codeberg deploy key on `caniko/rs-modde-apt` with write access |
 
 Additional credentials later phases will need:
 

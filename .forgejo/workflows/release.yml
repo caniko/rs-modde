@@ -24,7 +24,7 @@ name: release
 #   (matches SignWith in dist/apt/conf/distributions).
 # - modde_apt_repo_gpg_passphrase: optional passphrase for the apt key (unset
 #   when the key was generated with %no-protection).
-# - modde_apt_repo_push_token: optional Codeberg token for caniko/modde-apt.
+# - modde_apt_repo_ssh_key: ed25519 private key the runner uses to push the rebuilt apt tree to ssh://git@codeberg.org/caniko/rs-modde-apt.git. Public key is registered as a Codeberg deploy key with write access.
 # - copr_login, copr_username, copr_token: optional COPR upload credentials.
 # - WINGET_PAT: optional GitHub PAT for opening microsoft/winget-pkgs PRs from the token owner's fork.
 # - AUR_SSH_KEY: Ed25519 private key for aur.archlinux.org package pushes.
@@ -1076,17 +1076,17 @@ jobs:
           git push origin "HEAD:${DEFAULT_BRANCH}"
       # APT repository publish:
       # Rebuilds the signed reprepro tree from release/*.deb and pushes it to
-      # caniko/modde-apt, which Codeberg Pages serves at
-      # https://modde.tartanoglu.com/apt/. Skipped on prereleases (stable-only
-      # channel) and skipped silently when bootstrap secrets are absent so
-      # early tag pushes stay green.
+      # caniko/rs-modde-apt over SSH, which Codeberg Pages serves at
+      # https://caniko.codeberg.page/rs-modde-apt/. Skipped on prereleases
+      # (stable-only channel) and skipped silently when bootstrap secrets are
+      # absent so early tag pushes stay green.
       #
       # Required secrets (provisioned via canix forgejo-runner add-secret):
       # - modde_apt_repo_gpg_key: ascii-armored secret key for the apt repository
       # - modde_apt_repo_gpg_key_id: long-form fingerprint matching SignWith in
       #   dist/apt/conf/distributions
-      # - modde_apt_repo_push_token: Codeberg token scoped to caniko/modde-apt
-      #   with write:repository
+      # - modde_apt_repo_ssh_key: ed25519 private key whose public key is
+      #   registered as a write-enabled Codeberg deploy key on caniko/rs-modde-apt
       # - modde_apt_repo_gpg_passphrase: optional, only if the apt key is
       #   password-protected (rs-modde's key is %no-protection)
       - name: Publish APT repository
@@ -1094,7 +1094,7 @@ jobs:
           APT_REPO_GPG_KEY: ${{ secrets.modde_apt_repo_gpg_key }}
           APT_REPO_GPG_KEY_ID: ${{ secrets.modde_apt_repo_gpg_key_id }}
           APT_REPO_GPG_PASSPHRASE: ${{ secrets.modde_apt_repo_gpg_passphrase }}
-          APT_REPO_PUSH_TOKEN: ${{ secrets.modde_apt_repo_push_token }}
+          APT_REPO_SSH_KEY: ${{ secrets.modde_apt_repo_ssh_key }}
         run: |
           set -euo pipefail
           . ./release-env
@@ -1104,7 +1104,7 @@ jobs:
           fi
 
           export VERSION
-          nix shell nixpkgs#reprepro nixpkgs#gnupg nixpkgs#git -c \
+          nix shell nixpkgs#reprepro nixpkgs#gnupg nixpkgs#git nixpkgs#openssh -c \
             bash scripts/publish-apt.sh
       - name: Push SRPM to COPR
         env:

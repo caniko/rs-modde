@@ -177,11 +177,11 @@ MSIX packaging is deferred to a separate distribution enhancement.
 
 ## APT Repository Signing Key
 
-The APT repository at <https://modde.tartanoglu.com/apt/> is signed by a
+The APT repository at <https://caniko.codeberg.page/rs-modde-apt/> is signed by a
 dedicated key, separate from the maintainer's GPG keys and the minisign
 release key. The public key ships at
 [`dist/apt/key.gpg.asc`](dist/apt/key.gpg.asc) in this repository and at
-<https://modde.tartanoglu.com/apt/key.gpg.asc>.
+<https://caniko.codeberg.page/rs-modde-apt/key.gpg.asc>.
 
 Fingerprint:
 
@@ -193,7 +193,7 @@ Pin this fingerprint when adding the repository so an attacker cannot swap the
 served key:
 
 ```sh
-curl -fsSL https://modde.tartanoglu.com/apt/key.gpg.asc \
+curl -fsSL https://caniko.codeberg.page/rs-modde-apt/key.gpg.asc \
   | gpg --dearmor \
   | sudo tee /etc/apt/keyrings/modde.gpg >/dev/null
 
@@ -202,12 +202,24 @@ gpg --show-keys --with-colons /etc/apt/keyrings/modde.gpg \
 # Must print CCFE4A8461DF8778F5227684B6DB8F177A951E1B.
 ```
 
-Rotation procedure: generate a new ed25519 key, replace `dist/apt/key.gpg.asc`
-and the `SignWith` line in `dist/apt/conf/distributions`, replace the Forgejo
+Rotation procedure: generate a new signing key, replace
+`dist/apt/key.gpg.asc` and the `SignWith` line in
+`dist/apt/conf/distributions`, replace the Forgejo
 `APT_REPO_GPG_KEY`, `APT_REPO_GPG_KEY_ID`, and `APT_REPO_GPG_PASSPHRASE`
-secrets together, and re-publish the apt tree. Keep the previous key
-trusted in `keyrings/` until the next stable release is signed by the new
-key. Tag the release notes with the old and new fingerprints.
+secrets together, and re-publish the apt tree. Keep the previous signing key
+trusted in `keyrings/` until the next stable release is signed by the new key.
+Tag the release notes with the old and new fingerprints.
+
+### APT Repository Push Key
+
+APT repository pushes use a per-repository SSH deploy key on
+`caniko/rs-modde-apt`, not a Codeberg access token. The private key is exposed
+to the release workflow as `APT_REPO_SSH_KEY` from the canix-managed
+`modde_apt_repo_ssh_key` runner credential, and the matching public key is
+registered on the Codeberg repository with write access. Rotate this SSH key
+only when the deploy key is compromised or access should be revoked; it is
+independent of the APT signing key rotation above. See Phase 02 of the APT
+channel bootstrap plan for the deploy-key install and canix wiring steps.
 
 ## Inspecting the SBOM
 
