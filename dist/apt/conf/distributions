@@ -1,0 +1,8 @@
+Origin: modde APT repository
+Label: modde
+Codename: stable
+Suite: stable
+Architectures: amd64 arm64
+Components: main
+Description: Apt repository for the modde mod manager
+SignWith: CCFE4A8461DF8778F5227684B6DB8F177A951E1B

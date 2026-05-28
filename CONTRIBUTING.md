@@ -112,6 +112,29 @@ See [docs/copr-release.md](docs/copr-release.md) for the Fedora COPR wiring (one
 - Those checks would treat this repo's bespoke `atlas` workflows and rs-harbor-driven flake as drift.
 - The rationale, revisit conditions, and other non-obvious choices live in [docs/architecture-decisions.md](docs/architecture-decisions.md).
 
+### crates.io publish policy
+
+Every product crate publishes to crates.io on each stable tag:
+
+- `modde-core`, `modde-sources`, `modde-games`: library crates for downstream
+  reuse.
+- `modde-cli`, `modde-ui`: binary crates published so `cargo install
+modde-cli` and `cargo install modde-ui` work for users who prefer cargo
+  over the native packages.
+- `modde-xtask`: workspace-internal tooling, marked `publish = false`.
+
+Publishes are driven per crate by
+`.forgejo/workflows/publish-crate-<name>.yaml`. Each workflow validates the
+signed tag matches the crate's `Cargo.toml` version, runs tests, clippy,
+`cargo deny`, `cargo doc`, and `cargo publish --dry-run`, then queries
+`crates.io/api/v1/crates/<crate>/<version>`. HTTP 200 means the version is
+already on crates.io and the publish step exits without re-uploading; HTTP
+404 triggers the real `cargo publish`; any other status fails the workflow.
+
+To re-publish a single crate after a publish failure, push (or re-push) the
+tag and the corresponding per-crate workflow re-runs. Tag values must match
+`X.Y.Z` exactly; prerelease tags do not publish to crates.io.
+
 ### Hotfix release
 
 Hotfixes ship from the last good release tag, not from `trunk`, when `trunk`

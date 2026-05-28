@@ -6,6 +6,10 @@
 *.profraw
 .direnv/
 result
+dist/apt/*
+!dist/apt/conf/
+!dist/apt/conf/distributions
+!dist/apt/key.gpg.asc
 docs/site/themes/
 docs/site/public/
 website/public/

@@ -76,6 +76,31 @@ updating `keys/minisign.pub`, replacing the Forgejo `MINISIGN_SECRET_KEY` and
 `MINISIGN_PASSWORD` secrets, and publishing a signed release note that names
 both the old and new public keys.
 
+## macOS Gatekeeper
+
+rs-modde does not pursue Apple Developer ID notarization. The project's
+verification path on macOS is the same as on every other platform: verify
+`SHA256SUMS.txt` with minisign (and optionally cosign), then run the binary
+after a one-time Gatekeeper override.
+
+On first launch macOS will refuse to open an unsigned binary downloaded via a
+browser, citing the quarantine attribute. Remove it after verifying the
+checksum:
+
+```sh
+minisign -Vm SHA256SUMS.txt -p keys/minisign.pub
+sha256sum -c SHA256SUMS.txt --ignore-missing
+tar xzf modde-<version>-aarch64-darwin.tar.gz
+xattr -d com.apple.quarantine modde modde-ui
+```
+
+Alternatively, right-click the binary in Finder, choose **Open**, and confirm
+the warning dialog once; macOS records the approval per-binary.
+
+The Homebrew tap installs the same unsigned binaries through Homebrew's normal
+attribute handling; the verification path is the minisign signature on
+`SHA256SUMS.txt` for the release that the tap formula was bumped to.
+
 ## Windows Code Signing
 
 Windows release artifacts are Authenticode-signed after the Nix
@@ -149,6 +174,40 @@ unsigned Nix artifacts can still be rebuilt from source; Windows users should
 verify both the signed checksum manifest and the Authenticode signature.
 
 MSIX packaging is deferred to a separate distribution enhancement.
+
+## APT Repository Signing Key
+
+The APT repository at <https://modde.tartanoglu.com/apt/> is signed by a
+dedicated key, separate from the maintainer's GPG keys and the minisign
+release key. The public key ships at
+[`dist/apt/key.gpg.asc`](dist/apt/key.gpg.asc) in this repository and at
+<https://modde.tartanoglu.com/apt/key.gpg.asc>.
+
+Fingerprint:
+
+```
+CCFE 4A84 61DF 8778 F522  7684 B6DB 8F17 7A95 1E1B
+```
+
+Pin this fingerprint when adding the repository so an attacker cannot swap the
+served key:
+
+```sh
+curl -fsSL https://modde.tartanoglu.com/apt/key.gpg.asc \
+  | gpg --dearmor \
+  | sudo tee /etc/apt/keyrings/modde.gpg >/dev/null
+
+gpg --show-keys --with-colons /etc/apt/keyrings/modde.gpg \
+  | awk -F: '/^fpr:/ {print $10; exit}'
+# Must print CCFE4A8461DF8778F5227684B6DB8F177A951E1B.
+```
+
+Rotation procedure: generate a new ed25519 key, replace `dist/apt/key.gpg.asc`
+and the `SignWith` line in `dist/apt/conf/distributions`, replace the Forgejo
+`APT_REPO_GPG_KEY`, `APT_REPO_GPG_KEY_ID`, and `APT_REPO_GPG_PASSPHRASE`
+secrets together, and re-publish the apt tree. Keep the previous key
+trusted in `keyrings/` until the next stable release is signed by the new
+key. Tag the release notes with the old and new fingerprints.
 
 ## Inspecting the SBOM
 

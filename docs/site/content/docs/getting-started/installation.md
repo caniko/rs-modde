@@ -77,6 +77,34 @@ After the Flathub submission is accepted, install the GUI from Flathub:
 flatpak install flathub com.tartanoglu.modde
 ```
 
+## Debian / Ubuntu (apt)
+
+The signed apt repository at <https://modde.tartanoglu.com/apt/> serves
+amd64 and arm64 `.deb` packages on every stable release. Pin the repository
+key by fingerprint so an attacker can't swap the served key:
+
+```bash
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://modde.tartanoglu.com/apt/key.gpg.asc \
+  | gpg --dearmor \
+  | sudo tee /etc/apt/keyrings/modde.gpg >/dev/null
+
+# Verify the fingerprint matches CCFE4A8461DF8778F5227684B6DB8F177A951E1B
+gpg --show-keys --with-colons /etc/apt/keyrings/modde.gpg \
+  | awk -F: '/^fpr:/ {print $10; exit}'
+
+echo "deb [signed-by=/etc/apt/keyrings/modde.gpg] https://modde.tartanoglu.com/apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/modde.list
+
+sudo apt update
+sudo apt install modde       # CLI
+sudo apt install modde-ui    # GUI
+```
+
+The `modde` and `modde-ui` packages share the same release version. Verify
+the served key fingerprint against the one published in this repository's
+[`SECURITY.md`](https://codeberg.org/caniko/rs-modde/src/branch/main/SECURITY.md#apt-repository-signing-key).
+
 ## Arch Linux
 
 modde is published to the AUR in three flavours:

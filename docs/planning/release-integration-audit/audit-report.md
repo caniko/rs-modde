@@ -127,6 +127,33 @@ Release assets not directly derived from pinned flake outputs: `THIRD_PARTY_LICE
 | Website/download synchronization | Website install cards intentionally say many artifacts are not downloadable                                        | Workflow now publishes those assets, so site can lag release reality                | Medium   | 09    |
 | External channel skip semantics  | Homebrew/COPR skip when secrets missing; Codeberg release fails when token missing                                 | No single release summary that records which optional channels actually published   | Medium   | 09    |
 
+## Phase 04a APT Repository State
+
+The Debian/APT publish flow is wired through
+[`scripts/publish-apt.sh`](../../../scripts/publish-apt.sh) and gated in
+`.forgejo/workflows/release.yml` (`Publish APT repository` step). On every
+stable tag the workflow assembles a reprepro tree from `release/*.deb`, signs
+the `Release` files with the dedicated apt repo key
+(`CCFE4A8461DF8778F5227684B6DB8F177A951E1B`), and pushes the rebuilt
+`dists/` + `pool/` + `key.gpg.asc` tree to `caniko/modde-apt`, which Codeberg
+Pages serves at <https://modde.tartanoglu.com/apt/>.
+
+Bootstrap state (one-time, maintainer setup):
+
+1. Create the `caniko/modde-apt` Codeberg repository and enable Codeberg
+   Pages so it serves at the project's `/apt/` URL.
+2. Install the four Forgejo secrets `APT_REPO_GPG_KEY`,
+   `APT_REPO_GPG_KEY_ID`, `APT_REPO_PUSH_TOKEN`, and (if the key is
+   password-protected) `APT_REPO_GPG_PASSPHRASE`.
+3. Push a throwaway prerelease tag, watch the release workflow's `Publish
+APT repository` step run, and verify the tree at
+   `https://modde.tartanoglu.com/apt/dists/stable/Release` resolves and is
+   signed by the pinned key.
+
+When any of the four secrets is missing the workflow logs `::warning::` and
+skips apt publish so tarball/AppImage releases continue to land; the gate
+mirrors how Homebrew, Scoop, and Flathub skip cleanly.
+
 ## Phase 04c Flathub Submission State
 
 The `.#flatpak-manifest` output now emits a source-build Flatpak manifest for
@@ -177,28 +204,31 @@ secret is unset.
 
 Current release workflow credentials:
 
-| Secret / credential                                            | Required by                                             | Current behavior when missing                         | Notes                                                                                                     |
-| -------------------------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `secrets.codeberg_token` -> `CODEBERG_TOKEN`                   | Codeberg release create/update and asset upload         | Fails release (`test -n "$CODEBERG_TOKEN"`)           | Also used by `pages.yml` for Codeberg Pages, outside tag release                                          |
-| `secrets.MINISIGN_SECRET_KEY` -> `MINISIGN_SECRET_KEY`         | minisign signature for `SHA256SUMS.txt`                 | Fails release (`test -n`)                             | Secret key is written to a `0600` temp file and removed by trap                                           |
-| `secrets.MINISIGN_PASSWORD` -> `MINISIGN_PASSWORD`             | Unlock minisign secret key                              | Fails release (`test -n`)                             | Piped to minisign stdin; not echoed                                                                       |
-| Forgejo OIDC (`enable-openid-connect: true`)                   | Preferred keyless cosign signing and SLSA attestation   | Falls back only if `COSIGN_PRIVATE_KEY` is configured | Must be proven against Sigstore Fulcio/Rekor in a dry-run tag release                                     |
-| `secrets.COSIGN_PRIVATE_KEY` -> `COSIGN_PRIVATE_KEY`           | Optional fallback cosign signing key                    | Required only if keyless OIDC fails                   | Use only as documented deviation from keyless                                                             |
-| `secrets.COSIGN_PASSWORD` -> `COSIGN_PASSWORD`                 | Optional cosign key password                            | Required only when fallback key is password-protected | Consumed by cosign                                                                                        |
-| `secrets.WINDOWS_SIGNING_PFX` -> `WINDOWS_SIGNING_PFX`         | Optional Authenticode signing of Windows EXEs           | Warns and leaves Windows EXEs unsigned when missing   | Base64-encoded PKCS#12 bundle; decoded only to a `0600` temp file                                         |
-| `secrets.WINDOWS_SIGNING_PASS` -> `WINDOWS_SIGNING_PASS`       | Unlock Authenticode PKCS#12 bundle                      | Warns and leaves Windows EXEs unsigned when missing   | Written to a `0600` temp file and consumed by `osslsigncode -readpass`                                    |
-| `secrets.WINDOWS_SIGNING_SUBJECT` -> `WINDOWS_SIGNING_SUBJECT` | Optional signer subject guardrail                       | Skips subject matching when missing                   | Set to the exact issued subject substring, for example `CN=...`; do not guess before certificate issuance |
-| Runner file `$ATTIC_TOKENS_DIR/rs-modde`                       | Attic closure push to `https://attic.candee.baby/canix` | Fails release (`test -r`)                             | Not a Forgejo secret expression, but still a required credential on the atlas runner                      |
-| `secrets.homebrew_tap_token` -> `HOMEBREW_TAP_TOKEN`           | Push to `caniko/homebrew-modde`                         | Skips Homebrew tap update                             | Token comment says Codeberg access token scoped to tap with `write:repository`                            |
-| `secrets.copr_login` -> `COPR_LOGIN`                           | COPR CLI config                                         | Skips COPR upload if any COPR credential missing      | Fedora COPR                                                                                               |
-| `secrets.copr_username` -> `COPR_USERNAME`                     | COPR CLI config                                         | Skips COPR upload if any COPR credential missing      | Fedora COPR                                                                                               |
-| `secrets.copr_token` -> `COPR_TOKEN`                           | COPR CLI config                                         | Skips COPR upload if any COPR credential missing      | Fedora COPR                                                                                               |
+| Secret / credential                                                  | Required by                                             | Current behavior when missing                         | Notes                                                                                                     |
+| -------------------------------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `secrets.codeberg_token` -> `CODEBERG_TOKEN`                         | Codeberg release create/update and asset upload         | Fails release (`test -n "$CODEBERG_TOKEN"`)           | Also used by `pages.yml` for Codeberg Pages, outside tag release                                          |
+| `secrets.modde_minisign_secret_key` -> `MINISIGN_SECRET_KEY`         | minisign signature for `SHA256SUMS.txt`                 | Fails release (`test -n`)                             | Secret key is written to a `0600` temp file and removed by trap                                           |
+| `secrets.modde_minisign_password` -> `MINISIGN_PASSWORD`             | Unlock minisign secret key                              | Fails release (`test -n`)                             | Piped to minisign stdin; not echoed                                                                       |
+| Forgejo OIDC (`enable-openid-connect: true`)                         | Preferred keyless cosign signing and SLSA attestation   | Falls back only if `COSIGN_PRIVATE_KEY` is configured | Must be proven against Sigstore Fulcio/Rekor in a dry-run tag release                                     |
+| `secrets.COSIGN_PRIVATE_KEY` -> `COSIGN_PRIVATE_KEY`                 | Optional fallback cosign signing key                    | Required only if keyless OIDC fails                   | Use only as documented deviation from keyless                                                             |
+| `secrets.COSIGN_PASSWORD` -> `COSIGN_PASSWORD`                       | Optional cosign key password                            | Required only when fallback key is password-protected | Consumed by cosign                                                                                        |
+| `secrets.WINDOWS_SIGNING_PFX` -> `WINDOWS_SIGNING_PFX`               | Optional Authenticode signing of Windows EXEs           | Warns and leaves Windows EXEs unsigned when missing   | Base64-encoded PKCS#12 bundle; decoded only to a `0600` temp file                                         |
+| `secrets.WINDOWS_SIGNING_PASS` -> `WINDOWS_SIGNING_PASS`             | Unlock Authenticode PKCS#12 bundle                      | Warns and leaves Windows EXEs unsigned when missing   | Written to a `0600` temp file and consumed by `osslsigncode -readpass`                                    |
+| `secrets.WINDOWS_SIGNING_SUBJECT` -> `WINDOWS_SIGNING_SUBJECT`       | Optional signer subject guardrail                       | Skips subject matching when missing                   | Set to the exact issued subject substring, for example `CN=...`; do not guess before certificate issuance |
+| Runner file `$ATTIC_TOKENS_DIR/rs-modde`                             | Attic closure push to `https://attic.candee.baby/canix` | Fails release (`test -r`)                             | Not a Forgejo secret expression, but still a required credential on the atlas runner                      |
+| `secrets.homebrew_tap_token` -> `HOMEBREW_TAP_TOKEN`                 | Push to `caniko/homebrew-modde`                         | Skips Homebrew tap update                             | Token comment says Codeberg access token scoped to tap with `write:repository`                            |
+| `secrets.copr_login` -> `COPR_LOGIN`                                 | COPR CLI config                                         | Skips COPR upload if any COPR credential missing      | Fedora COPR                                                                                               |
+| `secrets.copr_username` -> `COPR_USERNAME`                           | COPR CLI config                                         | Skips COPR upload if any COPR credential missing      | Fedora COPR                                                                                               |
+| `secrets.copr_token` -> `COPR_TOKEN`                                 | COPR CLI config                                         | Skips COPR upload if any COPR credential missing      | Fedora COPR                                                                                               |
+| `secrets.modde_apt_repo_gpg_key` -> `APT_REPO_GPG_KEY`               | Sign Debian/APT `Release` files via reprepro            | Skips apt publish; tarball/AppImage release continues | Ascii-armored ed25519 secret key; fingerprint `CCFE4A8461DF8778F5227684B6DB8F177A951E1B`                  |
+| `secrets.modde_apt_repo_gpg_key_id` -> `APT_REPO_GPG_KEY_ID`         | Identify the apt key to reprepro `SignWith`             | Skips apt publish                                     | Long-form fingerprint matching the value committed in `dist/apt/conf/distributions`                       |
+| `secrets.modde_apt_repo_gpg_passphrase` -> `APT_REPO_GPG_PASSPHRASE` | Unlock `APT_REPO_GPG_KEY` if password-protected         | Required only if the apt key has a password           | Empty when the apt key was generated with `%no-protection`                                                |
+| `secrets.modde_apt_repo_push_token` -> `APT_REPO_PUSH_TOKEN`         | Push `caniko/modde-apt` Pages repository                | Skips apt publish                                     | Codeberg access token scoped to `caniko/modde-apt` with `write:repository`                                |
 
 Additional credentials later phases will need:
 
 | Secret / credential                                | Channel/control                                                                    | Phase |
 | -------------------------------------------------- | ---------------------------------------------------------------------------------- | ----- |
-| `APT_REPO_GPG_KEY`                                 | Sign Debian/APT repository metadata and packages                                   | 04    |
 | `AUR_SSH_KEY`                                      | Push `modde`, `modde-git`, and `modde-bin` PKGBUILDs to AUR                        | 04    |
 | `FLATHUB_TOKEN`                                    | Open/update Flathub app repository PR or publish branch                            | 04    |
 | `WINGET_PAT`                                       | Push winget manifests / PR to `microsoft/winget-pkgs` via bot fork                 | 05    |

@@ -13,10 +13,21 @@
 
 ## Goal
 
-1. Library crates (`modde-core`, `modde-sources`, `modde-games`, and any other reusable parts) are published to crates.io on every tag, in dependency order.
-2. Binary crates (`modde-cli`, `modde-ui`) are marked `publish = false`.
-3. Each library crate has minimum required metadata to render well on crates.io / docs.rs (description, license, keywords, README).
-4. docs.rs builds successfully for each published crate (no platform-specific deps in default features that break docs.rs's linux container).
+1. Every product crate is published to crates.io on each tag, in dependency
+   order. The maintainer's design call is to publish **all** product crates,
+   including the binaries `modde-cli` and `modde-ui` (so `cargo install
+modde-cli` works), and to keep only the workspace's pure tooling crate
+   (`modde-xtask`) as `publish = false`. The library crates `modde-core`,
+   `modde-sources`, `modde-games` publish for downstream library use.
+2. Each publishable crate has the metadata required to render well on
+   crates.io / docs.rs (description, license, license-file, repository,
+   readme, keywords, categories, rust-version, documentation).
+3. docs.rs builds successfully for each published crate (no platform-specific
+   deps in default features that break docs.rs's linux container).
+4. The publish flow is driven per crate by `simit init-ci`-generated
+   `.forgejo/workflows/publish-crate-<name>.yaml` workflows so each crate can
+   re-publish independently when a version-only release of one crate is
+   needed.
 
 ## Why
 
@@ -59,12 +70,24 @@ The user's memory notes preference for `simit` (commit/release/init-ci/init-flak
 
 ## Acceptance criteria
 
-- [ ] `cargo publish --dry-run -p <each-publishable-crate>` succeeds for every crate marked publishable.
-- [ ] Binary crates have `publish = false`.
-- [ ] Each publishable crate has `description`, `repository`, `license`, `readme`, `keywords`, `categories`, `rust-version`.
-- [ ] After a tag, the published version on crates.io matches `Cargo.toml`'s `version` (verified by querying `crates.io/api/v1/crates/<crate>` from a workflow post-flight step).
-- [ ] docs.rs renders each published crate without build errors (check after first publish; if it fails, add `[package.metadata.docs.rs]` with `no-default-features` or `features = [...]` as needed).
-- [ ] `CONTRIBUTING.md` documents the publish policy.
+- [ ] `cargo publish --dry-run -p <crate>` succeeds for every publishable crate
+      (`modde-core`, `modde-sources`, `modde-games`, `modde-cli`, `modde-ui`).
+      The `Dry-run publish` step in each
+      `.forgejo/workflows/publish-crate-<name>.yaml` enforces this on every tag.
+- [ ] Pure tooling crates that are not user-facing have `publish = false`.
+      Today this is only `modde-xtask`.
+- [ ] Each publishable crate sets `description`, `repository`, `license`,
+      `license-file`, `readme`, `keywords`, `categories`, `rust-version`, and
+      `documentation` (the last pinned to `https://docs.rs/<crate>`).
+- [ ] Before publishing, each crate's per-crate workflow queries
+      `crates.io/api/v1/crates/<crate>/<version>`; if HTTP 200 (already
+      published) the publish step exits 0, and only HTTP 404 (new version) is
+      allowed to call `cargo publish`. Any other status fails the workflow.
+- [ ] docs.rs renders each published crate without build errors (check after
+      first publish; if it fails, add `[package.metadata.docs.rs]` with
+      `no-default-features` or `features = [...]` as needed).
+- [ ] `CONTRIBUTING.md` documents the publish policy (which crates publish,
+      per-crate release tag flow, and how to re-publish a single crate).
 
 ## Files likely touched
 

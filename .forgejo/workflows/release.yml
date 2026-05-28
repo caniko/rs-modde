@@ -4,8 +4,9 @@ name: release
 
 # Required secrets:
 # - codeberg_token: Codeberg API token for release creation and asset upload.
-# - MINISIGN_SECRET_KEY: password-protected minisign secret key for signing SHA256SUMS.txt.
-# - MINISIGN_PASSWORD: password for MINISIGN_SECRET_KEY.
+# - modde_minisign_secret_key: ascii-armored minisign secret key for signing
+#   SHA256SUMS.txt. Stored via `canix forgejo-runner add-secret -i codeberg`.
+# - modde_minisign_password: passphrase for modde_minisign_secret_key.
 # - COSIGN_PRIVATE_KEY: optional fallback when Forgejo OIDC cannot obtain a public Sigstore certificate.
 # - COSIGN_PASSWORD: optional password for COSIGN_PRIVATE_KEY.
 # - COSIGN_PUBLIC_KEY: optional public key for smoke verification when COSIGN_PRIVATE_KEY fallback signs blobs.
@@ -17,6 +18,13 @@ name: release
 # - homebrew_tap_token: optional Codeberg token for caniko/homebrew-modde.
 # - FLATHUB_TOKEN: optional GitHub PAT for flathub/com.tartanoglu.modde PR updates.
 # - SCOOP_BUCKET_TOKEN: optional Codeberg token for caniko/scoop-modde.
+# - modde_apt_repo_gpg_key: ascii-armored secret key for the APT repository
+#   that signs dists/stable/Release. Pairs with modde_apt_repo_gpg_key_id.
+# - modde_apt_repo_gpg_key_id: long-form fingerprint of the APT repo key
+#   (matches SignWith in dist/apt/conf/distributions).
+# - modde_apt_repo_gpg_passphrase: optional passphrase for the apt key (unset
+#   when the key was generated with %no-protection).
+# - modde_apt_repo_push_token: optional Codeberg token for caniko/modde-apt.
 # - copr_login, copr_username, copr_token: optional COPR upload credentials.
 # - WINGET_PAT: optional GitHub PAT for opening microsoft/winget-pkgs PRs from the token owner's fork.
 # - AUR_SSH_KEY: Ed25519 private key for aur.archlinux.org package pushes.
@@ -347,8 +355,8 @@ jobs:
 
       - name: Sign checksums and attest release artifacts
         env:
-          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
-          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+          MINISIGN_SECRET_KEY: ${{ secrets.modde_minisign_secret_key }}
+          MINISIGN_PASSWORD: ${{ secrets.modde_minisign_password }}
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
@@ -1066,6 +1074,38 @@ jobs:
           git add bucket/modde.json
           git commit -m "modde ${VERSION}"
           git push origin "HEAD:${DEFAULT_BRANCH}"
+      # APT repository publish:
+      # Rebuilds the signed reprepro tree from release/*.deb and pushes it to
+      # caniko/modde-apt, which Codeberg Pages serves at
+      # https://modde.tartanoglu.com/apt/. Skipped on prereleases (stable-only
+      # channel) and skipped silently when bootstrap secrets are absent so
+      # early tag pushes stay green.
+      #
+      # Required secrets (provisioned via canix forgejo-runner add-secret):
+      # - modde_apt_repo_gpg_key: ascii-armored secret key for the apt repository
+      # - modde_apt_repo_gpg_key_id: long-form fingerprint matching SignWith in
+      #   dist/apt/conf/distributions
+      # - modde_apt_repo_push_token: Codeberg token scoped to caniko/modde-apt
+      #   with write:repository
+      # - modde_apt_repo_gpg_passphrase: optional, only if the apt key is
+      #   password-protected (rs-modde's key is %no-protection)
+      - name: Publish APT repository
+        env:
+          APT_REPO_GPG_KEY: ${{ secrets.modde_apt_repo_gpg_key }}
+          APT_REPO_GPG_KEY_ID: ${{ secrets.modde_apt_repo_gpg_key_id }}
+          APT_REPO_GPG_PASSPHRASE: ${{ secrets.modde_apt_repo_gpg_passphrase }}
+          APT_REPO_PUSH_TOKEN: ${{ secrets.modde_apt_repo_push_token }}
+        run: |
+          set -euo pipefail
+          . ./release-env
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            echo "Prerelease ${VERSION}; skipping APT repository publish."
+            exit 0
+          fi
+
+          export VERSION
+          nix shell nixpkgs#reprepro nixpkgs#gnupg nixpkgs#git -c \
+            bash scripts/publish-apt.sh
       - name: Push SRPM to COPR
         env:
           COPR_LOGIN: ${{ secrets.copr_login }}
