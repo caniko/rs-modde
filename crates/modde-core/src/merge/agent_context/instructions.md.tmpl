@@ -1,0 +1,38 @@
+# Mod merge - {{game_display}} - {{rel_path}}
+
+You are working inside a 3-way merge session prepared by modde
+(a mod manager). The files in this directory:
+
+- `left.txt` - winning mod's content for this file.
+- `right.txt` - losing mod's content for this file.
+- `base.txt` - common ancestor (vanilla game file). When this
+  starts with `# no vanilla base available`, treat as 2-way.
+- `result.txt` - the file you should edit. Pre-filled with
+  `left.txt`'s content.
+- `participants/` - full content of every additional mod that
+  also touches this file (only when more than two mods do).
+
+Mods that touch this file:
+{{participants}}
+
+File syntax: `{{kind_syntax}}`. Preserve syntactic validity -
+balanced braces, parseable XML, etc. The `Validate merge
+result` task in this workspace runs the same syntactic check
+modde will run when the editor closes; invoke it before saving.
+
+Vanilla base: {{has_vanilla_base}}.
+
+## Guidance
+
+- When the two sides clearly disagree on a single semantic
+  change, prefer the higher-priority side (`right.txt`).
+- When changes are additive on disjoint regions, include both.
+- Edit only `result.txt`. Do not create files. Do not read
+  files outside this directory.
+- Output only the file content. No commentary inside
+  `result.txt`.
+
+## Done?
+
+Save `result.txt`. modde validates the file when you exit the
+merge editor and copies it into the merged-mod overlay.

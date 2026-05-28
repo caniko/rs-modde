@@ -4,6 +4,7 @@ pub mod scanner;
 use std::path::{Path, PathBuf};
 
 use modde_core::installer::InstallMethod;
+use modde_core::merge::MergeKind;
 
 use crate::policies::{BareLayoutPolicy, ContentPolicy, DllOverridePolicy, StagingDllSearch};
 use crate::traits::{ContentCategory, GamePlugin, ModSafety};
@@ -111,6 +112,10 @@ impl GamePlugin for OblivionRemasteredGame {
         true
     }
 
+    fn mergeable(&self, rel_path: &str) -> Option<MergeKind> {
+        oblivion_remastered_mergeable(rel_path)
+    }
+
     fn steam_app_id_u32(&self) -> Option<u32> {
         Some(2623190)
     }
@@ -133,6 +138,22 @@ impl GamePlugin for OblivionRemasteredGame {
 
     fn recognizes_bare_layout(&self, extracted_dir: &Path) -> bool {
         OR_BARE_LAYOUT_POLICY.recognizes(extracted_dir)
+    }
+}
+
+fn oblivion_remastered_mergeable(rel_path: &str) -> Option<MergeKind> {
+    let lower = rel_path.to_lowercase().replace('\\', "/");
+    let ext = lower.rsplit('.').next()?;
+    match ext {
+        // No merge backend consumes Bethesda plugin sessions in v1.
+        "esp" | "esm" | "esl" => Some(MergeKind::BethesdaPlugin),
+        "ini" => Some(MergeKind::Text {
+            syntax: "ini".to_string(),
+        }),
+        "json" => Some(MergeKind::Text {
+            syntax: "json".to_string(),
+        }),
+        _ => None,
     }
 }
 

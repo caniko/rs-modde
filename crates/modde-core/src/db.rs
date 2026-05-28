@@ -6,10 +6,13 @@ use tracing::info;
 
 use crate::error::{CoreError, Result};
 use crate::installer::{InstallMethod, InstallPlan, InstallStatus, StagedFile};
+use crate::merge::{
+    BaseSource, MergeKind, MergeParticipant, MergeSession, MergedWith, is_reserved_mod_id,
+};
 use crate::profile::{EnabledMod, LoadOrderLock, LockReason, Profile, ProfileSource};
 use crate::resolver::{GameId, LoadOrderRule, ModId};
 
-const CURRENT_SCHEMA_VERSION: u32 = 10;
+const CURRENT_SCHEMA_VERSION: u32 = 12;
 
 const SCHEMA_V1: &str = "
 PRAGMA journal_mode = WAL;
@@ -225,6 +228,39 @@ CREATE INDEX IF NOT EXISTS idx_tool_setting_nodes_tool
     ON tool_setting_nodes(game_id, tool_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_tool_setting_edges_child
     ON tool_setting_edges(child_node_id);
+";
+
+// Schema V11 adds persistent merge sessions. V8 already reserved
+// `installed_mod_files.merge_group`; this table stores the higher-level merge
+// session keyed by `(profile_id, merge_group)`.
+const SCHEMA_V11: &str = "
+CREATE TABLE IF NOT EXISTS merge_sessions (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id          INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    merge_group         TEXT NOT NULL,
+    rel_path            TEXT NOT NULL,
+    kind_json           TEXT NOT NULL,
+    participants_json   TEXT NOT NULL,
+    base_json           TEXT NOT NULL,
+    status              TEXT NOT NULL,
+    result_path         TEXT,
+    merged_with         TEXT,
+    resolved_at         INTEGER,
+    UNIQUE(profile_id, merge_group)
+);
+
+CREATE INDEX IF NOT EXISTS idx_merge_sessions_status
+    ON merge_sessions(profile_id, status);
+";
+
+// Schema V12 stores per-game merge configuration. Witcher 3 uses this to
+// locate the user-provided vanilla scripts/config cache used as a 3-way base.
+const SCHEMA_V12: &str = "
+CREATE TABLE IF NOT EXISTS merge_game_config (
+    game_id        TEXT PRIMARY KEY,
+    vanilla_dir    TEXT,
+    updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
 ";
 
 /// Summary view of a profile (without loading all mods).
@@ -447,6 +483,24 @@ impl ModdeDb {
                 from = version.max(9),
                 to = 10,
                 "database schema migrated to V10"
+            );
+        }
+
+        if version < 11 {
+            self.conn.execute_batch(SCHEMA_V11)?;
+            info!(
+                from = version.max(10),
+                to = 11,
+                "database schema migrated to V11"
+            );
+        }
+
+        if version < 12 {
+            self.conn.execute_batch(SCHEMA_V12)?;
+            info!(
+                from = version.max(11),
+                to = 12,
+                "database schema migrated to V12"
             );
         }
 
@@ -1328,6 +1382,113 @@ impl ModdeDb {
         Ok(rows)
     }
 
+    /// List all merge sessions for a profile.
+    pub fn list_merge_sessions(&self, profile_id: i64) -> Result<Vec<MergeSession>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT merge_group, rel_path, kind_json, participants_json, base_json,
+                    status, result_path, merged_with, resolved_at
+               FROM merge_sessions
+              WHERE profile_id = ?1
+           ORDER BY rel_path, merge_group",
+        )?;
+        let rows = stmt.query_map(params![profile_id], merge_session_row)?;
+        rows.collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(CoreError::from)
+    }
+
+    /// Load one merge session by profile and merge group.
+    pub fn get_merge_session(
+        &self,
+        profile_id: i64,
+        merge_group: &str,
+    ) -> Result<Option<MergeSession>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT merge_group, rel_path, kind_json, participants_json, base_json,
+                    status, result_path, merged_with, resolved_at
+               FROM merge_sessions
+              WHERE profile_id = ?1 AND merge_group = ?2",
+        )?;
+        let mut rows = stmt.query(params![profile_id, merge_group])?;
+        rows.next()?
+            .map(merge_session_row)
+            .transpose()
+            .map_err(CoreError::from)
+    }
+
+    /// Insert or update a merge session scoped to a profile.
+    pub fn upsert_merge_session(&self, profile_id: i64, session: &MergeSession) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO merge_sessions (
+                 profile_id, merge_group, rel_path, kind_json, participants_json,
+                 base_json, status, result_path, merged_with, resolved_at
+             )
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             ON CONFLICT(profile_id, merge_group) DO UPDATE SET
+                 rel_path = excluded.rel_path,
+                 kind_json = excluded.kind_json,
+                 participants_json = excluded.participants_json,
+                 base_json = excluded.base_json,
+                 status = excluded.status,
+                 result_path = excluded.result_path,
+                 merged_with = excluded.merged_with,
+                 resolved_at = excluded.resolved_at",
+            params![
+                profile_id,
+                session.merge_group.as_str(),
+                session.rel_path.as_str(),
+                encode_merge_kind(&session.kind)?,
+                encode_merge_participants(&session.participants)?,
+                encode_base_source(&session.base)?,
+                session.status.as_str(),
+                session
+                    .result_path
+                    .as_ref()
+                    .map(|path| path.to_string_lossy().to_string()),
+                session.merged_with.map(MergedWith::as_str),
+                session.resolved_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Delete a merge session by profile and merge group.
+    pub fn delete_merge_session(&self, profile_id: i64, merge_group: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM merge_sessions WHERE profile_id = ?1 AND merge_group = ?2",
+            params![profile_id, merge_group],
+        )?;
+        Ok(())
+    }
+
+    /// Load the configured vanilla merge-base cache directory for a game.
+    pub fn get_vanilla_dir(&self, game_id: &str) -> Result<Option<PathBuf>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT vanilla_dir FROM merge_game_config WHERE game_id = ?1")?;
+        let mut rows = stmt.query(params![game_id])?;
+        rows.next()?
+            .map(|row| {
+                row.get::<_, Option<String>>(0)
+                    .map(|raw| raw.map(PathBuf::from))
+            })
+            .transpose()
+            .map(Option::flatten)
+            .map_err(CoreError::from)
+    }
+
+    /// Persist the configured vanilla merge-base cache directory for a game.
+    pub fn set_vanilla_dir(&self, game_id: &str, dir: &Path) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO merge_game_config (game_id, vanilla_dir, updated_at)
+             VALUES (?1, ?2, datetime('now'))
+             ON CONFLICT(game_id) DO UPDATE SET
+                 vanilla_dir = excluded.vanilla_dir,
+                 updated_at = excluded.updated_at",
+            params![game_id, dir.to_string_lossy().as_ref()],
+        )?;
+        Ok(())
+    }
+
     // ── TOML Import ───────────────────────────────────────────────
 
     /// Import existing TOML profile files into the database.
@@ -1411,6 +1572,11 @@ impl ModdeDb {
         )?;
 
         for (idx, m) in mods.iter().enumerate() {
+            if is_reserved_mod_id(&m.mod_id) {
+                return Err(CoreError::Validation(
+                    format!("reserved mod id cannot be added to a profile: {}", m.mod_id).into(),
+                ));
+            }
             let lock_reason = encode_lock_reason(m.lock.as_ref());
             stmt.execute(params![
                 profile_id,
@@ -1677,6 +1843,63 @@ pub fn decode_install_method(raw: Option<&str>) -> Result<Option<InstallMethod>>
             .map(Some)
             .map_err(|e| CoreError::Other(format!("failed to parse install_method: {e}").into())),
     }
+}
+
+fn encode_merge_kind(kind: &MergeKind) -> Result<String> {
+    serde_json::to_string(kind).map_err(CoreError::from)
+}
+
+fn encode_merge_participants(participants: &[MergeParticipant]) -> Result<String> {
+    serde_json::to_string(participants).map_err(CoreError::from)
+}
+
+fn encode_base_source(base: &BaseSource) -> Result<String> {
+    serde_json::to_string(base).map_err(CoreError::from)
+}
+
+fn merge_decode_error(
+    column: usize,
+    error: impl Into<Box<dyn std::error::Error + Send + Sync>>,
+) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(column, rusqlite::types::Type::Text, error.into())
+}
+
+fn merge_session_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MergeSession> {
+    let kind_json: String = row.get(2)?;
+    let participants_json: String = row.get(3)?;
+    let base_json: String = row.get(4)?;
+    let status: String = row.get(5)?;
+    let result_path: Option<String> = row.get(6)?;
+    let merged_with: Option<String> = row.get(7)?;
+
+    Ok(MergeSession {
+        merge_group: row.get(0)?,
+        rel_path: row.get(1)?,
+        kind: serde_json::from_str::<MergeKind>(&kind_json)
+            .map_err(|error| merge_decode_error(2, error))?,
+        participants: serde_json::from_str::<Vec<MergeParticipant>>(&participants_json)
+            .map_err(|error| merge_decode_error(3, error))?,
+        base: serde_json::from_str::<BaseSource>(&base_json)
+            .map_err(|error| merge_decode_error(4, error))?,
+        status: status.parse().map_err(|error: String| {
+            merge_decode_error(
+                5,
+                std::io::Error::new(std::io::ErrorKind::InvalidData, error),
+            )
+        })?,
+        result_path: result_path.map(PathBuf::from),
+        merged_with: merged_with
+            .map(|value| {
+                value.parse().map_err(|error: String| {
+                    merge_decode_error(
+                        7,
+                        std::io::Error::new(std::io::ErrorKind::InvalidData, error),
+                    )
+                })
+            })
+            .transpose()?,
+        resolved_at: row.get(8)?,
+    })
 }
 
 fn new_tool_setting_node_id(game_id: &str, tool_id: &str) -> String {
@@ -2097,6 +2320,8 @@ fn executable_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ExecutableCo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::collision::FileOrigin;
+    use crate::merge::{MergeStatus, merge_group_for_rel_path};
 
     fn test_db() -> ModdeDb {
         ModdeDb::open_memory().unwrap()
@@ -2131,6 +2356,80 @@ mod tests {
             }],
             load_order_lock: None,
         }
+    }
+
+    fn sample_merge_session(rel_path: &str) -> MergeSession {
+        MergeSession {
+            merge_group: merge_group_for_rel_path(rel_path),
+            rel_path: rel_path.to_string(),
+            participants: vec![
+                MergeParticipant {
+                    mod_id: ModId::from("mod_a"),
+                    origin: FileOrigin::Loose,
+                    content_hash: Some("hash-a".to_string()),
+                },
+                MergeParticipant {
+                    mod_id: ModId::from("mod_b"),
+                    origin: FileOrigin::Archive {
+                        archive_rel: "mod_b.bsa".to_string(),
+                    },
+                    content_hash: Some("hash-b".to_string()),
+                },
+            ],
+            base: BaseSource::Vanilla {
+                abs_path: PathBuf::from("/game/Data/config/game.ini"),
+                content_hash: "hash-base".to_string(),
+            },
+            kind: MergeKind::Text {
+                syntax: "ini".to_string(),
+            },
+            status: MergeStatus::Pending,
+            result_path: Some(PathBuf::from("/profiles/default/merge/config/game.ini")),
+            merged_with: Some(MergedWith::Manual),
+            resolved_at: Some(1_700_000_000),
+        }
+    }
+
+    fn create_v10_fixture(path: &Path) {
+        let conn = Connection::open(path).unwrap();
+        conn.execute_batch(SCHEMA_V1).unwrap();
+        conn.execute_batch(SCHEMA_V2).unwrap();
+        conn.execute_batch(SCHEMA_V3).unwrap();
+        conn.execute_batch(
+            "
+            ALTER TABLE profile_mods ADD COLUMN nexus_mod_id INTEGER;
+            ALTER TABLE profile_mods ADD COLUMN nexus_file_id INTEGER;
+            ALTER TABLE profile_mods ADD COLUMN nexus_game_domain TEXT;
+            ALTER TABLE profile_mods ADD COLUMN installed_timestamp INTEGER;
+            ALTER TABLE profile_mods ADD COLUMN category_id INTEGER REFERENCES mod_categories(id);
+            ALTER TABLE profile_mods ADD COLUMN notes TEXT;
+            ALTER TABLE profile_mods ADD COLUMN tags TEXT;
+            ALTER TABLE profile_mods ADD COLUMN display_name TEXT;
+            ALTER TABLE profiles ADD COLUMN load_order_lock TEXT;
+            ALTER TABLE profile_mods ADD COLUMN lock_reason TEXT;
+            ALTER TABLE profile_mods ADD COLUMN install_method TEXT;
+            ALTER TABLE profile_mods ADD COLUMN source_archive_hash TEXT;
+            ALTER TABLE profile_mods ADD COLUMN install_status TEXT;
+            ",
+        )
+        .unwrap();
+        conn.execute_batch(SCHEMA_V8).unwrap();
+        conn.execute_batch(SCHEMA_V9).unwrap();
+        conn.execute_batch(SCHEMA_V10).unwrap();
+        conn.execute_batch("ALTER TABLE game_tools ADD COLUMN current_node_id TEXT;")
+            .unwrap();
+        conn.pragma_update(None, "user_version", 10).unwrap();
+    }
+
+    fn create_v11_fixture(path: &Path) {
+        create_v10_fixture(path);
+        let db = ModdeDb::open_at(path).unwrap();
+        let profile_id = db
+            .create_profile(&sample_profile("test", "skyrim-se"))
+            .unwrap();
+        db.upsert_merge_session(profile_id, &sample_merge_session("config/game.ini"))
+            .unwrap();
+        db.conn.pragma_update(None, "user_version", 11).unwrap();
     }
 
     #[test]
@@ -2311,6 +2610,118 @@ mod tests {
     }
 
     #[test]
+    fn v11_migration_adds_empty_merge_sessions_to_v10_database() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("modde.sqlite");
+        create_v10_fixture(&db_path);
+
+        let db = ModdeDb::open_at(&db_path).unwrap();
+        let version: u32 = db
+            .conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, CURRENT_SCHEMA_VERSION);
+
+        let table_count: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'merge_sessions'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(table_count, 1);
+
+        let row_count: i64 = db
+            .conn
+            .query_row("SELECT COUNT(*) FROM merge_sessions", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(row_count, 0);
+    }
+
+    #[test]
+    fn merge_session_upsert_get_list_and_delete_roundtrip() {
+        let db = test_db();
+        let profile_id = db
+            .create_profile(&sample_profile("test", "skyrim-se"))
+            .unwrap();
+        let session = sample_merge_session("config/game.ini");
+
+        db.upsert_merge_session(profile_id, &session).unwrap();
+
+        let loaded = db
+            .get_merge_session(profile_id, &session.merge_group)
+            .unwrap()
+            .unwrap();
+        assert_eq!(loaded, session);
+
+        let listed = db.list_merge_sessions(profile_id).unwrap();
+        assert_eq!(listed, vec![session.clone()]);
+        assert_eq!(
+            serde_json::to_string(&listed[0]).unwrap(),
+            serde_json::to_string(&session).unwrap()
+        );
+
+        let mut updated = session.clone();
+        updated.status = MergeStatus::Resolved;
+        updated.merged_with = Some(MergedWith::VSCode);
+        db.upsert_merge_session(profile_id, &updated).unwrap();
+        assert_eq!(
+            db.list_merge_sessions(profile_id).unwrap(),
+            vec![updated.clone()]
+        );
+
+        db.delete_merge_session(profile_id, &updated.merge_group)
+            .unwrap();
+        assert!(
+            db.get_merge_session(profile_id, &updated.merge_group)
+                .unwrap()
+                .is_none()
+        );
+        assert!(db.list_merge_sessions(profile_id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn merge_game_config_vanilla_dir_roundtrip() {
+        let db = test_db();
+        let temp = tempfile::tempdir().unwrap();
+        let vanilla = temp.path().join("vanilla");
+        std::fs::create_dir_all(&vanilla).unwrap();
+
+        assert!(db.get_vanilla_dir("witcher3").unwrap().is_none());
+        db.set_vanilla_dir("witcher3", &vanilla).unwrap();
+        assert_eq!(db.get_vanilla_dir("witcher3").unwrap(), Some(vanilla));
+    }
+
+    #[test]
+    fn merge_game_config_v12_migration_preserves_v11_merge_sessions() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("modde.sqlite");
+        create_v11_fixture(&db_path);
+
+        let db = ModdeDb::open_at(&db_path).unwrap();
+        let version: u32 = db
+            .conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, CURRENT_SCHEMA_VERSION);
+
+        let table_count: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'merge_game_config'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(table_count, 1);
+
+        let sessions = db.list_merge_sessions(1).unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].rel_path, "config/game.ini");
+    }
+
+    #[test]
     fn list_profiles_all_and_by_game() {
         let db = test_db();
         db.create_profile(&sample_profile("vanilla", "skyrim-se"))
@@ -2419,5 +2830,37 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+}
+
+#[cfg(test)]
+mod merge_game_config {
+    use super::*;
+
+    #[test]
+    fn vanilla_dir_roundtrip() {
+        let db = ModdeDb::open_memory().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let vanilla = temp.path().join("vanilla");
+        std::fs::create_dir_all(&vanilla).unwrap();
+
+        assert!(db.get_vanilla_dir("witcher3").unwrap().is_none());
+        db.set_vanilla_dir("witcher3", &vanilla).unwrap();
+        assert_eq!(db.get_vanilla_dir("witcher3").unwrap(), Some(vanilla));
+    }
+
+    #[test]
+    fn v12_table_is_created_for_new_databases() {
+        let db = ModdeDb::open_memory().unwrap();
+
+        let table_count: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'merge_game_config'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(table_count, 1);
     }
 }

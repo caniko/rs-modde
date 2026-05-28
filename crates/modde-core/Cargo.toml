@@ -52,6 +52,9 @@ dirs = { workspace = true }
 zip = { workspace = true }
 fomod-oxide = { workspace = true }
 reflink-copy = { workspace = true }
+which = { workspace = true }
+similar = { workspace = true }
+quick-xml = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -60,6 +63,7 @@ libc = "0.2"
 winreg = { workspace = true }
 
 [dev-dependencies]
+modde-games = { path = "../modde-games" }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }

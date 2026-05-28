@@ -7,6 +7,7 @@ pub mod scanner;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use modde_core::merge::MergeKind;
 
 use smallvec::SmallVec;
 
@@ -154,6 +155,12 @@ impl GamePlugin for Cyberpunk2077 {
 
     fn classify_extension(&self, ext: &str) -> ContentCategory {
         CYBERPUNK_CONTENT_POLICY.classify_extension(ext)
+    }
+
+    fn mergeable(&self, _rel_path: &str) -> Option<MergeKind> {
+        // TODO(merge): classify `.reds` and `.tweak` once a Cyberpunk merge
+        // backend exists.
+        None
     }
 
     fn wine_dll_overrides(&self, game_dir: &Path) -> SmallVec<[String; 4]> {

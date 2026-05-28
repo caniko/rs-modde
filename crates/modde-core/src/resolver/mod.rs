@@ -2,10 +2,13 @@ use std::borrow::Borrow;
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fmt;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 use crate::error::{CoreError, Result};
+use crate::merge::{MERGED_MOD_ID, MergeSession, MergeStatus};
 use crate::profile::Profile;
 
 /// Generates a newtype wrapper around `String` with zero-cost `#[repr(transparent)]`
@@ -184,6 +187,40 @@ pub struct ResolvedLoadOrder {
     pub order: Vec<ModId>,
 }
 
+/// Inject the synthetic merged mod as the highest-priority provider for
+/// resolved merge sessions that have a published file on disk.
+pub fn inject_merged_mod(
+    order: &mut Vec<ModId>,
+    conflict_map: &mut ConflictMap,
+    resolved_sessions: &[MergeSession],
+    merged_mod_root: &Path,
+) {
+    let merged_mod_id = ModId::from(MERGED_MOD_ID);
+    let mut injected = false;
+
+    for session in resolved_sessions
+        .iter()
+        .filter(|session| session.status == MergeStatus::Resolved)
+    {
+        let merged_file = merged_mod_root.join(&session.rel_path);
+        if !merged_file.is_file() {
+            warn!(
+                merge_group = %session.merge_group,
+                rel_path = %session.rel_path,
+                path = %merged_file.display(),
+                "resolved merge session has no published file; skipping synthetic provider"
+            );
+            continue;
+        }
+        conflict_map.register(session.rel_path.clone(), merged_mod_id.clone());
+        injected = true;
+    }
+
+    if injected && !order.iter().any(|mod_id| mod_id == &merged_mod_id) {
+        order.push(merged_mod_id);
+    }
+}
+
 /// Resolve a profile into a topologically sorted load order.
 ///
 /// **Stability contract:** the output preserves `profile.mods` input order
@@ -312,6 +349,8 @@ pub fn resolve(profile: &Profile) -> Result<ResolvedLoadOrder> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::collision::FileOrigin;
+    use crate::merge::{BaseSource, MergeKind, MergeParticipant};
     use crate::profile::{EnabledMod, ProfileSource};
     use smallvec::{SmallVec, smallvec};
     use std::path::PathBuf;
@@ -417,6 +456,70 @@ mod tests {
         let conflicts = cm.conflicts();
         assert_eq!(conflicts.len(), 1);
         assert_eq!(conflicts[0].0, "textures/sky.dds");
+    }
+
+    #[test]
+    fn merged_mod_injection_makes_synthetic_provider_win_only_merged_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let merged_root = tmp.path().join("__merged__");
+        std::fs::create_dir_all(merged_root.join("content/scripts/game")).unwrap();
+        std::fs::write(merged_root.join("content/scripts/game/player.ws"), "merged").unwrap();
+
+        let mut order = vec![ModId::from("mod_a"), ModId::from("mod_b")];
+        let mut conflict_map = ConflictMap::default();
+        conflict_map.register(
+            "content/scripts/game/player.ws".into(),
+            ModId::from("mod_a"),
+        );
+        conflict_map.register(
+            "content/scripts/game/player.ws".into(),
+            ModId::from("mod_b"),
+        );
+        conflict_map.register("textures/sky.dds".into(), ModId::from("mod_a"));
+        conflict_map.register("textures/sky.dds".into(), ModId::from("mod_b"));
+
+        let sessions = vec![MergeSession {
+            merge_group: "group".to_string(),
+            rel_path: "content/scripts/game/player.ws".to_string(),
+            participants: vec![
+                MergeParticipant {
+                    mod_id: ModId::from("mod_a"),
+                    origin: FileOrigin::Loose,
+                    content_hash: Some("a".to_string()),
+                },
+                MergeParticipant {
+                    mod_id: ModId::from("mod_b"),
+                    origin: FileOrigin::Loose,
+                    content_hash: Some("b".to_string()),
+                },
+            ],
+            base: BaseSource::Missing,
+            kind: MergeKind::Text {
+                syntax: "witcherscript".to_string(),
+            },
+            status: MergeStatus::Resolved,
+            result_path: Some(merged_root.join("content/scripts/game/player.ws")),
+            merged_with: None,
+            resolved_at: Some(1),
+        }];
+
+        inject_merged_mod(&mut order, &mut conflict_map, &sessions, &merged_root);
+
+        let hidden = HashSet::new();
+        assert_eq!(
+            conflict_map
+                .winner_for("content/scripts/game/player.ws", &order, &hidden)
+                .unwrap()
+                .as_str(),
+            MERGED_MOD_ID
+        );
+        assert_eq!(
+            conflict_map
+                .winner_for("textures/sky.dds", &order, &hidden)
+                .unwrap()
+                .as_str(),
+            "mod_b"
+        );
     }
 
     #[test]
@@ -579,5 +682,81 @@ mod tests {
         };
         let result = resolve(&profile).unwrap();
         assert_eq!(ids(&result.order), vec!["a", "c"]);
+    }
+}
+
+#[cfg(test)]
+mod merged_mod {
+    use std::collections::HashSet;
+
+    use crate::collision::FileOrigin;
+    use crate::merge::{
+        BaseSource, MERGED_MOD_ID, MergeKind, MergeParticipant, MergeSession, MergeStatus,
+    };
+
+    use super::*;
+
+    #[test]
+    fn synthetic_provider_wins_merged_path_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let merged_root = tmp.path().join("__merged__");
+        std::fs::create_dir_all(merged_root.join("content/scripts/game")).unwrap();
+        std::fs::write(merged_root.join("content/scripts/game/player.ws"), "merged").unwrap();
+
+        let mut order = vec![ModId::from("mod_a"), ModId::from("mod_b")];
+        let mut conflict_map = ConflictMap::default();
+        conflict_map.register(
+            "content/scripts/game/player.ws".into(),
+            ModId::from("mod_a"),
+        );
+        conflict_map.register(
+            "content/scripts/game/player.ws".into(),
+            ModId::from("mod_b"),
+        );
+        conflict_map.register("textures/sky.dds".into(), ModId::from("mod_a"));
+        conflict_map.register("textures/sky.dds".into(), ModId::from("mod_b"));
+
+        let sessions = vec![MergeSession {
+            merge_group: "group".to_string(),
+            rel_path: "content/scripts/game/player.ws".to_string(),
+            participants: vec![
+                MergeParticipant {
+                    mod_id: ModId::from("mod_a"),
+                    origin: FileOrigin::Loose,
+                    content_hash: Some("a".to_string()),
+                },
+                MergeParticipant {
+                    mod_id: ModId::from("mod_b"),
+                    origin: FileOrigin::Loose,
+                    content_hash: Some("b".to_string()),
+                },
+            ],
+            base: BaseSource::Missing,
+            kind: MergeKind::Text {
+                syntax: "witcherscript".to_string(),
+            },
+            status: MergeStatus::Resolved,
+            result_path: Some(merged_root.join("content/scripts/game/player.ws")),
+            merged_with: None,
+            resolved_at: Some(1),
+        }];
+
+        inject_merged_mod(&mut order, &mut conflict_map, &sessions, &merged_root);
+
+        let hidden = HashSet::new();
+        assert_eq!(
+            conflict_map
+                .winner_for("content/scripts/game/player.ws", &order, &hidden)
+                .unwrap()
+                .as_str(),
+            MERGED_MOD_ID
+        );
+        assert_eq!(
+            conflict_map
+                .winner_for("textures/sky.dds", &order, &hidden)
+                .unwrap()
+                .as_str(),
+            "mod_b"
+        );
     }
 }

@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use crate::fs::walk_files_relative;
@@ -18,7 +19,7 @@ use crate::resolver::{ConflictMap, ModId};
 // ── Types ───────────────────────────────────────────────────────────
 
 /// How a file is provided by a mod.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum FileOrigin {
     /// A loose file in the mod's staging directory.
     Loose,

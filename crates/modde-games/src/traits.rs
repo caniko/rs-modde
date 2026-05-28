@@ -228,6 +228,24 @@ pub trait GamePlugin: Send + Sync {
         None
     }
 
+    /// Whether a per-mod file path is content-mergeable, and which
+    /// syntax or merge kind should be used for it.
+    ///
+    /// `None` means the file should keep normal override-winner semantics
+    /// instead of being offered as a content merge candidate.
+    fn mergeable(&self, _rel_path: &str) -> Option<modde_core::merge::MergeKind> {
+        None
+    }
+
+    /// Return the vanilla file to use as a 3-way merge base for
+    /// `rel_path`, when the game has one configured and present.
+    ///
+    /// The default returns `None`; callers should fall back to a synthetic
+    /// base source rather than treating this as an error.
+    fn vanilla_base(&self, _install: &Path, _rel_path: &str) -> Option<PathBuf> {
+        None
+    }
+
     /// Whether this game participates in modde's per-profile save layer.
     ///
     /// Disabled games still support normal profile/mod management, but modde
@@ -302,7 +320,7 @@ pub trait GamePlugin: Send + Sync {
     /// Claim an extracted archive as a game-specific install method.
     ///
     /// Runs **before** the generic probes (FOMOD, BAIN, DLL overlay) in
-    /// [`modde_core::installer::analyze`], so a game can authoritatively
+    /// [`modde_core::installer::analyze()`], so a game can authoritatively
     /// identify layouts it knows about — e.g. Cyberpunk recognizing a
     /// `REDmod` by `info.json` + `archives/` presence, or ENB for Bethesda.
     ///
@@ -319,9 +337,9 @@ pub trait GamePlugin: Send + Sync {
     /// top-level `Data/` directory, or a Cyberpunk archive with `r6/`).
     ///
     /// Called as the last fallback by
-    /// [`modde_core::installer::analyze`] — if this returns `true` the
+    /// [`modde_core::installer::analyze()`] — if this returns `true` the
     /// plan becomes `InstallMethod::BareExtract`, otherwise the analyzer
-    /// falls through to [`InstallMethod::Unknown`] and the caller dumps
+    /// falls through to [`modde_core::installer::InstallMethod::Unknown`] and the caller dumps
     /// a dossier for the skill path.
     fn recognizes_bare_layout(&self, _extracted_dir: &Path) -> bool {
         false

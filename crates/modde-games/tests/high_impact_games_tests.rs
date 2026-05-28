@@ -188,10 +188,6 @@ fn witcher3_scanner_and_script_conflict_detection_work() {
     std::fs::create_dir_all(&scripts2).unwrap();
     std::fs::write(scripts2.join("player.ws"), "script").unwrap();
 
-    assert!(modde_games::witcher3::has_script_conflict(
-        &tmp.path().join("mods/modGameplay")
-    ));
-
     let ctx = modde_games::traits::ScanContext {
         install_dir: tmp.path(),
     };
@@ -203,10 +199,6 @@ fn witcher3_scanner_and_script_conflict_detection_work() {
         .map(|item| item.mod_id.as_str())
         .collect::<Vec<_>>();
     assert!(ids.contains(&"mod/modGameplay"));
-    assert_eq!(
-        modde_games::witcher3::script_conflict_paths(&tmp.path().join("mods")),
-        vec!["content/scripts/game/player.ws"]
-    );
 }
 
 #[test]

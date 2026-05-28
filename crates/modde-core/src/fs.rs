@@ -134,6 +134,10 @@ pub fn deploy_symlinks(src: &Path, dst: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::merge::MERGED_MOD_ID;
+    use crate::resolver::{ModId, ResolvedLoadOrder};
+    use crate::vfs::SymlinkFarm;
+    use std::collections::HashMap;
     use tempfile::TempDir;
 
     #[test]
@@ -227,5 +231,116 @@ mod tests {
         );
         assert_eq!(std::fs::read_to_string(dst.join("a.txt")).unwrap(), "a");
         assert_eq!(std::fs::read_to_string(dst.join("sub/b.txt")).unwrap(), "b");
+    }
+
+    #[tokio::test]
+    async fn deploy_with_merged_mod_uses_synthetic_source_for_merged_path() {
+        let tmp = TempDir::new().unwrap();
+        let source_a = tmp.path().join("store/mod_a/content/scripts/game/foo.ws");
+        let source_b = tmp.path().join("store/mod_b/content/scripts/game/foo.ws");
+        let source_c = tmp.path().join("store/mod_c/content/scripts/game/foo.ws");
+        let source_merged = tmp
+            .path()
+            .join("profiles/default/__merged__/content/scripts/game/foo.ws");
+        for path in [&source_a, &source_b, &source_c, &source_merged] {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        }
+        std::fs::write(&source_a, "a").unwrap();
+        std::fs::write(&source_b, "b").unwrap();
+        std::fs::write(&source_c, "c").unwrap();
+        std::fs::write(&source_merged, "merged").unwrap();
+
+        let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
+        let rel_path = "content/scripts/game/foo.ws".to_string();
+        mod_files.insert(
+            ModId::from("mod_a"),
+            vec![(rel_path.clone(), source_a.clone())],
+        );
+        mod_files.insert(
+            ModId::from("mod_b"),
+            vec![(rel_path.clone(), source_b.clone())],
+        );
+        mod_files.insert(
+            ModId::from("mod_c"),
+            vec![(rel_path.clone(), source_c.clone())],
+        );
+        mod_files.insert(
+            ModId::from(MERGED_MOD_ID),
+            vec![(rel_path.clone(), source_merged.clone())],
+        );
+
+        let resolved = ResolvedLoadOrder {
+            order: vec![
+                ModId::from("mod_a"),
+                ModId::from("mod_b"),
+                ModId::from("mod_c"),
+                ModId::from(MERGED_MOD_ID),
+            ],
+        };
+        let farm = SymlinkFarm::build("default", &resolved, &mod_files, None, None)
+            .unwrap()
+            .materialize()
+            .await
+            .unwrap();
+        let game_dir = tmp.path().join("game");
+        farm.deploy_to(&game_dir).await.unwrap();
+
+        let deployed = game_dir.join(&rel_path);
+        assert_eq!(
+            std::fs::read_link(&deployed).unwrap(),
+            farm.staging_dir.join(&rel_path)
+        );
+        assert_eq!(std::fs::read_to_string(deployed).unwrap(), "merged");
+    }
+}
+
+#[cfg(test)]
+mod deploy_with_merged_mod {
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    use tempfile::TempDir;
+
+    use crate::merge::MERGED_MOD_ID;
+    use crate::resolver::{ModId, ResolvedLoadOrder};
+    use crate::vfs::SymlinkFarm;
+
+    #[tokio::test]
+    async fn symlink_farm_deploys_synthetic_winner() {
+        let tmp = TempDir::new().unwrap();
+        let rel_path = "content/scripts/game/foo.ws".to_string();
+        let source_a = tmp.path().join("store/mod_a").join(&rel_path);
+        let source_merged = tmp
+            .path()
+            .join("profiles/default/__merged__")
+            .join(&rel_path);
+        for path in [&source_a, &source_merged] {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        }
+        std::fs::write(&source_a, "a").unwrap();
+        std::fs::write(&source_merged, "merged").unwrap();
+
+        let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
+        mod_files.insert(ModId::from("mod_a"), vec![(rel_path.clone(), source_a)]);
+        mod_files.insert(
+            ModId::from(MERGED_MOD_ID),
+            vec![(rel_path.clone(), source_merged)],
+        );
+        let resolved = ResolvedLoadOrder {
+            order: vec![ModId::from("mod_a"), ModId::from(MERGED_MOD_ID)],
+        };
+
+        let farm = SymlinkFarm::build("default", &resolved, &mod_files, None, None)
+            .unwrap()
+            .materialize()
+            .await
+            .unwrap();
+        let game_dir = tmp.path().join("game");
+        farm.deploy_to(&game_dir).await.unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(game_dir.join(rel_path)).unwrap(),
+            "merged"
+        );
     }
 }

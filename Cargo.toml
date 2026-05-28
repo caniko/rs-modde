@@ -119,6 +119,7 @@ proptest = "1"
 libc = "0.2"
 dirs = "6"
 which = "8"
+similar = "2"
 winreg = "0.56"
 
 # Filesystem watch (inotify/kqueue)

@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use modde_core::installer::InstallMethod;
+use modde_core::merge::MergeKind;
 
 use crate::policies::{BareLayoutPolicy, ContentPolicy};
 use crate::traits::{ContentCategory, GamePlugin, ModSafety};
@@ -156,6 +157,10 @@ impl GamePlugin for LarianBg3Game {
         &["pak"]
     }
 
+    fn mergeable(&self, rel_path: &str) -> Option<MergeKind> {
+        bg3_mergeable(rel_path)
+    }
+
     fn executable_dir(&self, install: &Path) -> PathBuf {
         install.join("bin")
     }
@@ -223,4 +228,20 @@ fn has_root_file_with_ext(dir: &Path, extensions: &[&str]) -> bool {
                     })
         })
     })
+}
+
+fn bg3_mergeable(rel_path: &str) -> Option<MergeKind> {
+    let lower = rel_path.to_lowercase().replace('\\', "/");
+    let ext = lower.rsplit('.').next()?;
+    match ext {
+        // No merge backend consumes Bethesda plugin sessions in v1.
+        "esp" | "esm" | "esl" => Some(MergeKind::BethesdaPlugin),
+        "ini" => Some(MergeKind::Text {
+            syntax: "ini".to_string(),
+        }),
+        "json" => Some(MergeKind::Text {
+            syntax: "json".to_string(),
+        }),
+        _ => None,
+    }
 }

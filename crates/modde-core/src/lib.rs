@@ -12,6 +12,7 @@ pub mod instance;
 pub mod ipc;
 pub mod link;
 pub mod manifest;
+pub mod merge;
 pub mod paths;
 pub mod plugin;
 pub mod profile;
@@ -34,6 +35,10 @@ pub use diagnostics::{
 pub use error::{CoreError, Result};
 pub use manifest::collection::CollectionManifest;
 pub use manifest::wabbajack::{DownloadDirective, InstallDirective, WabbajackManifest};
+pub use merge::{
+    BaseSource, MERGED_MOD_ID, MergeDriverId, MergeKind, MergeParticipant, MergePathsHint,
+    MergeSession, MergeStatus, MergedWith,
+};
 pub use profile::{
     ActivateResult, ActiveProfileInfo, EnabledMod, LoadOrderLock, LockReason, Profile,
     ProfileSource,

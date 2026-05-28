@@ -4,6 +4,7 @@ pub mod scanner;
 use std::path::{Path, PathBuf};
 
 use modde_core::installer::InstallMethod;
+use modde_core::merge::MergeKind;
 
 use crate::policies::{BareLayoutPolicy, ContentPolicy};
 use crate::traits::{ContentCategory, GamePlugin, ModSafety};
@@ -173,6 +174,10 @@ impl GamePlugin for GamebryoGame {
         true
     }
 
+    fn mergeable(&self, rel_path: &str) -> Option<MergeKind> {
+        gamebryo_mergeable(rel_path)
+    }
+
     fn steam_app_id_u32(&self) -> Option<u32> {
         self.steam_app_id.parse().ok()
     }
@@ -192,5 +197,21 @@ impl GamePlugin for GamebryoGame {
 
     fn recognizes_bare_layout(&self, extracted_dir: &Path) -> bool {
         GAMEBRYO_BARE_LAYOUT_POLICY.recognizes(extracted_dir)
+    }
+}
+
+fn gamebryo_mergeable(rel_path: &str) -> Option<MergeKind> {
+    let lower = rel_path.to_lowercase().replace('\\', "/");
+    let ext = lower.rsplit('.').next()?;
+    match ext {
+        // No merge backend consumes Bethesda plugin sessions in v1.
+        "esp" | "esm" | "esl" => Some(MergeKind::BethesdaPlugin),
+        "ini" => Some(MergeKind::Text {
+            syntax: "ini".to_string(),
+        }),
+        "json" => Some(MergeKind::Text {
+            syntax: "json".to_string(),
+        }),
+        _ => None,
     }
 }

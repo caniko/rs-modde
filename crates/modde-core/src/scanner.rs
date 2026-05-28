@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::manifest::wabbajack::{
     ArchiveEntry, ArchiveState, InstallDirective, WabbajackManifest, compute_manifest_hash,
 };
+use crate::merge;
 use crate::profile::{EnabledMod, LoadOrderLock, LockReason, Profile};
 
 /// Canonical `mod_id` derivation for a Wabbajack archive entry.
@@ -27,6 +28,12 @@ pub fn archive_mod_id(archive: &ArchiveEntry) -> String {
     } else {
         format!("wj_{}", archive.hash)
     }
+}
+
+/// Return whether a scanner-produced mod id is reserved for modde internals.
+#[must_use]
+pub fn is_reserved_scanner_mod_id(mod_id: &str) -> bool {
+    merge::is_reserved_mod_id(mod_id)
 }
 
 /// A mod discovered by matching a Wabbajack manifest against files on disk.

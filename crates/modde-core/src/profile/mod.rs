@@ -6,6 +6,9 @@ use smallvec::SmallVec;
 use crate::db::ModdeDb;
 pub use crate::db::ProfileSummary;
 use crate::error::{CoreError, Result};
+use crate::installer::StagedFile;
+use crate::merge::{MERGED_MOD_ID, invalidate_sessions_for_mod_in_data_dir, revalidate_sessions};
+use crate::paths;
 use crate::resolver::{GameId, LoadOrderRule};
 use crate::save::{SaveFingerprint, SaveManager};
 
@@ -337,26 +340,33 @@ impl ProfileManager {
 
     /// Load a profile by name. If `game_id` is None, the name must be unambiguous.
     pub fn load(&self, name: &str, game_id: Option<&str>) -> Result<Profile> {
-        match game_id {
+        let profile = match game_id {
             Some(gid) => self.db.load_profile(name, gid),
             None => self.db.load_profile_by_name(name),
+        }?;
+        if let Some(profile_id) = profile.id {
+            revalidate_sessions(&self.db, profile_id, &paths::store_dir())?;
         }
+        Ok(profile)
     }
 
     /// Create a new profile, returning its database ID.
     pub fn create(&self, profile: &Profile) -> Result<i64> {
         validate_profile_name(&profile.name)?;
+        validate_profile_mod_ids(profile)?;
         self.db.create_profile(profile)
     }
 
     /// Update an existing profile.
     pub fn update(&self, profile: &Profile) -> Result<()> {
+        validate_profile_mod_ids(profile)?;
         self.db.update_profile(profile)
     }
 
     /// Create a profile if it doesn't exist, or update it if it does.
     pub fn create_or_update(&self, profile: &Profile) -> Result<i64> {
         validate_profile_name(&profile.name)?;
+        validate_profile_mod_ids(profile)?;
         match self.db.create_profile(profile) {
             Ok(id) => Ok(id),
             Err(CoreError::Database(_)) => {
@@ -615,6 +625,69 @@ impl ProfileManager {
 
         Ok(new_id)
     }
+
+    /// Remove a mod from a profile and invalidate merge sessions that depended on it.
+    pub fn remove_mod(&mut self, profile: &mut Profile, mod_id: &str) -> Result<Vec<StagedFile>> {
+        self.remove_mod_in_data_dir(profile, mod_id, &paths::modde_data_dir())
+    }
+
+    /// Remove a mod using an explicit modde data directory.
+    pub fn remove_mod_in_data_dir(
+        &mut self,
+        profile: &mut Profile,
+        mod_id: &str,
+        data_dir: &Path,
+    ) -> Result<Vec<StagedFile>> {
+        if mod_id == MERGED_MOD_ID {
+            return Err(CoreError::Validation(
+                format!("reserved synthetic mod cannot be removed directly: {MERGED_MOD_ID}")
+                    .into(),
+            ));
+        }
+
+        let profile_id = profile
+            .id
+            .ok_or_else(|| CoreError::Other("profile has no database ID".into()))?;
+
+        invalidate_sessions_for_mod_in_data_dir(
+            &self.db,
+            profile_id,
+            &profile.name,
+            mod_id,
+            data_dir,
+        )?;
+
+        let staged_files = self.db.remove_installed_mod(profile_id, mod_id)?;
+
+        let store_mod_dir = data_dir.join("store").join(mod_id);
+        if store_mod_dir.exists()
+            && let Err(error) = std::fs::remove_dir_all(&store_mod_dir)
+        {
+            tracing::warn!(
+                path = %store_mod_dir.display(),
+                error = %error,
+                "failed to delete store dir; leaving orphaned files behind"
+            );
+        }
+
+        profile.mods.retain(|enabled| enabled.mod_id != mod_id);
+        self.update(profile)?;
+
+        Ok(staged_files)
+    }
+}
+
+fn validate_profile_mod_ids(profile: &Profile) -> Result<()> {
+    if profile
+        .mods
+        .iter()
+        .any(|enabled| enabled.mod_id == MERGED_MOD_ID)
+    {
+        return Err(CoreError::Validation(
+            format!("reserved mod id cannot be added to a profile: {MERGED_MOD_ID}").into(),
+        ));
+    }
+    Ok(())
 }
 
 /// Options for [`ProfileManager::fork_with_options`].
@@ -644,4 +717,100 @@ pub enum ActivateResult {
     Activated,
     /// Existing saves need adoption before activation can proceed.
     AdoptionRequired { save_count: usize },
+}
+
+#[cfg(test)]
+mod remove_mod_invalidates_sessions {
+    use super::*;
+    use crate::collision::FileOrigin;
+    use crate::merge::{
+        BaseSource, MergeKind, MergeParticipant, MergeSession, MergeStatus, merged_mod_root_in,
+    };
+    use crate::resolver::ModId;
+
+    fn profile() -> Profile {
+        Profile {
+            id: None,
+            name: "default".to_string(),
+            game_id: GameId::from("witcher3"),
+            source: ProfileSource::Manual,
+            mods: vec![
+                EnabledMod {
+                    mod_id: "mod_a".to_string(),
+                    enabled: true,
+                    ..Default::default()
+                },
+                EnabledMod {
+                    mod_id: "mod_b".to_string(),
+                    enabled: true,
+                    ..Default::default()
+                },
+            ],
+            overrides: "/tmp/overrides".into(),
+            load_order_rules: smallvec::smallvec![],
+            load_order_lock: None,
+        }
+    }
+
+    #[test]
+    fn remove_mod_invalidates_sessions_and_removes_merged_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let data_dir = tmp.path();
+        let db = ModdeDb::open_memory().unwrap();
+        let mut profile = profile();
+        let profile_id = db.create_profile(&profile).unwrap();
+        profile.id = Some(profile_id);
+
+        let rel_path = "content/scripts/game/player.ws";
+        let merged_file = merged_mod_root_in(data_dir, &profile.name).join(rel_path);
+        std::fs::create_dir_all(merged_file.parent().unwrap()).unwrap();
+        std::fs::write(&merged_file, "merged").unwrap();
+
+        let session = MergeSession {
+            merge_group: "group".to_string(),
+            rel_path: rel_path.to_string(),
+            participants: vec![
+                MergeParticipant {
+                    mod_id: ModId::from("mod_a"),
+                    origin: FileOrigin::Loose,
+                    content_hash: Some("hash-a".to_string()),
+                },
+                MergeParticipant {
+                    mod_id: ModId::from("mod_b"),
+                    origin: FileOrigin::Loose,
+                    content_hash: Some("hash-b".to_string()),
+                },
+            ],
+            base: BaseSource::Missing,
+            kind: MergeKind::Text {
+                syntax: "witcherscript".to_string(),
+            },
+            status: MergeStatus::Resolved,
+            result_path: Some(merged_file.clone()),
+            merged_with: None,
+            resolved_at: Some(1),
+        };
+        db.upsert_merge_session(profile_id, &session).unwrap();
+
+        let mut manager = ProfileManager::with_db(db);
+        manager
+            .remove_mod_in_data_dir(&mut profile, "mod_a", data_dir)
+            .unwrap();
+
+        let loaded = manager
+            .db()
+            .get_merge_session(profile_id, "group")
+            .unwrap()
+            .unwrap();
+        assert_eq!(loaded.status, MergeStatus::Stale);
+        assert!(!merged_file.exists());
+        assert_eq!(
+            profile
+                .mods
+                .iter()
+                .map(|enabled| enabled.mod_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["mod_b"]
+        );
+    }
 }

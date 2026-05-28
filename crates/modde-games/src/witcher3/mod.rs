@@ -1,10 +1,16 @@
 pub mod saves;
 pub mod scanner;
 
+#[cfg(test)]
+mod merge_tests;
+#[cfg(test)]
+mod vanilla;
+
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use modde_core::installer::InstallMethod;
+use modde_core::merge::MergeKind;
 
 use crate::policies::{BareLayoutPolicy, ContentPolicy, DllOverridePolicy, StagingDllSearch};
 use crate::traits::{ContentCategory, GamePlugin, ModSafety};
@@ -49,6 +55,8 @@ const WITCHER_DLL_POLICY: DllOverridePolicy = DllOverridePolicy {
 
 #[must_use]
 pub fn has_script_conflict(mod_dir: &Path) -> bool {
+    // TODO(merge phase 05): replace this legacy WitcherScript-only scan with
+    // `GamePlugin::mergeable` fed by the profile collision map.
     let mut stack = vec![mod_dir.to_path_buf()];
     while let Some(dir) = stack.pop() {
         let Ok(entries) = std::fs::read_dir(&dir) else {
@@ -74,6 +82,8 @@ pub fn has_script_conflict(mod_dir: &Path) -> bool {
 
 #[must_use]
 pub fn script_conflict_paths(mods_root: &Path) -> Vec<String> {
+    // TODO(merge phase 05): remove once synthetic merged mods consume
+    // `GamePlugin::mergeable` candidates instead.
     let mut providers: std::collections::BTreeMap<String, usize> =
         std::collections::BTreeMap::new();
     let Ok(mods) = std::fs::read_dir(mods_root) else {
@@ -173,6 +183,36 @@ impl GamePlugin for Witcher3Game {
         }
     }
 
+    fn mergeable(&self, rel_path: &str) -> Option<MergeKind> {
+        let lower = rel_path.to_lowercase().replace('\\', "/");
+        let ext = lower.rsplit('.').next()?;
+        match ext {
+            "ws" => Some(MergeKind::Text {
+                syntax: "witcherscript".to_string(),
+            }),
+            "xml" if is_content_path(&lower) || is_bin_config_path(&lower) => {
+                Some(MergeKind::Text {
+                    syntax: "xml".to_string(),
+                })
+            }
+            "csv" if is_content_path(&lower) => Some(MergeKind::Text {
+                syntax: "csv".to_string(),
+            }),
+            "yml" | "yaml" => Some(MergeKind::Text {
+                syntax: "yaml".to_string(),
+            }),
+            "ini" | "settings" => Some(MergeKind::Text {
+                syntax: "ini".to_string(),
+            }),
+            _ => None,
+        }
+    }
+
+    fn vanilla_base(&self, _install: &Path, rel_path: &str) -> Option<PathBuf> {
+        let cache = modde_core::merge::vanilla::resolve_cache_dir("witcher3")?;
+        vanilla_base_from_cache(&cache, rel_path)
+    }
+
     fn archive_extensions(&self) -> &[&str] {
         &["bundle", "cache"]
     }
@@ -212,6 +252,43 @@ impl GamePlugin for Witcher3Game {
                 .and_then(|name| name.to_str())
                 .is_some_and(|name| name.to_lowercase().starts_with("mod"))
     }
+}
+
+fn is_content_path(path: &str) -> bool {
+    path.starts_with("content/") || path.contains("/content/")
+}
+
+fn is_bin_config_path(path: &str) -> bool {
+    path.starts_with("bin/config/") || path.contains("/bin/config/")
+}
+
+fn vanilla_base_from_cache(cache: &Path, rel_path: &str) -> Option<PathBuf> {
+    let stripped = strip_mod_prefix(rel_path)?;
+    let candidate = cache.join(stripped);
+    candidate.is_file().then_some(candidate)
+}
+
+fn strip_mod_prefix(rel_path: &str) -> Option<PathBuf> {
+    let normalized = rel_path.replace('\\', "/");
+    let parts = normalized
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    let stripped = if parts
+        .first()
+        .is_some_and(|part| part.eq_ignore_ascii_case("mods"))
+    {
+        parts.get(2..)?
+    } else {
+        parts.as_slice()
+    };
+    (!stripped.is_empty()).then(|| {
+        let mut path = PathBuf::new();
+        for part in stripped {
+            path.push(part);
+        }
+        path
+    })
 }
 
 fn present_roots(dir: &Path, roots: &[&str]) -> Vec<String> {
