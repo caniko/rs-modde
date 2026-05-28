@@ -458,7 +458,7 @@
                 name = "modde";
                 version = versionField;
                 description = "Cross-platform game mod manager";
-                homepage = "https://modde.tartanoglu.com";
+                homepage = "https://modde.rs";
                 license = "GPL-3.0-only";
                 platforms = {
                   darwin_arm = {
@@ -1326,7 +1326,7 @@
           download_repo = "caniko/rs-modde";
           binaries = ["modde" "modde-ui"];
           description = "Cross-platform game mod manager";
-          homepage = "https://modde.tartanoglu.com";
+          homepage = "https://modde.rs";
           license = "GPL-3.0-only";
           archive_pattern = "modde-{version}-{arch}-{os}.tar.gz";
         };

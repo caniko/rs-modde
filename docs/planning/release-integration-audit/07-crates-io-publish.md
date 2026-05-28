@@ -41,7 +41,7 @@ The user's memory notes preference for `simit` (commit/release/init-ci/init-flak
    ```toml
    description = "..."             # one-line, ≤200 chars
    repository = "https://codeberg.org/caniko/rs-modde"
-   homepage   = "https://modde.tartanoglu.com"
+   homepage   = "https://modde.rs"
    license    = "GPL-3.0-only"
    readme     = "README.md"        # crate-local README; create if missing
    keywords   = ["modding", "games", "..."]   # ≤5 entries

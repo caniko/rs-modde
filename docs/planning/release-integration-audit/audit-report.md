@@ -1,5 +1,7 @@
 # Release Integration Audit Report
 
+Canonical host as of 2026-05-28: modde.rs. Earlier references to modde.tartanoglu.com are pre-decision.
+
 Audit date: 2026-05-22
 
 Scope read: `.forgejo/workflows/release.yml`, `.forgejo/workflows/ci.yml`, `.forgejo/workflows/pages.yml`, `flake.nix`, `dist/`, `scripts/`, `justfile`, `nix/release-supporting-tools.nix`, `crates/*/Cargo.toml`, `modde.spec`, `about-template.hbs`, `deny.toml`, `CHANGELOG.md`, `README.md`, `website/content/_index.md`, and `docs/site/content/docs/getting-started/installation.md`.

@@ -51,7 +51,7 @@ The PKGBUILD has lived in `dist/aur/` since before the project had releases — 
      cp dist/aur/$pkg/PKGBUILD "aur-$pkg/"
      (cd "aur-$pkg" && makepkg --printsrcinfo > .SRCINFO && \
        git add PKGBUILD .SRCINFO && \
-       git -c user.email=ci@modde.tartanoglu.com -c user.name='modde release bot' \
+       git -c user.email=ci@modde.rs -c user.name='modde release bot' \
          commit -m "${VERSION}" && \
        GIT_SSH_COMMAND='ssh -i ~/.ssh/aur' git push)
    done

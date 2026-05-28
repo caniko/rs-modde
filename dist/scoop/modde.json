@@ -1,7 +1,7 @@
 {
   "version": "{{VERSION}}",
   "description": "Cross-platform game mod manager",
-  "homepage": "https://modde.tartanoglu.com",
+  "homepage": "https://modde.rs",
   "license": "GPL-3.0-only",
   "url": "https://codeberg.org/caniko/rs-modde/releases/download/{{VERSION}}/modde-{{VERSION}}-x86_64-windows.zip",
   "hash": "{{SHA256}}",

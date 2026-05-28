@@ -13,13 +13,13 @@ This table is intentionally conservative:
 
 ## Bethesda titles
 
-| Game                       | ID          | Overall status | Scanner | Conflict detection | Save tracking                              |
-| -------------------------- | ----------- | -------------- | ------- | ------------------ | ------------------------------------------ |
-| Skyrim Special Edition     | `skyrim-se` | `Done`         | Yes     | Yes                | `Done`                                     |
-| Skyrim Anniversary Edition | `skyrim-ae` | `Done`         | Yes     | Yes                | `Done`                                     |
-| Fallout 4                  | `fallout4`  | `Done`         | Yes     | Yes                | `Done`                                     |
-| Fallout 76                 | `fallout76` | `Partial`      | Yes     | Yes                | `Partial` (server-side / local cache only) |
-| Starfield                  | `starfield` | `Partial`      | Yes     | Yes                | `Done`                                     |
+| Game | ID | Overall status | Scanner | Conflict detection | Save tracking |
+| ---- | -- | -------------- | ------- | ------------------ | ------------- |
+| Skyrim Special Edition | `skyrim-se` | `Done` | Yes | Yes | `Done` |
+| Skyrim Anniversary Edition | `skyrim-ae` | `Done` | Yes | Yes | `Done` |
+| Fallout 4 | `fallout4` | `Done` | Yes | Yes | `Done` |
+| Fallout 76 | `fallout76` | `Partial` | Yes | Yes | `Partial` (server-side / local cache only) |
+| Starfield | `starfield` | `Partial` | Yes | Yes | `Done` |
 
 ## Other games
 

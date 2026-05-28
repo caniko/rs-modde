@@ -39,7 +39,7 @@ Scoop is the de-facto Windows package manager for developers and power users (wi
    {
      "version": "{{VERSION}}",
      "description": "Cross-platform game mod manager",
-     "homepage": "https://modde.tartanoglu.com",
+     "homepage": "https://modde.rs",
      "license": "GPL-3.0-only",
      "url": "https://codeberg.org/caniko/rs-modde/releases/download/{{VERSION}}/modde-{{VERSION}}-x86_64-windows.zip",
      "hash": "{{SHA256}}",
@@ -62,7 +62,7 @@ Scoop is the de-facto Windows package manager for developers and power users (wi
      -e "s|{{VERSION}}|${VERSION}|g" \
      -e "s|{{SHA256}}|${SHA256}|g" \
      dist/scoop/modde.json > scoop-bucket/bucket/modde.json
-   (cd scoop-bucket && git -c user.email=ci@modde.tartanoglu.com -c user.name='modde release bot' \
+   (cd scoop-bucket && git -c user.email=ci@modde.rs -c user.name='modde release bot' \
      commit -am "modde ${VERSION}" && git push)
    ```
 6. Store the template at `dist/scoop/modde.json` in the main repo so it's reviewable in PRs.
