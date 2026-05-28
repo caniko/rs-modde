@@ -172,9 +172,9 @@ _Blocked_ (waiting on prerequisite work).
   view in `crates/modde-ui/src/mod_info.rs` (or similar). Expanding
   to tabs (file tree, image preview, conflicts, metadata/Nexus) is
   mostly Iced wiring once the backing data is fetched.
-- **Conflicts tab** is the highest-value tab — it surfaces the
-  resolver's `resolved_conflicts` output for that mod, which today
-  is only visible via `modde collisions`. Implement that first.
+- **Conflicts tab** has landed with the merge tooling UI; keep the
+  remaining tab work scoped to file tree, image preview, and
+  metadata/Nexus surfaces.
 - **Image preview** needs the existing `NexusApi::fetch_bytes` (used
   by browse tiles) plus an Iced image widget — straightforward.
 

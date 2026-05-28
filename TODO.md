@@ -63,7 +63,7 @@ Living checklist of feature, test, and infrastructure gaps. Tick items as they l
 
 - [ ] Mod info dialog — file tree tab
 - [ ] Mod info dialog — image preview tab
-- [ ] Mod info dialog — conflicts tab (winners/losers)
+- [x] Mod info dialog — conflicts tab (winners/losers; shipped with mod merge tooling)
 - [ ] Mod info dialog — metadata / nexus tab
 - [ ] "Problems" button — diagnostics panel
 - [ ] "Problems" button — guided fix actions

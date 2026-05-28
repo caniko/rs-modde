@@ -86,6 +86,27 @@ The `rs-harbor` CLI does **not** gain top-level `release` / `copr` / `docs` subc
 
 ---
 
+## Mod-merge framework: VS Code as canonical UI, no AI-agent shellout
+
+**Decision.** rs-modde detects content-mergeable mod conflicts and drives **VS Code's built-in 3-way merge editor** (`code --merge <left> <right> <base> <result>`) as the canonical merge UI. Meld, KDiff3, and a plain-Inline fallback are registered as alternates discovered via `which::which`. **modde does not spawn any AI agent itself** — no `claude -p`, no `codex`, no LLM HTTP calls. When the VS Code driver is selected, modde writes `CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`, `MERGE.md`, and a `.vscode/{tasks,extensions}.json` pair into the session directory. The user invokes their installed Claude Code / Codex / GitHub Copilot extension from inside the merge editor; the extension reads the staged context files automatically.
+
+**Why.** modde stays free of LLM credentials, tool-allowlist surface, and per-request costs. Users pay for and configure their own agent via their existing IDE extension. AI assistance is opt-in per merge by virtue of the user clicking the chat panel — never automatic. The three context-file conventions (Anthropic's `CLAUDE.md`, the `AGENTS.md` convention used by Codex and other agentic tools, GitHub's `.github/copilot-instructions.md`) all carry the same rendered body; the difference is filename, not content.
+
+**Invariants worth preserving.**
+
+- The synthetic mod that owns merged outputs is `__merged__` (mirrors the pre-existing `__overwrite__` reserved id in `executable_configs.output_mod`). `ProfileManager::add_mod` refuses to claim it; `ProfileManager::remove_mod` refuses to delete it.
+- `__merged__` ranks above every real mod for paths it provides, and **only** for those paths — the resolver registers it through `inject_merged_mod` per-rel-path, not as a blanket high-priority mod set.
+- Per-game merge metadata lives on `GamePlugin` (`mergeable(&str) -> Option<MergeKind>`, `vanilla_base(install, rel_path) -> Option<PathBuf>`). Witcher 3 is implemented; Bethesda / BG3 / Cyberpunk currently return `None` or `Some(BethesdaPlugin)` without an active backend.
+- The Witcher 3 vanilla-base cache is **user-pointed** via `modde merge witcher3 set-vanilla <dir>`. No in-tree `.bundle` extractor exists; without a cache the merger drops to 2-way mode with a `# no vanilla base available` marker file.
+- Agent-context files are **never** written by Meld / KDiff3 / Inline drivers. They are VS-Code-specific.
+- Per-session validation runs the same syntactic check inside VS Code (via the `.vscode/tasks.json` "Validate merge result" task shelling to `modde merge validate <group>`) that modde runs on editor close. The two paths share `merge::validation`.
+
+**Where it's encoded.** `crates/modde-core/src/merge/` (data model, drivers, agent_context, validation, vanilla); `crates/modde-games/src/witcher3/` (`mergeable`, `vanilla_base`); `crates/modde-core/src/resolver/mod.rs` (`inject_merged_mod`); `crates/modde-cli/src/commands/merge.rs` (`list / open / accept-winner / validate / drivers` and the Witcher 3 vanilla subcommands); `crates/modde-ui/src/views/{mod_details,merges,merge_badge}.rs` (Conflicts tab + Merges panel).
+
+**Revisit when.** Bethesda record-level merging (ESP/ESM) becomes in scope — it is not a text merge and will need either xEdit-script delegation or an in-tree record-level engine. The `MergeKind::BethesdaPlugin` variant exists as a reserved slot for that work.
+
+---
+
 ## Removed planning directory
 
 The `docs/planning/` directory was removed once the work it tracked landed in trunk. The DECISION.md files have been distilled into this document; the per-phase implementation narratives are recoverable from `git log` if needed.

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Mod merging**: New `modde merge` subcommand and UI panels replace Script Merger for Witcher 3. Generic per-game framework; Bethesda / Cyberpunk / BG3 wiring queued. See `docs/site/content/docs/guides/resolving-mod-conflicts.md`.
 - **Homebrew**: Tap available at `brew tap caniko/modde https://codeberg.org/caniko/homebrew-modde.git`.
 - **Release ops**: Release CI supports `rc`, `beta`, and `alpha` prerelease tags, marks Codeberg prereleases correctly, skips stable-only publish channels for prereleases, and routes prerelease COPR builds to `caniko/rs-modde-testing`.
 - **Release ops**: Stable releases can announce to Mastodon and Matrix with the release URL and a short changelog excerpt.

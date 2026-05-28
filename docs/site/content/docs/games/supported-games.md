@@ -13,28 +13,28 @@ This table is intentionally conservative:
 
 ## Bethesda titles
 
-| Game                       | ID          | Overall status | Scanner | Conflict detection | Save tracking                              |
-| -------------------------- | ----------- | -------------- | ------- | ------------------ | ------------------------------------------ |
-| Skyrim Special Edition     | `skyrim-se` | `Done`         | Yes     | Yes                | `Done`                                     |
-| Skyrim Anniversary Edition | `skyrim-ae` | `Done`         | Yes     | Yes                | `Done`                                     |
-| Fallout 4                  | `fallout4`  | `Done`         | Yes     | Yes                | `Done`                                     |
-| Fallout 76                 | `fallout76` | `Partial`      | Yes     | Yes                | `Partial` (server-side / local cache only) |
-| Starfield                  | `starfield` | `Partial`      | Yes     | Yes                | `Done`                                     |
+| Game                       | ID          | Overall status | Scanner | Conflict detection | Save tracking                              | Merge     |
+| -------------------------- | ----------- | -------------- | ------- | ------------------ | ------------------------------------------ | --------- |
+| Skyrim Special Edition     | `skyrim-se` | `Done`         | Yes     | Yes                | `Done`                                     | `Planned` |
+| Skyrim Anniversary Edition | `skyrim-ae` | `Done`         | Yes     | Yes                | `Done`                                     | `Planned` |
+| Fallout 4                  | `fallout4`  | `Done`         | Yes     | Yes                | `Done`                                     | `Planned` |
+| Fallout 76                 | `fallout76` | `Partial`      | Yes     | Yes                | `Partial` (server-side / local cache only) | `Planned` |
+| Starfield                  | `starfield` | `Partial`      | Yes     | Yes                | `Done`                                     | `Planned` |
 
 ## Other games
 
-| Game                                      | ID                    | Overall status | Scanner | Conflict detection | Save tracking |
-| ----------------------------------------- | --------------------- | -------------- | ------- | ------------------ | ------------- |
-| Cyberpunk 2077                            | `cyberpunk2077`       | `Done`         | Yes     | Yes                | `Done`        |
-| Stellar Blade                             | `stellar-blade`       | `Partial`      | Yes     | Yes                | `Done`        |
-| Baldur's Gate 3                           | `baldurs-gate3`       | `Partial`      | Yes     | Yes                | `Done`        |
-| Stardew Valley                            | `stardew-valley`      | `Partial`      | Yes     | Yes                | `Done`        |
-| Fallout: New Vegas                        | `fallout-new-vegas`   | `Partial`      | Yes     | Yes                | `Done`        |
-| The Elder Scrolls IV: Oblivion            | `oblivion`            | `Partial`      | Yes     | Yes                | `Done`        |
-| The Elder Scrolls IV: Oblivion Remastered | `oblivion-remastered` | `Partial`      | Yes     | Yes                | `Done`        |
-| Mount & Blade II: Bannerlord              | `bannerlord`          | `Partial`      | Yes     | Yes                | `Done`        |
-| The Witcher 3: Wild Hunt                  | `witcher3`            | `Partial`      | Yes     | Yes                | `Done`        |
-| Subnautica 2                              | `subnautica2`         | `Partial`      | Yes     | Yes                | `Done`        |
+| Game                                      | ID                    | Overall status | Scanner | Conflict detection | Save tracking | Merge                                   |
+| ----------------------------------------- | --------------------- | -------------- | ------- | ------------------ | ------------- | --------------------------------------- |
+| Cyberpunk 2077                            | `cyberpunk2077`       | `Done`         | Yes     | Yes                | `Done`        | `Planned`                               |
+| Stellar Blade                             | `stellar-blade`       | `Partial`      | Yes     | Yes                | `Done`        |                                         |
+| Baldur's Gate 3                           | `baldurs-gate3`       | `Partial`      | Yes     | Yes                | `Done`        | `Planned`                               |
+| Stardew Valley                            | `stardew-valley`      | `Partial`      | Yes     | Yes                | `Done`        |                                         |
+| Fallout: New Vegas                        | `fallout-new-vegas`   | `Partial`      | Yes     | Yes                | `Done`        | `Planned`                               |
+| The Elder Scrolls IV: Oblivion            | `oblivion`            | `Partial`      | Yes     | Yes                | `Done`        | `Planned`                               |
+| The Elder Scrolls IV: Oblivion Remastered | `oblivion-remastered` | `Partial`      | Yes     | Yes                | `Done`        | `Planned`                               |
+| Mount & Blade II: Bannerlord              | `bannerlord`          | `Partial`      | Yes     | Yes                | `Done`        |                                         |
+| The Witcher 3: Wild Hunt                  | `witcher3`            | `Partial`      | Yes     | Yes                | `Done`        | Script & config merge via `modde merge` |
+| Subnautica 2                              | `subnautica2`         | `Partial`      | Yes     | Yes                | `Done`        |                                         |
 
 ## Wabbajack game mapping
 

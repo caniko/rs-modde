@@ -7,26 +7,31 @@ not_shipped = "Must not be marketed as available yet."
 display_name = "Skyrim SE/AE"
 overall = "Done"
 save_tracking = "Done"
+merge = "Planned"
 
 [games.fallout4]
 display_name = "Fallout 4"
 overall = "Done"
 save_tracking = "Done"
+merge = "Planned"
 
 [games.fallout76]
 display_name = "Fallout 76"
 overall = "Partial"
 save_tracking = "Partial"
+merge = "Planned"
 
 [games.starfield]
 display_name = "Starfield"
 overall = "Partial"
 save_tracking = "Done"
+merge = "Planned"
 
 [games.cyberpunk2077]
 display_name = "Cyberpunk 2077"
 overall = "Done"
 save_tracking = "Done"
+merge = "Planned"
 
 [games."stellar-blade"]
 display_name = "Stellar Blade"
@@ -37,6 +42,7 @@ save_tracking = "Done"
 display_name = "Baldur's Gate 3"
 overall = "Partial"
 save_tracking = "Done"
+merge = "Planned"
 
 [games."stardew-valley"]
 display_name = "Stardew Valley"
@@ -47,16 +53,19 @@ save_tracking = "Done"
 display_name = "Fallout: New Vegas"
 overall = "Partial"
 save_tracking = "Done"
+merge = "Planned"
 
 [games.oblivion]
 display_name = "The Elder Scrolls IV: Oblivion"
 overall = "Partial"
 save_tracking = "Done"
+merge = "Planned"
 
 [games."oblivion-remastered"]
 display_name = "The Elder Scrolls IV: Oblivion Remastered"
 overall = "Partial"
 save_tracking = "Done"
+merge = "Planned"
 
 [games.bannerlord]
 display_name = "Mount & Blade II: Bannerlord"
@@ -67,6 +76,7 @@ save_tracking = "Done"
 display_name = "The Witcher 3: Wild Hunt"
 overall = "Partial"
 save_tracking = "Done"
+merge = "Done"
 
 [features.instance_switching]
 label = "Instance switching"
@@ -83,6 +93,10 @@ status = "Partial"
 [features.downloads_ui]
 label = "Downloads UI"
 status = "Partial"
+
+[features.script_merge]
+label = "Script & config merge"
+status = "Done"
 
 [features.tool_management]
 label = "Tool management"
