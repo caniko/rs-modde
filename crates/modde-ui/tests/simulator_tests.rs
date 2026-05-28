@@ -306,6 +306,7 @@ macro_rules! sidebar_test {
                 true,
                 None,
                 None,
+                0,
             ));
             $body
         }
@@ -329,6 +330,7 @@ sidebar_test!(
         ui.find("Downloads").expect("nav: Downloads");
         ui.find("Data Files").expect("nav: Data Files");
         ui.find("Diagnostics").expect("nav: Diagnostics");
+        ui.find("Merges").expect("nav: Merges");
         ui.find("Tools").expect("nav: Tools");
         ui.find("Executables").expect("nav: Executables");
         ui.find("Settings").expect("nav: Settings");
@@ -355,6 +357,7 @@ fn sidebar_default_collapsed_groups_hide_inactive_items() {
         true,
         None,
         None,
+        0,
     ));
 
     ui.find("Mod List")
@@ -365,6 +368,28 @@ fn sidebar_default_collapsed_groups_hide_inactive_items() {
         ui.find("Settings").is_err(),
         "collapsed inactive General item should be hidden"
     );
+}
+
+#[test]
+fn sidebar_shows_merges_badge_when_attention_count_is_nonzero() {
+    let view = modde_ui::app::View::ModList;
+    let collapsed_groups = std::collections::HashSet::new();
+    let profiles = Vec::new();
+    let active = None;
+    let mut ui = simulator(modde_ui::views::sidebar::view(
+        &view,
+        &collapsed_groups,
+        &profiles,
+        &active,
+        0,
+        true,
+        None,
+        None,
+        3,
+    ));
+
+    ui.find("Merges").expect("should show Merges nav item");
+    ui.find("3").expect("should show merge attention badge");
 }
 
 #[test]
@@ -382,6 +407,7 @@ fn sidebar_collapsed_active_group_still_shows_active_view() {
         true,
         None,
         None,
+        0,
     ));
 
     ui.find("Settings")
@@ -403,6 +429,7 @@ fn sidebar_group_toggle_emits_message() {
         true,
         None,
         None,
+        0,
     ));
 
     ui.click("Game").expect("should click Game group header");
@@ -431,6 +458,7 @@ fn sidebar_hides_inactive_saves_when_save_profiles_are_unsupported() {
         false,
         None,
         None,
+        0,
     ));
 
     assert!(

@@ -146,6 +146,7 @@ pub struct Modde {
     pub mod_categories: Vec<(Option<i64>, String)>,
     pub data_tab_state: crate::views::data_tab::DataTabState,
     pub data_tab_conflicts: Vec<(String, Vec<String>)>,
+    pub merge_panel: crate::views::merges::MergePanelState,
     /// State for the Browse Nexus view (Phase 6 of the installer pipeline).
     pub browse_nexus: crate::views::browse_nexus::NexusBrowseState,
     pub diagnostics_state: crate::views::diagnostics::DiagnosticsState,
@@ -195,6 +196,48 @@ fn load_active_plugins(pm: &ProfileManager, profile: &modde_core::Profile) -> Ve
         .filter(|plugin| plugin.enabled)
         .map(|plugin| plugin.plugin_name)
         .collect()
+}
+
+async fn load_merge_sessions_for_profile(
+    profile_id: i64,
+) -> Result<Vec<modde_core::merge::MergeSession>, String> {
+    tokio::task::spawn_blocking(move || {
+        let pm = ProfileManager::open().map_err(|error| error.to_string())?;
+        pm.db()
+            .list_merge_sessions(profile_id)
+            .map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+async fn execute_merge_for_profile(
+    profile_id: i64,
+    session: modde_core::merge::MergeSession,
+    driver_id: String,
+) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let pm = ProfileManager::open().map_err(|error| error.to_string())?;
+        let driver = modde_core::merge::driver_by_id(&driver_id)
+            .ok_or_else(|| format!("Merge driver is unavailable: {driver_id}"))?;
+        if !driver.is_available() {
+            return Err(format!("Merge driver is unavailable: {driver_id}"));
+        }
+        let outcome = modde_core::merge::execute(pm.db(), profile_id, &session, driver)
+            .map_err(|error| error.to_string())?;
+        Ok(format!("{outcome:?}"))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+async fn open_merge_dossier_dir(merge_group: String) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let dir = modde_core::merge::MergePaths::for_session(&merge_group).dir;
+        open::that(&dir).map_err(|error| format!("Failed to open {}: {error}", dir.display()))
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 fn detected_game_ids(
@@ -1528,6 +1571,7 @@ impl Modde {
         self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Idle;
         self.data_tab_conflicts.clear();
         self.data_tab_state.missing_store_mod_count = 0;
+        self.merge_panel = Default::default();
     }
 
     fn game_supports_save_profiles(game_id: &str) -> bool {
@@ -1590,7 +1634,34 @@ impl Modde {
 
         self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Idle;
         self.refresh_data_tab_conflicts();
+        self.refresh_selected_mod_conflicts();
+        self.refresh_merge_panel();
         self.refresh_tools_state();
+    }
+
+    fn refresh_merge_panel(&mut self) {
+        let Some(profile_id) = self.loaded_profile.as_ref().and_then(|profile| profile.id) else {
+            self.merge_panel.replace_sessions(Vec::new());
+            self.merge_panel.error = None;
+            return;
+        };
+        let result = ProfileManager::open()
+            .map_err(|error| error.to_string())
+            .and_then(|pm| {
+                pm.db()
+                    .list_merge_sessions(profile_id)
+                    .map_err(|error| error.to_string())
+            });
+        match result {
+            Ok(sessions) => {
+                self.merge_panel.replace_sessions(sessions);
+                self.merge_panel.error = None;
+            }
+            Err(error) => {
+                self.merge_panel.replace_sessions(Vec::new());
+                self.merge_panel.error = Some(format!("Failed to load merge sessions: {error}"));
+            }
+        }
     }
 
     fn switch_game_context(&mut self, game_id: &str) {
@@ -1768,6 +1839,94 @@ impl Modde {
                 self.data_tab_state.missing_store_mod_count = 0;
                 self.status_message = format!("Failed to load data tab: {err}");
             }
+        }
+    }
+
+    fn refresh_selected_mod_conflicts(&mut self) {
+        let Some(details) = self.selected_mod_details.as_ref() else {
+            return;
+        };
+        let mod_id = details.mod_id.clone();
+        let Some(profile) = self.loaded_profile.as_ref() else {
+            return;
+        };
+        let Some(profile_id) = profile.id else {
+            if let Some(details) = self.selected_mod_details.as_mut() {
+                details.conflict_rows.clear();
+                details.conflicts_error =
+                    Some("The active profile has not been saved yet.".to_string());
+            }
+            return;
+        };
+
+        let game_id = profile.game_id.as_str().to_string();
+        let game_label = modde_games::resolve_game_plugin(&game_id)
+            .map(|plugin| plugin.display_name().to_string())
+            .unwrap_or_else(|| game_id.clone());
+        let Some(plugin) = modde_games::resolve_game_plugin(&game_id) else {
+            if let Some(details) = self.selected_mod_details.as_mut() {
+                details.conflict_rows.clear();
+                details.conflicts_error = Some(format!("No game plugin registered for {game_id}."));
+                details.game_label = game_label;
+            }
+            return;
+        };
+
+        let Ok(pm) = ProfileManager::open() else {
+            if let Some(details) = self.selected_mod_details.as_mut() {
+                details.conflict_rows.clear();
+                details.conflicts_error = Some("Failed to open profile database.".to_string());
+                details.game_label = game_label;
+            }
+            return;
+        };
+
+        let hidden = load_hidden_files(&pm, profile);
+        let classifier = modde_games::resolve_collision_classifier(&game_id);
+        let sessions = match pm.db().list_merge_sessions(profile_id) {
+            Ok(sessions) => sessions,
+            Err(error) => {
+                if let Some(details) = self.selected_mod_details.as_mut() {
+                    details.conflict_rows.clear();
+                    details.conflicts_error =
+                        Some(format!("Failed to load merge sessions: {error}"));
+                    details.game_label = game_label;
+                }
+                return;
+            }
+        };
+
+        let rows = match modde_core::diagnostics::analyze_profile_state(
+            profile,
+            &modde_core::paths::store_dir(),
+            &hidden,
+            classifier.as_deref(),
+        ) {
+            Ok(analysis) => analysis.collision_report.map_or_else(Vec::new, |report| {
+                crate::views::mod_details::build_conflict_rows(
+                    &report,
+                    &mod_id,
+                    &sessions,
+                    |rel_path| plugin.mergeable(rel_path).is_some(),
+                )
+            }),
+            Err(error) => {
+                if let Some(details) = self.selected_mod_details.as_mut() {
+                    details.conflict_rows.clear();
+                    details.conflicts_error =
+                        Some(format!("Failed to load mod conflicts: {error}"));
+                    details.game_label = game_label;
+                }
+                return;
+            }
+        };
+
+        if let Some(details) = self.selected_mod_details.as_mut() {
+            details.conflict_rows = rows;
+            details.conflicts_error = None;
+            details.game_label = game_label;
+            details.claude_code_available = modde_core::merge::driver_by_id("claude-code")
+                .is_some_and(modde_core::merge::MergeDriver::is_available);
         }
     }
 
@@ -2702,6 +2861,7 @@ pub enum View {
     Saves,
     Downloads,
     DataTab,
+    Merges,
     Diagnostics,
     Tools,
     Executables,
@@ -3396,6 +3556,24 @@ pub enum Message {
     },
     /// User clicked the thumbnail — advance to the next image in the gallery.
     ModGalleryNext,
+    ModDetailsTabChanged(crate::views::mod_details::ModDetailsTab),
+    RunModConflictMerge {
+        merge_group: String,
+        driver_id: Option<String>,
+    },
+    ModConflictMergeComplete {
+        merge_group: String,
+        result: Result<String, String>,
+    },
+    AcceptModConflictWinner {
+        merge_group: String,
+        winner_mod_id: String,
+    },
+    ToggleModConflictHidden {
+        mod_id: String,
+        rel_path: String,
+        hide: bool,
+    },
     /// User clicked the "Open in Nexus" link.
     OpenModPage,
     Deploy,
@@ -3555,6 +3733,25 @@ pub enum Message {
     // Data tab
     DataTabFilterChanged(String),
     DataTabToggleConflicts(bool),
+
+    // Merges
+    LoadMerges,
+    MergesLoaded(Result<Vec<modde_core::merge::MergeSession>, String>),
+    MergeDriverSelected {
+        merge_group: String,
+        driver_id: String,
+    },
+    ResolveMerge {
+        merge_group: String,
+    },
+    MergeResolved {
+        merge_group: String,
+        result: Result<String, String>,
+    },
+    OpenMergeDossier {
+        merge_group: String,
+    },
+    MergeDossierOpened(Result<(), String>),
 
     // Diagnostics
     RunDiagnostics,
@@ -3774,6 +3971,7 @@ impl Modde {
             mod_categories: vec![(None, "Uncategorized".to_string())],
             data_tab_state: Default::default(),
             data_tab_conflicts: Vec::new(),
+            merge_panel: Default::default(),
             diagnostics_state: Default::default(),
             tool_state: Default::default(),
             browse_nexus: Default::default(),
@@ -3871,6 +4069,10 @@ impl Modde {
                     self.active_view = View::DataTab;
                     self.refresh_data_tab_conflicts();
                 }
+                View::Merges => {
+                    self.active_view = View::Merges;
+                    return self.update(Message::LoadMerges);
+                }
                 View::Tools => {
                     self.active_view = View::Tools;
                     return self.update(Message::LoadTools);
@@ -3913,6 +4115,9 @@ impl Modde {
                 self.status_message = "Profile switched".to_string();
                 if matches!(self.active_view, View::Diagnostics) {
                     return self.update(Message::RunDiagnostics);
+                }
+                if matches!(self.active_view, View::Merges) {
+                    return self.update(Message::LoadMerges);
                 }
             }
             Message::CreateProfile { name, game_id } => {
@@ -4341,6 +4546,7 @@ impl Modde {
                         let nid = m.nexus_mod_id?;
                         let domain = m.nexus_game_domain.clone()?.to_lowercase();
                         Some((
+                            m.mod_id.clone(),
                             nid,
                             domain,
                             m.display_name.clone().unwrap_or_else(|| m.mod_id.clone()),
@@ -4349,14 +4555,16 @@ impl Modde {
                     });
 
                 match nexus_info {
-                    Some((nexus_mod_id, game_domain, name, version)) => {
+                    Some((mod_id, nexus_mod_id, game_domain, name, version)) => {
                         self.selected_mod_details =
                             Some(crate::views::mod_details::ModDetailsState::loading(
+                                mod_id,
                                 nexus_mod_id,
                                 game_domain.clone(),
                                 name,
                                 version,
                             ));
+                        self.refresh_selected_mod_conflicts();
 
                         return Task::perform(
                             async move {
@@ -4570,6 +4778,165 @@ impl Modde {
                         None => Message::Noop,
                     },
                 );
+            }
+            Message::ModDetailsTabChanged(tab) => {
+                if let Some(ref mut s) = self.selected_mod_details {
+                    s.active_tab = tab;
+                    if tab == crate::views::mod_details::ModDetailsTab::Conflicts {
+                        self.refresh_selected_mod_conflicts();
+                    }
+                }
+            }
+            Message::RunModConflictMerge {
+                merge_group,
+                driver_id,
+            } => {
+                let Some(profile) = self.loaded_profile.as_ref() else {
+                    self.status_message = "Select a profile before merging conflicts".to_string();
+                    return Task::none();
+                };
+                let Some(profile_id) = profile.id else {
+                    self.status_message =
+                        "Save the active profile before merging conflicts".to_string();
+                    return Task::none();
+                };
+                if let Some(ref mut s) = self.selected_mod_details {
+                    s.conflict_actions_in_flight.insert(merge_group.clone());
+                }
+                self.status_message = "Starting merge...".to_string();
+                return Task::perform(
+                    async move {
+                        let group_for_result = merge_group.clone();
+                        let result =
+                            tokio::task::spawn_blocking(move || -> Result<String, String> {
+                                let pm = ProfileManager::open().map_err(|e| e.to_string())?;
+                                let session = pm
+                                    .db()
+                                    .get_merge_session(profile_id, &merge_group)
+                                    .map_err(|e| e.to_string())?
+                                    .ok_or_else(|| {
+                                        format!("merge session not found: {merge_group}")
+                                    })?;
+                                let driver = match driver_id.as_deref() {
+                                    Some(id) => {
+                                        modde_core::merge::driver_by_id(id).ok_or_else(|| {
+                                            format!("merge driver is not available: {id}")
+                                        })?
+                                    }
+                                    None => modde_core::merge::available_drivers()
+                                        .into_iter()
+                                        .next()
+                                        .ok_or_else(|| {
+                                            "no merge driver is available".to_string()
+                                        })?,
+                                };
+                                let outcome = modde_core::merge::execute(
+                                    pm.db(),
+                                    profile_id,
+                                    &session,
+                                    driver,
+                                )
+                                .map_err(|e| e.to_string())?;
+                                Ok(format!("{outcome:?}"))
+                            })
+                            .await
+                            .map_err(|error| error.to_string())
+                            .and_then(std::convert::identity);
+                        (group_for_result, result)
+                    },
+                    |(merge_group, result)| Message::ModConflictMergeComplete {
+                        merge_group,
+                        result,
+                    },
+                );
+            }
+            Message::ModConflictMergeComplete {
+                merge_group,
+                result,
+            } => {
+                if let Some(ref mut s) = self.selected_mod_details {
+                    s.conflict_actions_in_flight.remove(&merge_group);
+                }
+                self.status_message = match result {
+                    Ok(outcome) => format!("Merge finished: {outcome}"),
+                    Err(error) => format!("Merge failed: {error}"),
+                };
+                self.refresh_selected_mod_conflicts();
+                self.refresh_merge_panel();
+            }
+            Message::AcceptModConflictWinner {
+                merge_group,
+                winner_mod_id,
+            } => {
+                let Some(profile) = self.loaded_profile.as_ref() else {
+                    self.status_message = "Select a profile before accepting a winner".to_string();
+                    return Task::none();
+                };
+                let Some(profile_id) = profile.id else {
+                    self.status_message =
+                        "Save the active profile before accepting a winner".to_string();
+                    return Task::none();
+                };
+                match ProfileManager::open()
+                    .map_err(|e| e.to_string())
+                    .and_then(|pm| {
+                        let session = pm
+                            .db()
+                            .get_merge_session(profile_id, &merge_group)
+                            .map_err(|e| e.to_string())?
+                            .ok_or_else(|| format!("merge session not found: {merge_group}"))?;
+                        modde_core::merge::accept_winner(
+                            pm.db(),
+                            profile_id,
+                            &session,
+                            &winner_mod_id,
+                        )
+                        .map_err(|e| e.to_string())
+                    }) {
+                    Ok(path) => {
+                        self.status_message = format!("Accepted winner into {}", path.display());
+                        self.refresh_selected_mod_conflicts();
+                        self.refresh_merge_panel();
+                    }
+                    Err(error) => {
+                        self.status_message = format!("Accept winner failed: {error}");
+                    }
+                }
+            }
+            Message::ToggleModConflictHidden {
+                mod_id,
+                rel_path,
+                hide,
+            } => {
+                let Some(profile_id) = self.loaded_profile.as_ref().and_then(|profile| profile.id)
+                else {
+                    self.status_message =
+                        "Save the active profile before changing hidden files".to_string();
+                    return Task::none();
+                };
+                match ProfileManager::open()
+                    .map_err(|e| e.to_string())
+                    .and_then(|pm| {
+                        if hide {
+                            pm.db().hide_file(profile_id, &mod_id, &rel_path)
+                        } else {
+                            pm.db().unhide_file(profile_id, &mod_id, &rel_path)
+                        }
+                        .map_err(|e| e.to_string())
+                    }) {
+                    Ok(()) => {
+                        self.status_message = if hide {
+                            format!("Hidden {rel_path} from {mod_id}")
+                        } else {
+                            format!("Unhidden {rel_path} from {mod_id}")
+                        };
+                        self.refresh_data_tab_conflicts();
+                        self.refresh_selected_mod_conflicts();
+                    }
+                    Err(error) => {
+                        self.status_message = format!("Failed to update hidden file: {error}");
+                    }
+                }
             }
             Message::OpenModPage => {
                 if let Some(ref s) = self.selected_mod_details {
@@ -5924,6 +6291,104 @@ impl Modde {
             Message::DataTabToggleConflicts(v) => {
                 self.data_tab_state.show_conflicts_only = v;
             }
+            Message::LoadMerges => {
+                let Some(profile_id) = self.loaded_profile.as_ref().and_then(|profile| profile.id)
+                else {
+                    self.merge_panel.replace_sessions(Vec::new());
+                    self.merge_panel.error = Some("No active profile is loaded.".to_string());
+                    return Task::none();
+                };
+                self.merge_panel.error = None;
+                self.status_message = "Loading merge sessions...".to_string();
+                return Task::perform(
+                    load_merge_sessions_for_profile(profile_id),
+                    Message::MergesLoaded,
+                );
+            }
+            Message::MergesLoaded(result) => match result {
+                Ok(sessions) => {
+                    let count = sessions.len();
+                    self.merge_panel.replace_sessions(sessions);
+                    self.merge_panel.error = None;
+                    self.status_message = format!("Loaded {count} merge session(s)");
+                }
+                Err(error) => {
+                    self.merge_panel.error =
+                        Some(format!("Failed to load merge sessions: {error}"));
+                    self.status_message = format!("Failed to load merge sessions: {error}");
+                }
+            },
+            Message::MergeDriverSelected {
+                merge_group,
+                driver_id,
+            } => {
+                self.merge_panel
+                    .selected_drivers
+                    .insert(merge_group, driver_id);
+            }
+            Message::ResolveMerge { merge_group } => {
+                let Some(profile_id) = self.loaded_profile.as_ref().and_then(|profile| profile.id)
+                else {
+                    self.status_message = "No active profile is loaded.".to_string();
+                    return Task::none();
+                };
+                let Some(session) = self
+                    .merge_panel
+                    .sessions
+                    .iter()
+                    .find(|session| session.merge_group == merge_group)
+                    .cloned()
+                else {
+                    self.status_message = format!("Merge session not found: {merge_group}");
+                    return Task::none();
+                };
+                let Some(driver_id) = self.merge_panel.selected_drivers.get(&merge_group).cloned()
+                else {
+                    self.status_message = "No merge driver selected.".to_string();
+                    return Task::none();
+                };
+                self.merge_panel.running.insert(merge_group.clone());
+                self.merge_panel.error = None;
+                self.status_message = format!("Resolving merge {}", session.rel_path);
+                return Task::perform(
+                    execute_merge_for_profile(profile_id, session, driver_id),
+                    move |result| Message::MergeResolved {
+                        merge_group: merge_group.clone(),
+                        result,
+                    },
+                );
+            }
+            Message::MergeResolved {
+                merge_group,
+                result,
+            } => {
+                self.merge_panel.running.remove(&merge_group);
+                match result {
+                    Ok(outcome) => {
+                        self.status_message = format!("Merge completed: {outcome}");
+                        return self.update(Message::LoadMerges);
+                    }
+                    Err(error) => {
+                        self.merge_panel.error = Some(format!("Merge failed: {error}"));
+                        self.status_message = format!("Merge failed: {error}");
+                    }
+                }
+            }
+            Message::OpenMergeDossier { merge_group } => {
+                return Task::perform(
+                    open_merge_dossier_dir(merge_group),
+                    Message::MergeDossierOpened,
+                );
+            }
+            Message::MergeDossierOpened(result) => match result {
+                Ok(()) => {
+                    self.status_message = "Opened merge dossier".to_string();
+                }
+                Err(error) => {
+                    self.status_message = error.clone();
+                    self.merge_panel.error = Some(error);
+                }
+            },
             Message::RunDiagnostics => {
                 self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Running;
                 self.status_message = "Running diagnostics...".to_string();
@@ -6959,6 +7424,7 @@ impl Modde {
             save_profiles_supported,
             mod_details_for_sidebar,
             save_details_for_sidebar,
+            self.merge_panel.summary().attention_count(),
         );
 
         let mods = self
@@ -7019,6 +7485,7 @@ impl Modde {
             View::DataTab => {
                 crate::views::data_tab::view(&self.data_tab_state, &self.data_tab_conflicts)
             }
+            View::Merges => crate::views::merges::view(&self.merge_panel),
             View::Diagnostics => crate::views::diagnostics::view(&self.diagnostics_state),
             View::Tools => crate::views::tools::view(&self.tool_state),
             View::Executables => crate::views::executables::view(&self.tool_state),
@@ -7480,6 +7947,7 @@ mod tests {
             mod_categories: vec![(None, "Uncategorized".to_string())],
             data_tab_state: Default::default(),
             data_tab_conflicts: Vec::new(),
+            merge_panel: Default::default(),
             diagnostics_state: Default::default(),
             tool_state: Default::default(),
             browse_nexus: Default::default(),
@@ -9513,6 +9981,7 @@ mod tests {
         let mut app = test_app();
         app.selected_mod_index = Some(4);
         app.selected_mod_details = Some(crate::views::mod_details::ModDetailsState::loading(
+            "old-mod".to_string(),
             1,
             "skyrimspecialedition".to_string(),
             "Old mod".to_string(),

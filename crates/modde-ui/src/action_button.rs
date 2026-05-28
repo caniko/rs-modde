@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::app::{Message, ReorderDirection, SidebarGroup, View, WabbajackTab};
 use crate::views::browse_nexus::BrowseTab;
+use crate::views::mod_details::ModDetailsTab;
 use iced::Element;
 use iced::widget::{Button, mouse_area};
 use modde_core::filter::FilterKind;
@@ -28,6 +29,27 @@ pub enum ButtonAction {
     TryProfile,
     OpenModPage,
     ModGalleryNext,
+    ModDetailsTabChanged(ModDetailsTab),
+    RunModConflictMerge {
+        merge_group: String,
+        driver_id: Option<String>,
+    },
+    AcceptModConflictWinner {
+        merge_group: String,
+        winner_mod_id: String,
+    },
+    ToggleModConflictHidden {
+        mod_id: String,
+        rel_path: String,
+        hide: bool,
+    },
+    LoadMerges,
+    ResolveMerge {
+        merge_group: String,
+    },
+    OpenMergeDossier {
+        merge_group: String,
+    },
     ModEndorseToggle,
     ModTrackToggle,
     RestoreSaveSnapshot(String),
@@ -161,6 +183,33 @@ impl ButtonActionDescription for ButtonAction {
             ButtonAction::OpenModPage => "Open the selected mod's Nexus Mods page in a browser.",
             ButtonAction::ModGalleryNext => {
                 "Show the next image from the selected mod's Nexus gallery."
+            }
+            ButtonAction::ModDetailsTabChanged(_) => {
+                "Switch the selected mod details panel to this tab."
+            }
+            ButtonAction::RunModConflictMerge { driver_id, .. } => {
+                if driver_id.as_deref() == Some("claude-code") {
+                    "Resolve this collision with the Claude Code merge driver."
+                } else {
+                    "Resolve this collision with the default available merge driver."
+                }
+            }
+            ButtonAction::AcceptModConflictWinner { .. } => {
+                "Resolve this collision by accepting the current winning file."
+            }
+            ButtonAction::ToggleModConflictHidden { hide, .. } => {
+                if *hide {
+                    "Hide the losing file from deployment for this mod."
+                } else {
+                    "Unhide the losing file so it participates in deployment again."
+                }
+            }
+            ButtonAction::LoadMerges => "Refresh merge sessions for the active profile.",
+            ButtonAction::ResolveMerge { .. } => {
+                "Open this merge session with the selected merge driver."
+            }
+            ButtonAction::OpenMergeDossier { .. } => {
+                "Open the merge session dossier for manual inspection."
             }
             ButtonAction::ModEndorseToggle => "Toggle your Nexus endorsement for the selected mod.",
             ButtonAction::ModTrackToggle => {
@@ -394,6 +443,35 @@ impl From<ButtonAction> for Message {
             ButtonAction::TryProfile => Message::TryProfile,
             ButtonAction::OpenModPage => Message::OpenModPage,
             ButtonAction::ModGalleryNext => Message::ModGalleryNext,
+            ButtonAction::ModDetailsTabChanged(tab) => Message::ModDetailsTabChanged(tab),
+            ButtonAction::RunModConflictMerge {
+                merge_group,
+                driver_id,
+            } => Message::RunModConflictMerge {
+                merge_group,
+                driver_id,
+            },
+            ButtonAction::AcceptModConflictWinner {
+                merge_group,
+                winner_mod_id,
+            } => Message::AcceptModConflictWinner {
+                merge_group,
+                winner_mod_id,
+            },
+            ButtonAction::ToggleModConflictHidden {
+                mod_id,
+                rel_path,
+                hide,
+            } => Message::ToggleModConflictHidden {
+                mod_id,
+                rel_path,
+                hide,
+            },
+            ButtonAction::LoadMerges => Message::LoadMerges,
+            ButtonAction::ResolveMerge { merge_group } => Message::ResolveMerge { merge_group },
+            ButtonAction::OpenMergeDossier { merge_group } => {
+                Message::OpenMergeDossier { merge_group }
+            }
             ButtonAction::ModEndorseToggle => Message::ModEndorseToggle,
             ButtonAction::ModTrackToggle => Message::ModTrackToggle,
             ButtonAction::RestoreSaveSnapshot(id) => Message::RestoreSaveSnapshot(id),

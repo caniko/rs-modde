@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::views::selectable_text::text;
-use iced::widget::{button, column, container, image, mouse_area, pick_list, row};
+use iced::widget::{button, column, container, pick_list, row};
 use iced::{Element, Length, color};
 
 use crate::action_button::{ButtonAction, DescribedButtonExt};
@@ -29,6 +29,7 @@ enum NavTarget {
     Wabbajack,
     Downloads,
     Diagnostics,
+    Merges,
     Tools,
     Executables,
     Settings,
@@ -45,6 +46,7 @@ impl NavTarget {
             NavTarget::Wabbajack => View::WabbajackInstaller(Default::default()),
             NavTarget::Downloads => View::Downloads,
             NavTarget::Diagnostics => View::Diagnostics,
+            NavTarget::Merges => View::Merges,
             NavTarget::Tools => View::Tools,
             NavTarget::Executables => View::Executables,
             NavTarget::Settings => View::Settings,
@@ -68,6 +70,10 @@ const GAME_ITEMS: &[NavItem] = &[
     NavItem {
         label: "Diagnostics",
         target: NavTarget::Diagnostics,
+    },
+    NavItem {
+        label: "Merges",
+        target: NavTarget::Merges,
     },
     NavItem {
         label: "Tools",
@@ -128,12 +134,27 @@ pub fn view<'a>(
     save_profiles_supported: bool,
     mod_details: Option<&'a ModDetailsState>,
     save_details: Option<&'a SaveDetailsState>,
+    merge_attention_count: usize,
 ) -> Element<'a, Message> {
-    let nav_button = |label: &'static str, target: View, current: &View| -> Element<'a, Message> {
+    let nav_button = |label: &'static str,
+                      target: View,
+                      current: &View,
+                      badge: Option<usize>|
+     -> Element<'a, Message> {
         let is_active = std::mem::discriminant(&target) == std::mem::discriminant(current);
-        let btn = button(text(label).size(14))
-            .width(Length::Fill)
-            .padding([6, 12]);
+        let label_row = if let Some(count) = badge.filter(|count| *count > 0) {
+            row![
+                text(label).size(14).width(Length::Fill),
+                container(text(count.to_string()).size(11))
+                    .padding([1, 6])
+                    .style(container::rounded_box),
+            ]
+            .align_y(iced::Alignment::Center)
+            .spacing(6)
+        } else {
+            row![text(label).size(14).width(Length::Fill)]
+        };
+        let btn = button(label_row).width(Length::Fill).padding([6, 12]);
         if is_active {
             btn.style(button::primary)
                 .described_disabled("This section is already open.")
@@ -165,7 +186,10 @@ pub fn view<'a>(
                     continue;
                 }
                 if show_all_items || same_view_kind(&view, active_view) {
-                    group_items = group_items.push(nav_button(item.label, view, active_view));
+                    let badge =
+                        matches!(item.target, NavTarget::Merges).then_some(merge_attention_count);
+                    group_items =
+                        group_items.push(nav_button(item.label, view, active_view, badge));
                 }
             }
             nav = nav.push(group_items);
@@ -289,183 +313,12 @@ fn render_group_header(group: SidebarGroup, collapsed: bool) -> Element<'static,
         .on_action(ButtonAction::ToggleSidebarGroup(group))
 }
 
-/// Maximum character count for the mod summary text before it is
-/// truncated with an ellipsis. ~160 chars is roughly 4-5 wrapped lines
-/// at the sidebar width.
-const SUMMARY_MAX: usize = 160;
-
 /// Render the mod detail panel appended to the bottom of the left sidebar.
 /// Width budget is ~166px (190px sidebar minus 12px padding each side minus
 /// a little breathing room), so text is sized small and the thumbnail is
 /// clamped to `Length::Fill` within that column.
 fn render_mod_details(state: &ModDetailsState) -> Element<'_, Message> {
-    // Loading state — show only a minimal placeholder, no partial data.
-    if state.loading {
-        return column![
-            text(&state.name).size(13),
-            text("Loading…").size(11).color(color!(0x888888)),
-        ]
-        .spacing(4)
-        .width(Length::Fill)
-        .into();
-    }
-
-    // Error state — show the error instead of the metadata block.
-    if let Some(ref err) = state.error {
-        return column![
-            text(&state.name).size(13),
-            text(err.as_str()).size(11).color(color!(0xFF6666)),
-            button(text("Open in Nexus").size(11))
-                .style(button::text)
-                .padding([2, 4])
-                .on_action(ButtonAction::OpenModPage),
-        ]
-        .spacing(4)
-        .width(Length::Fill)
-        .into();
-    }
-
-    // ── Thumbnail ──
-    let thumb_slot: Element<Message> = match &state.thumbnail {
-        Some(handle) => image(handle.clone())
-            .width(Length::Fill)
-            .height(Length::Fixed(96.0))
-            .content_fit(iced::ContentFit::Contain)
-            .into(),
-        None => container(text("…").size(14).color(color!(0x888888)))
-            .width(Length::Fill)
-            .height(Length::Fixed(96.0))
-            .center_x(Length::Fill)
-            .center_y(Length::Fixed(96.0))
-            .style(container::bordered_box)
-            .into(),
-    };
-
-    // Wrap the thumbnail in a mouse_area so clicking cycles the gallery.
-    // Only attach the on_press handler when there's actually more than one
-    // image to cycle through.
-    let thumb_area: Element<Message> = if state.gallery.len() > 1 {
-        mouse_area(thumb_slot)
-            .on_press(Message::ModGalleryNext)
-            .into()
-    } else {
-        thumb_slot
-    };
-
-    // Gallery position indicator ("2 / 5") — only shown when multiple images.
-    let gallery_indicator: Element<Message> = if state.gallery.len() > 1 {
-        text(format!(
-            "{} / {}",
-            state.gallery_index + 1,
-            state.gallery.len()
-        ))
-        .size(10)
-        .color(color!(0x888888))
-        .into()
-    } else {
-        iced::widget::Space::new().into()
-    };
-
-    // ── Metadata text ──
-    let author_version: Element<Message> = if state.author.is_empty() {
-        text(&state.version).size(11).color(color!(0xAAAAAA)).into()
-    } else {
-        text(format!("by {} · v{}", state.author, state.version))
-            .size(11)
-            .color(color!(0xAAAAAA))
-            .into()
-    };
-
-    // Summary — clamp length so it doesn't blow out the sidebar.
-    let summary_text: Element<Message> = match state.summary.as_deref() {
-        Some(s) if !s.is_empty() => {
-            let truncated = if s.chars().count() > SUMMARY_MAX {
-                let mut t: String = s.chars().take(SUMMARY_MAX).collect();
-                t.push('…');
-                t
-            } else {
-                s.to_string()
-            };
-            text(truncated).size(11).into()
-        }
-        _ => iced::widget::Space::new().into(),
-    };
-
-    // ── Endorse / Track action buttons ──
-    // Both buttons reflect the user's current relationship with the mod on
-    // Nexus. While any action is in flight (`action_pending`), both buttons
-    // lose their `on_press` to block double-submits. Before the initial
-    // fetch resolves (`endorse_status`/`is_tracked` are None), the buttons
-    // render but are disabled.
-    let disabled = state.action_pending;
-
-    let endorsed = state.endorse_status.as_deref() == Some("Endorsed");
-    let endorse_label = if endorsed { "✓ Endorsed" } else { "Endorse" };
-    let endorse_style = if endorsed {
-        button::success
-    } else if state.endorse_status.is_some() {
-        button::primary
-    } else {
-        button::secondary
-    };
-    let endorse_btn = button(text(endorse_label).size(11))
-        .style(endorse_style)
-        .padding([3, 8])
-        .width(Length::Fill)
-        .on_action_maybe(
-            (!disabled && state.endorse_status.is_some()).then_some(ButtonAction::ModEndorseToggle),
-            "Nexus endorsement status is still loading or an action is already in progress.",
-        );
-
-    let tracked = state.is_tracked == Some(true);
-    let track_label = if tracked { "Tracked" } else { "Track" };
-    let track_style = if tracked {
-        button::success
-    } else if state.is_tracked.is_some() {
-        button::primary
-    } else {
-        button::secondary
-    };
-    let track_btn = button(text(track_label).size(11))
-        .style(track_style)
-        .padding([3, 8])
-        .width(Length::Fill)
-        .on_action_maybe(
-            (!disabled && state.is_tracked.is_some()).then_some(ButtonAction::ModTrackToggle),
-            "Nexus tracking status is still loading or an action is already in progress.",
-        );
-
-    let action_row = row![endorse_btn, track_btn].spacing(4);
-
-    // Endorsement count line — only rendered when > 0 to keep the panel
-    // uncluttered for mods that have just been published.
-    let count_line: Element<Message> = if state.endorsement_count > 0 {
-        text(format!("{} endorsements", state.endorsement_count))
-            .size(10)
-            .color(color!(0x888888))
-            .into()
-    } else {
-        iced::widget::Space::new().into()
-    };
-
-    let link_button = button(text("Open in Nexus").size(11))
-        .style(button::text)
-        .padding([2, 4])
-        .on_action(ButtonAction::OpenModPage);
-
-    column![
-        thumb_area,
-        gallery_indicator,
-        text(&state.name).size(13),
-        author_version,
-        summary_text,
-        action_row,
-        count_line,
-        link_button,
-    ]
-    .spacing(4)
-    .width(Length::Fill)
-    .into()
+    crate::views::mod_details::view(state)
 }
 
 /// Render the save detail panel appended to the bottom of the left sidebar.
