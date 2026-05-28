@@ -241,7 +241,7 @@ mod tests {
         let source_c = tmp.path().join("store/mod_c/content/scripts/game/foo.ws");
         let source_merged = tmp
             .path()
-            .join("profiles/default/__merged__/content/scripts/game/foo.ws");
+            .join("profiles/fs-merged-path/__merged__/content/scripts/game/foo.ws");
         for path in [&source_a, &source_b, &source_c, &source_merged] {
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         }
@@ -277,7 +277,7 @@ mod tests {
                 ModId::from(MERGED_MOD_ID),
             ],
         };
-        let farm = SymlinkFarm::build("default", &resolved, &mod_files, None, None)
+        let farm = SymlinkFarm::build("fs-merged-path", &resolved, &mod_files, None, None)
             .unwrap()
             .materialize()
             .await
@@ -312,7 +312,7 @@ mod deploy_with_merged_mod {
         let source_a = tmp.path().join("store/mod_a").join(&rel_path);
         let source_merged = tmp
             .path()
-            .join("profiles/default/__merged__")
+            .join("profiles/fs-synthetic-winner/__merged__")
             .join(&rel_path);
         for path in [&source_a, &source_merged] {
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -330,7 +330,7 @@ mod deploy_with_merged_mod {
             order: vec![ModId::from("mod_a"), ModId::from(MERGED_MOD_ID)],
         };
 
-        let farm = SymlinkFarm::build("default", &resolved, &mod_files, None, None)
+        let farm = SymlinkFarm::build("fs-synthetic-winner", &resolved, &mod_files, None, None)
             .unwrap()
             .materialize()
             .await
