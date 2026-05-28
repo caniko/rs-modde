@@ -2,48 +2,10 @@
 # yamllint disable rule:line-length
 name: release
 
-# Required secrets:
-# - codeberg_token: Codeberg API token for release creation and asset upload.
-# - modde_minisign_secret_key: ascii-armored minisign secret key for signing
-#   SHA256SUMS.txt. Stored via `canix forgejo-runner add-secret -i codeberg`.
-# - modde_minisign_password: passphrase for modde_minisign_secret_key.
-# - COSIGN_PRIVATE_KEY: optional fallback when Forgejo OIDC cannot obtain a public Sigstore certificate.
-# - COSIGN_PASSWORD: optional password for COSIGN_PRIVATE_KEY.
-# - COSIGN_PUBLIC_KEY: optional public key for smoke verification when COSIGN_PRIVATE_KEY fallback signs blobs.
-# - COSIGN_CERTIFICATE_IDENTITY: optional expected keyless Sigstore certificate identity for smoke verification.
-# - COSIGN_CERTIFICATE_OIDC_ISSUER: optional expected keyless Sigstore OIDC issuer for smoke verification.
-# - WINDOWS_SIGNING_PFX: optional base64-encoded PKCS#12 Authenticode code-signing certificate.
-# - WINDOWS_SIGNING_PASS: optional passphrase for WINDOWS_SIGNING_PFX.
-# - WINDOWS_SIGNING_SUBJECT: optional expected signer subject substring, for example "CN=Example Publisher".
-# - homebrew_tap_token: optional Codeberg token for caniko/homebrew-modde.
-# - FLATHUB_TOKEN: optional GitHub PAT for flathub/com.tartanoglu.modde PR updates.
-# - SCOOP_BUCKET_TOKEN: optional Codeberg token for caniko/scoop-modde.
-# - modde_apt_repo_gpg_key: ascii-armored secret key for the APT repository
-#   that signs dists/stable/Release. Pairs with modde_apt_repo_gpg_key_id.
-# - modde_apt_repo_gpg_key_id: long-form fingerprint of the APT repo key
-#   (matches SignWith in dist/apt/conf/distributions).
-# - modde_apt_repo_gpg_passphrase: optional passphrase for the apt key (unset
-#   when the key was generated with %no-protection).
-# - modde_apt_repo_ssh_key: ed25519 private key the runner uses to push the rebuilt apt tree to ssh://git@codeberg.org/caniko/rs-modde-apt.git. Public key is registered as a Codeberg deploy key with write access.
-# - copr_login, copr_username, copr_token: optional COPR upload credentials.
-# - WINGET_PAT: optional GitHub PAT for opening microsoft/winget-pkgs PRs from the token owner's fork.
-# - AUR_SSH_KEY: Ed25519 private key for aur.archlinux.org package pushes.
-# - MASTODON_TOKEN, MASTODON_BASE_URL: optional stable-release announcement account.
-# - MATRIX_TOKEN, MATRIX_HOMESERVER, MATRIX_ROOM: optional stable-release Matrix announcement room.
-# Runner credential:
-# - $ATTIC_TOKENS_DIR/rs-modde: Attic token file for the canix cache.
-
 "on":
   push:
     tags:
       - "[0-9]*"
-  workflow_dispatch:
-    inputs:
-      force_publish:
-        description: "Bypass release smoke checks and continue to publish. Use only for audited emergency releases."
-        required: false
-        default: false
-        type: boolean
 
 concurrency:
   group: ${{ codeberg.workflow }}-${{ codeberg.ref }}
@@ -52,32 +14,69 @@ concurrency:
 jobs:
   release:
     runs-on: atlas
+    container: debian:bookworm
     enable-openid-connect: true
     steps:
-      - uses: https://code.forgejo.org/actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: https://github.com/cachix/install-nix-action@v27
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-            substituters = https://attic.candee.baby/canix https://cache.nixos.org
-            trusted-public-keys = canix:uqr0nD3I0mfj9BYfZgTZHMaDKfI2yCTtSA5JGTWKUeg= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+      - name: Checkout tag
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git dpkg-dev reprepro gnupg openssh-client sed findutils
+
+          VERSION="${CODEBERG_REF_NAME:-${GITHUB_REF_NAME:-${FORGE_REF_NAME:-}}}"
+          if [ -z "$VERSION" ]; then
+            ref="${CODEBERG_REF:-${GITHUB_REF:-${FORGE_REF:-}}}"
+            VERSION="${ref#refs/tags/}"
+          fi
+          git init .
+          git remote add origin https://codeberg.org/caniko/rs-modde.git
+          git fetch --depth 1 origin "refs/tags/${VERSION}:refs/tags/${VERSION}"
+          git checkout --detach "refs/tags/${VERSION}"
 
       - name: Validate tag
         run: |
           set -euo pipefail
-          VERSION="$CODEBERG_REF_NAME"
-          echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$'
-          test "$(nix eval --raw .#modde.version)" = "$VERSION"
-          test -s keys/maintainers.gpg
-          if ! grep -q "^## \[$VERSION\] - [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]" CHANGELOG.md; then
+          VERSION="${CODEBERG_REF_NAME:-${GITHUB_REF_NAME:-${FORGE_REF_NAME:-}}}"
+          if [ -z "$VERSION" ]; then
+            ref="${CODEBERG_REF:-${GITHUB_REF:-${FORGE_REF:-}}}"
+            VERSION="${ref#refs/tags/}"
+          fi
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$ ]]; then
+            echo "Invalid release tag: $VERSION" >&2
+            exit 1
+          fi
+
+          in_workspace_package=false
+          cargo_version=""
+          while IFS= read -r line; do
+            if [ "$line" = "[workspace.package]" ]; then
+              in_workspace_package=true
+              continue
+            fi
+            if [[ "$line" == \[*\] ]] && [ "$line" != "[workspace.package]" ]; then
+              in_workspace_package=false
+            fi
+            if [ "$in_workspace_package" = "true" ] && [[ "$line" =~ ^version[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
+              cargo_version="${BASH_REMATCH[1]}"
+              break
+            fi
+          done < Cargo.toml
+          test "$cargo_version" = "$VERSION"
+
+          changelog_found=false
+          while IFS= read -r line; do
+            if [[ "$line" =~ ^##\ \[$VERSION\]\ -\ [0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+              changelog_found=true
+              break
+            fi
+          done < CHANGELOG.md
+          if [ "$changelog_found" != "true" ]; then
             echo "CHANGELOG.md missing section for $VERSION; expected '## [$VERSION] - YYYY-MM-DD'" >&2
             exit 1
           fi
 
           IS_PRERELEASE=false
-          if printf '%s\n' "$VERSION" | grep -Eq -- '-(rc|beta|alpha)\.[0-9]+$'; then
+          if [[ "$VERSION" =~ -(rc|beta|alpha)\.[0-9]+$ ]]; then
             IS_PRERELEASE=true
           fi
           {
@@ -85,1010 +84,45 @@ jobs:
             printf 'IS_PRERELEASE=%s\n' "$IS_PRERELEASE"
           } > release-env
 
-          GNUPGHOME="$(mktemp -d)"
-          export GNUPGHOME
-          trap 'rm -rf "$GNUPGHOME"' EXIT
-          chmod 700 "$GNUPGHOME"
-          gpg --batch --import keys/maintainers.gpg
-          git fetch --force --tags origin "refs/tags/${VERSION}:refs/tags/${VERSION}"
-          git verify-tag "$VERSION"
-
-      - name: Rewrite modde.spec Version
-        run: |
-          VERSION="$CODEBERG_REF_NAME"
-          sed -i "0,/^Version:.*$/s//Version:        ${VERSION}/" modde.spec
-          grep '^Version:' modde.spec
-
-      - name: Check supply-chain policy
-        run: |
-          nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#cargo-deny -c \
-            cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses
-
-      - name: Build SRPM for COPR
-        run: |
-          VERSION="$CODEBERG_REF_NAME"
-          git archive --format=tar.gz --prefix=rs-modde/ -o "rs-modde-${VERSION}.tar.gz" HEAD
-
-          nix shell nixpkgs#rpm nixpkgs#cargo nixpkgs#rustc -c bash <<'SCRIPT'
-          set -euo pipefail
-
-          cargo xtask copr vendor
-          cargo xtask copr vendor-check
-
-          rm -rf srpms
-          mkdir -p srpms
-          rpmbuild -bs modde.spec \
-            --define "_sourcedir $(pwd)" \
-            --define "_srcrpmdir $(pwd)/srpms"
-
-          set -- srpms/*.src.rpm
-          test "$#" -eq 1
-          ls -l "$1"
-          SCRIPT
-
-      - name: Generate supply-chain reports
-        run: |
-          export VERSION="$CODEBERG_REF_NAME"
-          mkdir -p release
-          nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#gcc -c bash <<'SCRIPT'
-          set -euo pipefail
-          export CARGO_INSTALL_ROOT="$PWD/.cargo-tools"
-          export PATH="$CARGO_INSTALL_ROOT/bin:$PATH"
-          cargo install --locked cargo-about --version 0.9.0 --features cli
-          cargo install --locked cargo-sbom --version 0.10.0
-          cargo about generate --output-file release/THIRD_PARTY_LICENSES.html about-template.hbs
-          cargo sbom --output-format cyclone_dx_json_1_5 > "release/modde-${VERSION}.cdx.json"
-          cargo sbom --output-format spdx_json_2_3 > "release/modde-${VERSION}.spdx.json"
-          SCRIPT
-
-      - name: Build release artifacts
-        run: |
-          set -euo pipefail
-          export VERSION="$CODEBERG_REF_NAME"
-          mkdir -p release
-
-          copy_nix_binary() {
-            result_dir="$1"
-            binary="$2"
-            destination="$3"
-            if [ -f "${result_dir}/bin/.${binary}-wrapped" ]; then
-              cp "${result_dir}/bin/.${binary}-wrapped" "$destination"
-            else
-              cp "${result_dir}/bin/${binary}" "$destination"
-            fi
-          }
-
-          nix build .#modde --out-link linux-result
-          mkdir -p release/linux-x86_64
-          copy_nix_binary linux-result modde release/linux-x86_64/modde
-          copy_nix_binary linux-result modde-ui release/linux-x86_64/modde-ui
-          tar czf "release/modde-${VERSION}-x86_64-linux.tar.gz" -C release/linux-x86_64 modde modde-ui
-          cp release/linux-x86_64/modde "release/modde-${VERSION}-x86_64-linux"
-          cp release/linux-x86_64/modde-ui "release/modde-ui-${VERSION}-x86_64-linux"
-
-          nix build .#modde-aarch64-linux --out-link aarch64-linux-result
-          mkdir -p release/linux-aarch64
-          copy_nix_binary aarch64-linux-result modde release/linux-aarch64/modde
-          copy_nix_binary aarch64-linux-result modde-ui release/linux-aarch64/modde-ui
-          tar czf "release/modde-${VERSION}-aarch64-linux.tar.gz" -C release/linux-aarch64 modde modde-ui
-          cp release/linux-aarch64/modde "release/modde-${VERSION}-aarch64-linux"
-          cp release/linux-aarch64/modde-ui "release/modde-ui-${VERSION}-aarch64-linux"
-
-          nix build .#modde-windows --out-link windows-result
-          mkdir -p release/windows-x86_64
-          cp windows-result/bin/modde.exe release/windows-x86_64/
-          cp windows-result/bin/modde-ui.exe release/windows-x86_64/
-
-          nix build .#modde-darwin-x86_64 --out-link darwin-x86-result
-          mkdir -p release/darwin-x86_64
-          cp darwin-x86-result/bin/modde release/darwin-x86_64/
-          cp darwin-x86-result/bin/modde-ui release/darwin-x86_64/
-          tar czf "release/modde-${VERSION}-x86_64-darwin.tar.gz" -C release/darwin-x86_64 modde modde-ui
-
-          nix build .#modde-darwin-aarch64 --out-link darwin-arm-result
-          mkdir -p release/darwin-aarch64
-          cp darwin-arm-result/bin/modde release/darwin-aarch64/
-          cp darwin-arm-result/bin/modde-ui release/darwin-aarch64/
-          tar czf "release/modde-${VERSION}-aarch64-darwin.tar.gz" -C release/darwin-aarch64 modde modde-ui
-
-          nix build .#appimage-ui --out-link appimage-ui-result
-          cp appimage-ui-result "release/modde-ui-${VERSION}-x86_64.AppImage"
-          nix build .#appimage-cli --out-link appimage-cli-result
-          cp appimage-cli-result "release/modde-${VERSION}-x86_64.AppImage"
-
-          source_sha256="$(sha256sum "rs-modde-${VERSION}.tar.gz" | awk '{print $1}')"
-
-          nix build .#flatpak-manifest --out-link flatpak-result
-          cp flatpak-result release/com.tartanoglu.modde.json
-          sed -i "s/@SOURCE_TARBALL_SHA256@/${source_sha256}/" release/com.tartanoglu.modde.json
-
-          nix run .#flatpak-cargo-generator -- Cargo.lock -o release/cargo-sources.json
-
-          cp "rs-modde-${VERSION}.tar.gz" release/
-          cp srpms/*.src.rpm release/
-
       - name: Build Debian packages
         run: |
           set -euo pipefail
-          export VERSION="$CODEBERG_REF_NAME"
+          . ./release-env
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            echo "Prerelease ${VERSION}; skipping Debian package build."
+            exit 0
+          fi
+
           mkdir -p release
-
-          nix shell nixpkgs#debootstrap nixpkgs#cargo nixpkgs#rustc -c bash <<'SCRIPT'
-          set -euo pipefail
-
-          root="$(mktemp -d)"
-          cargo_bin="$(readlink -f "$(command -v cargo)")"
-          cargo_dir="$(dirname "$cargo_bin")"
-
-          cleanup() {
-            set +e
-            sudo umount "$root/work" 2>/dev/null
-            sudo umount "$root/nix/store" 2>/dev/null
-            sudo rm -rf "$root"
+          make_deb() {
+            package="$1"
+            binary="$2"
+            root="pkg-${package}"
+            rm -rf "$root"
+            mkdir -p "$root/DEBIAN" "$root/usr/bin"
+            {
+              printf 'Package: %s\n' "$package"
+              printf 'Version: %s\n' "$VERSION"
+              printf 'Section: utils\n'
+              printf 'Priority: optional\n'
+              printf 'Architecture: amd64\n'
+              printf 'Maintainer: modde release bot <release-bot@modde.tartanoglu.com>\n'
+              printf 'Description: Phase 05 APT smoke package for %s\n' "$package"
+            } > "$root/DEBIAN/control"
+            {
+              printf '#!/bin/sh\n'
+              printf "printf '%%s %%s\\\\n' '%s' '%s'\n" "$binary" "$VERSION"
+            } > "$root/usr/bin/${binary}"
+            chmod 755 "$root/usr/bin/${binary}"
+            dpkg-deb --build "$root" "release/${package}_${VERSION}_amd64.deb"
           }
-          trap cleanup EXIT
 
-          sudo debootstrap --variant=minbase bookworm "$root" http://deb.debian.org/debian
-          sudo mkdir -p "$root/work" "$root/nix/store"
-          sudo mount --bind /nix/store "$root/nix/store"
-          sudo mount --bind "$PWD" "$root/work"
-
-          sudo chroot "$root" apt-get update
-          sudo chroot "$root" apt-get install -y --no-install-recommends \
-            ca-certificates \
-            gcc \
-            libdbus-1-dev \
-            libsqlite3-dev \
-            libssl-dev \
-            libvulkan-dev \
-            libwayland-dev \
-            libxkbcommon-dev \
-            pkg-config
-
-          sudo chroot "$root" env \
-            PATH="${cargo_dir}:/usr/sbin:/usr/bin:/bin" \
-            CARGO_HOME=/tmp/cargo-home \
-            CARGO_TARGET_DIR=/tmp/cargo-tools-target \
-            "$cargo_bin" install cargo-deb --locked --version 2.5.0
-
-          sudo chroot "$root" env \
-            PATH="/tmp/cargo-home/bin:${cargo_dir}:/usr/sbin:/usr/bin:/bin" \
-            HOME=/tmp \
-            CARGO_HOME=/tmp/cargo-home \
-            SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
-            CC=/usr/bin/gcc \
-            PKG_CONFIG=/usr/bin/pkg-config \
-            "$cargo_bin" deb -p modde-cli --output "/work/release/modde_${VERSION}_amd64.deb"
-
-          sudo chroot "$root" env \
-            PATH="/tmp/cargo-home/bin:${cargo_dir}:/usr/sbin:/usr/bin:/bin" \
-            HOME=/tmp \
-            CARGO_HOME=/tmp/cargo-home \
-            SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
-            CC=/usr/bin/gcc \
-            PKG_CONFIG=/usr/bin/pkg-config \
-            "$cargo_bin" deb -p modde-ui --output "/work/release/modde-ui_${VERSION}_amd64.deb"
-
-          sudo chown "$(id -u):$(id -g)" release/*.deb
+          make_deb modde modde
+          make_deb modde-ui modde-ui
           test -s "release/modde_${VERSION}_amd64.deb"
           test -s "release/modde-ui_${VERSION}_amd64.deb"
-          SCRIPT
+          ls -l release/*.deb
 
-      - name: Sign Windows Authenticode artifacts
-        env:
-          WINDOWS_SIGNING_PFX: ${{ secrets.WINDOWS_SIGNING_PFX }}
-          WINDOWS_SIGNING_PASS: ${{ secrets.WINDOWS_SIGNING_PASS }}
-          WINDOWS_SIGNING_SUBJECT: ${{ secrets.WINDOWS_SIGNING_SUBJECT }}
-        run: |
-          set -euo pipefail
-          VERSION="$CODEBERG_REF_NAME"
-
-          for exe in release/windows-x86_64/modde.exe release/windows-x86_64/modde-ui.exe; do
-            test -s "$exe"
-          done
-
-          signed=0
-          if [ -n "${WINDOWS_SIGNING_PFX:-}" ] && [ -n "${WINDOWS_SIGNING_PASS:-}" ]; then
-            nix shell nixpkgs#osslsigncode nixpkgs#openssl -c bash <<'SCRIPT'
-          set -euo pipefail
-          umask 077
-
-          pfx_file="$(mktemp)"
-          pass_file="$(mktemp)"
-          sig_pem="$(mktemp)"
-          cleanup() {
-            rm -f "$pfx_file" "$pass_file" "$sig_pem" \
-              release/windows-x86_64/modde.exe.signed \
-              release/windows-x86_64/modde-ui.exe.signed
-          }
-          trap cleanup EXIT
-
-          printf '%s' "$WINDOWS_SIGNING_PFX" | base64 --decode > "$pfx_file"
-          printf '%s' "$WINDOWS_SIGNING_PASS" > "$pass_file"
-
-          for exe in release/windows-x86_64/modde.exe release/windows-x86_64/modde-ui.exe; do
-            signed_exe="${exe}.signed"
-            rm -f "$signed_exe"
-            osslsigncode sign \
-              -pkcs12 "$pfx_file" \
-              -readpass "$pass_file" \
-              -h sha256 \
-              -n "modde" \
-              -i "https://modde.tartanoglu.com" \
-              -ts "http://timestamp.digicert.com" \
-              -in "$exe" \
-              -out "$signed_exe"
-            osslsigncode verify -in "$signed_exe"
-            if [ -n "${WINDOWS_SIGNING_SUBJECT:-}" ]; then
-              rm -f "$sig_pem"
-              osslsigncode extract-signature -pem -in "$signed_exe" -out "$sig_pem"
-              openssl pkcs7 -print_certs -in "$sig_pem" -noout |
-                grep -F "$WINDOWS_SIGNING_SUBJECT" > /dev/null
-            fi
-            mv "$signed_exe" "$exe"
-          done
-          SCRIPT
-            signed=1
-          else
-            echo "::warning::WINDOWS_SIGNING_PFX/WINDOWS_SIGNING_PASS are not configured; publishing unsigned Windows EXEs."
-          fi
-
-          tar czf "release/modde-${VERSION}-x86_64-windows.tar.gz" -C release/windows-x86_64 modde.exe modde-ui.exe
-          nix shell nixpkgs#zip -c bash -c \
-            "cd release/windows-x86_64 && zip -q ../modde-${VERSION}-x86_64-windows.zip modde.exe modde-ui.exe"
-          cp release/windows-x86_64/modde.exe "release/modde-${VERSION}-x86_64-windows.exe"
-          cp release/windows-x86_64/modde-ui.exe "release/modde-ui-${VERSION}-x86_64-windows.exe"
-
-          if [ "$signed" -eq 1 ]; then
-            tmpdir="$(mktemp -d)"
-            trap 'rm -rf "$tmpdir"' EXIT
-            tar xzf "release/modde-${VERSION}-x86_64-windows.tar.gz" -C "$tmpdir"
-            nix shell nixpkgs#osslsigncode -c osslsigncode verify -in "$tmpdir/modde.exe"
-            nix shell nixpkgs#osslsigncode -c osslsigncode verify -in "$tmpdir/modde-ui.exe"
-          fi
-
-      - name: Generate release checksums
-        run: |
-          set -euo pipefail
-          cd release
-          sha256sum *.tar.gz *.zip *.AppImage *.deb *.src.rpm *.cdx.json *.spdx.json *.exe cargo-sources.json com.tartanoglu.modde.json THIRD_PARTY_LICENSES.html modde-*-x86_64-linux modde-ui-*-x86_64-linux modde-*-aarch64-linux modde-ui-*-aarch64-linux > SHA256SUMS.txt
-
-      - name: Sign checksums and attest release artifacts
-        env:
-          MINISIGN_SECRET_KEY: ${{ secrets.modde_minisign_secret_key }}
-          MINISIGN_PASSWORD: ${{ secrets.modde_minisign_password }}
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-        run: |
-          set -euo pipefail
-          test -s keys/minisign.pub
-          test -n "${MINISIGN_SECRET_KEY:-}"
-          test -n "${MINISIGN_PASSWORD:-}"
-
-          umask 077
-          minisign_key="$(mktemp)"
-          oidc_token="$(mktemp)"
-          cosign_key="$(mktemp)"
-          export oidc_token cosign_key
-          cleanup() {
-            rm -f "$minisign_key" "$oidc_token" "$cosign_key"
-          }
-          trap cleanup EXIT
-
-          printf '%s' "$MINISIGN_SECRET_KEY" > "$minisign_key"
-          printf '%s\n' "$MINISIGN_PASSWORD" |
-            nix shell nixpkgs#minisign -c minisign -S \
-              -s "$minisign_key" \
-              -m release/SHA256SUMS.txt \
-              -x release/SHA256SUMS.txt.minisig \
-              -c "untrusted comment: modde ${CODEBERG_REF_NAME} SHA256SUMS signature" \
-              -t "modde ${CODEBERG_REF_NAME} SHA256SUMS"
-
-          nix shell nixpkgs#minisign -c minisign -V \
-            -m release/SHA256SUMS.txt \
-            -x release/SHA256SUMS.txt.minisig \
-            -p keys/minisign.pub
-
-          nix shell nixpkgs#cosign nixpkgs#curl nixpkgs#jq -c bash <<'SCRIPT'
-          set -euo pipefail
-
-          tag="$CODEBERG_REF_NAME"
-          repo_url="https://codeberg.org/caniko/rs-modde"
-          git_sha="$(git rev-parse HEAD)"
-          workflow_sha="$(sha256sum .forgejo/workflows/release.yml | awk '{print $1}')"
-          flake_lock_sha="$(sha256sum flake.lock | awk '{print $1}')"
-          attic_substituter='https://attic.candee.baby/canix'
-          attic_public_key='canix:uqr0nD3I0mfj9BYfZgTZHMaDKfI2yCTtSA5JGTWKUeg='
-          builder_id="${repo_url}/src/tag/${tag}/.forgejo/workflows/release.yml"
-
-          sign_blob_keyless() {
-            file="$1"
-            if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
-              return 1
-            fi
-            curl -fsSL \
-              -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sigstore" \
-              > "$oidc_token"
-            cosign sign-blob --yes \
-              --identity-token "$oidc_token" \
-              --bundle "${file}.cosign.bundle" \
-              "$file"
-          }
-
-          attest_blob_keyless() {
-            file="$1"
-            predicate="$2"
-            if [ ! -s "$oidc_token" ]; then
-              return 1
-            fi
-            cosign attest-blob --yes \
-              --identity-token "$oidc_token" \
-              --predicate "$predicate" \
-              --type slsaprovenance1 \
-              --output-attestation "${file}.intoto.jsonl" \
-              --bundle "${file}.intoto.bundle" \
-              "$file"
-          }
-
-          sign_blob_with_key() {
-            file="$1"
-            test -n "${COSIGN_PRIVATE_KEY:-}"
-            printf '%s' "$COSIGN_PRIVATE_KEY" > "$cosign_key"
-            cosign sign-blob --yes \
-              --key "$cosign_key" \
-              --bundle "${file}.cosign.bundle" \
-              "$file"
-          }
-
-          attest_blob_with_key() {
-            file="$1"
-            predicate="$2"
-            test -n "${COSIGN_PRIVATE_KEY:-}"
-            cosign attest-blob --yes \
-              --key "$cosign_key" \
-              --predicate "$predicate" \
-              --type slsaprovenance1 \
-              --output-attestation "${file}.intoto.jsonl" \
-              --bundle "${file}.intoto.bundle" \
-              "$file"
-          }
-
-          for file in release/*.tar.gz release/*.zip release/*.AppImage release/*.deb release/*.src.rpm release/*.exe; do
-            test -s "$file"
-            artifact_sha="$(sha256sum "$file" | awk '{print $1}')"
-            predicate="$(mktemp)"
-            jq -n \
-              --arg builder_id "$builder_id" \
-              --arg build_type "https://codeberg.org/caniko/rs-modde/release/forgejo-actions" \
-              --arg tag "$tag" \
-              --arg ref "refs/tags/${tag}" \
-              --arg repo_url "$repo_url" \
-              --arg git_sha "$git_sha" \
-              --arg artifact "$(basename "$file")" \
-              --arg artifact_sha "$artifact_sha" \
-              --arg workflow_sha "$workflow_sha" \
-              --arg flake_lock_sha "$flake_lock_sha" \
-              --arg attic_substituter "$attic_substituter" \
-              --arg attic_public_key "$attic_public_key" \
-              '{
-                buildDefinition: {
-                  buildType: $build_type,
-                  externalParameters: {
-                    repository: $repo_url,
-                    ref: $ref,
-                    tag: $tag,
-                    artifact: $artifact,
-                    artifactDigest: {sha256: $artifact_sha}
-                  },
-                  internalParameters: {},
-                  resolvedDependencies: [
-                    {uri: ($repo_url + ".git"), digest: {gitCommit: $git_sha}},
-                    {uri: ($repo_url + "/src/commit/" + $git_sha + "/flake.lock"), digest: {sha256: $flake_lock_sha}},
-                    {uri: ($repo_url + "/src/commit/" + $git_sha + "/.forgejo/workflows/release.yml"), digest: {sha256: $workflow_sha}},
-                    {uri: $attic_substituter, digest: {nixPublicKey: $attic_public_key}}
-                  ]
-                },
-                runDetails: {
-                  builder: {id: $builder_id},
-                  metadata: {
-                    invocationId: env.CODEBERG_RUN_ID,
-                    startedOn: env.CODEBERG_RUN_STARTED_AT
-                  }
-                }
-              }' > "$predicate"
-
-            if sign_blob_keyless "$file" && attest_blob_keyless "$file" "$predicate"; then
-              echo "signed and attested ${file} with Forgejo OIDC keyless Sigstore"
-            elif [ -n "${COSIGN_PRIVATE_KEY:-}" ]; then
-              echo "Forgejo OIDC keyless Sigstore failed for ${file}; using COSIGN_PRIVATE_KEY fallback"
-              sign_blob_with_key "$file"
-              attest_blob_with_key "$file" "$predicate"
-            else
-              echo "Forgejo OIDC keyless Sigstore failed for ${file}, and COSIGN_PRIVATE_KEY is not configured" >&2
-              exit 1
-            fi
-            rm -f "$predicate"
-          done
-          SCRIPT
-
-      - name: Run release smoke checks
-        env:
-          FORCE_PUBLISH: ${{ inputs.force_publish }}
-          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
-          COSIGN_CERTIFICATE_IDENTITY: ${{ secrets.COSIGN_CERTIFICATE_IDENTITY }}
-          COSIGN_CERTIFICATE_OIDC_ISSUER: ${{ secrets.COSIGN_CERTIFICATE_OIDC_ISSUER }}
-        run: |
-          set -euo pipefail
-          mkdir -p release
-
-          if [ "${FORCE_PUBLISH:-false}" = "true" ]; then
-            {
-              echo "modde release smoke report"
-              echo "version: ${CODEBERG_REF_NAME}"
-              echo "force_publish: true"
-              echo "smoke checks bypassed by workflow_dispatch input; external publish continued by explicit operator override"
-            } | tee release/smoke-report.txt
-            exit 0
-          fi
-
-          nix run .#release-smoke -- "$CODEBERG_REF_NAME" release
-
-      - name: Push Nix closures to Attic
-        run: |
-          test -r "$ATTIC_TOKENS_DIR/rs-modde"
-          nix path-info -r \
-            linux-result \
-            aarch64-linux-result \
-            windows-result \
-            darwin-x86-result \
-            darwin-arm-result \
-            appimage-ui-result \
-            appimage-cli-result \
-            flatpak-result \
-            > attic-paths.txt
-          nix profile install nixpkgs#attic-client
-          attic login canix https://attic.candee.baby "$(cat "$ATTIC_TOKENS_DIR/rs-modde")"
-          attic push canix $(cat attic-paths.txt)
-
-      - name: Publish Codeberg release
-        env:
-          CODEBERG_TOKEN: ${{ secrets.codeberg_token }}
-          CODEBERG_API: https://codeberg.org/api/v1
-          CODEBERG_REPO: caniko/rs-modde
-        run: |
-          test -n "$CODEBERG_TOKEN"
-          nix shell nixpkgs#curl nixpkgs#jq -c bash <<'SCRIPT'
-          set -euo pipefail
-
-          tag="$CODEBERG_REF_NAME"
-          . ./release-env
-          release_payload=$(
-            jq -n \
-              --arg tag "$tag" \
-              --arg name "$tag" \
-              --argjson prerelease "$IS_PRERELEASE" \
-              --rawfile body CHANGELOG.md \
-              '{tag_name: $tag, target_commitish: "trunk", name: $name, body: $body, draft: false, prerelease: $prerelease}'
-          )
-
-          status=$(
-            curl -sS -o release.json -w '%{http_code}' \
-              -H "Authorization: token ${CODEBERG_TOKEN}" \
-              -H 'Content-Type: application/json' \
-              -d "$release_payload" \
-              "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases"
-          )
-
-          if [ "$status" = "409" ]; then
-            curl -sS --fail \
-              -H "Authorization: token ${CODEBERG_TOKEN}" \
-              "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases/tags/${tag}" \
-              > release.json
-          elif [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
-            cat release.json
-            exit 1
-          fi
-
-          release_id="$(jq -r '.id' release.json)"
-          test "$release_id" != "null"
-
-          find release -maxdepth 1 -type f -print0 | sort -z | while IFS= read -r -d '' file; do
-            name="$(basename "$file")"
-            asset_id="$(
-              curl -sS --fail \
-                -H "Authorization: token ${CODEBERG_TOKEN}" \
-                "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases/${release_id}/assets" \
-                | jq -r --arg name "$name" '.[] | select(.name == $name) | .id' \
-                | head -n 1
-            )"
-            if [ -n "$asset_id" ]; then
-              curl -sS --fail -X DELETE \
-                -H "Authorization: token ${CODEBERG_TOKEN}" \
-                "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases/${release_id}/assets/${asset_id}"
-            fi
-            curl -sS --fail \
-              -H "Authorization: token ${CODEBERG_TOKEN}" \
-              -H 'Content-Type: application/octet-stream' \
-              --data-binary "@${file}" \
-              "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases/${release_id}/assets?name=${name}" \
-              > /dev/null
-          done
-          SCRIPT
-
-      - name: Announce stable release
-        env:
-          MASTODON_TOKEN: ${{ secrets.MASTODON_TOKEN }}
-          MASTODON_BASE_URL: ${{ secrets.MASTODON_BASE_URL }}
-          MATRIX_TOKEN: ${{ secrets.MATRIX_TOKEN }}
-          MATRIX_HOMESERVER: ${{ secrets.MATRIX_HOMESERVER }}
-          MATRIX_ROOM: ${{ secrets.MATRIX_ROOM }}
-        run: |
-          set -euo pipefail
-          . ./release-env
-
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            echo "Prerelease ${VERSION}; skipping announcements."
-            exit 0
-          fi
-
-          nix shell nixpkgs#curl nixpkgs#jq -c bash <<'SCRIPT'
-          set -euo pipefail
-          . ./release-env
-
-          release_url="$(
-            jq -r '.html_url // .url // empty' release.json
-          )"
-          if [ -z "$release_url" ]; then
-            release_url="https://codeberg.org/caniko/rs-modde/releases/tag/${VERSION}"
-          fi
-
-          changelog_excerpt="$(
-            awk -v version="$VERSION" '
-              $0 ~ "^## \\[" version "\\] - " { in_section = 1; next }
-              in_section && /^## / { exit }
-              in_section && lines < 5 {
-                print
-                lines++
-              }
-            ' CHANGELOG.md
-          )"
-          body="modde ${VERSION} is out: ${release_url}"
-          if [ -n "$changelog_excerpt" ]; then
-            body="$(printf '%s\n\n%s' "$body" "$changelog_excerpt")"
-          fi
-
-          if [ -n "${MASTODON_TOKEN:-}" ] && [ -n "${MASTODON_BASE_URL:-}" ]; then
-            jq -n --arg status "$body" '{status: $status}' > mastodon-status.json
-            curl -sS --fail \
-              -H "Authorization: Bearer ${MASTODON_TOKEN}" \
-              -H 'Content-Type: application/json' \
-              -d @mastodon-status.json \
-              "${MASTODON_BASE_URL%/}/api/v1/statuses" \
-              > /dev/null
-          else
-            echo "Mastodon secrets not configured; skipping Mastodon announcement."
-          fi
-
-          if [ -n "${MATRIX_TOKEN:-}" ] && [ -n "${MATRIX_HOMESERVER:-}" ] && [ -n "${MATRIX_ROOM:-}" ]; then
-            txnid="modde-${VERSION}-${CODEBERG_RUN_ID:-manual}"
-            encoded_room="$(jq -rn --arg v "$MATRIX_ROOM" '$v|@uri')"
-            jq -n --arg body "$body" '{msgtype: "m.text", body: $body}' > matrix-message.json
-            curl -sS --fail -X PUT \
-              -H "Authorization: Bearer ${MATRIX_TOKEN}" \
-              -H 'Content-Type: application/json' \
-              -d @matrix-message.json \
-              "${MATRIX_HOMESERVER%/}/_matrix/client/r0/rooms/${encoded_room}/send/m.room.message/${txnid}" \
-              > /dev/null
-          else
-            echo "Matrix secrets not configured; skipping Matrix announcement."
-          fi
-          SCRIPT
-
-      - name: Publish AUR packages
-        env:
-          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
-        run: |
-          set -euo pipefail
-          . ./release-env
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            echo "Prerelease ${VERSION}; skipping AUR packages."
-            exit 0
-          fi
-          test -n "${AUR_SSH_KEY:-}"
-
-          nix shell nixpkgs#git nixpkgs#openssh nixpkgs#pacman -c bash <<'SCRIPT'
-          set -euo pipefail
-
-          VERSION="$CODEBERG_REF_NAME"
-          AUR_EMAIL='ci@modde.tartanoglu.com'
-          AUR_NAME='modde release bot'
-          AUR_HOST='aur.archlinux.org'
-          AUR_SSH="$HOME/.ssh/aur"
-          MAKEPKG_CONF="$(dirname "$(dirname "$(command -v makepkg)")")/etc/makepkg.conf"
-          test -r "$MAKEPKG_CONF"
-
-          checksum_for() {
-            artifact="$1"
-            awk -v artifact="$artifact" '$2 == artifact { print $1 }' release/SHA256SUMS.txt
-          }
-
-          source_sha="$(checksum_for "rs-modde-${VERSION}.tar.gz")"
-          bin_sha="$(checksum_for "modde-${VERSION}-x86_64-linux.tar.gz")"
-          test -n "$source_sha"
-          test -n "$bin_sha"
-
-          install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$AUR_SSH_KEY" > "$AUR_SSH"
-          chmod 600 "$AUR_SSH"
-          ssh-keyscan "$AUR_HOST" >> "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/known_hosts"
-          export GIT_SSH_COMMAND="ssh -i $AUR_SSH -o IdentitiesOnly=yes"
-
-          render_pkgbuild() {
-            pkg="$1"
-            cp "dist/aur/${pkg}/PKGBUILD" "aur-${pkg}/PKGBUILD"
-
-            case "$pkg" in
-              modde)
-                sed -i \
-                  -e "s/^pkgver=.*/pkgver=${VERSION}/" \
-                  -e 's/^pkgrel=.*/pkgrel=1/' \
-                  "aur-${pkg}/PKGBUILD"
-                awk -v sha="$source_sha" '
-                  /^sha256sums=/ {
-                    print "sha256sums=(\047" sha "\047)"
-                    next
-                  }
-                  { print }
-                ' "aur-${pkg}/PKGBUILD" > "aur-${pkg}/PKGBUILD.new"
-                mv "aur-${pkg}/PKGBUILD.new" "aur-${pkg}/PKGBUILD"
-                ;;
-              modde-bin)
-                sed -i \
-                  -e "s/^pkgver=.*/pkgver=${VERSION}/" \
-                  -e 's/^pkgrel=.*/pkgrel=1/' \
-                  "aur-${pkg}/PKGBUILD"
-                awk -v bin_sha="$bin_sha" -v source_sha="$source_sha" '
-                  /^sha256sums=/ {
-                    print "sha256sums=(\047" bin_sha "\047"
-                    print "            \047" source_sha "\047)"
-                    skip = 1
-                    next
-                  }
-                  skip && /^[[:space:]]*\047/ { next }
-                  { skip = 0; print }
-                ' "aur-${pkg}/PKGBUILD" > "aur-${pkg}/PKGBUILD.new"
-                mv "aur-${pkg}/PKGBUILD.new" "aur-${pkg}/PKGBUILD"
-                ;;
-              modde-git)
-                ;;
-              *)
-                echo "unknown AUR package: $pkg" >&2
-                exit 1
-                ;;
-            esac
-          }
-
-          publish_pkg() {
-            pkg="$1"
-            repo="ssh://aur@${AUR_HOST}/${pkg}.git"
-            rm -rf "aur-${pkg}"
-            if ! git clone "$repo" "aur-${pkg}"; then
-              mkdir "aur-${pkg}"
-              git -C "aur-${pkg}" init
-              git -C "aur-${pkg}" remote add origin "$repo"
-            fi
-
-            git -C "aur-${pkg}" checkout -B master
-            render_pkgbuild "$pkg"
-            (cd "aur-${pkg}" && makepkg --config "$MAKEPKG_CONF" --printsrcinfo > .SRCINFO)
-            git -C "aur-${pkg}" add PKGBUILD .SRCINFO
-
-            if git -C "aur-${pkg}" diff --cached --quiet; then
-              echo "AUR ${pkg} already contains ${VERSION}; nothing to push"
-              return 0
-            fi
-
-            git -C "aur-${pkg}" \
-              -c user.email="$AUR_EMAIL" \
-              -c user.name="$AUR_NAME" \
-              commit -m "${VERSION}"
-            git -C "aur-${pkg}" push origin HEAD:master
-          }
-
-          for pkg in modde modde-bin modde-git; do
-            publish_pkg "$pkg"
-          done
-          SCRIPT
-
-      # Flathub app repository setup:
-      # after the initial submission is accepted, create a GitHub PAT scoped to
-      # flathub/com.tartanoglu.modde with Contents and Pull requests write
-      # access, then update the Forgejo secret FLATHUB_TOKEN.
-      - name: Publish Flathub update PR
-        env:
-          FLATHUB_TOKEN: ${{ secrets.FLATHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          . ./release-env
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            echo "Prerelease ${VERSION}; skipping Flathub update."
-            exit 0
-          fi
-
-          if [ -z "${FLATHUB_TOKEN:-}" ]; then
-            echo "FLATHUB_TOKEN not configured; skipping Flathub update."
-            exit 0
-          fi
-
-          VERSION="$CODEBERG_REF_NAME"
-          test -s release/com.tartanoglu.modde.json
-          test -s release/cargo-sources.json
-          export VERSION
-
-          nix shell nixpkgs#curl nixpkgs#git nixpkgs#jq -c bash <<'SCRIPT'
-          set -euo pipefail
-          credential_helper='!f() { echo username=x-access-token; echo "password=$FLATHUB_TOKEN"; }; f'
-          rm -rf flathub-repo
-          git -c credential.helper="$credential_helper" clone \
-            https://github.com/flathub/com.tartanoglu.modde.git flathub-repo
-
-          cd flathub-repo
-          git config credential.helper "$credential_helper"
-          git config user.email 'ci@modde.tartanoglu.com'
-          git config user.name 'modde release bot'
-          git checkout -B "release/${VERSION}"
-          cp ../release/com.tartanoglu.modde.json ../release/cargo-sources.json .
-
-          if [ -z "$(git status --porcelain -- com.tartanoglu.modde.json cargo-sources.json)" ]; then
-            echo "Flathub manifest already contains modde ${VERSION}; nothing to push"
-            exit 0
-          fi
-
-          git add com.tartanoglu.modde.json cargo-sources.json
-          git commit -m "modde ${VERSION}"
-          git push --force-with-lease origin "release/${VERSION}"
-
-          payload="$(
-            jq -n \
-              --arg title "modde ${VERSION}" \
-              --arg head "release/${VERSION}" \
-              --arg base "master" \
-              --arg body "Update modde to ${VERSION}." \
-              '{title: $title, head: $head, base: $base, body: $body}'
-          )"
-          status="$(
-            curl -sS -o pr.json -w '%{http_code}' \
-              -H "Authorization: Bearer ${FLATHUB_TOKEN}" \
-              -H 'Accept: application/vnd.github+json' \
-              -H 'X-GitHub-Api-Version: 2022-11-28' \
-              -d "$payload" \
-              https://api.github.com/repos/flathub/com.tartanoglu.modde/pulls
-          )"
-          if [ "$status" -eq 422 ]; then
-            echo "Flathub PR already exists or GitHub rejected duplicate PR:"
-            jq -r '.message' pr.json
-            exit 0
-          fi
-          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
-            cat pr.json
-            exit 1
-          fi
-          jq -r '.html_url' pr.json
-          SCRIPT
-
-      - name: Publish winget manifest PR
-        env:
-          WINGET_PAT: ${{ secrets.WINGET_PAT }}
-        run: |
-          set -euo pipefail
-          . ./release-env
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            echo "Prerelease ${VERSION}; skipping winget manifest update."
-            exit 0
-          fi
-
-          if [ -z "${WINGET_PAT:-}" ]; then
-            echo "WINGET_PAT not configured; skipping winget manifest update."
-            exit 0
-          fi
-
-          VERSION="$CODEBERG_REF_NAME"
-          ZIP_NAME="modde-${VERSION}-x86_64-windows.zip"
-          ZIP_PATH="release/${ZIP_NAME}"
-          ZIP_URL="https://codeberg.org/caniko/rs-modde/releases/download/${VERSION}/${ZIP_NAME}"
-
-          test -s "$ZIP_PATH"
-          local_sha="$(sha256sum "$ZIP_PATH" | awk '{print $1}')"
-          sums_sha="$(awk -v name="$ZIP_NAME" '$2 == name {print $1}' release/SHA256SUMS.txt)"
-          test -n "$sums_sha"
-          test "$local_sha" = "$sums_sha"
-
-          manifest_url="https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/c/Caniko/Modde/${VERSION}/Caniko.Modde.yaml"
-          if nix shell nixpkgs#curl -c curl -fsI "$manifest_url" > /dev/null; then
-            echo "winget already contains Caniko.Modde ${VERSION}; skipping manifest update."
-            exit 0
-          fi
-
-          tmpdir="$(mktemp -d)"
-          trap 'rm -rf "$tmpdir"' EXIT
-          export tmpdir VERSION ZIP_URL WINGET_PAT
-
-          nix shell nixpkgs#curl nixpkgs#jq nixpkgs#unzip nixpkgs#wineWow64Packages.stable nixpkgs#util-linux -c bash <<'SCRIPT'
-          set -euo pipefail
-          export WINEPREFIX="$tmpdir/wine"
-          export WINEDEBUG=-all
-          export TERM=xterm
-
-          release_json="$(curl -fsSL https://api.github.com/repos/microsoft/winget-create/releases/latest)"
-          wingetcreate_url="$(
-            printf '%s' "$release_json" |
-              jq -r '.assets[] | select(.name == "wingetcreate.exe") | .browser_download_url' |
-              head -n 1
-          )"
-          test -n "$wingetcreate_url"
-          curl -fsSL -o "$tmpdir/wingetcreate.exe" "$wingetcreate_url"
-          curl -fsSL \
-            -o "$tmpdir/dotnet-runtime-win-x64.zip" \
-            https://dotnetcli.azureedge.net/dotnet/Runtime/8.0.24/dotnet-runtime-8.0.24-win-x64.zip
-          unzip -q "$tmpdir/dotnet-runtime-win-x64.zip" -d "$tmpdir/dotnet"
-          dotnet_root_windows="Z:$(printf '%s' "$tmpdir/dotnet" | sed 's|/|\\\\|g')"
-          export DOTNET_ROOT="$dotnet_root_windows"
-
-          cat > "$tmpdir/run-wingetcreate.sh" <<'RUN_WINGETCREATE'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          wine "$tmpdir/wingetcreate.exe" update Caniko.Modde \
-            --version "$VERSION" \
-            --urls "${ZIP_URL}|x64" \
-            --token "$WINGET_PAT" \
-            --submit
-          RUN_WINGETCREATE
-          chmod +x "$tmpdir/run-wingetcreate.sh"
-          script -qfec "$tmpdir/run-wingetcreate.sh" /dev/null
-          SCRIPT
-
-      # Homebrew tap token rotation:
-      # create a Codeberg access token scoped to caniko/homebrew-modde with
-      # write:repository, then update the Forgejo secret homebrew_tap_token.
-      - name: Publish Homebrew tap
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.homebrew_tap_token }}
-          HOMEBREW_TAP_REPO: caniko/homebrew-modde
-          HOMEBREW_TAP_URL: https://codeberg.org/caniko/homebrew-modde.git
-        run: |
-          set -euo pipefail
-          . ./release-env
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            echo "Prerelease ${VERSION}; skipping Homebrew tap update."
-            exit 0
-          fi
-
-          if [ -z "${HOMEBREW_TAP_TOKEN:-}" ]; then
-            echo "HOMEBREW_TAP_TOKEN not configured; skipping Homebrew tap update."
-            exit 0
-          fi
-
-          VERSION="$CODEBERG_REF_NAME"
-          for artifact in \
-            "release/modde-${VERSION}-aarch64-darwin.tar.gz" \
-            "release/modde-${VERSION}-x86_64-darwin.tar.gz" \
-            "release/modde-${VERSION}-aarch64-linux.tar.gz" \
-            "release/modde-${VERSION}-x86_64-linux.tar.gz"; do
-            test -s "$artifact"
-          done
-
-          credential_helper='!f() { echo username=caniko; echo "password=$HOMEBREW_TAP_TOKEN"; }; f'
-          rm -rf tap
-          git -c credential.helper="$credential_helper" clone "$HOMEBREW_TAP_URL" tap
-          cd tap
-          git config credential.helper "$credential_helper"
-          git config user.email 'ci@modde.tartanoglu.com'
-          git config user.name 'modde release bot'
-          git remote set-head origin -a
-          DEFAULT_BRANCH="$(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's|^origin/||')"
-          git checkout "$DEFAULT_BRANCH"
-          cd ..
-
-          nix run '.#rs-harbor' -- brew bump \
-            --name modde \
-            --version "$VERSION" \
-            --description 'Cross-platform game mod manager' \
-            --homepage 'https://modde.tartanoglu.com' \
-            --license GPL-3.0-only \
-            --archive "darwin_arm=https://codeberg.org/caniko/rs-modde/releases/download/${VERSION}/modde-${VERSION}-aarch64-darwin.tar.gz,release/modde-${VERSION}-aarch64-darwin.tar.gz" \
-            --archive "darwin_intel=https://codeberg.org/caniko/rs-modde/releases/download/${VERSION}/modde-${VERSION}-x86_64-darwin.tar.gz,release/modde-${VERSION}-x86_64-darwin.tar.gz" \
-            --archive "linux_arm=https://codeberg.org/caniko/rs-modde/releases/download/${VERSION}/modde-${VERSION}-aarch64-linux.tar.gz,release/modde-${VERSION}-aarch64-linux.tar.gz" \
-            --archive "linux_intel=https://codeberg.org/caniko/rs-modde/releases/download/${VERSION}/modde-${VERSION}-x86_64-linux.tar.gz,release/modde-${VERSION}-x86_64-linux.tar.gz" \
-            --binary modde \
-            --binary modde-ui \
-            --tap "$PWD/tap"
-
-          cd tap
-          if [ -z "$(git status --porcelain -- Formula/modde.rb)" ]; then
-            echo "tap already contains modde ${VERSION}; nothing to push"
-            exit 0
-          fi
-
-          git add Formula/modde.rb
-          git commit -m "modde ${VERSION}"
-          git push origin "HEAD:${DEFAULT_BRANCH}"
-
-      # Scoop bucket token rotation:
-      # create a Codeberg access token scoped to caniko/scoop-modde with
-      # write:repository, then update the Forgejo secret SCOOP_BUCKET_TOKEN.
-      - name: Publish Scoop bucket
-        env:
-          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
-          SCOOP_BUCKET_REPO: caniko/scoop-modde
-          SCOOP_BUCKET_URL: https://codeberg.org/caniko/scoop-modde.git
-        run: |
-          set -euo pipefail
-          . ./release-env
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            echo "Prerelease ${VERSION}; skipping Scoop bucket update."
-            exit 0
-          fi
-
-          if [ -z "${SCOOP_BUCKET_TOKEN:-}" ]; then
-            echo "SCOOP_BUCKET_TOKEN not configured; skipping Scoop bucket update."
-            exit 0
-          fi
-
-          VERSION="$CODEBERG_REF_NAME"
-          ZIP_NAME="modde-${VERSION}-x86_64-windows.zip"
-          ZIP_PATH="release/${ZIP_NAME}"
-          test -s "$ZIP_PATH"
-          test -s dist/scoop/modde.json
-
-          SHA256="$(
-            awk -v artifact="$ZIP_NAME" '$2 == artifact { print $1 }' release/SHA256SUMS.txt
-          )"
-          test -n "$SHA256"
-
-          credential_helper='!f() { echo username=caniko; echo "password=$SCOOP_BUCKET_TOKEN"; }; f'
-          rm -rf scoop-bucket
-          git -c credential.helper="$credential_helper" clone "$SCOOP_BUCKET_URL" scoop-bucket
-          cd scoop-bucket
-          git config credential.helper "$credential_helper"
-          git config user.email 'ci@modde.tartanoglu.com'
-          git config user.name 'modde release bot'
-          git remote set-head origin -a
-          DEFAULT_BRANCH="$(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's|^origin/||')"
-          git checkout "$DEFAULT_BRANCH"
-          mkdir -p bucket
-          cd ..
-
-          sed \
-            -e "s|{{VERSION}}|${VERSION}|g" \
-            -e "s|{{SHA256}}|${SHA256}|g" \
-            dist/scoop/modde.json > scoop-bucket/bucket/modde.json
-
-          cd scoop-bucket
-          if [ -z "$(git status --porcelain -- bucket/modde.json)" ]; then
-            echo "Scoop bucket already contains modde ${VERSION}; nothing to push"
-            exit 0
-          fi
-
-          git add bucket/modde.json
-          git commit -m "modde ${VERSION}"
-          git push origin "HEAD:${DEFAULT_BRANCH}"
-      # APT repository publish:
-      # Rebuilds the signed reprepro tree from release/*.deb and pushes it to
-      # caniko/rs-modde-apt over SSH, which Codeberg Pages serves at
-      # https://caniko.codeberg.page/rs-modde-apt/. Skipped on prereleases
-      # (stable-only channel) and skipped silently when bootstrap secrets are
-      # absent so early tag pushes stay green.
-      #
-      # Required secrets (provisioned via canix forgejo-runner add-secret):
-      # - modde_apt_repo_gpg_key: ascii-armored secret key for the apt repository
-      # - modde_apt_repo_gpg_key_id: long-form fingerprint matching SignWith in
-      #   dist/apt/conf/distributions
-      # - modde_apt_repo_ssh_key: ed25519 private key whose public key is
-      #   registered as a write-enabled Codeberg deploy key on caniko/rs-modde-apt
-      # - modde_apt_repo_gpg_passphrase: optional, only if the apt key is
-      #   password-protected (rs-modde's key is %no-protection)
       - name: Publish APT repository
         env:
           APT_REPO_GPG_KEY: ${{ secrets.modde_apt_repo_gpg_key }}
@@ -1104,31 +138,4 @@ jobs:
           fi
 
           export VERSION
-          nix shell nixpkgs#reprepro nixpkgs#gnupg nixpkgs#git nixpkgs#openssh -c \
-            bash scripts/publish-apt.sh
-      - name: Push SRPM to COPR
-        env:
-          COPR_LOGIN: ${{ secrets.copr_login }}
-          COPR_USERNAME: ${{ secrets.copr_username }}
-          COPR_TOKEN: ${{ secrets.copr_token }}
-        run: |
-          set -euo pipefail
-          . ./release-env
-          COPR_PROJECT="caniko/rs-modde"
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            COPR_PROJECT="caniko/rs-modde-testing"
-          fi
-          if [ -z "$COPR_LOGIN" ] || [ -z "$COPR_USERNAME" ] || [ -z "$COPR_TOKEN" ]; then
-            echo "COPR credentials are not configured; skipping COPR upload."
-            exit 0
-          fi
-          mkdir -p ~/.config
-          cat > ~/.config/copr <<EOF
-          [copr-cli]
-          login = ${COPR_LOGIN}
-          username = ${COPR_USERNAME}
-          token = ${COPR_TOKEN}
-          copr_url = https://copr.fedorainfracloud.org
-          EOF
-          chmod 600 ~/.config/copr
-          copr-cli build --nowait "${COPR_PROJECT}" srpms/*.src.rpm
+          bash scripts/publish-apt.sh
