@@ -59,7 +59,7 @@ assets = [
 [features]
 default = ["rar"]
 rar = ["modde-sources/rar"]
-heap-profile = ["dep:dhat"]
+heap-profile = []
 remote-telemetry = [
   "dep:detritus",
   "dep:detritus-protocol",
@@ -98,7 +98,6 @@ zip = { workspace = true }
 url = { workspace = true }
 notify = { workspace = true }
 open = { workspace = true }
-dhat = { version = "0.3.3", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }

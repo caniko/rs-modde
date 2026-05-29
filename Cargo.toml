@@ -12,7 +12,7 @@ members = [
 [workspace.package]
 version = "0.2.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.93"
 license = "GPL-3.0-only"
 repository = "https://codeberg.org/caniko/rs-modde"
 authors = ["Can H. Tartanoglu"]
@@ -57,9 +57,6 @@ sha2 = "0.11"
 # Small-vec inline optimization
 smallvec = { version = "1", features = ["serde"] }
 
-# Graph
-petgraph = "0.8"
-
 # HTTP
 reqwest = { version = "0.13.2", default-features = false, features = [
   "rustls",
@@ -75,8 +72,8 @@ keyring = "4"
 keyring-core = "1"
 
 # Crypto
-aes = "0.9"
-ctr = "0.10"
+aes = "0.9.1"
+ctr = "0.10.1"
 base64 = "0.22"
 
 # Compression

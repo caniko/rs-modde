@@ -32,7 +32,6 @@ workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
-petgraph = { workspace = true }
 smallvec = { workspace = true }
 xxhash-rust = { workspace = true }
 sha2 = { workspace = true }
