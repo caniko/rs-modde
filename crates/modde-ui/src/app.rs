@@ -2642,6 +2642,9 @@ fn format_install_progress(
         } => format!("Applying directives: {}/{total}", directive_index + 1),
         InstallProgress::Patching { name } => format!("Patching: {name}"),
         InstallProgress::CreatingBSA { name } => format!("Creating BSA: {name}"),
+        InstallProgress::LauncherConfigured { report } => {
+            format_launcher_configuration_progress(report)
+        }
         InstallProgress::InlineFile { name } => format!("Writing inline file: {name}"),
         InstallProgress::StagingAdopted {
             archive_batches,
@@ -2651,6 +2654,47 @@ fn format_install_progress(
         ),
         InstallProgress::Complete => "Install pipeline complete".to_string(),
         InstallProgress::Failed { error } => format!("Install failed: {error}"),
+    }
+}
+
+fn format_launcher_configuration_progress(
+    report: &modde_games::launcher::LauncherConfigurationReport,
+) -> String {
+    let mut parts = Vec::new();
+    if let Some(wine_overrides) = &report.wine_overrides {
+        parts.push(match wine_overrides {
+            modde_games::launcher::WineOverrideReport::HeroicUpdated { .. } => {
+                "Updated Heroic Wine DLL overrides".to_string()
+            }
+            modde_games::launcher::WineOverrideReport::SteamInstruction { .. } => {
+                "Steam launch options need Wine DLL overrides".to_string()
+            }
+            modde_games::launcher::WineOverrideReport::UnknownInstruction { .. } => {
+                "Game launch environment needs Wine DLL overrides".to_string()
+            }
+        });
+    }
+    if let Some(wrapper) = &report.launch_wrapper {
+        parts.push(format!(
+            "Generated launch wrapper ({} DLL restores, {} tool env vars)",
+            wrapper.restore_count, wrapper.tool_env_var_count
+        ));
+    }
+    if let Some(registration) = &report.wrapper_registration {
+        parts.push(match registration {
+            modde_games::launcher::WrapperRegistrationReport::HeroicRegistered => {
+                "Registered launch wrapper in Heroic".to_string()
+            }
+            modde_games::launcher::WrapperRegistrationReport::ManualInstruction { .. } => {
+                "Launch wrapper needs manual launcher setup".to_string()
+            }
+        });
+    }
+
+    if parts.is_empty() {
+        "Launcher configuration unchanged".to_string()
+    } else {
+        parts.join("; ")
     }
 }
 

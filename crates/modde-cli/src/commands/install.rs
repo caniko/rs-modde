@@ -59,6 +59,79 @@ fn format_lock_reason_short(reason: &LockReason) -> &'static str {
     }
 }
 
+pub fn print_launcher_configuration_report(
+    report: &modde_games::launcher::LauncherConfigurationReport,
+) {
+    if let Some(wine_overrides) = &report.wine_overrides {
+        print_wine_override_report(wine_overrides);
+    }
+    if let Some(wrapper) = &report.launch_wrapper {
+        print_launch_wrapper_report(wrapper);
+    }
+    if let Some(registration) = &report.wrapper_registration {
+        print_wrapper_registration_report(registration);
+    }
+}
+
+fn print_wine_override_report(report: &modde_games::launcher::WineOverrideReport) {
+    match report {
+        modde_games::launcher::WineOverrideReport::HeroicUpdated { value } => {
+            println!("  Updated Heroic config with WINEDLLOVERRIDES: {value}");
+        }
+        modde_games::launcher::WineOverrideReport::SteamInstruction { override_value } => {
+            println!(
+                "\nSteam: Add this to your launch options:\n  \
+                 WINEDLLOVERRIDES=\"{override_value}\" %command%"
+            );
+        }
+        modde_games::launcher::WineOverrideReport::UnknownInstruction { override_value } => {
+            println!(
+                "\nSet this environment variable before launching:\n  \
+                 WINEDLLOVERRIDES=\"{override_value}\""
+            );
+        }
+    }
+}
+
+fn print_launch_wrapper_report(report: &modde_games::launcher::LaunchWrapperReport) {
+    if report.restore_count > 0 {
+        println!("  Launch wrapper: restores {} DLL(s)", report.restore_count);
+    }
+    if report.tool_env_var_count > 0 {
+        println!(
+            "  Launch wrapper: exports {} tool env var(s)",
+            report.tool_env_var_count
+        );
+    }
+}
+
+fn print_wrapper_registration_report(report: &modde_games::launcher::WrapperRegistrationReport) {
+    match report {
+        modde_games::launcher::WrapperRegistrationReport::HeroicRegistered => {
+            println!("  Registered modde launch wrapper in Heroic (position: after fgmod)");
+        }
+        modde_games::launcher::WrapperRegistrationReport::ManualInstruction { wrapper_path } => {
+            let wrapper_str = wrapper_path.display();
+            println!("\nAdd this wrapper before your game launcher:\n  {wrapper_str} --");
+        }
+    }
+}
+
+pub fn print_tool_environment_report(report: &modde_games::launcher::ToolEnvironmentReport) {
+    if report.env_var_count > 0 {
+        println!(
+            "  Applied {} tool env var(s) to Heroic config",
+            report.env_var_count
+        );
+    }
+    if report.wrapper_count > 0 {
+        println!(
+            "  Registered {} tool wrapper(s) in Heroic config",
+            report.wrapper_count
+        );
+    }
+}
+
 /// Fetch a Nexus Collection manifest via the two-step API.
 ///
 /// Step 1: `GET /v1/collections/{slug}.json` → discover `game_domain` + latest revision.
@@ -453,6 +526,9 @@ async fn handle_wabbajack(
                 InstallProgress::CreatingBSA { name } => {
                     println!("  Creating BSA: {name}");
                 }
+                InstallProgress::LauncherConfigured { report } => {
+                    print_launcher_configuration_report(&report);
+                }
                 InstallProgress::StagingAdopted {
                     archive_batches,
                     create_bsa,
@@ -488,10 +564,15 @@ async fn handle_wabbajack(
 
 /// Detect proxy DLLs in the game directory, configure Wine DLL overrides,
 /// and generate a launch wrapper to restore DLLs that fgmod deletes.
-pub fn configure_wine_overrides(game_id: &str, game_dir: &Path, staging: &Path) -> Result<()> {
+pub fn configure_wine_overrides(
+    game_id: &str,
+    game_dir: &Path,
+    staging: &Path,
+) -> Result<modde_games::launcher::LauncherConfigurationReport> {
+    let mut report = modde_games::launcher::LauncherConfigurationReport::default();
     let Some(plugin) = modde_games::resolve_game_plugin(game_id) else {
         info!(%game_id, "no game plugin found, skipping Wine DLL override detection");
-        return Ok(());
+        return Ok(report);
     };
 
     // Merge overrides from deployed game dir and staging (staging catches DLLs
@@ -504,7 +585,7 @@ pub fn configure_wine_overrides(game_id: &str, game_dir: &Path, staging: &Path) 
     }
     if overrides.is_empty() {
         info!("no proxy DLLs detected, no Wine overrides needed");
-        return Ok(());
+        return Ok(report);
     }
 
     println!(
@@ -521,7 +602,9 @@ pub fn configure_wine_overrides(game_id: &str, game_dir: &Path, staging: &Path) 
 
     // Set WINEDLLOVERRIDES in the launcher config (Linux only — Wine/Proton concept)
     #[cfg(target_os = "linux")]
-    modde_games::launcher::apply_wine_overrides(&launcher, &overrides)?;
+    {
+        report.wine_overrides = modde_games::launcher::apply_wine_overrides(&launcher, &overrides)?;
+    }
 
     // Collect tool env vars for the launch wrapper
     let tool_env_vars = match modde_core::db::ModdeDb::open() {
@@ -530,13 +613,17 @@ pub fn configure_wine_overrides(game_id: &str, game_dir: &Path, staging: &Path) 
     };
 
     // Generate a launch wrapper that restores mod DLLs deleted by fgmod + exports tool env vars
-    if let Some(wrapper_path) =
+    if let Some(wrapper) =
         modde_games::launcher::generate_launch_wrapper(game_dir, staging, game_id, &tool_env_vars)?
     {
-        modde_games::launcher::register_heroic_wrapper(&launcher, &wrapper_path)?;
+        report.wrapper_registration =
+            modde_games::launcher::register_heroic_wrapper(&launcher, &wrapper.path)?;
+        report.launch_wrapper = Some(wrapper);
     }
 
-    Ok(())
+    print_launcher_configuration_report(&report);
+
+    Ok(report)
 }
 
 /// Deploy MO2 mods/ staging layout to the game directory.

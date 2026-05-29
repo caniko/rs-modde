@@ -158,6 +158,8 @@ pub async fn install_wabbajack(
     let skip_install =
         !options.force && crate::wabbajack::validator::preflight_staging(&manifest, &staging).await;
 
+    let launcher_progress_tx = progress_tx.clone();
+
     if skip_install {
         if let Some(tx) = &progress_tx {
             tx.send(InstallProgress::Complete).ok();
@@ -209,7 +211,15 @@ pub async fn install_wabbajack(
         deploy_mo2_to_game(&staging, game_dir, options.force)
             .await
             .context("failed to deploy mods to game directory")?;
-        configure_wine_overrides(&game_id, game_dir, &staging)?;
+        let launcher_report = configure_wine_overrides(&game_id, game_dir, &staging)?;
+        if !launcher_report.is_empty()
+            && let Some(tx) = &launcher_progress_tx
+        {
+            tx.send(InstallProgress::LauncherConfigured {
+                report: launcher_report,
+            })
+            .ok();
+        }
     } else if options.no_deploy {
         info!("--no-deploy set: skipping copy of staging into game directory");
     }
@@ -271,10 +281,15 @@ fn save_profile_and_settings(
     Ok(())
 }
 
-pub fn configure_wine_overrides(game_id: &str, game_dir: &Path, staging: &Path) -> Result<()> {
+pub fn configure_wine_overrides(
+    game_id: &str,
+    game_dir: &Path,
+    staging: &Path,
+) -> Result<modde_games::launcher::LauncherConfigurationReport> {
+    let mut report = modde_games::launcher::LauncherConfigurationReport::default();
     let Some(plugin) = modde_games::resolve_game_plugin(game_id) else {
         info!(%game_id, "no game plugin found, skipping Wine DLL override detection");
-        return Ok(());
+        return Ok(report);
     };
 
     let mut overrides = plugin.wine_dll_overrides(game_dir);
@@ -284,25 +299,29 @@ pub fn configure_wine_overrides(game_id: &str, game_dir: &Path, staging: &Path) 
         }
     }
     if overrides.is_empty() {
-        return Ok(());
+        return Ok(report);
     }
 
     let launcher = modde_games::launcher::detect_launcher(game_dir);
     #[cfg(target_os = "linux")]
-    modde_games::launcher::apply_wine_overrides(&launcher, &overrides)?;
+    {
+        report.wine_overrides = modde_games::launcher::apply_wine_overrides(&launcher, &overrides)?;
+    }
 
     let tool_env_vars = match modde_core::db::ModdeDb::open() {
         Ok(db) => modde_games::launcher::collect_tool_env_vars(game_id, &db).unwrap_or_default(),
         Err(_) => Vec::new(),
     };
 
-    if let Some(wrapper_path) =
+    if let Some(wrapper) =
         modde_games::launcher::generate_launch_wrapper(game_dir, staging, game_id, &tool_env_vars)?
     {
-        modde_games::launcher::register_heroic_wrapper(&launcher, &wrapper_path)?;
+        report.wrapper_registration =
+            modde_games::launcher::register_heroic_wrapper(&launcher, &wrapper.path)?;
+        report.launch_wrapper = Some(wrapper);
     }
 
-    Ok(())
+    Ok(report)
 }
 
 pub async fn deploy_mo2_to_game(staging: &Path, game_dir: &Path, force: bool) -> Result<()> {

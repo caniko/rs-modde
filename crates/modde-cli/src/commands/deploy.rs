@@ -224,13 +224,16 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
                 .unwrap_or_default();
             let wrappers = modde_games::launcher::collect_tool_wrappers(&profile.game_id, &db)
                 .unwrap_or_default();
-            if let Err(e) = modde_games::launcher::apply_tool_environment_heroic(
+            match modde_games::launcher::apply_tool_environment_heroic(
                 config_path,
                 game_id,
                 &env_vars,
                 &wrappers,
             ) {
-                warn!(error = %e, "failed to apply tool environment to Heroic");
+                Ok(report) => super::install::print_tool_environment_report(&report),
+                Err(e) => {
+                    warn!(error = %e, "failed to apply tool environment to Heroic");
+                }
             }
         }
     }

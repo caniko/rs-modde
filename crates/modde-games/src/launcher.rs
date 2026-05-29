@@ -25,6 +25,46 @@ pub enum Launcher {
     Unknown,
 }
 
+/// Structured result of launcher configuration work.
+#[derive(Debug, Clone, Default)]
+pub struct LauncherConfigurationReport {
+    pub wine_overrides: Option<WineOverrideReport>,
+    pub launch_wrapper: Option<LaunchWrapperReport>,
+    pub wrapper_registration: Option<WrapperRegistrationReport>,
+}
+
+impl LauncherConfigurationReport {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.wine_overrides.is_none()
+            && self.launch_wrapper.is_none()
+            && self.wrapper_registration.is_none()
+    }
+}
+
+/// Result of applying or instructing Wine DLL override configuration.
+#[derive(Debug, Clone)]
+pub enum WineOverrideReport {
+    HeroicUpdated { value: String },
+    SteamInstruction { override_value: String },
+    UnknownInstruction { override_value: String },
+}
+
+/// Result of generating the modde launch wrapper.
+#[derive(Debug, Clone)]
+pub struct LaunchWrapperReport {
+    pub path: PathBuf,
+    pub restore_count: usize,
+    pub tool_env_var_count: usize,
+}
+
+/// Result of registering, or instructing the user to register, a wrapper.
+#[derive(Debug, Clone)]
+pub enum WrapperRegistrationReport {
+    HeroicRegistered,
+    ManualInstruction { wrapper_path: PathBuf },
+}
+
 /// Detect which launcher manages a game at the given install path.
 #[must_use]
 pub fn detect_launcher(game_dir: &Path) -> Launcher {
@@ -251,7 +291,7 @@ pub fn generate_launch_wrapper(
     staging_dir: &Path,
     game_id: &str,
     tool_env_vars: &[(String, String)],
-) -> Result<Option<PathBuf>> {
+) -> Result<Option<LaunchWrapperReport>> {
     // Delegate fgmod restore scanning to the optiscaler module, using the
     // selected game's metadata to derive the executable directory.
     let executable_dir = crate::resolve_game_plugin(game_id)
@@ -310,20 +350,11 @@ pub fn generate_launch_wrapper(
         "generated modde launch wrapper"
     );
 
-    if !restore_commands.is_empty() {
-        println!(
-            "  Launch wrapper: restores {} DLL(s)",
-            restore_commands.len(),
-        );
-    }
-    if !tool_env_vars.is_empty() {
-        println!(
-            "  Launch wrapper: exports {} tool env var(s)",
-            tool_env_vars.len(),
-        );
-    }
-
-    Ok(Some(wrapper_path))
+    Ok(Some(LaunchWrapperReport {
+        path: wrapper_path,
+        restore_count: restore_commands.len(),
+        tool_env_var_count: tool_env_vars.len(),
+    }))
 }
 
 /// Format a list of DLL names as a `WINEDLLOVERRIDES` value string.
@@ -344,9 +375,12 @@ fn format_wine_overrides(overrides: &[String]) -> String {
 ///
 /// Only relevant on Linux where games run via Wine/Proton.
 #[cfg(target_os = "linux")]
-pub fn apply_wine_overrides(launcher: &Launcher, overrides: &[String]) -> Result<bool> {
+pub fn apply_wine_overrides(
+    launcher: &Launcher,
+    overrides: &[String],
+) -> Result<Option<WineOverrideReport>> {
     if overrides.is_empty() {
-        return Ok(false);
+        return Ok(None);
     }
 
     match launcher {
@@ -360,27 +394,27 @@ pub fn apply_wine_overrides(launcher: &Launcher, overrides: &[String]) -> Result
                 "Steam game (app {app_id}): add to launch options:\n  \
                  WINEDLLOVERRIDES=\"{override_str}\" %command%"
             );
-            println!(
-                "\nSteam: Add this to your launch options:\n  \
-                 WINEDLLOVERRIDES=\"{override_str}\" %command%"
-            );
-            Ok(false)
+            Ok(Some(WineOverrideReport::SteamInstruction {
+                override_value: override_str,
+            }))
         }
         Launcher::Unknown => {
             let override_str = format_wine_overrides(overrides);
             warn!("Unknown launcher: set WINEDLLOVERRIDES=\"{override_str}\" before launching");
-            println!(
-                "\nSet this environment variable before launching:\n  \
-                 WINEDLLOVERRIDES=\"{override_str}\""
-            );
-            Ok(false)
+            Ok(Some(WineOverrideReport::UnknownInstruction {
+                override_value: override_str,
+            }))
         }
     }
 }
 
 /// Update Heroic's `GamesConfig` JSON to include WINEDLLOVERRIDES.
 #[cfg(target_os = "linux")]
-fn apply_heroic_overrides(config_path: &Path, game_id: &str, overrides: &[String]) -> Result<bool> {
+fn apply_heroic_overrides(
+    config_path: &Path,
+    game_id: &str,
+    overrides: &[String],
+) -> Result<Option<WineOverrideReport>> {
     let data = std::fs::read_to_string(config_path)
         .with_context(|| format!("failed to read Heroic config: {}", config_path.display()))?;
 
@@ -404,7 +438,7 @@ fn apply_heroic_overrides(config_path: &Path, game_id: &str, overrides: &[String
         .collect();
 
     if new_overrides.is_empty() {
-        return Ok(false);
+        return Ok(None);
     }
 
     let override_value = new_overrides.join(";");
@@ -470,31 +504,31 @@ fn apply_heroic_overrides(config_path: &Path, game_id: &str, overrides: &[String
     std::fs::write(config_path, output)
         .with_context(|| format!("failed to write Heroic config: {}", config_path.display()))?;
 
-    println!(
-        "  Updated Heroic config with WINEDLLOVERRIDES: {}",
-        if existing_idx.is_some() {
-            "merged with existing"
+    Ok(Some(WineOverrideReport::HeroicUpdated {
+        value: if existing_idx.is_some() {
+            "merged with existing".to_string()
         } else {
-            &override_value
-        }
-    );
-
-    Ok(true)
+            override_value
+        },
+    }))
 }
 
 /// Register the modde launch wrapper in Heroic's wrapper chain.
 ///
 /// The wrapper is inserted **after** fgmod (if present) so it can restore DLLs
 /// that fgmod deletes before the game launches.
-pub fn register_heroic_wrapper(launcher: &Launcher, wrapper_path: &Path) -> Result<bool> {
+pub fn register_heroic_wrapper(
+    launcher: &Launcher,
+    wrapper_path: &Path,
+) -> Result<Option<WrapperRegistrationReport>> {
     let Launcher::Heroic {
         config_path,
         game_id,
     } = launcher
     else {
-        let wrapper_str = wrapper_path.display();
-        println!("\nAdd this wrapper before your game launcher:\n  {wrapper_str} --");
-        return Ok(false);
+        return Ok(Some(WrapperRegistrationReport::ManualInstruction {
+            wrapper_path: wrapper_path.to_path_buf(),
+        }));
     };
 
     let data = std::fs::read_to_string(config_path)
@@ -528,7 +562,7 @@ pub fn register_heroic_wrapper(launcher: &Launcher, wrapper_path: &Path) -> Resu
 
     if already_registered {
         info!("modde launch wrapper already registered in Heroic config");
-        return Ok(false);
+        return Ok(None);
     }
 
     // Insert the modde wrapper. It should go after fgmod (which modifies files)
@@ -558,10 +592,9 @@ pub fn register_heroic_wrapper(launcher: &Launcher, wrapper_path: &Path) -> Resu
     std::fs::write(config_path, output)
         .with_context(|| format!("failed to write Heroic config: {}", config_path.display()))?;
 
-    println!("  Registered modde launch wrapper in Heroic (position: after fgmod)");
     info!(wrapper = %wrapper_exe, "registered modde wrapper in Heroic config");
 
-    Ok(true)
+    Ok(Some(WrapperRegistrationReport::HeroicRegistered))
 }
 
 // ── Tool environment integration ────────────────────────────────────────
@@ -706,9 +739,9 @@ pub fn apply_tool_environment_heroic(
     game_id_heroic: &str,
     env_vars: &[(String, String)],
     wrappers: &[crate::tools::WrapperEntry],
-) -> Result<()> {
+) -> Result<ToolEnvironmentReport> {
     if env_vars.is_empty() && wrappers.is_empty() {
-        return Ok(());
+        return Ok(ToolEnvironmentReport::default());
     }
 
     let data = std::fs::read_to_string(config_path)
@@ -768,18 +801,15 @@ pub fn apply_tool_environment_heroic(
     std::fs::write(config_path, output)
         .with_context(|| format!("failed to write Heroic config: {}", config_path.display()))?;
 
-    if !env_vars.is_empty() {
-        println!(
-            "  Applied {} tool env var(s) to Heroic config",
-            env_vars.len()
-        );
-    }
-    if !wrappers.is_empty() {
-        println!(
-            "  Registered {} tool wrapper(s) in Heroic config",
-            wrappers.len()
-        );
-    }
+    Ok(ToolEnvironmentReport {
+        env_var_count: env_vars.len(),
+        wrapper_count: wrappers.len(),
+    })
+}
 
-    Ok(())
+/// Result of applying tool environment settings to a launcher config.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ToolEnvironmentReport {
+    pub env_var_count: usize,
+    pub wrapper_count: usize,
 }

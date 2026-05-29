@@ -145,6 +145,9 @@ pub enum InstallProgress {
     CreatingBSA {
         name: String,
     },
+    LauncherConfigured {
+        report: modde_games::launcher::LauncherConfigurationReport,
+    },
     InlineFile {
         name: String,
     },
