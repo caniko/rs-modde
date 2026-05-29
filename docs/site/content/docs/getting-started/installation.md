@@ -69,6 +69,20 @@ Or run it directly:
 nix run codeberg:caniko/rs-modde
 ```
 
+## Debian / Ubuntu (apt)
+
+The canonical `modde.rs` host serves the APT repository at
+`https://modde.rs/apt/`; the release workflow publishes the same signed
+repository tree from the Codeberg Pages origin.
+
+```bash
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://modde.rs/apt/key.gpg.asc | sudo gpg --dearmor -o /etc/apt/keyrings/modde.gpg
+echo "deb [signed-by=/etc/apt/keyrings/modde.gpg] https://modde.rs/apt/ stable main" | sudo tee /etc/apt/sources.list.d/modde.list
+sudo apt update
+sudo apt install modde modde-ui
+```
+
 ## Flathub
 
 After the Flathub submission is accepted, install the GUI from Flathub:

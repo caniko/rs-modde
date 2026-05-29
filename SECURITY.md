@@ -76,6 +76,35 @@ updating `keys/minisign.pub`, replacing the Forgejo `MINISIGN_SECRET_KEY` and
 `MINISIGN_PASSWORD` secrets, and publishing a signed release note that names
 both the old and new public keys.
 
+## APT Repository Signing Key
+
+The Debian/Ubuntu APT repository at `https://modde.rs/apt/` is signed with a
+dedicated repository GPG key, separate from the maintainer tag-signing key and
+the minisign release-manifest key. Users should install the repository key from
+`https://modde.rs/apt/key.gpg.asc` into `/etc/apt/keyrings/modde.gpg` and use a
+`signed-by=/etc/apt/keyrings/modde.gpg` source entry.
+
+APT repository signing-key rotation is independent from release transport. To
+rotate the signing key, generate a new repository-only GPG key, update the
+public key published at `dist/apt/key.gpg.asc`, replace the
+`modde_apt_repo_gpg_key`, `modde_apt_repo_gpg_key_id`, and optional
+`modde_apt_repo_gpg_passphrase` runner secrets together, publish a signed
+release note that names both old and new fingerprints, and keep the old public
+key available long enough for users to migrate. Rotate
+`modde_apt_repo_ssh_key` only if the APT repository push key itself is
+compromised.
+
+### APT Repository Push Key
+
+APT repository publication uses a per-repository ed25519 SSH deploy key on
+`caniko/rs-modde-apt`, not a Codeberg access token. The private key is stored as
+the canix-managed `modde_apt_repo_ssh_key` runner credential and is exposed to
+release CI as `APT_REPO_SSH_KEY`; the matching public key is registered on
+`caniko/rs-modde-apt` with write access. Recreate that key through the Phase 02
+deploy-key procedure in
+`docs/planning/apt-channel-bootstrap/02-ssh-deploy-key-canix-wiring.md` when
+rotating the push credential.
+
 ## Windows Code Signing
 
 Windows release artifacts are Authenticode-signed after the Nix

@@ -18,6 +18,10 @@ name: release
 # - FLATHUB_TOKEN: optional GitHub PAT for flathub/com.tartanoglu.modde PR updates.
 # - SCOOP_BUCKET_TOKEN: optional Codeberg token for caniko/scoop-modde.
 # - copr_login, copr_username, copr_token: optional COPR upload credentials.
+# - modde_apt_repo_gpg_key: armored GPG private key used to sign the Debian/APT repository.
+# - modde_apt_repo_gpg_key_id: fingerprint for the Debian/APT repository signing key.
+# - modde_apt_repo_gpg_passphrase: optional passphrase for the Debian/APT repository signing key.
+# - modde_apt_repo_ssh_key: ed25519 private key the runner uses to push the rebuilt apt tree to ssh://git@codeberg.org/caniko/rs-modde-apt.git. Public key is registered as a Codeberg deploy key with write access.
 # - WINGET_PAT: optional GitHub PAT for opening microsoft/winget-pkgs PRs from the token owner's fork.
 # - AUR_SSH_KEY: Ed25519 private key for aur.archlinux.org package pushes.
 # - MASTODON_TOKEN, MASTODON_BASE_URL: optional stable-release announcement account.
@@ -607,6 +611,27 @@ jobs:
               > /dev/null
           done
           SCRIPT
+
+      # Required secrets:
+      # - modde_apt_repo_gpg_key: armored GPG private key used to sign the APT repository.
+      # - modde_apt_repo_gpg_key_id: fingerprint for the APT repository signing key.
+      # - modde_apt_repo_gpg_passphrase: optional passphrase for the APT repository signing key.
+      # - modde_apt_repo_ssh_key: ed25519 private key for the caniko/rs-modde-apt deploy key.
+      - name: Publish APT repository
+        env:
+          APT_REPO_GPG_KEY: ${{ secrets.modde_apt_repo_gpg_key }}
+          APT_REPO_GPG_KEY_ID: ${{ secrets.modde_apt_repo_gpg_key_id }}
+          APT_REPO_GPG_PASSPHRASE: ${{ secrets.modde_apt_repo_gpg_passphrase }}
+          APT_REPO_SSH_KEY: ${{ secrets.modde_apt_repo_ssh_key }}
+        run: |
+          set -euo pipefail
+          . ./release-env
+          if [ "$IS_PRERELEASE" = true ]; then
+            echo "Prerelease ${VERSION}; skipping APT repository publish."
+            exit 0
+          fi
+          export VERSION
+          ./scripts/publish-apt.sh
 
       - name: Announce stable release
         env:

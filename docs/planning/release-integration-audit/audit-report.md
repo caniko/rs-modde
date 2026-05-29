@@ -192,6 +192,7 @@ Current release workflow credentials:
 | `secrets.WINDOWS_SIGNING_SUBJECT` -> `WINDOWS_SIGNING_SUBJECT` | Optional signer subject guardrail                       | Skips subject matching when missing                   | Set to the exact issued subject substring, for example `CN=...`; do not guess before certificate issuance |
 | Runner file `$ATTIC_TOKENS_DIR/rs-modde`                       | Attic closure push to `https://attic.candee.baby/canix` | Fails release (`test -r`)                             | Not a Forgejo secret expression, but still a required credential on the atlas runner                      |
 | `secrets.homebrew_tap_token` -> `HOMEBREW_TAP_TOKEN`           | Push to `caniko/homebrew-modde`                         | Skips Homebrew tap update                             | Token comment says Codeberg access token scoped to tap with `write:repository`                            |
+| `secrets.modde_apt_repo_ssh_key` -> `APT_REPO_SSH_KEY`          | Push rebuilt apt tree to caniko/rs-modde-apt over SSH   | Skips apt publish; tarball/AppImage release continues | Ed25519 private key; matching public key registered as a Codeberg deploy key on caniko/rs-modde-apt with write access |
 | `secrets.copr_login` -> `COPR_LOGIN`                           | COPR CLI config                                         | Skips COPR upload if any COPR credential missing      | Fedora COPR                                                                                               |
 | `secrets.copr_username` -> `COPR_USERNAME`                     | COPR CLI config                                         | Skips COPR upload if any COPR credential missing      | Fedora COPR                                                                                               |
 | `secrets.copr_token` -> `COPR_TOKEN`                           | COPR CLI config                                         | Skips COPR upload if any COPR credential missing      | Fedora COPR                                                                                               |
@@ -200,7 +201,9 @@ Additional credentials later phases will need:
 
 | Secret / credential                                | Channel/control                                                                    | Phase |
 | -------------------------------------------------- | ---------------------------------------------------------------------------------- | ----- |
-| `APT_REPO_GPG_KEY`                                 | Sign Debian/APT repository metadata and packages                                   | 04    |
+| `secrets.modde_apt_repo_gpg_key`                   | Sign Debian/APT repository metadata and packages                                   | 04    |
+| `secrets.modde_apt_repo_gpg_key_id`                | Fingerprint for the Debian/APT repository signing key                              | 04    |
+| `secrets.modde_apt_repo_gpg_passphrase`            | Optional passphrase for the Debian/APT repository signing key                      | 04    |
 | `AUR_SSH_KEY`                                      | Push `modde`, `modde-git`, and `modde-bin` PKGBUILDs to AUR                        | 04    |
 | `FLATHUB_TOKEN`                                    | Open/update Flathub app repository PR or publish branch                            | 04    |
 | `WINGET_PAT`                                       | Push winget manifests / PR to `microsoft/winget-pkgs` via bot fork                 | 05    |
@@ -215,6 +218,21 @@ Additional credentials later phases will need:
 | `MASTODON_TOKEN`                                   | Release announcement automation                                                    | 09    |
 | `MATRIX_TOKEN`                                     | Release announcement automation                                                    | 09    |
 | `MATRIX_ROOM`                                      | Release announcement target room                                                   | 09    |
+
+## Phase 04a APT Repository State
+
+The APT repository target is `caniko/rs-modde-apt`, served from its `pages`
+branch and exposed to users as `https://modde.rs/apt/`. Phase 01 created the
+Codeberg repository and recorded the custom-domain URL choice. Phase 02
+installed a write-enabled ed25519 deploy key on `caniko/rs-modde-apt` and
+deployed the matching canix-managed `modde_apt_repo_ssh_key` credential onto
+the `codeberg` Forgejo runner instance on `atlas`.
+
+Release CI publishes by passing `secrets.modde_apt_repo_ssh_key` to
+`scripts/publish-apt.sh` as `APT_REPO_SSH_KEY`; the script pushes the rebuilt
+reprepro tree over SSH to `ssh://git@codeberg.org/caniko/rs-modde-apt.git`.
+The APT signing key remains separate and is supplied through the
+`modde_apt_repo_gpg_key` credential family.
 
 ## Severity-ranked Gap List
 
