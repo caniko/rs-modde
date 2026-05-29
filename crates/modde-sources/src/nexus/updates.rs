@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use modde_core::NexusModId;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
@@ -12,7 +13,7 @@ pub struct ModUpdate {
     /// The `mod_id` string used in the profile (local identifier).
     pub mod_id: String,
     /// Nexus mod ID.
-    pub nexus_mod_id: u64,
+    pub nexus_mod_id: NexusModId,
     /// Currently installed version (if known).
     pub installed_version: Option<String>,
     /// Timestamp when the mod was installed locally.
@@ -27,7 +28,7 @@ pub struct ModUpdate {
 #[derive(Debug, Clone)]
 pub struct TrackedMod {
     pub mod_id: String,
-    pub nexus_mod_id: u64,
+    pub nexus_mod_id: NexusModId,
     pub nexus_game_domain: String,
     pub installed_version: Option<String>,
     pub installed_timestamp: i64,
@@ -65,7 +66,7 @@ pub async fn check_updates(
         );
 
         // Build a lookup: nexus_mod_id -> TrackedMod
-        let lookup: HashMap<u64, &&TrackedMod> =
+        let lookup: HashMap<NexusModId, &&TrackedMod> =
             domain_mods.iter().map(|m| (m.nexus_mod_id, m)).collect();
 
         // One API call per domain
@@ -107,21 +108,21 @@ mod tests {
         let tracked = vec![
             TrackedMod {
                 mod_id: "skyui".to_string(),
-                nexus_mod_id: 12604,
+                nexus_mod_id: NexusModId::from(12604),
                 nexus_game_domain: "skyrimspecialedition".to_string(),
                 installed_version: Some("5.2".to_string()),
                 installed_timestamp: 1700000000,
             },
             TrackedMod {
                 mod_id: "ussep".to_string(),
-                nexus_mod_id: 266,
+                nexus_mod_id: NexusModId::from(266),
                 nexus_game_domain: "skyrimspecialedition".to_string(),
                 installed_version: Some("4.2.8".to_string()),
                 installed_timestamp: 1700000000,
             },
             TrackedMod {
                 mod_id: "fo4_patch".to_string(),
-                nexus_mod_id: 4598,
+                nexus_mod_id: NexusModId::from(4598),
                 nexus_game_domain: "fallout4".to_string(),
                 installed_version: None,
                 installed_timestamp: 1700000000,

@@ -22,6 +22,7 @@ use modde_core::installer::{
     self, DossierContext, InstallMethod, InstallPlan, InstallProbe, InstallerError, ProbeTrace,
 };
 use modde_core::paths;
+use modde_core::{NexusFileId, NexusModId};
 
 use super::api::NexusMod;
 use super::cdn::generate_download_link;
@@ -57,8 +58,8 @@ pub async fn install_single_mod(
     client: &Client,
     api_key: &str,
     game_domain: &str,
-    mod_id: u64,
-    file_id: u64,
+    mod_id: NexusModId,
+    file_id: NexusFileId,
     mod_info: &NexusMod,
     probe: &InstallProbe,
 ) -> Result<InstallOutcome> {
@@ -196,8 +197,8 @@ async fn download_with_reqwest(client: &Client, url: &str, dest: &Path) -> Resul
 fn write_dossier(
     extracted_dir: &Path,
     game_domain: &str,
-    mod_id: u64,
-    file_id: u64,
+    mod_id: NexusModId,
+    file_id: NexusFileId,
     mod_info: &NexusMod,
     method: &InstallMethod,
 ) -> Result<PathBuf> {

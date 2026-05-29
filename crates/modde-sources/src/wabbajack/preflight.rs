@@ -133,8 +133,8 @@ mod tests {
             size: 1,
             state: Some(ArchiveState::NexusDownloader {
                 game_name: "skyrimspecialedition".into(),
-                mod_id: 1,
-                file_id: 2,
+                mod_id: 1.into(),
+                file_id: 2.into(),
             }),
         }
     }

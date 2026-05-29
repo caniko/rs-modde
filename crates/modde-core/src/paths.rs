@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+use crate::resolver::GameId;
+
 static DATA_DIR_OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
 
 /// Set a custom data directory. Must be called before any path functions.
@@ -133,8 +135,8 @@ pub fn wabbajack_cache_path(manifest_hash: &str) -> PathBuf {
 
 /// Save vault (git repo) for a specific game: `<modde_data>/saves/<game_id>/`.
 #[must_use]
-pub fn save_vault_dir(game_id: &str) -> PathBuf {
-    save_vaults_dir().join(game_id)
+pub fn save_vault_dir(game_id: &GameId) -> PathBuf {
+    save_vaults_dir().join(game_id.as_str())
 }
 
 /// Default Steam install directory (platform-aware).

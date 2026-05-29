@@ -14,6 +14,7 @@ use tracing::{debug, info, warn};
 
 use crate::registry::{GameRegistration, launcher_games};
 use modde_core::paths;
+use modde_core::resolver::GameId;
 
 static DETECTION_CACHE: LazyLock<RwLock<Option<Vec<DetectedGame>>>> =
     LazyLock::new(|| RwLock::new(None));
@@ -164,10 +165,10 @@ fn heroic_command() -> Option<(String, Vec<String>)> {
 /// Convenience wrapper that returns the first match from the latest detection
 /// scan, performing one if no cached result exists yet.
 #[must_use]
-pub fn find_detected_game(game_id: &str) -> Option<DetectedGame> {
+pub fn find_detected_game(game_id: &GameId) -> Option<DetectedGame> {
     cached_installed_games()
         .into_iter()
-        .find(|g| g.game_id == game_id)
+        .find(|g| game_id.as_str() == g.game_id)
 }
 
 /// Scan all known launchers for installed games.
@@ -587,7 +588,7 @@ fn scan_heroic_sideload(path: &Path, detected: &mut Vec<DetectedGame>) {
 /// This is used by `GamePlugin::detect_install()` implementations to check
 /// all available sources instead of just hardcoded paths.
 #[must_use]
-pub fn find_game_install(game_id: &str) -> Option<PathBuf> {
+pub fn find_game_install(game_id: &GameId) -> Option<PathBuf> {
     // Check settings override first
     let settings = modde_core::settings::AppSettings::load();
     if let Some(path) = settings.game_path(game_id)
@@ -600,7 +601,7 @@ pub fn find_game_install(game_id: &str) -> Option<PathBuf> {
     // launcher while the UI resolves supported games one by one.
     cached_installed_games()
         .into_iter()
-        .find(|g| g.game_id == game_id)
+        .find(|g| game_id.as_str() == g.game_id)
         .map(|g| g.install_path)
 }
 

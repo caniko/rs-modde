@@ -8,6 +8,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use modde_core::resolver::GameId;
 use serde_json::Value;
 use tracing::{debug, info, warn};
 
@@ -195,7 +196,7 @@ fn generate_wrapper_unix(
     wrapper_dir: &Path,
     restore_commands: &[(String, String)],
     tool_env_vars: &[(String, String)],
-    game_id: &str,
+    game_id: &GameId,
     modde_bin: &str,
 ) -> (PathBuf, String) {
     let wrapper_path = wrapper_dir.join("modde-launch-wrapper.sh");
@@ -239,7 +240,7 @@ fn generate_wrapper_windows(
     wrapper_dir: &Path,
     restore_commands: &[(String, String)],
     tool_env_vars: &[(String, String)],
-    game_id: &str,
+    game_id: &GameId,
     modde_bin: &str,
 ) -> (PathBuf, String) {
     let wrapper_path = wrapper_dir.join("modde-launch-wrapper.cmd");
@@ -289,12 +290,12 @@ fn generate_wrapper_windows(
 pub fn generate_launch_wrapper(
     game_dir: &Path,
     staging_dir: &Path,
-    game_id: &str,
+    game_id: &GameId,
     tool_env_vars: &[(String, String)],
 ) -> Result<Option<LaunchWrapperReport>> {
     // Delegate fgmod restore scanning to the optiscaler module, using the
     // selected game's metadata to derive the executable directory.
-    let executable_dir = crate::resolve_game_plugin(game_id)
+    let executable_dir = crate::resolve_game_plugin(game_id.as_str())
         .map(|plugin| plugin.executable_dir(game_dir))
         .unwrap_or_else(|| game_dir.to_path_buf());
     let restore_commands = crate::tools::optiscaler::fgmod_restore_commands_for_executable_dir(
@@ -604,7 +605,7 @@ pub fn register_heroic_wrapper(
 /// Reads tool configs from the database and calls each tool's `env_vars()`.
 /// Returns a flat list of `(KEY, VALUE)` pairs.
 pub fn collect_tool_env_vars(
-    game_id: &str,
+    game_id: &GameId,
     db: &modde_core::db::ModdeDb,
 ) -> Result<Vec<(String, String)>> {
     let rows = db.load_tool_configs(game_id)?;
@@ -625,7 +626,7 @@ pub fn collect_tool_env_vars(
             settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
         };
         // Inject game_id so tools can build per-game config paths
-        config.set("_game_id", serde_json::json!(game_id));
+        config.set("_game_id", serde_json::json!(game_id.as_str()));
 
         all_vars.extend(tool.env_vars(&config));
     }
@@ -635,7 +636,7 @@ pub fn collect_tool_env_vars(
 
 /// Collect all Wine DLL overrides from enabled tools for a game.
 pub fn collect_tool_dll_overrides(
-    game_id: &str,
+    game_id: &GameId,
     db: &modde_core::db::ModdeDb,
 ) -> Result<Vec<String>> {
     let rows = db.load_tool_configs(game_id)?;
@@ -664,7 +665,7 @@ pub fn collect_tool_dll_overrides(
 
 /// Collect wrapper commands from enabled tools.
 pub fn collect_tool_wrappers(
-    game_id: &str,
+    game_id: &GameId,
     db: &modde_core::db::ModdeDb,
 ) -> Result<Vec<crate::tools::WrapperEntry>> {
     let rows = db.load_tool_configs(game_id)?;
@@ -696,7 +697,7 @@ pub fn collect_tool_wrappers(
 /// Generate per-game config files for all enabled tools.
 ///
 /// Writes configs to `~/.local/share/modde/tools/{game_id}/`.
-pub fn generate_tool_configs(game_id: &str, db: &modde_core::db::ModdeDb) -> Result<()> {
+pub fn generate_tool_configs(game_id: &GameId, db: &modde_core::db::ModdeDb) -> Result<()> {
     let rows = db.load_tool_configs(game_id)?;
 
     for row in &rows {
@@ -713,7 +714,7 @@ pub fn generate_tool_configs(game_id: &str, db: &modde_core::db::ModdeDb) -> Res
             enabled: true,
             settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
         };
-        config.set("_game_id", serde_json::json!(game_id));
+        config.set("_game_id", serde_json::json!(game_id.as_str()));
 
         if let Some(generated) = tool.generate_config(&config) {
             if let Some(parent) = generated.path.parent() {

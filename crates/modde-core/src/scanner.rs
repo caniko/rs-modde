@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::manifest::wabbajack::{
     ArchiveEntry, ArchiveState, InstallDirective, WabbajackManifest, compute_manifest_hash,
 };
+use crate::nexus_id::{NexusFileId, NexusModId};
 use crate::profile::{EnabledMod, LoadOrderLock, LockReason, Profile};
 
 /// Canonical `mod_id` derivation for a Wabbajack archive entry.
@@ -41,8 +42,8 @@ pub struct ManifestMatch {
     pub total_files: usize,
     pub present_files: usize,
     pub confidence: f32,
-    pub nexus_mod_id: Option<i64>,
-    pub nexus_file_id: Option<i64>,
+    pub nexus_mod_id: Option<NexusModId>,
+    pub nexus_file_id: Option<NexusFileId>,
     pub nexus_game_domain: Option<String>,
     /// Game-relative file paths that this archive covers on disk (lowercased).
     /// Used for correlation with filesystem-discovered mods.
@@ -135,11 +136,7 @@ pub fn match_wabbajack_manifest(
                     game_name,
                     mod_id,
                     file_id,
-                } => (
-                    Some(*mod_id as i64),
-                    Some(*file_id as i64),
-                    Some(game_name.clone()),
-                ),
+                } => (Some(*mod_id), Some(*file_id), Some(game_name.clone())),
                 _ => (None, None, None),
             });
 

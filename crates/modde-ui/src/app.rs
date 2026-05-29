@@ -10,6 +10,7 @@ use smallvec::SmallVec;
 use modde_core::filter::{FilterCriterion, FilterKind, FilterMode};
 use modde_core::manifest::collection::CollectionManifest;
 use modde_core::profile::ProfileManager;
+use modde_core::resolver::GameId;
 use modde_core::save::SaveSnapshot;
 use modde_core::settings::AppSettings;
 
@@ -701,10 +702,11 @@ fn current_tool_config(
 ) -> Result<modde_games::tools::ToolConfig, String> {
     let tool = modde_games::tools::resolve_tool(tool_id)
         .ok_or_else(|| format!("Tool is not registered: {tool_id}"))?;
-    let Some(row) = modde_core::db::ModdeDb::open()
-        .ok()
-        .and_then(|db| db.load_tool_config(game_id, tool_id).ok().flatten())
-    else {
+    let Some(row) = modde_core::db::ModdeDb::open().ok().and_then(|db| {
+        db.load_tool_config(&GameId::from(game_id), tool_id)
+            .ok()
+            .flatten()
+    }) else {
         return Ok(tool.default_config());
     };
     let mut config = modde_games::tools::ToolConfig {
@@ -734,8 +736,14 @@ fn save_tool_settings_with_reason(
 ) -> Result<(), String> {
     let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
     let settings_json = serde_json::to_string(&config.settings).map_err(|err| err.to_string())?;
-    db.save_tool_config_with_reason(game_id, tool_id, config.enabled, &settings_json, reason)
-        .map_err(|err| err.to_string())
+    db.save_tool_config_with_reason(
+        &GameId::from(game_id),
+        tool_id,
+        config.enabled,
+        &settings_json,
+        reason,
+    )
+    .map_err(|err| err.to_string())
 }
 
 async fn load_tool_releases(
@@ -790,7 +798,7 @@ async fn install_selected_proton_version(game_id: String) -> Result<String, Stri
     let tool = modde_games::tools::resolve_tool("proton")
         .ok_or_else(|| "Proton tool is not registered".to_string())?;
     let row = db
-        .load_tool_config(&game_id, "proton")
+        .load_tool_config(&GameId::from(game_id.as_str()), "proton")
         .map_err(|err| err.to_string())?;
     let config = row.map_or_else(
         || tool.default_config(),
@@ -816,7 +824,7 @@ async fn load_tools_state(request: ToolLoadRequest) -> Result<ToolLoadSnapshot, 
 async fn load_executables_for_game(game_id: String) -> Result<Vec<ExecutableUiEntry>, String> {
     tokio::task::spawn_blocking(move || {
         let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
-        db.load_executable_configs(&game_id)
+        db.load_executable_configs(&GameId::from(game_id.as_str()))
             .map_err(|err| err.to_string())
             .map(|rows| rows.into_iter().map(ExecutableUiEntry::from_row).collect())
     })
@@ -826,7 +834,8 @@ async fn load_executables_for_game(game_id: String) -> Result<Vec<ExecutableUiEn
 
 fn load_tools_state_blocking(request: ToolLoadRequest) -> Result<ToolLoadSnapshot, String> {
     let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
-    let detected = modde_games::detection::find_detected_game(&request.game_id);
+    let detected =
+        modde_games::detection::find_detected_game(&GameId::from(request.game_id.as_str()));
     let game_dir = request.configured_game_dir.clone().or_else(|| {
         detected
             .as_ref()
@@ -880,7 +889,7 @@ fn load_tools_state_blocking(request: ToolLoadRequest) -> Result<ToolLoadSnapsho
         .filter(|active| entries.iter().any(|entry| entry.tool_id == *active))
         .or_else(|| entries.first().map(|entry| entry.tool_id.clone()));
     let executables = db
-        .load_executable_configs(&request.game_id)
+        .load_executable_configs(&GameId::from(request.game_id.as_str()))
         .map_err(|err| err.to_string())?
         .into_iter()
         .map(ExecutableUiEntry::from_row)
@@ -905,10 +914,14 @@ fn build_tool_ui_entry(
     tool: &'static dyn modde_games::tools::GameTool,
     option_catalog: &ToolOptionCatalog,
 ) -> ToolUiEntry {
-    let row = db.load_tool_config(game_id, tool.tool_id()).ok().flatten();
+    let typed_game_id = GameId::from(game_id);
+    let row = db
+        .load_tool_config(&typed_game_id, tool.tool_id())
+        .ok()
+        .flatten();
     let availability = tool.detect_available();
     let applied_files = db
-        .load_applied_files(game_id, tool.tool_id())
+        .load_applied_files(&typed_game_id, tool.tool_id())
         .unwrap_or_default();
     let status_message = match &availability {
         modde_games::tools::ToolAvailability::Available {
@@ -935,7 +948,12 @@ fn build_tool_ui_entry(
     if release_config_normalized || normalized_settings != config.settings {
         config.settings = normalized_settings;
         if let Ok(settings_json) = serde_json::to_string(&config.settings) {
-            let _ = db.save_tool_config(game_id, tool.tool_id(), config.enabled, &settings_json);
+            let _ = db.save_tool_config(
+                &typed_game_id,
+                tool.tool_id(),
+                config.enabled,
+                &settings_json,
+            );
         }
         setting_specs = tool.settings_schema_for(context, &config);
     }
@@ -1033,7 +1051,7 @@ fn build_tool_ui_entry(
             (None, None, 0)
         };
     let setting_history = db
-        .list_tool_setting_history(game_id, tool.tool_id(), 8)
+        .list_tool_setting_history(&typed_game_id, tool.tool_id(), 8)
         .unwrap_or_default()
         .into_iter()
         .map(ToolHistoryUiEntry::from_node)
@@ -1074,10 +1092,11 @@ async fn apply_tool_for_game(
     context: Option<modde_games::tools::ToolGameContext>,
 ) -> Result<ToolApplyResult, String> {
     let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
+    let typed_game_id = GameId::from(game_id.as_str());
     let tool = modde_games::tools::resolve_tool(&tool_id)
         .ok_or_else(|| format!("Unknown tool: {tool_id}"))?;
     let row = db
-        .load_tool_config(&game_id, &tool_id)
+        .load_tool_config(&typed_game_id, &tool_id)
         .map_err(|err| err.to_string())?;
     let mut config = row.map_or_else(
         || tool.default_config_for(context.as_ref()),
@@ -1118,13 +1137,14 @@ async fn apply_tool_for_game(
     let apply_signature = tool_apply_signature(&config.settings);
     config.set("_last_applied_settings", apply_signature);
     let settings_json = serde_json::to_string(&config.settings).map_err(|err| err.to_string())?;
-    db.save_tool_config_with_reason(&game_id, &tool_id, true, &settings_json, "ui:apply")
+    db.save_tool_config_with_reason(&typed_game_id, &tool_id, true, &settings_json, "ui:apply")
         .map_err(|err| err.to_string())?;
-    db.clear_applied_files(&game_id, &tool_id)
+    db.clear_applied_files(&typed_game_id, &tool_id)
         .map_err(|err| err.to_string())?;
-    db.save_applied_files(&game_id, &tool_id, &paths)
+    db.save_applied_files(&typed_game_id, &tool_id, &paths)
         .map_err(|err| err.to_string())?;
-    modde_games::launcher::generate_tool_configs(&game_id, &db).map_err(|err| err.to_string())?;
+    modde_games::launcher::generate_tool_configs(&typed_game_id, &db)
+        .map_err(|err| err.to_string())?;
 
     Ok(ToolApplyResult {
         display_name: tool.display_name().to_string(),
@@ -1139,19 +1159,21 @@ async fn revert_tool_for_game(
     tool_id: String,
 ) -> Result<ToolRevertResult, String> {
     let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
+    let typed_game_id = GameId::from(game_id.as_str());
     let tool = modde_games::tools::resolve_tool(&tool_id)
         .ok_or_else(|| format!("Unknown tool: {tool_id}"))?;
     let applied_paths = db
-        .load_applied_files(&game_id, &tool_id)
+        .load_applied_files(&typed_game_id, &tool_id)
         .map_err(|err| err.to_string())?;
     let applied = modde_games::tools::AppliedFiles {
         files: applied_paths.iter().map(PathBuf::from).collect(),
     };
     tool.revert(&game_dir, &applied)
         .map_err(|err| err.to_string())?;
-    db.clear_applied_files(&game_id, &tool_id)
+    db.clear_applied_files(&typed_game_id, &tool_id)
         .map_err(|err| err.to_string())?;
-    modde_games::launcher::generate_tool_configs(&game_id, &db).map_err(|err| err.to_string())?;
+    modde_games::launcher::generate_tool_configs(&typed_game_id, &db)
+        .map_err(|err| err.to_string())?;
     Ok(ToolRevertResult {
         display_name: tool.display_name().to_string(),
     })
@@ -1162,10 +1184,11 @@ async fn deactivate_optiscaler_for_game(
     game_dir: PathBuf,
 ) -> Result<ToolRevertResult, String> {
     let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
+    let typed_game_id = GameId::from(game_id.as_str());
     let tool = modde_games::tools::resolve_tool("optiscaler")
         .ok_or_else(|| "OptiScaler tool is not registered".to_string())?;
     let applied_paths = db
-        .load_applied_files(&game_id, "optiscaler")
+        .load_applied_files(&typed_game_id, "optiscaler")
         .map_err(|err| err.to_string())?;
     if !applied_paths.is_empty() {
         let applied = modde_games::tools::AppliedFiles {
@@ -1173,23 +1196,24 @@ async fn deactivate_optiscaler_for_game(
         };
         tool.revert(&game_dir, &applied)
             .map_err(|err| err.to_string())?;
-        db.clear_applied_files(&game_id, "optiscaler")
+        db.clear_applied_files(&typed_game_id, "optiscaler")
             .map_err(|err| err.to_string())?;
     }
 
     let settings_json = db
-        .load_tool_config(&game_id, "optiscaler")
+        .load_tool_config(&typed_game_id, "optiscaler")
         .map_err(|err| err.to_string())?
         .map_or_else(|| "{}".to_string(), |row| row.settings_json);
     db.save_tool_config_with_reason(
-        &game_id,
+        &typed_game_id,
         "optiscaler",
         false,
         &settings_json,
         "ui:deactivate",
     )
     .map_err(|err| err.to_string())?;
-    modde_games::launcher::generate_tool_configs(&game_id, &db).map_err(|err| err.to_string())?;
+    modde_games::launcher::generate_tool_configs(&typed_game_id, &db)
+        .map_err(|err| err.to_string())?;
 
     Ok(ToolRevertResult {
         display_name: tool.display_name().to_string(),
@@ -1202,9 +1226,11 @@ async fn restore_tool_settings_for_game(
     node_id: String,
 ) -> Result<String, String> {
     let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
-    db.restore_tool_setting_node(&game_id, &tool_id, &node_id)
+    let typed_game_id = GameId::from(game_id.as_str());
+    db.restore_tool_setting_node(&typed_game_id, &tool_id, &node_id)
         .map_err(|err| err.to_string())?;
-    modde_games::launcher::generate_tool_configs(&game_id, &db).map_err(|err| err.to_string())?;
+    modde_games::launcher::generate_tool_configs(&typed_game_id, &db)
+        .map_err(|err| err.to_string())?;
     let display_name = modde_games::tools::resolve_tool(&tool_id)
         .map_or_else(|| tool_id.clone(), |tool| tool.display_name().to_string());
     Ok(format!("Restored {display_name} settings version"))
@@ -1229,7 +1255,7 @@ async fn remove_executable_for_game(game_id: String, name: String) -> Result<Str
     tokio::task::spawn_blocking(move || {
         let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
         if db
-            .delete_executable_config(&game_id, &name)
+            .delete_executable_config(&GameId::from(game_id.as_str()), &name)
             .map_err(|err| err.to_string())?
         {
             Ok(format!("Removed executable '{name}'"))
@@ -1251,7 +1277,7 @@ async fn run_saved_executable_for_game(
     tokio::task::spawn_blocking(move || {
         let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
         let row = db
-            .load_executable_config(&game_id, &name)
+            .load_executable_config(&GameId::from(game_id.as_str()), &name)
             .map_err(|err| err.to_string())?
             .ok_or_else(|| format!("No executable named '{name}' is configured for {game_id}"))?;
         run_executable_row(row, profile_name)
@@ -1265,8 +1291,9 @@ fn run_executable_row(
     profile_name: Option<String>,
 ) -> Result<String, String> {
     let pm = ProfileManager::open().map_err(|err| err.to_string())?;
+    let row_game_id = GameId::from(row.game_id.as_str());
     let profile = if let Some(profile_name) = profile_name {
-        pm.load(&profile_name, Some(&row.game_id))
+        pm.load(&profile_name, Some(&row_game_id))
             .map_err(|err| err.to_string())?
     } else {
         let summaries = pm.list().map_err(|err| err.to_string())?;
@@ -1274,10 +1301,10 @@ fn run_executable_row(
             .iter()
             .find(|profile| profile.game_id.as_str() == row.game_id)
             .ok_or_else(|| format!("No profile found for {}", row.game_id))?;
-        pm.load(&first.name, Some(&row.game_id))
+        pm.load(&first.name, Some(&row_game_id))
             .map_err(|err| err.to_string())?
     };
-    let game_plugin = modde_games::resolve_game_plugin(&profile.game_id)
+    let game_plugin = modde_games::resolve_game_plugin(profile.game_id.as_str())
         .ok_or_else(|| format!("Unsupported game: {}", profile.game_id))?;
     let install_dir = game_plugin.detect_install().ok_or_else(|| {
         format!(
@@ -1555,12 +1582,13 @@ impl Modde {
     fn reload_profile(&mut self) {
         if let Some(ref name) = self.active_profile {
             if let Ok(pm) = ProfileManager::open() {
-                if let Some(game_id) = self.selected_game.as_deref() {
+                let selected_game_id = self.selected_game.as_deref().map(GameId::from);
+                if let Some(game_id) = selected_game_id.as_ref() {
                     self.profiles = pm.list_for_game(game_id).unwrap_or_default();
                 } else {
                     self.profiles = pm.list().unwrap_or_default();
                 }
-                if let Ok(profile) = pm.load(name, self.selected_game.as_deref()) {
+                if let Ok(profile) = pm.load(name, selected_game_id.as_ref()) {
                     if let Ok(info) = pm.active(&profile.game_id) {
                         self.experiment_depth = info.map_or(0, |i| i.experiment_depth);
                     }
@@ -1608,9 +1636,10 @@ impl Modde {
             return;
         };
 
-        self.profiles = pm.list_for_game(game_id).unwrap_or_default();
+        let typed_game_id = GameId::from(game_id);
+        self.profiles = pm.list_for_game(&typed_game_id).unwrap_or_default();
         self.active_profile = pm
-            .active(game_id)
+            .active(&typed_game_id)
             .ok()
             .flatten()
             .map(|info| info.profile.name)
@@ -1629,20 +1658,21 @@ impl Modde {
     fn accept_game_selection(&mut self, game_id: String, previous_game: Option<String>) {
         self.selected_game = Some(game_id.clone());
         self.settings.selected_game = Some(game_id.clone());
+        let typed_game_id = GameId::from(game_id.as_str());
 
         let configured_path_valid = self
             .settings
-            .game_path(&game_id)
+            .game_path(&typed_game_id)
             .is_some_and(|path| path.is_dir());
         if !configured_path_valid {
-            if let Some(path) = modde_games::find_detected_game(&game_id)
+            if let Some(path) = modde_games::find_detected_game(&typed_game_id)
                 .map(|detected| detected.install_path)
                 .or_else(|| {
                     modde_games::resolve_game_plugin(&game_id)
                         .and_then(modde_games::GamePlugin::detect_install)
                 })
             {
-                self.settings.set_game_path(&game_id, path);
+                self.settings.set_game_path(&typed_game_id, path);
                 self.detected_games.insert(game_id.clone());
             } else {
                 self.game_path_dialog_open = true;
@@ -1694,10 +1724,13 @@ impl Modde {
 
     fn current_game_dir(&self) -> Option<PathBuf> {
         let game_id = self.current_game_id()?;
-        self.settings.game_path(game_id).cloned().or_else(|| {
-            modde_games::resolve_game_plugin(game_id)
-                .and_then(modde_games::GamePlugin::detect_install)
-        })
+        self.settings
+            .game_path(&GameId::from(game_id))
+            .cloned()
+            .or_else(|| {
+                modde_games::resolve_game_plugin(game_id)
+                    .and_then(modde_games::GamePlugin::detect_install)
+            })
     }
 
     fn add_custom_game_modal(&self) -> Element<'_, Message> {
@@ -1733,7 +1766,7 @@ impl Modde {
             .map(|(_, name)| name.clone())
             .unwrap_or_else(|| game_id.to_string());
         let install_path = self.current_game_dir();
-        let detected = modde_games::detection::find_detected_game(game_id);
+        let detected = modde_games::detection::find_detected_game(&GameId::from(game_id));
         Some(modde_games::tools::ToolGameContext::from_parts(
             game_id,
             display_name,
@@ -1908,7 +1941,10 @@ impl Modde {
         Some(ToolLoadRequest {
             game_id,
             display_name,
-            configured_game_dir: self.settings.game_path(self.current_game_id()?).cloned(),
+            configured_game_dir: self
+                .settings
+                .game_path(&GameId::from(self.current_game_id()?))
+                .cloned(),
             optiscaler_releases: self.tool_state.optiscaler_releases.clone(),
             tool_option_catalog: self.tool_state.tool_option_catalog.clone(),
             previous_active_tool_id: self.tool_state.active_tool_id.clone(),
@@ -2009,13 +2045,17 @@ impl Modde {
         }
         let context = self.current_tool_game_context();
 
+        let typed_game_id = GameId::from(game_id.as_str());
         self.tool_state.entries = modde_games::tools::all_tools()
             .iter()
             .map(|tool| {
-                let row = db.load_tool_config(&game_id, tool.tool_id()).ok().flatten();
+                let row = db
+                    .load_tool_config(&typed_game_id, tool.tool_id())
+                    .ok()
+                    .flatten();
                 let availability = tool.detect_available();
                 let applied_files = db
-                    .load_applied_files(&game_id, tool.tool_id())
+                    .load_applied_files(&typed_game_id, tool.tool_id())
                     .unwrap_or_default();
                 let status_message = match &availability {
                     modde_games::tools::ToolAvailability::Available {
@@ -2042,7 +2082,7 @@ impl Modde {
                     config.settings = normalized_settings;
                     if let Ok(settings_json) = serde_json::to_string(&config.settings) {
                         let _ = db.save_tool_config(
-                            &game_id,
+                            &typed_game_id,
                             tool.tool_id(),
                             config.enabled,
                             &settings_json,
@@ -2159,7 +2199,7 @@ impl Modde {
                         (None, None, 0)
                     };
                 let setting_history = db
-                    .list_tool_setting_history(&game_id, tool.tool_id(), 8)
+                    .list_tool_setting_history(&typed_game_id, tool.tool_id(), 8)
                     .unwrap_or_default()
                     .into_iter()
                     .map(ToolHistoryUiEntry::from_node)
@@ -2424,7 +2464,10 @@ impl Modde {
 /// the Browse Nexus **Install** button. Owned as a free function so
 /// the `update()` arm can hand it to `Task::perform` without borrowing
 /// `self`.
-async fn run_browse_install(game_domain: String, mod_id: u64) -> Result<String, String> {
+async fn run_browse_install(
+    game_domain: String,
+    mod_id: modde_core::NexusModId,
+) -> Result<String, String> {
     let api_key = modde_sources::nexus::auth::load_api_key().map_err(|e| e.to_string())?;
     let client = reqwest::Client::new();
     let api = modde_sources::nexus::api::NexusApi::new(client.clone(), api_key.clone());
@@ -2515,10 +2558,10 @@ async fn run_browse_install(game_domain: String, mod_id: u64) -> Result<String, 
             display_name: Some(mod_info.name.clone()),
             enabled: true,
             version: Some(mod_info.version.clone()),
-            nexus_mod_id: Some(mod_id as i64),
-            nexus_file_id: Some(file_id as i64),
+            nexus_mod_id: Some(mod_id),
+            nexus_file_id: Some(file_id),
             nexus_game_domain: Some(game_domain.clone()),
-            install_status: Some(status.as_str().to_string()),
+            install_status: Some(status),
             ..Default::default()
         });
     }
@@ -2531,8 +2574,13 @@ async fn run_browse_install(game_domain: String, mod_id: u64) -> Result<String, 
             .map_err(|e| e.to_string())?
             .id
             .ok_or_else(|| "saved profile has no id".to_string())?;
-        db.record_install(profile_id, &mod_id_str, plan, InstallStatus::Installed)
-            .map_err(|e| e.to_string())?;
+        db.record_install(
+            profile_id,
+            &modde_core::ModId::from(mod_id_str.as_str()),
+            plan,
+            InstallStatus::Installed,
+        )
+        .map_err(|e| e.to_string())?;
     }
 
     Ok(match outcome {
@@ -3119,7 +3167,7 @@ fn prefill_wabbajack_game_dir(settings: &AppSettings, state: &mut WabbajackInsta
     if state.hm_game_dir_user_edited && !state.hm_game_dir.is_empty() {
         return;
     }
-    let Some(path) = settings.game_path(&state.hm_game) else {
+    let Some(path) = settings.game_path(&GameId::from(state.hm_game.as_str())) else {
         return;
     };
     state.hm_game_dir = path.display().to_string();
@@ -3429,19 +3477,19 @@ pub enum Message {
     /// `nexus_mod_id` so stale responses (from a previous selection) are
     /// discarded when they race a newer click.
     ModDetailsLoaded {
-        nexus_mod_id: i64,
+        nexus_mod_id: modde_core::NexusModId,
         result: Result<modde_sources::nexus::api::NexusMod, String>,
     },
     /// Gallery image URL list returned by the v2 GraphQL endpoint.
     ModGalleryLoaded {
-        nexus_mod_id: i64,
+        nexus_mod_id: modde_core::NexusModId,
         urls: Vec<String>,
     },
     /// Image bytes downloaded for a specific gallery slot. Guarded by both
     /// `nexus_mod_id` and `gallery_index` so clicking through the gallery
     /// rapidly doesn't let an old image overwrite a newer one.
     ModThumbnailLoaded {
-        nexus_mod_id: i64,
+        nexus_mod_id: modde_core::NexusModId,
         gallery_index: usize,
         bytes: Vec<u8>,
     },
@@ -3497,7 +3545,7 @@ pub enum Message {
     /// pipeline via `modde_sources::nexus::install::install_single_mod`.
     BrowseInstallMod {
         game_domain: String,
-        mod_id: u64,
+        mod_id: modde_core::NexusModId,
     },
     /// Async completion of a browse install. The `Ok` payload is a
     /// short human-readable status message; `Err` is an error string.
@@ -3701,7 +3749,7 @@ pub enum Message {
     /// status the handler optimistically applied, so it can roll back if
     /// the request failed.
     ModEndorseResult {
-        nexus_mod_id: i64,
+        nexus_mod_id: modde_core::NexusModId,
         new_status: String,
         result: Result<(), String>,
     },
@@ -3709,14 +3757,14 @@ pub enum Message {
     ModTrackToggle,
     /// Async result of a track or untrack call.
     ModTrackResult {
-        nexus_mod_id: i64,
+        nexus_mod_id: modde_core::NexusModId,
         new_tracked: bool,
         result: Result<(), String>,
     },
     /// Async result of the initial `get_tracked_mods` call fired alongside
     /// `get_mod` when a mod is selected.
     ModTrackedSetLoaded {
-        nexus_mod_id: i64,
+        nexus_mod_id: modde_core::NexusModId,
         is_tracked: bool,
     },
 
@@ -3987,7 +4035,9 @@ impl Modde {
                         };
                         match pm.create(&profile) {
                             Ok(_) => {
-                                self.profiles = pm.list_for_game(&game_id).unwrap_or_default();
+                                self.profiles = pm
+                                    .list_for_game(&GameId::from(game_id.as_str()))
+                                    .unwrap_or_default();
                                 self.active_profile = Some(name);
                                 self.selected_game = Some(game_id.clone());
                                 self.settings.selected_game = Some(game_id);
@@ -4098,7 +4148,8 @@ impl Modde {
                     self.status_message = "Select a valid game directory".to_string();
                     return Task::none();
                 }
-                self.settings.set_game_path(&game_id, path);
+                self.settings
+                    .set_game_path(&GameId::from(game_id.as_str()), path);
                 self.detected_games.insert(game_id.clone());
                 self.selected_game = Some(game_id.clone());
                 self.settings.selected_game = Some(game_id.clone());
@@ -4209,7 +4260,8 @@ impl Modde {
                 match modde_games::add_user_game(&spec, false) {
                     Ok(_) => {
                         modde_games::reload_user_games();
-                        self.settings.set_game_path(&spec.id, install_path);
+                        self.settings
+                            .set_game_path(&GameId::from(spec.id.as_str()), install_path);
                         self.refresh_available_games();
                         self.add_custom_game_dialog_open = false;
                         self.add_custom_game = AddCustomGameState::default();
@@ -4417,7 +4469,7 @@ impl Modde {
                                     .map_err(|e| e.to_string())?;
                                 let client = reqwest::Client::new();
                                 let api = modde_sources::nexus::api::NexusApi::new(client, api_key);
-                                api.get_mod(&game_domain, nexus_mod_id as u64)
+                                api.get_mod(&game_domain, nexus_mod_id)
                                     .await
                                     .map_err(|e| e.to_string())
                             },
@@ -4510,7 +4562,7 @@ impl Modde {
                                     let client = reqwest::Client::new();
                                     let api =
                                         modde_sources::nexus::api::NexusApi::new(client, api_key);
-                                    api.get_mod_media(&domain, nexus_mod_id as u64)
+                                    api.get_mod_media(&domain, nexus_mod_id)
                                         .await
                                         .unwrap_or_default()
                                 },
@@ -4533,7 +4585,7 @@ impl Modde {
                                     let api =
                                         modde_sources::nexus::api::NexusApi::new(client, api_key);
                                     let list = api.get_tracked_mods().await.ok()?;
-                                    let target = nexus_mod_id as u64;
+                                    let target = nexus_mod_id;
                                     Some(list.iter().any(|t| {
                                         t.mod_id == target
                                             && t.domain_name.eq_ignore_ascii_case(&domain)
@@ -4684,11 +4736,11 @@ impl Modde {
                         let client = reqwest::Client::new();
                         let api = modde_sources::nexus::api::NexusApi::new(client, api_key);
                         if was_endorsed {
-                            api.abstain_mod(&game_domain, nexus_mod_id as u64, &version)
+                            api.abstain_mod(&game_domain, nexus_mod_id, &version)
                                 .await
                                 .map_err(|e| e.to_string())
                         } else {
-                            api.endorse_mod(&game_domain, nexus_mod_id as u64, &version)
+                            api.endorse_mod(&game_domain, nexus_mod_id, &version)
                                 .await
                                 .map_err(|e| e.to_string())
                         }
@@ -4762,11 +4814,11 @@ impl Modde {
                         let client = reqwest::Client::new();
                         let api = modde_sources::nexus::api::NexusApi::new(client, api_key);
                         if was_tracked {
-                            api.untrack_mod(&game_domain, nexus_mod_id as u64)
+                            api.untrack_mod(&game_domain, nexus_mod_id)
                                 .await
                                 .map_err(|e| e.to_string())
                         } else {
-                            api.track_mod(&game_domain, nexus_mod_id as u64)
+                            api.track_mod(&game_domain, nexus_mod_id)
                                 .await
                                 .map_err(|e| e.to_string())
                         }
@@ -4829,8 +4881,9 @@ impl Modde {
                                     .map_err(|e| e.to_string())?;
                                 let resolved = modde_core::resolver::resolve(&profile)
                                     .map_err(|e| e.to_string())?;
-                                let game_plugin = modde_games::resolve_game_plugin(&game_id)
-                                    .ok_or_else(|| format!("unsupported game: {game_id}"))?;
+                                let game_plugin =
+                                    modde_games::resolve_game_plugin(game_id.as_str())
+                                        .ok_or_else(|| format!("unsupported game: {game_id}"))?;
                                 let install_path =
                                     game_plugin.detect_install().ok_or_else(|| {
                                         format!("could not detect install for {game_id}")
@@ -5669,7 +5722,8 @@ impl Modde {
             }
             Message::SetGamePath { game_id, path } => {
                 let path_exists = path.is_dir();
-                self.settings.set_game_path(&game_id, path);
+                self.settings
+                    .set_game_path(&GameId::from(game_id.as_str()), path);
                 if path_exists {
                     self.detected_games.insert(game_id.clone());
                 } else {
@@ -5773,8 +5827,9 @@ impl Modde {
                     return Task::perform(
                         async move {
                             tokio::task::spawn_blocking(move || -> Result<String, String> {
-                                let game_plugin = modde_games::resolve_game_plugin(&game_id)
-                                    .ok_or_else(|| format!("unsupported game: {game_id}"))?;
+                                let game_plugin =
+                                    modde_games::resolve_game_plugin(game_id.as_str())
+                                        .ok_or_else(|| format!("unsupported game: {game_id}"))?;
                                 let install_path =
                                     game_plugin.detect_install().ok_or_else(|| {
                                         format!("could not detect install for {game_id}")
@@ -5809,8 +5864,9 @@ impl Modde {
                     return Task::perform(
                         async move {
                             tokio::task::spawn_blocking(move || -> Result<String, String> {
-                                let game_plugin = modde_games::resolve_game_plugin(&game_id)
-                                    .ok_or_else(|| format!("unsupported game: {game_id}"))?;
+                                let game_plugin =
+                                    modde_games::resolve_game_plugin(game_id.as_str())
+                                        .ok_or_else(|| format!("unsupported game: {game_id}"))?;
                                 let _install_path =
                                     game_plugin.detect_install().ok_or_else(|| {
                                         format!("could not detect install for {game_id}")
@@ -5846,7 +5902,7 @@ impl Modde {
                     let name = profile_name.clone();
                     match ProfileManager::open() {
                         Ok(pm) => {
-                            let save_dir = Self::resolve_save_dir(&game_id);
+                            let save_dir = Self::resolve_save_dir(game_id.as_str());
                             match pm.try_profile(&name, &game_id, save_dir.as_deref()) {
                                 Ok(()) => {
                                     self.experiment_depth += 1;
@@ -5867,7 +5923,7 @@ impl Modde {
                     let game_id = profile.game_id.clone();
                     match ProfileManager::open() {
                         Ok(pm) => {
-                            let save_dir = Self::resolve_save_dir(&game_id);
+                            let save_dir = Self::resolve_save_dir(game_id.as_str());
                             match pm.rollback(&game_id, save_dir.as_deref()) {
                                 Ok(prev_name) => {
                                     self.active_profile = Some(prev_name.clone());
@@ -5902,7 +5958,7 @@ impl Modde {
                 self.selected_save_details = None;
                 if let Some(ref profile) = self.loaded_profile {
                     let game_id = profile.game_id.clone();
-                    if !Self::game_supports_save_profiles(&game_id) {
+                    if !Self::game_supports_save_profiles(game_id.as_str()) {
                         self.save_snapshots.clear();
                         self.current_fingerprint = None;
                         self.status_message =
@@ -5948,7 +6004,7 @@ impl Modde {
                 if let Some(ref profile) = self.loaded_profile {
                     let game_id = profile.game_id.clone();
                     let profile_name = profile.name.clone();
-                    let save_dir = Self::resolve_save_dir(&game_id);
+                    let save_dir = Self::resolve_save_dir(game_id.as_str());
                     if let Some(save_dir) = save_dir {
                         match modde_core::save::SaveManager::restore(
                             &game_id,
@@ -5961,7 +6017,7 @@ impl Modde {
                             }
                             Err(e) => self.status_message = format!("Restore failed: {e}"),
                         }
-                    } else if Self::game_supports_save_profiles(&game_id) {
+                    } else if Self::game_supports_save_profiles(game_id.as_str()) {
                         self.status_message =
                             "Cannot detect save directory for this game".to_string();
                     } else {
@@ -6219,8 +6275,9 @@ impl Modde {
                 let context = self.current_tool_game_context();
                 match modde_core::db::ModdeDb::open() {
                     Ok(db) => {
+                        let typed_game_id = GameId::from(game_id.as_str());
                         let mut config = db
-                            .load_tool_config(&game_id, &tool_id)
+                            .load_tool_config(&typed_game_id, &tool_id)
                             .ok()
                             .flatten()
                             .map_or_else(
@@ -6300,7 +6357,7 @@ impl Modde {
                         let settings_json = serde_json::to_string(&config.settings)
                             .unwrap_or_else(|_| "{}".to_string());
                         match db.save_tool_config_with_reason(
-                            &game_id,
+                            &typed_game_id,
                             &tool_id,
                             config.enabled,
                             &settings_json,
@@ -6308,8 +6365,10 @@ impl Modde {
                         ) {
                             Ok(()) => {
                                 if config.enabled {
-                                    let _ =
-                                        modde_games::launcher::generate_tool_configs(&game_id, &db);
+                                    let _ = modde_games::launcher::generate_tool_configs(
+                                        &typed_game_id,
+                                        &db,
+                                    );
                                 }
                                 self.tool_state.active_tool_id = Some(tool_id);
                                 self.status_message =
@@ -6339,8 +6398,9 @@ impl Modde {
                 let context = self.current_tool_game_context();
                 match modde_core::db::ModdeDb::open() {
                     Ok(db) => {
+                        let typed_game_id = GameId::from(game_id.as_str());
                         let settings_json = db
-                            .load_tool_config(&game_id, &tool_id)
+                            .load_tool_config(&typed_game_id, &tool_id)
                             .ok()
                             .flatten()
                             .map_or_else(
@@ -6353,14 +6413,17 @@ impl Modde {
                                 |row| row.settings_json,
                             );
                         match db.save_tool_config_with_reason(
-                            &game_id,
+                            &typed_game_id,
                             &tool_id,
                             enabled,
                             &settings_json,
                             if enabled { "ui:enable" } else { "ui:disable" },
                         ) {
                             Ok(()) => {
-                                let _ = modde_games::launcher::generate_tool_configs(&game_id, &db);
+                                let _ = modde_games::launcher::generate_tool_configs(
+                                    &typed_game_id,
+                                    &db,
+                                );
                                 self.status_message = format!(
                                     "{} {}",
                                     tool.display_name(),
@@ -6747,11 +6810,12 @@ impl Modde {
                 };
                 match modde_core::db::ModdeDb::open() {
                     Ok(db) => {
+                        let typed_game_id = GameId::from(game_id.as_str());
                         let tool = modde_games::tools::resolve_tool("optiscaler")
                             .expect("optiscaler tool is registered");
                         let context = self.current_tool_game_context();
                         let mut config = db
-                            .load_tool_config(&game_id, "optiscaler")
+                            .load_tool_config(&typed_game_id, "optiscaler")
                             .ok()
                             .flatten()
                             .map_or_else(
@@ -6797,13 +6861,13 @@ impl Modde {
                                 let settings_json = serde_json::to_string(&config.settings)
                                     .unwrap_or_else(|_| "{}".to_string());
                                 let _ = db.save_tool_config(
-                                    &game_id,
+                                    &typed_game_id,
                                     "optiscaler",
                                     true,
                                     &settings_json,
                                 );
-                                let _ = db.clear_applied_files(&game_id, "optiscaler");
-                                let _ = db.save_applied_files(&game_id, "optiscaler", &paths);
+                                let _ = db.clear_applied_files(&typed_game_id, "optiscaler");
+                                let _ = db.save_applied_files(&typed_game_id, "optiscaler", &paths);
                                 self.tool_state.active_tool_id = Some("optiscaler".to_string());
                                 self.status_message =
                                     format!("Adopted OptiScaler ({} file(s))", paths.len());
@@ -6852,10 +6916,11 @@ impl Modde {
                 };
                 match modde_core::db::ModdeDb::open() {
                     Ok(db) => {
+                        let typed_game_id = GameId::from(game_id.as_str());
                         let tool = modde_games::tools::resolve_tool("optiscaler")
                             .expect("optiscaler tool is registered");
                         let mut config = db
-                            .load_tool_config(&game_id, "optiscaler")
+                            .load_tool_config(&typed_game_id, "optiscaler")
                             .ok()
                             .flatten()
                             .map_or_else(
@@ -6874,7 +6939,7 @@ impl Modde {
                         let settings_json = serde_json::to_string(&config.settings)
                             .unwrap_or_else(|_| "{}".to_string());
                         match db.save_tool_config(
-                            &game_id,
+                            &typed_game_id,
                             "optiscaler",
                             config.enabled,
                             &settings_json,

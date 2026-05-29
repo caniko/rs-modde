@@ -39,8 +39,8 @@ fn test_download_directives_all_types() {
                 size: 1000,
                 state: Some(ArchiveState::NexusDownloader {
                     game_name: "skyrimspecialedition".to_string(),
-                    mod_id: 42,
-                    file_id: 99,
+                    mod_id: 42.into(),
+                    file_id: 99.into(),
                 }),
             },
             ArchiveEntry {
@@ -97,8 +97,8 @@ fn test_download_directives_all_types() {
             hash,
         } => {
             assert_eq!(game_id, "skyrimspecialedition");
-            assert_eq!(*mod_id, 42);
-            assert_eq!(*file_id, 99);
+            assert_eq!(mod_id.get(), 42);
+            assert_eq!(file_id.get(), 99);
             assert_eq!(*hash, 100);
         }
         _ => panic!("expected Nexus"),
@@ -165,8 +165,8 @@ fn test_download_directives_archives_without_state_filtered() {
                 size: 2000,
                 state: Some(ArchiveState::NexusDownloader {
                     game_name: "skyrimse".to_string(),
-                    mod_id: 1,
-                    file_id: 1,
+                    mod_id: 1.into(),
+                    file_id: 1.into(),
                 }),
             },
         ],
@@ -388,8 +388,8 @@ fn test_wabbajack_manifest_json_roundtrip() {
             size: 12345,
             state: Some(ArchiveState::NexusDownloader {
                 game_name: "skyrimse".to_string(),
-                mod_id: 100,
-                file_id: 200,
+                mod_id: 100.into(),
+                file_id: 200.into(),
             }),
         }],
         directives: vec![RawDirective::FromArchive {
@@ -499,8 +499,8 @@ fn test_collection_manifest_roundtrip() {
             name: "Skyrim SE".to_string(),
         },
         mods: vec![CollectionMod {
-            mod_id: 100,
-            file_id: 200,
+            mod_id: 100.into(),
+            file_id: 200.into(),
             name: "TestMod".to_string(),
             version: "1.0".to_string(),
             optional: false,
@@ -555,8 +555,8 @@ fn test_download_directive_roundtrip() {
     let directives = vec![
         DownloadDirective::Nexus {
             game_id: GameId::from("skyrimse"),
-            mod_id: 42,
-            file_id: 99,
+            mod_id: 42.into(),
+            file_id: 99.into(),
             hash: 12345,
         },
         DownloadDirective::GitHub {
@@ -672,8 +672,8 @@ fn test_mixed_install_and_download_directives() {
                 size: 5000,
                 state: Some(ArchiveState::NexusDownloader {
                     game_name: "skyrimse".to_string(),
-                    mod_id: 1,
-                    file_id: 1,
+                    mod_id: 1.into(),
+                    file_id: 1.into(),
                 }),
             },
             ArchiveEntry {

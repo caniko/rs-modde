@@ -110,8 +110,8 @@ fn test_direct_source_rejects_nexus() {
 
     let directive = DownloadDirective::Nexus {
         game_id: GameId::from("skyrimse"),
-        mod_id: 1,
-        file_id: 1,
+        mod_id: 1.into(),
+        file_id: 1.into(),
         hash: 123,
     };
     assert!(!source.can_handle(&directive));
@@ -164,8 +164,8 @@ async fn test_direct_source_resolve_wrong_type_errors() {
 
     let directive = DownloadDirective::Nexus {
         game_id: GameId::from("skyrimse"),
-        mod_id: 1,
-        file_id: 1,
+        mod_id: 1.into(),
+        file_id: 1.into(),
         hash: 1,
     };
 
@@ -237,8 +237,8 @@ fn test_gdrive_source_rejects_nexus() {
 
     let directive = DownloadDirective::Nexus {
         game_id: GameId::from("skyrimse"),
-        mod_id: 1,
-        file_id: 1,
+        mod_id: 1.into(),
+        file_id: 1.into(),
         hash: 1,
     };
     assert!(!source.can_handle(&directive));
@@ -403,8 +403,8 @@ fn test_no_source_handles_nexus_without_nexus_source() {
 
     let nexus = DownloadDirective::Nexus {
         game_id: GameId::from("skyrimse"),
-        mod_id: 42,
-        file_id: 99,
+        mod_id: 42.into(),
+        file_id: 99.into(),
         hash: 5,
     };
 

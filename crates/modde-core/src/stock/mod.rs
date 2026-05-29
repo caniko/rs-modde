@@ -66,12 +66,12 @@ impl StockGameManager {
     /// Create a hardlink snapshot of a game installation.
     ///
     /// Falls back to file copy if source and destination are on different filesystems.
-    pub async fn snapshot(&self, game_id: &str, source_dir: &Path) -> Result<StockSnapshot> {
+    pub async fn snapshot(&self, game_id: &GameId, source_dir: &Path) -> Result<StockSnapshot> {
         if !source_dir.exists() {
             return Err(CoreError::GameNotDetected(game_id.to_string()));
         }
 
-        let snapshot_dir = self.store_dir.join(game_id);
+        let snapshot_dir = self.store_dir.join(game_id.as_str());
         tokio::fs::create_dir_all(&snapshot_dir).await?;
 
         // Walk source and hardlink/copy files
@@ -90,18 +90,18 @@ impl StockGameManager {
             )?;
         }
 
-        info!(game_id, path = %snapshot_dir.display(), hash = %tree_hash.tree_hash, "stock snapshot created");
+        info!(game_id = %game_id, path = %snapshot_dir.display(), hash = %tree_hash.tree_hash, "stock snapshot created");
 
         Ok(StockSnapshot {
-            game_id: GameId::from(game_id),
+            game_id: game_id.clone(),
             path: snapshot_dir,
             hash: tree_hash.tree_hash,
         })
     }
 
     /// Verify an existing snapshot still matches the stored tree hash.
-    pub async fn verify(&self, game_id: &str) -> Result<bool> {
-        let snapshot_dir = self.store_dir.join(game_id);
+    pub async fn verify(&self, game_id: &GameId) -> Result<bool> {
+        let snapshot_dir = self.store_dir.join(game_id.as_str());
         if !snapshot_dir.exists() {
             return Err(CoreError::Other(
                 format!("no snapshot found for game '{game_id}'").into(),
@@ -112,11 +112,11 @@ impl StockGameManager {
         let current = compute_tree_hash(&snapshot_dir).await?;
 
         if stored.tree_hash == current.tree_hash {
-            info!(game_id, hash = %stored.tree_hash, "snapshot verified OK");
+            info!(game_id = %game_id, hash = %stored.tree_hash, "snapshot verified OK");
             Ok(true)
         } else {
             warn!(
-                game_id,
+                game_id = %game_id,
                 expected = %stored.tree_hash,
                 actual = %current.tree_hash,
                 "snapshot verification failed: tree hash mismatch"
@@ -282,10 +282,13 @@ mod tests {
         let store = TempDir::new().unwrap();
         let mgr = StockGameManager::new(store.path().to_path_buf());
 
-        let snap = mgr.snapshot("test-game", src.path()).await.unwrap();
+        let snap = mgr
+            .snapshot(&GameId::from("test-game"), src.path())
+            .await
+            .unwrap();
         assert!(!snap.hash.is_empty());
 
-        let ok = mgr.verify("test-game").await.unwrap();
+        let ok = mgr.verify(&GameId::from("test-game")).await.unwrap();
         assert!(ok);
     }
 }

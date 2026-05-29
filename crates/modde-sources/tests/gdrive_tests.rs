@@ -50,8 +50,8 @@ fn gdrive_source_rejects_nexus_directive() {
     let source = GoogleDriveSource::new(Client::new());
     let directive = DownloadDirective::Nexus {
         game_id: GameId::from("skyrimse"),
-        mod_id: 1,
-        file_id: 1,
+        mod_id: 1.into(),
+        file_id: 1.into(),
         hash: 0,
     };
     assert!(!source.can_handle(&directive));

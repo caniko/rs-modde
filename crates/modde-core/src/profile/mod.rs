@@ -6,6 +6,8 @@ use smallvec::SmallVec;
 use crate::db::ModdeDb;
 pub use crate::db::ProfileSummary;
 use crate::error::{CoreError, Result};
+use crate::installer::{InstallMethod, InstallStatus};
+use crate::nexus_id::{NexusFileId, NexusModId};
 use crate::resolver::{GameId, LoadOrderRule};
 use crate::save::{SaveFingerprint, SaveManager};
 
@@ -28,9 +30,9 @@ pub struct EnabledMod {
 
     // ── Nexus metadata (V2) ──────────────────────────────────────
     #[serde(default)]
-    pub nexus_mod_id: Option<i64>,
+    pub nexus_mod_id: Option<NexusModId>,
     #[serde(default)]
-    pub nexus_file_id: Option<i64>,
+    pub nexus_file_id: Option<NexusFileId>,
     #[serde(default)]
     pub nexus_game_domain: Option<String>,
     #[serde(default)]
@@ -41,9 +43,14 @@ pub struct EnabledMod {
     pub category_id: Option<i64>,
     #[serde(default)]
     pub notes: Option<String>,
-    /// JSON-encoded array of tag strings.
-    #[serde(default)]
-    pub tags: Option<String>,
+    /// User-defined tags for filtering and export.
+    #[serde(
+        default,
+        deserialize_with = "tags_serde::deserialize",
+        serialize_with = "tags_serde::serialize",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub tags: Vec<String>,
 
     // ── Load order lock (V7) ─────────────────────────────────────
     /// Per-mod lock: when `Some`, this mod's position cannot be changed via
@@ -54,12 +61,16 @@ pub struct EnabledMod {
     pub lock: Option<LockReason>,
 
     // ── Installer metadata (V8) ──────────────────────────────────
-    /// The detected install method for this mod, serialized as TOML
-    /// (matching the `lock_reason` convention). `None` for mods that
-    /// predate the installer pipeline or were installed via paths
-    /// that bypass analysis (Wabbajack directives).
-    #[serde(default)]
-    pub install_method: Option<String>,
+    /// The detected install method for this mod. `None` for mods that
+    /// predate the installer pipeline or were installed via paths that
+    /// bypass analysis (Wabbajack directives).
+    #[serde(
+        default,
+        deserialize_with = "install_method_serde::deserialize",
+        serialize_with = "install_method_serde::serialize",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub install_method: Option<InstallMethod>,
 
     /// xxh64 hex digest of the source archive. Lets uninstall and dossier
     /// dumps correlate a mod row back to the original download.
@@ -68,8 +79,108 @@ pub struct EnabledMod {
 
     /// Where this mod is in the install lifecycle. `None` means legacy
     /// (pre-V8) — treat as `Installed` for display purposes.
-    #[serde(default)]
-    pub install_status: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "install_status_serde::deserialize",
+        serialize_with = "install_status_serde::serialize",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub install_status: Option<InstallStatus>,
+}
+
+mod install_status_serde {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    use crate::installer::InstallStatus;
+
+    #[allow(clippy::ref_option)] // serde serialize_with requires &Option<T>
+    pub fn serialize<S>(status: &Option<InstallStatus>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match status {
+            Some(status) => serializer.serialize_some(status.as_str()),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<InstallStatus>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = Option::<String>::deserialize(deserializer)?;
+        match raw.as_deref() {
+            None | Some("") => Ok(None),
+            Some(value) => InstallStatus::parse(value).map(Some).ok_or_else(|| {
+                serde::de::Error::custom(format!("unknown install_status: {value}"))
+            }),
+        }
+    }
+}
+
+mod install_method_serde {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    use crate::installer::InstallMethod;
+
+    #[allow(clippy::ref_option)] // serde serialize_with requires &Option<T>
+    pub fn serialize<S>(method: &Option<InstallMethod>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match method {
+            Some(method) => {
+                let encoded = toml::to_string(method).map_err(serde::ser::Error::custom)?;
+                serializer.serialize_some(&encoded)
+            }
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<InstallMethod>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = Option::<String>::deserialize(deserializer)?;
+        match raw.as_deref() {
+            None | Some("") => Ok(None),
+            Some(value) => toml::from_str::<InstallMethod>(value)
+                .map(Some)
+                .map_err(serde::de::Error::custom),
+        }
+    }
+}
+
+mod tags_serde {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Tags {
+        JsonString(String),
+        List(Vec<String>),
+    }
+
+    pub fn serialize<S>(tags: &[String], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let encoded = serde_json::to_string(tags).map_err(serde::ser::Error::custom)?;
+        serializer.serialize_str(&encoded)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match Tags::deserialize(deserializer)? {
+            Tags::JsonString(value) if value.is_empty() => Ok(Vec::new()),
+            Tags::JsonString(value) => {
+                serde_json::from_str::<Vec<String>>(&value).map_err(serde::de::Error::custom)
+            }
+            Tags::List(tags) => Ok(tags),
+        }
+    }
 }
 
 /// Source from which a profile was created.
@@ -331,12 +442,12 @@ impl ProfileManager {
     }
 
     /// List profiles for a specific game.
-    pub fn list_for_game(&self, game_id: &str) -> Result<Vec<ProfileSummary>> {
+    pub fn list_for_game(&self, game_id: &GameId) -> Result<Vec<ProfileSummary>> {
         self.db.list_profiles(Some(game_id))
     }
 
     /// Load a profile by name. If `game_id` is None, the name must be unambiguous.
-    pub fn load(&self, name: &str, game_id: Option<&str>) -> Result<Profile> {
+    pub fn load(&self, name: &str, game_id: Option<&GameId>) -> Result<Profile> {
         match game_id {
             Some(gid) => self.db.load_profile(name, gid),
             None => self.db.load_profile_by_name(name),
@@ -362,9 +473,7 @@ impl ProfileManager {
             Err(CoreError::Database(_)) => {
                 self.db.update_profile(profile)?;
                 // Return the existing ID
-                let loaded = self
-                    .db
-                    .load_profile(&profile.name, profile.game_id.as_str())?;
+                let loaded = self.db.load_profile(&profile.name, &profile.game_id)?;
                 Ok(loaded.id.unwrap_or(0))
             }
             Err(e) => Err(e),
@@ -372,13 +481,13 @@ impl ProfileManager {
     }
 
     /// Delete a profile. If `game_id` is None, the name must be unambiguous.
-    pub fn delete(&self, name: &str, game_id: Option<&str>) -> Result<()> {
+    pub fn delete(&self, name: &str, game_id: Option<&GameId>) -> Result<()> {
         if let Some(gid) = game_id {
             self.db.delete_profile(name, gid)
         } else {
             // Resolve the game_id first
             let profile = self.db.load_profile_by_name(name)?;
-            self.db.delete_profile(name, profile.game_id.as_str())
+            self.db.delete_profile(name, &profile.game_id)
         }
     }
 
@@ -415,7 +524,7 @@ impl ProfileManager {
     pub fn activate(
         &self,
         name: &str,
-        game_id: &str,
+        game_id: &GameId,
         save_dir: Option<&Path>,
     ) -> Result<ActivateResult> {
         self.activate_with_fingerprint(name, game_id, save_dir, None)
@@ -425,7 +534,7 @@ impl ProfileManager {
     pub fn activate_with_fingerprint(
         &self,
         name: &str,
-        game_id: &str,
+        game_id: &GameId,
         save_dir: Option<&Path>,
         fingerprint: Option<&SaveFingerprint>,
     ) -> Result<ActivateResult> {
@@ -458,7 +567,7 @@ impl ProfileManager {
     ///
     /// `save_dir` is the game's save directory. If `None`, save swapping is skipped.
     /// `fingerprint` is the current profile's mod fingerprint.
-    pub fn try_profile(&self, name: &str, game_id: &str, save_dir: Option<&Path>) -> Result<()> {
+    pub fn try_profile(&self, name: &str, game_id: &GameId, save_dir: Option<&Path>) -> Result<()> {
         self.try_profile_with_fingerprint(name, game_id, save_dir, None)
     }
 
@@ -466,7 +575,7 @@ impl ProfileManager {
     pub fn try_profile_with_fingerprint(
         &self,
         name: &str,
-        game_id: &str,
+        game_id: &GameId,
         save_dir: Option<&Path>,
         fingerprint: Option<&SaveFingerprint>,
     ) -> Result<()> {
@@ -498,14 +607,14 @@ impl ProfileManager {
     ///
     /// `save_dir` is the game's save directory. If `None`, save swapping is skipped.
     /// `fingerprint` is the current profile's mod fingerprint.
-    pub fn rollback(&self, game_id: &str, save_dir: Option<&Path>) -> Result<String> {
+    pub fn rollback(&self, game_id: &GameId, save_dir: Option<&Path>) -> Result<String> {
         self.rollback_with_fingerprint(game_id, save_dir, None)
     }
 
     /// Roll back with a mod fingerprint.
     pub fn rollback_with_fingerprint(
         &self,
-        game_id: &str,
+        game_id: &GameId,
         save_dir: Option<&Path>,
         fingerprint: Option<&SaveFingerprint>,
     ) -> Result<String> {
@@ -538,7 +647,7 @@ impl ProfileManager {
     }
 
     /// Accept the current experiment, clearing the experiment stack.
-    pub fn commit(&self, game_id: &str) -> Result<()> {
+    pub fn commit(&self, game_id: &GameId) -> Result<()> {
         let depth = self.db.experiment_depth(game_id)?;
         if depth == 0 {
             return Err(CoreError::NotInExperiment(game_id.to_string()));
@@ -548,7 +657,7 @@ impl ProfileManager {
     }
 
     /// Get the currently active profile and experiment depth for a game.
-    pub fn active(&self, game_id: &str) -> Result<Option<ActiveProfileInfo>> {
+    pub fn active(&self, game_id: &GameId) -> Result<Option<ActiveProfileInfo>> {
         let (profile_id, _name) = match self.db.get_active_profile(game_id)? {
             Some(pair) => pair,
             None => return Ok(None),
@@ -570,7 +679,7 @@ impl ProfileManager {
     /// [`Self::fork_with_options`] (or `modde profile fork --unlock`) for
     /// the "fork to diverge" workflow where the new profile starts
     /// unlocked so it can be freely reorganised.
-    pub fn fork(&self, source_name: &str, new_name: &str, game_id: &str) -> Result<i64> {
+    pub fn fork(&self, source_name: &str, new_name: &str, game_id: &GameId) -> Result<i64> {
         self.fork_with_options(source_name, new_name, game_id, ForkOptions::default())
     }
 
@@ -580,7 +689,7 @@ impl ProfileManager {
         &self,
         source_name: &str,
         new_name: &str,
-        game_id: &str,
+        game_id: &GameId,
         options: ForkOptions,
     ) -> Result<i64> {
         validate_profile_name(new_name)?;
@@ -600,7 +709,7 @@ impl ProfileManager {
         let new_profile = Profile {
             id: None,
             name: new_name.to_string(),
-            game_id: GameId::from(game_id),
+            game_id: game_id.clone(),
             source: source.source.clone(),
             mods,
             overrides: Self::default_overrides(new_name),

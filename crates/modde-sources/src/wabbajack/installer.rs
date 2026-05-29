@@ -2719,8 +2719,8 @@ mod tests {
                 size: 1,
                 state: Some(ArchiveState::NexusDownloader {
                     game_name: "skyrimspecialedition".into(),
-                    mod_id: 123,
-                    file_id: 456,
+                    mod_id: 123.into(),
+                    file_id: 456.into(),
                 }),
             }],
             ..minimal_manifest()
@@ -3432,8 +3432,8 @@ mod tests {
     fn directive_name_nexus() {
         let d = DownloadDirective::Nexus {
             game_id: "skyrimse".into(),
-            mod_id: 12345,
-            file_id: 1,
+            mod_id: 12345.into(),
+            file_id: 1.into(),
             hash: 0,
         };
         assert_eq!(d.display_name(), "nexus:12345");
@@ -3501,8 +3501,8 @@ mod tests {
     fn directive_hash_nexus() {
         let d = DownloadDirective::Nexus {
             game_id: "s".into(),
-            mod_id: 1,
-            file_id: 1,
+            mod_id: 1.into(),
+            file_id: 1.into(),
             hash: 0xABCD,
         };
         assert_eq!(d.hash(), 0xABCD);

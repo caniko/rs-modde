@@ -187,7 +187,7 @@ fn db_roundtrip_preserves_profile_level_lock() {
 
     pm.create(&profile).expect("create profile");
     let loaded = pm
-        .load("wj-locked", Some("skyrim-se"))
+        .load("wj-locked", Some(&GameId::from("skyrim-se")))
         .expect("load profile");
 
     assert_eq!(profile.load_order_lock, loaded.load_order_lock);
@@ -207,7 +207,7 @@ fn db_roundtrip_preserves_per_mod_lock() {
     pm.create(&profile).expect("create profile");
 
     let loaded = pm
-        .load("mixed-pins", Some("skyrim-se"))
+        .load("mixed-pins", Some(&GameId::from("skyrim-se")))
         .expect("load profile");
     assert_eq!(loaded.mods.len(), 2);
     assert_eq!(loaded.mods[0].lock, pinned.lock);
@@ -237,7 +237,9 @@ fn db_update_preserves_lock_after_delete_reinsert() {
     profile.overrides = PathBuf::from("/tmp/new-overrides");
     pm.update(&profile).expect("update");
 
-    let loaded = pm.load("pin-me", Some("skyrim-se")).expect("reload");
+    let loaded = pm
+        .load("pin-me", Some(&GameId::from("skyrim-se")))
+        .expect("reload");
     assert_eq!(loaded.load_order_lock, profile.load_order_lock);
     assert_eq!(loaded.mods[0].lock, profile.mods[0].lock);
 }
@@ -252,7 +254,9 @@ fn db_roundtrip_none_lock_stays_none() {
     let profile = make_profile("plain", "skyrim-se", vec![mod_entry("skse")]);
     pm.create(&profile).expect("create");
 
-    let loaded = pm.load("plain", Some("skyrim-se")).expect("load");
+    let loaded = pm
+        .load("plain", Some(&GameId::from("skyrim-se")))
+        .expect("load");
     assert!(loaded.load_order_lock.is_none());
     assert!(loaded.mods[0].lock.is_none());
 }
@@ -271,7 +275,9 @@ fn schema_v7_migration_is_idempotent() {
     let pm = ProfileManager::with_db(db);
     let profile = make_profile("post-migration", "skyrim-se", vec![mod_entry("test")]);
     pm.create(&profile).expect("create after migration");
-    let loaded = pm.load("post-migration", Some("skyrim-se")).unwrap();
+    let loaded = pm
+        .load("post-migration", Some(&GameId::from("skyrim-se")))
+        .unwrap();
     assert_eq!(loaded.mods.len(), 1);
 }
 
@@ -289,22 +295,26 @@ fn fork_clones_both_profile_level_and_per_mod_locks() {
 
     // Use a game_id unique to this test so the vault path doesn't collide
     // with other tests that may touch Skyrim saves.
-    let game = "skyrim-se-lock-fork-test";
+    let game = GameId::from("skyrim-se-lock-fork-test");
     let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
 
     let mut pinned = mod_entry("SkyUI");
     pinned.lock = Some(LockReason::Manual {
         note: Some("keep me".to_string()),
     });
-    let mut profile = make_profile("lock-src", game, vec![pinned.clone(), mod_entry("USSEP")]);
+    let mut profile = make_profile(
+        "lock-src",
+        game.as_str(),
+        vec![pinned.clone(), mod_entry("USSEP")],
+    );
     profile.load_order_lock = Some(LoadOrderLock::now(LockReason::Wabbajack {
         manifest_hash: "src-hash".to_string(),
     }));
     pm.create(&profile).expect("create source");
 
-    let _new_id = pm.fork("lock-src", "lock-fork", game).expect("fork");
+    let _new_id = pm.fork("lock-src", "lock-fork", &game).expect("fork");
 
-    let forked = pm.load("lock-fork", Some(game)).expect("load fork");
+    let forked = pm.load("lock-fork", Some(&game)).expect("load fork");
 
     // Profile-level lock rides along (faithful-copy principle).
     assert_eq!(
@@ -333,7 +343,7 @@ fn fork_with_options_unlock_strips_both_lock_levels() {
     isolated_data_dir();
 
     // Unique game_id to avoid save-vault collisions with other fork tests.
-    let game = "skyrim-se-fork-unlock-test";
+    let game = GameId::from("skyrim-se-fork-unlock-test");
     let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
 
     let mut pinned_a = mod_entry("SkyUI");
@@ -345,17 +355,21 @@ fn fork_with_options_unlock_strips_both_lock_levels() {
         manifest_hash: "src".to_string(),
     });
 
-    let mut source = make_profile("wj-src", game, vec![pinned_a, pinned_b, mod_entry("Free")]);
+    let mut source = make_profile(
+        "wj-src",
+        game.as_str(),
+        vec![pinned_a, pinned_b, mod_entry("Free")],
+    );
     source.load_order_lock = Some(LoadOrderLock::now(LockReason::Wabbajack {
         manifest_hash: "src".to_string(),
     }));
     pm.create(&source).expect("create source");
 
     let _ = pm
-        .fork_with_options("wj-src", "wj-diverged", game, ForkOptions { unlock: true })
+        .fork_with_options("wj-src", "wj-diverged", &game, ForkOptions { unlock: true })
         .expect("fork --unlock");
 
-    let forked = pm.load("wj-diverged", Some(game)).expect("load fork");
+    let forked = pm.load("wj-diverged", Some(&game)).expect("load fork");
 
     // Profile-level lock stripped.
     assert!(
@@ -380,7 +394,7 @@ fn fork_with_options_unlock_strips_both_lock_levels() {
 
     // Source is untouched — critical invariant so users can "try a
     // diverged fork" without losing the locked original.
-    let source_reloaded = pm.load("wj-src", Some(game)).expect("reload source");
+    let source_reloaded = pm.load("wj-src", Some(&game)).expect("reload source");
     assert!(
         source_reloaded.load_order_lock.is_some(),
         "fork --unlock must NOT touch the source profile's lock"
@@ -399,22 +413,22 @@ fn fork_with_options_default_matches_legacy_fork() {
     use modde_core::profile::ForkOptions;
     isolated_data_dir();
 
-    let game = "skyrim-se-fork-default-test";
+    let game = GameId::from("skyrim-se-fork-default-test");
     let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
 
     let mut pinned = mod_entry("SkyUI");
     pinned.lock = Some(LockReason::Manual { note: None });
-    let mut source = make_profile("src-default", game, vec![pinned.clone()]);
+    let mut source = make_profile("src-default", game.as_str(), vec![pinned.clone()]);
     source.load_order_lock = Some(LoadOrderLock::now(LockReason::Wabbajack {
         manifest_hash: "abc".to_string(),
     }));
     pm.create(&source).expect("create source");
 
     let _ = pm
-        .fork_with_options("src-default", "fork-default", game, ForkOptions::default())
+        .fork_with_options("src-default", "fork-default", &game, ForkOptions::default())
         .expect("fork default");
 
-    let forked = pm.load("fork-default", Some(game)).expect("load fork");
+    let forked = pm.load("fork-default", Some(&game)).expect("load fork");
     assert_eq!(forked.load_order_lock, source.load_order_lock);
     assert_eq!(forked.mods[0].lock, pinned.lock);
 }
@@ -447,7 +461,7 @@ Manual = {}
     assert_eq!(imported, 1);
 
     let profile = db
-        .load_profile("fresh-import", "skyrim-se")
+        .load_profile("fresh-import", &GameId::from("skyrim-se"))
         .expect("load imported");
     match profile.load_order_lock.as_ref().map(|l| &l.reason) {
         Some(LockReason::TomlImport { source_path }) => {
@@ -481,7 +495,9 @@ fn toml_import_preserves_existing_wabbajack_lock() {
     let imported = db.import_toml_profiles(tmp.path()).expect("import");
     assert_eq!(imported, 1);
 
-    let loaded = db.load_profile("from-wj", "skyrim-se").expect("load");
+    let loaded = db
+        .load_profile("from-wj", &GameId::from("skyrim-se"))
+        .expect("load");
     match loaded.load_order_lock.as_ref().map(|l| &l.reason) {
         Some(LockReason::Wabbajack { manifest_hash }) => {
             assert_eq!(manifest_hash, "original-wj-hash");
@@ -539,8 +555,8 @@ fn archive_mod_id_nexus_uses_nexus_prefix() {
         size: 100,
         state: Some(ArchiveState::NexusDownloader {
             game_name: "skyrimspecialedition".to_string(),
-            mod_id: 1000,
-            file_id: 2000,
+            mod_id: 1000.into(),
+            file_id: 2000.into(),
         }),
     };
     assert_eq!(

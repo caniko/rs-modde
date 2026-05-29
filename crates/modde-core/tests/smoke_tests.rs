@@ -337,8 +337,8 @@ fn smoke_collection_manifest_with_mods() {
 
     let manifest: CollectionManifest = serde_json::from_str(json).unwrap();
     assert_eq!(manifest.mods.len(), 1);
-    assert_eq!(manifest.mods[0].mod_id, 100);
-    assert_eq!(manifest.mods[0].file_id, 200);
+    assert_eq!(manifest.mods[0].mod_id.get(), 100);
+    assert_eq!(manifest.mods[0].file_id.get(), 200);
     assert!(manifest.mods[0].optional);
     assert_eq!(manifest.mods[0].install_order, 5);
     assert_eq!(manifest.endorsements, 999);

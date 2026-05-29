@@ -10,6 +10,7 @@ use smallvec::SmallVec;
 use crate::db::{ModdeDb, SaveEntry};
 use crate::error::{CoreError, Result};
 use crate::profile::EnabledMod;
+use crate::resolver::GameId;
 
 const STEAM_CLOUD_MARKER: &str = "steam_autocloud.vdf";
 const MODDE_LIVE_STATE_DIR: &str = ".modde";
@@ -310,7 +311,7 @@ impl<'a> SaveManager<'a> {
     // ── Vault management ─────────────────────────────────────────
 
     /// Initialize a git-backed save vault for a game if it doesn't exist.
-    pub fn init_vault(game_id: &str) -> Result<Repository> {
+    pub fn init_vault(game_id: &GameId) -> Result<Repository> {
         let vault_path = crate::paths::save_vault_dir(game_id);
         if vault_path.join(".git").exists() {
             return Repository::open(&vault_path)
@@ -341,12 +342,12 @@ impl<'a> SaveManager<'a> {
                 })?;
         }
 
-        info!(game_id, path = %vault_path.display(), "initialized save vault");
+        info!(game_id = %game_id, path = %vault_path.display(), "initialized save vault");
         Ok(repo)
     }
 
     /// Open an existing vault repo, or initialize it if it doesn't exist.
-    pub fn vault_repo(game_id: &str) -> Result<Repository> {
+    pub fn vault_repo(game_id: &GameId) -> Result<Repository> {
         let vault_path = crate::paths::save_vault_dir(game_id);
         if vault_path.join(".git").exists() {
             Repository::open(&vault_path)
@@ -359,7 +360,7 @@ impl<'a> SaveManager<'a> {
     // ── Branch operations ────────────────────────────────────────
 
     /// Ensure a branch exists for a profile. Creates a branch if needed.
-    pub fn ensure_branch(game_id: &str, profile_name: &str) -> Result<()> {
+    pub fn ensure_branch(game_id: &GameId, profile_name: &str) -> Result<()> {
         let repo = Self::vault_repo(game_id)?;
         let branch_name = sanitize_branch_name(profile_name);
 
@@ -380,12 +381,12 @@ impl<'a> SaveManager<'a> {
                 CoreError::SaveVaultError(format!("failed to create branch '{branch_name}': {e}"))
             })?;
 
-        info!(game_id, branch = %branch_name, "created save branch");
+        info!(game_id = %game_id, branch = %branch_name, "created save branch");
         Ok(())
     }
 
     /// Checkout a profile's branch, updating the working directory.
-    pub fn checkout_branch(game_id: &str, profile_name: &str) -> Result<()> {
+    pub fn checkout_branch(game_id: &GameId, profile_name: &str) -> Result<()> {
         let repo = Self::vault_repo(game_id)?;
         let branch_name = sanitize_branch_name(profile_name);
 
@@ -413,7 +414,7 @@ impl<'a> SaveManager<'a> {
         repo.set_head(&refname)
             .map_err(|e| CoreError::SaveVaultError(format!("failed to set HEAD: {e}")))?;
 
-        info!(game_id, branch = %branch_name, "checked out save branch");
+        info!(game_id = %game_id, branch = %branch_name, "checked out save branch");
         Ok(())
     }
 
@@ -426,7 +427,7 @@ impl<'a> SaveManager<'a> {
     /// trailer lines so that future restores can warn about mod mismatches.
     pub fn capture_with_fingerprint(
         &self,
-        game_id: &str,
+        game_id: &GameId,
         profile_name: &str,
         game_save_dir: &Path,
         fingerprint: Option<&SaveFingerprint>,
@@ -491,7 +492,7 @@ impl<'a> SaveManager<'a> {
         // Skip commit if tree is identical to HEAD (no actual changes)
         if tree_oid == head_commit.tree_id() {
             info!(
-                game_id,
+                game_id = %game_id,
                 profile = profile_name,
                 "saves unchanged, skipping commit"
             );
@@ -509,14 +510,14 @@ impl<'a> SaveManager<'a> {
         repo.commit(Some("HEAD"), &sig, &sig, &message, &tree, &[&head_commit])
             .map_err(|e| CoreError::SaveVaultError(format!("failed to commit: {e}")))?;
 
-        info!(game_id, profile = profile_name, count, "captured saves");
+        info!(game_id = %game_id, profile = profile_name, count, "captured saves");
         Ok(count)
     }
 
     /// Capture saves without a fingerprint (backwards-compatible convenience method).
     pub fn capture(
         &self,
-        game_id: &str,
+        game_id: &GameId,
         profile_name: &str,
         game_save_dir: &Path,
     ) -> Result<usize> {
@@ -525,7 +526,12 @@ impl<'a> SaveManager<'a> {
 
     /// Deploy saves from the vault to the game's save directory.
     /// Returns the number of files deployed.
-    pub fn deploy(&self, game_id: &str, profile_name: &str, game_save_dir: &Path) -> Result<usize> {
+    pub fn deploy(
+        &self,
+        game_id: &GameId,
+        profile_name: &str,
+        game_save_dir: &Path,
+    ) -> Result<usize> {
         Self::checkout_branch(game_id, profile_name)?;
 
         let vault_path = crate::paths::save_vault_dir(game_id);
@@ -542,7 +548,7 @@ impl<'a> SaveManager<'a> {
             name != ".git" && !is_live_metadata(name)
         })?;
 
-        info!(game_id, profile = profile_name, count, "deployed saves");
+        info!(game_id = %game_id, profile = profile_name, count, "deployed saves");
         Ok(count)
     }
 
@@ -554,7 +560,7 @@ impl<'a> SaveManager<'a> {
     /// the *current* profile's saves (the ones being put away).
     pub fn activate(
         &self,
-        game_id: &str,
+        game_id: &GameId,
         new_profile: &str,
         current_profile: Option<&str>,
         game_save_dir: &Path,
@@ -565,7 +571,7 @@ impl<'a> SaveManager<'a> {
     /// Full activate flow with an optional mod fingerprint.
     pub fn activate_with_fingerprint(
         &self,
-        game_id: &str,
+        game_id: &GameId,
         new_profile: &str,
         current_profile: Option<&str>,
         game_save_dir: &Path,
@@ -583,7 +589,7 @@ impl<'a> SaveManager<'a> {
     }
 
     /// Fork saves from one profile's branch to a new profile's branch.
-    pub fn fork_saves(game_id: &str, source_profile: &str, target_profile: &str) -> Result<()> {
+    pub fn fork_saves(game_id: &GameId, source_profile: &str, target_profile: &str) -> Result<()> {
         let repo = Self::vault_repo(game_id)?;
         let source_branch = sanitize_branch_name(source_profile);
         let target_branch = sanitize_branch_name(target_profile);
@@ -603,7 +609,7 @@ impl<'a> SaveManager<'a> {
             .map_err(|e| CoreError::SaveVaultError(format!("failed to create fork branch: {e}")))?;
 
         info!(
-            game_id,
+            game_id = %game_id,
             source = source_profile,
             target = target_profile,
             "forked save branch"
@@ -614,7 +620,11 @@ impl<'a> SaveManager<'a> {
     // ── History & restore ──────────────────────────────────────
 
     /// List commit history for a profile's save branch.
-    pub fn history(game_id: &str, profile_name: &str, limit: usize) -> Result<Vec<SaveSnapshot>> {
+    pub fn history(
+        game_id: &GameId,
+        profile_name: &str,
+        limit: usize,
+    ) -> Result<Vec<SaveSnapshot>> {
         let repo = Self::vault_repo(game_id)?;
         let branch_name = sanitize_branch_name(profile_name);
 
@@ -678,7 +688,7 @@ impl<'a> SaveManager<'a> {
     /// Returns `FingerprintCheck` without performing the restore — use this
     /// to warn the user before calling `restore`.
     pub fn check_restore_compatibility(
-        game_id: &str,
+        game_id: &GameId,
         _profile_name: &str,
         commit_id: &str,
         current_fingerprint: &SaveFingerprint,
@@ -715,7 +725,7 @@ impl<'a> SaveManager<'a> {
 
     /// Restore saves from a specific commit to the game save directory.
     pub fn restore(
-        game_id: &str,
+        game_id: &GameId,
         profile_name: &str,
         commit_id: &str,
         game_save_dir: &Path,
@@ -762,7 +772,7 @@ impl<'a> SaveManager<'a> {
         })?;
 
         info!(
-            game_id,
+            game_id = %game_id,
             profile = profile_name,
             commit = commit_id,
             count,
@@ -772,7 +782,7 @@ impl<'a> SaveManager<'a> {
     }
 
     /// List file paths in a specific snapshot's git tree.
-    pub fn snapshot_file_list(game_id: &str, commit_id: &str) -> Result<Vec<String>> {
+    pub fn snapshot_file_list(game_id: &GameId, commit_id: &str) -> Result<Vec<String>> {
         let repo = Self::vault_repo(game_id)?;
         let obj = repo.revparse_single(commit_id).map_err(|e| {
             CoreError::SaveVaultError(format!("could not find commit '{commit_id}': {e}"))
@@ -790,7 +800,11 @@ impl<'a> SaveManager<'a> {
 
     /// Check if a game save directory has saves but no profile is active.
     /// Returns the number of unadopted saves, or None if no saves found.
-    pub fn detect_unadopted(&self, game_id: &str, game_save_dir: &Path) -> Result<Option<usize>> {
+    pub fn detect_unadopted(
+        &self,
+        game_id: &GameId,
+        game_save_dir: &Path,
+    ) -> Result<Option<usize>> {
         if self.db.get_active_profile(game_id)?.is_some() {
             return Ok(None);
         }
@@ -808,7 +822,12 @@ impl<'a> SaveManager<'a> {
 
     /// Adopt existing saves from the game's save directory into a profile's vault.
     /// Returns the number of files adopted.
-    pub fn adopt(&self, game_id: &str, profile_name: &str, game_save_dir: &Path) -> Result<usize> {
+    pub fn adopt(
+        &self,
+        game_id: &GameId,
+        profile_name: &str,
+        game_save_dir: &Path,
+    ) -> Result<usize> {
         Self::ensure_branch(game_id, profile_name)?;
         self.capture(game_id, profile_name, game_save_dir)
     }

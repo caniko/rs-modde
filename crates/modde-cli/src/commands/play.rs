@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use tracing::info;
 
 use modde_core::profile::{ActivateResult, ProfileManager};
+use modde_core::resolver::GameId;
 use modde_core::save::SaveManager;
 
 use super::{compute_fingerprint, resolve_save_dir, supports_save_profiles};
@@ -19,7 +20,7 @@ pub async fn handle(
     let target_profile = match profile_name {
         Some(name) => name,
         None => pm
-            .active(&game_id)?
+            .active(&GameId::from(game_id.as_str()))?
             .map(|info| info.profile.name)
             .ok_or_else(|| {
                 anyhow::anyhow!(
@@ -32,7 +33,7 @@ pub async fn handle(
     // 2. Switch profile (swaps saves automatically)
     if !no_switch {
         let already_active = pm
-            .active(&game_id)?
+            .active(&GameId::from(game_id.as_str()))?
             .is_some_and(|info| info.profile.name == target_profile);
 
         if already_active {
@@ -42,7 +43,7 @@ pub async fn handle(
             let fp = compute_fingerprint(&pm, &target_profile, &game_id);
             match pm.activate_with_fingerprint(
                 &target_profile,
-                &game_id,
+                &GameId::from(game_id.as_str()),
                 save_dir.as_deref(),
                 fp.as_ref(),
             )? {
@@ -73,9 +74,10 @@ pub async fn handle(
     }
 
     // 4. Detect launcher and launch
-    let detected = modde_games::find_detected_game(&game_id).ok_or_else(|| {
-        anyhow::anyhow!("could not detect launcher for '{game_id}'. Is the game installed?")
-    })?;
+    let detected =
+        modde_games::find_detected_game(&GameId::from(game_id.as_str())).ok_or_else(|| {
+            anyhow::anyhow!("could not detect launcher for '{game_id}'. Is the game installed?")
+        })?;
 
     println!("Launching via {}...", detected.source);
     let exit_status = detected.source.launch()?;
@@ -90,7 +92,7 @@ pub async fn handle(
                     let sm = SaveManager::new(pm.db());
                     let fp = compute_fingerprint(&pm, &target_profile, &game_id);
                     match sm.capture_with_fingerprint(
-                        &game_id,
+                        &GameId::from(game_id.as_str()),
                         &target_profile,
                         save_dir,
                         fp.as_ref(),

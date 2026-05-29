@@ -12,6 +12,7 @@ use modde_core::paths;
 use modde_core::profile::{
     EnabledMod, LoadOrderLock, LockReason, Profile, ProfileManager, ProfileSource,
 };
+use modde_core::resolver::GameId;
 
 use crate::direct::DirectSource;
 use crate::nexus::NexusSource;
@@ -53,7 +54,7 @@ pub struct WabbajackInstallSafety {
 pub struct WabbajackInstallSummary {
     pub profile_name: String,
     pub modlist_name: String,
-    pub game_id: String,
+    pub game_id: GameId,
     pub mod_count: usize,
     pub manifest_hash: String,
 }
@@ -95,8 +96,10 @@ pub async fn install_wabbajack(
 
     let manifest = parse_wabbajack_manifest(&options.path)?;
     let modlist_name = manifest.name.clone();
-    let game_id = modde_games::normalize_wabbajack_game(&manifest.game)
-        .map_or_else(|| manifest.game.to_lowercase(), String::from);
+    let game_id = GameId::from(
+        modde_games::normalize_wabbajack_game(&manifest.game)
+            .map_or_else(|| manifest.game.to_lowercase(), String::from),
+    );
     let profile_name = options
         .profile_name
         .clone()
@@ -239,7 +242,7 @@ pub async fn install_wabbajack(
     let profile = Profile {
         id: None,
         name: profile_name.clone(),
-        game_id: modde_core::GameId::from(game_id.clone()),
+        game_id: game_id.clone(),
         source: ProfileSource::Wabbajack {
             manifest_hash: manifest_hash.clone(),
         },
@@ -282,12 +285,12 @@ fn save_profile_and_settings(
 }
 
 pub fn configure_wine_overrides(
-    game_id: &str,
+    game_id: &GameId,
     game_dir: &Path,
     staging: &Path,
 ) -> Result<modde_games::launcher::LauncherConfigurationReport> {
     let mut report = modde_games::launcher::LauncherConfigurationReport::default();
-    let Some(plugin) = modde_games::resolve_game_plugin(game_id) else {
+    let Some(plugin) = modde_games::resolve_game_plugin(game_id.as_str()) else {
         info!(%game_id, "no game plugin found, skipping Wine DLL override detection");
         return Ok(report);
     };

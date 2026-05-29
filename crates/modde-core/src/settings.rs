@@ -78,20 +78,20 @@ impl AppSettings {
 
     /// Get the install path for a game, if configured.
     #[must_use]
-    pub fn game_path(&self, game_id: &str) -> Option<&PathBuf> {
+    pub fn game_path(&self, game_id: &GameId) -> Option<&PathBuf> {
         self.game_paths
             .iter()
-            .find(|gp| gp.game_id == game_id)
+            .find(|gp| gp.game_id == *game_id)
             .map(|gp| &gp.path)
     }
 
     /// Set the install path for a game (add or update).
-    pub fn set_game_path(&mut self, game_id: &str, path: PathBuf) {
-        if let Some(entry) = self.game_paths.iter_mut().find(|gp| gp.game_id == game_id) {
+    pub fn set_game_path(&mut self, game_id: &GameId, path: PathBuf) {
+        if let Some(entry) = self.game_paths.iter_mut().find(|gp| gp.game_id == *game_id) {
             entry.path = path;
         } else {
             self.game_paths.push(GamePath {
-                game_id: GameId::from(game_id),
+                game_id: game_id.clone(),
                 path,
             });
         }
@@ -139,18 +139,21 @@ mod tests {
     #[test]
     fn game_path_lookup_and_set() {
         let mut s = AppSettings::default();
-        assert!(s.game_path("cyberpunk2077").is_none());
+        assert!(s.game_path(&GameId::from("cyberpunk2077")).is_none());
 
-        s.set_game_path("cyberpunk2077", PathBuf::from("/games/cp2077"));
+        s.set_game_path(
+            &GameId::from("cyberpunk2077"),
+            PathBuf::from("/games/cp2077"),
+        );
         assert_eq!(
-            s.game_path("cyberpunk2077"),
+            s.game_path(&GameId::from("cyberpunk2077")),
             Some(&PathBuf::from("/games/cp2077"))
         );
 
         // Update existing
-        s.set_game_path("cyberpunk2077", PathBuf::from("/new/path"));
+        s.set_game_path(&GameId::from("cyberpunk2077"), PathBuf::from("/new/path"));
         assert_eq!(
-            s.game_path("cyberpunk2077"),
+            s.game_path(&GameId::from("cyberpunk2077")),
             Some(&PathBuf::from("/new/path"))
         );
         assert_eq!(s.game_paths.len(), 1, "should update, not duplicate");
@@ -159,19 +162,22 @@ mod tests {
     #[test]
     fn multiple_game_paths() {
         let mut s = AppSettings::default();
-        s.set_game_path("skyrim-se", PathBuf::from("/games/skyrim"));
-        s.set_game_path("cyberpunk2077", PathBuf::from("/games/cp2077"));
+        s.set_game_path(&GameId::from("skyrim-se"), PathBuf::from("/games/skyrim"));
+        s.set_game_path(
+            &GameId::from("cyberpunk2077"),
+            PathBuf::from("/games/cp2077"),
+        );
 
         assert_eq!(s.game_paths.len(), 2);
         assert_eq!(
-            s.game_path("skyrim-se"),
+            s.game_path(&GameId::from("skyrim-se")),
             Some(&PathBuf::from("/games/skyrim"))
         );
         assert_eq!(
-            s.game_path("cyberpunk2077"),
+            s.game_path(&GameId::from("cyberpunk2077")),
             Some(&PathBuf::from("/games/cp2077"))
         );
-        assert!(s.game_path("fallout4").is_none());
+        assert!(s.game_path(&GameId::from("fallout4")).is_none());
     }
 
     #[test]
@@ -183,8 +189,11 @@ mod tests {
             nexus_api_key: "test-key-123".into(),
             ..AppSettings::default()
         };
-        original.set_game_path("cyberpunk2077", PathBuf::from("/games/cp2077"));
-        original.set_game_path("skyrim-se", PathBuf::from("/games/skyrim"));
+        original.set_game_path(
+            &GameId::from("cyberpunk2077"),
+            PathBuf::from("/games/cp2077"),
+        );
+        original.set_game_path(&GameId::from("skyrim-se"), PathBuf::from("/games/skyrim"));
         original.selected_game = Some("cyberpunk2077".into());
         original.theme = "Nord".into();
         original.download_dir = Some(PathBuf::from("/downloads"));
@@ -197,11 +206,11 @@ mod tests {
         assert_eq!(loaded.theme, "Nord");
         assert_eq!(loaded.download_dir, Some(PathBuf::from("/downloads")));
         assert_eq!(
-            loaded.game_path("cyberpunk2077"),
+            loaded.game_path(&GameId::from("cyberpunk2077")),
             Some(&PathBuf::from("/games/cp2077"))
         );
         assert_eq!(
-            loaded.game_path("skyrim-se"),
+            loaded.game_path(&GameId::from("skyrim-se")),
             Some(&PathBuf::from("/games/skyrim"))
         );
     }
@@ -245,7 +254,10 @@ mod tests {
         let path = tmp.path().join("settings.toml");
 
         let mut s = AppSettings::default();
-        s.set_game_path("cyberpunk2077", PathBuf::from("/games/cp2077"));
+        s.set_game_path(
+            &GameId::from("cyberpunk2077"),
+            PathBuf::from("/games/cp2077"),
+        );
         s.selected_game = Some("cyberpunk2077".into());
         s.save_to(&path);
 

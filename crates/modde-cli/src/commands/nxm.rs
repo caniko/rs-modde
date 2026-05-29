@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
+use modde_core::{NexusFileId, NexusModId};
 use tracing::info;
 
 /// Parsed nxm:// URI.
@@ -9,8 +10,8 @@ use tracing::info;
 #[derive(Debug, Clone)]
 pub struct NxmUri {
     pub game_domain: String,
-    pub mod_id: u64,
-    pub file_id: u64,
+    pub mod_id: NexusModId,
+    pub file_id: NexusFileId,
     /// Authorization key from a premium nxm:// link. Parsed for a complete
     /// representation of the URI; not yet consumed by the download flow.
     #[allow(dead_code)]
@@ -37,11 +38,13 @@ impl NxmUri {
         }
 
         let game_domain = segments[0].to_string();
-        let mod_id: u64 = segments[2]
-            .parse()
+        let mod_id = segments[2]
+            .parse::<u64>()
+            .map(NexusModId::from)
             .with_context(|| format!("invalid mod_id: {}", segments[2]))?;
-        let file_id: u64 = segments[4]
-            .parse()
+        let file_id = segments[4]
+            .parse::<u64>()
+            .map(NexusFileId::from)
             .with_context(|| format!("invalid file_id: {}", segments[4]))?;
 
         // Parse query parameters
@@ -280,8 +283,8 @@ mod tests {
         let uri = "nxm://skyrimspecialedition/mods/12604/files/35834?key=abc123&expires=1700000000";
         let parsed = NxmUri::parse(uri).unwrap();
         assert_eq!(parsed.game_domain, "skyrimspecialedition");
-        assert_eq!(parsed.mod_id, 12604);
-        assert_eq!(parsed.file_id, 35834);
+        assert_eq!(parsed.mod_id, NexusModId::from(12604));
+        assert_eq!(parsed.file_id, NexusFileId::from(35834));
         assert_eq!(parsed.key.as_deref(), Some("abc123"));
         assert_eq!(parsed.expires, Some(1700000000));
     }
@@ -291,8 +294,8 @@ mod tests {
         let uri = "nxm://fallout4/mods/100/files/200";
         let parsed = NxmUri::parse(uri).unwrap();
         assert_eq!(parsed.game_domain, "fallout4");
-        assert_eq!(parsed.mod_id, 100);
-        assert_eq!(parsed.file_id, 200);
+        assert_eq!(parsed.mod_id, NexusModId::from(100));
+        assert_eq!(parsed.file_id, NexusFileId::from(200));
         assert!(parsed.key.is_none());
         assert!(parsed.expires.is_none());
     }

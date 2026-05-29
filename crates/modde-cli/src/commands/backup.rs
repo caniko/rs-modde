@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 
 use modde_core::backup::BackupManager;
+use modde_core::resolver::{GameId, ModId};
 
 use crate::BackupAction;
 
@@ -18,7 +19,7 @@ pub fn handle(action: BackupAction) -> Result<()> {
             }
 
             let entry = mgr
-                .create_mod_backup(&mod_id, &store_mod)
+                .create_mod_backup(&ModId::from(mod_id.as_str()), &store_mod)
                 .context("failed to create backup")?;
 
             println!("Backup created: {}", entry.name);
@@ -27,14 +28,14 @@ pub fn handle(action: BackupAction) -> Result<()> {
         BackupAction::Restore { mod_id } => {
             let store_mod = modde_core::paths::store_dir().join(&mod_id);
             let entry = mgr
-                .restore_mod_backup(&mod_id, &store_mod)
+                .restore_mod_backup(&ModId::from(mod_id.as_str()), &store_mod)
                 .context("failed to restore backup")?;
 
             println!("Restored mod '{}' from backup: {}", mod_id, entry.name);
         }
         BackupAction::List { mod_id } => {
             let entries = mgr
-                .list_mod_backups(&mod_id)
+                .list_mod_backups(&ModId::from(mod_id.as_str()))
                 .context("failed to list backups")?;
 
             if entries.is_empty() {
@@ -55,7 +56,7 @@ pub fn handle(action: BackupAction) -> Result<()> {
             }
 
             let path = mgr
-                .backup_plugin_order(&profile, &game, &plugins)
+                .backup_plugin_order(&profile, &GameId::from(game.as_str()), &plugins)
                 .context("failed to backup plugin order")?;
 
             println!("Plugin order backed up ({} plugins)", plugins.len());
@@ -63,7 +64,7 @@ pub fn handle(action: BackupAction) -> Result<()> {
         }
         BackupAction::RestorePlugins { profile, game } => {
             let plugins = mgr
-                .restore_plugin_order(&profile, &game)
+                .restore_plugin_order(&profile, &GameId::from(game.as_str()))
                 .context("failed to restore plugin order")?;
 
             let pm = modde_core::profile::ProfileManager::open()?;

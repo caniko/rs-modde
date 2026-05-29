@@ -40,8 +40,8 @@ fn mega_source_rejects_nexus_directive() {
     let source = MegaSource::new(Client::new());
     let directive = DownloadDirective::Nexus {
         game_id: GameId::from("skyrimse"),
-        mod_id: 100,
-        file_id: 200,
+        mod_id: 100.into(),
+        file_id: 200.into(),
         hash: 0,
     };
     assert!(!source.can_handle(&directive));

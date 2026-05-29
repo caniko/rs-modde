@@ -20,6 +20,7 @@
 //! if Nexus ever pulls the v2 endpoint.
 
 use anyhow::{Context, Result, bail};
+use modde_core::NexusModId;
 use reqwest::Client;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -84,7 +85,7 @@ pub async fn post<T: DeserializeOwned>(
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GqlModTile {
     #[serde(rename = "modId")]
-    pub mod_id: u64,
+    pub mod_id: NexusModId,
     pub name: String,
     #[serde(default)]
     pub summary: Option<String>,
@@ -234,7 +235,8 @@ fn decode_mod_list(data: &Value) -> Result<Vec<GqlModTile>> {
                 mod_id: raw
                     .get("modId")
                     .and_then(serde_json::Value::as_u64)
-                    .unwrap_or_default(),
+                    .map(NexusModId::from)
+                    .unwrap_or_else(|| NexusModId::from(0)),
                 name: raw
                     .get("name")
                     .and_then(|v| v.as_str())

@@ -166,7 +166,7 @@ pub trait GamePlugin: Send + Sync {
     /// Attempt to detect the game's install location.
     /// Default: delegates to `detection::find_game_install(self.game_id())`.
     fn detect_install(&self) -> Option<PathBuf> {
-        crate::detection::find_game_install(self.game_id())
+        crate::detection::find_game_install(&modde_core::GameId::from(self.game_id()))
     }
 
     /// Return the mod directory relative to the install path.

@@ -27,6 +27,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::nexus_id::{NexusFileId, NexusModId};
 use crate::paths::modde_data_dir;
 
 use super::fs::walk_files;
@@ -39,8 +40,8 @@ use super::types::{InstallMethod, InstallerResult};
 pub struct DossierContext {
     pub game_id: String,
     pub game_domain: Option<String>,
-    pub nexus_mod_id: Option<u64>,
-    pub nexus_file_id: Option<u64>,
+    pub nexus_mod_id: Option<NexusModId>,
+    pub nexus_file_id: Option<NexusFileId>,
     pub mod_name: String,
     pub mod_author: Option<String>,
     pub mod_version: Option<String>,

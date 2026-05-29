@@ -99,8 +99,8 @@ async fn test_validate_mixed_from_archive_and_patched() {
             size: 200,
             state: Some(ArchiveState::NexusDownloader {
                 game_name: "SkyrimSE".to_string(),
-                mod_id: 42,
-                file_id: 99,
+                mod_id: 42.into(),
+                file_id: 99.into(),
             }),
         }],
         directives: vec![

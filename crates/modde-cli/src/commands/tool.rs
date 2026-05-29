@@ -9,6 +9,7 @@ use modde_core::db::{ExecutableConfigRow, ModdeDb};
 use modde_core::fs::walk_files_relative;
 use modde_core::paths;
 use modde_core::profile::ProfileManager;
+use modde_core::resolver::GameId;
 
 use super::load_profile_or_default;
 
@@ -52,7 +53,7 @@ async fn run_external_tool(options: ExternalToolRun) -> Result<()> {
         options.game_id.as_deref(),
     )?;
 
-    let game_plugin = modde_games::resolve_game_plugin(&profile.game_id)
+    let game_plugin = modde_games::resolve_game_plugin(profile.game_id.as_str())
         .ok_or_else(|| anyhow::anyhow!("unsupported game: '{}'", profile.game_id))?;
 
     let install_dir = game_plugin.detect_install().ok_or_else(|| {
@@ -203,7 +204,7 @@ pub fn handle_add_executable(
 /// List saved executable launch targets for a game.
 pub fn handle_list_executables(game_id: &str) -> Result<()> {
     let db = ModdeDb::open().context("failed to open database")?;
-    let rows = db.load_executable_configs(game_id)?;
+    let rows = db.load_executable_configs(&GameId::from(game_id))?;
 
     println!("Executables for {game_id}:");
     if rows.is_empty() {
@@ -233,7 +234,7 @@ pub fn handle_list_executables(game_id: &str) -> Result<()> {
 /// Remove a saved executable launch target.
 pub fn handle_remove_executable(name: &str, game_id: &str) -> Result<()> {
     let db = ModdeDb::open().context("failed to open database")?;
-    if db.delete_executable_config(game_id, name)? {
+    if db.delete_executable_config(&GameId::from(game_id), name)? {
         println!("Removed executable '{name}' for {game_id}");
     } else {
         anyhow::bail!("no executable named '{name}' is configured for {game_id}");
@@ -249,9 +250,11 @@ pub async fn handle_run_executable(
     extra_args: Vec<String>,
 ) -> Result<()> {
     let db = ModdeDb::open().context("failed to open database")?;
-    let row = db.load_executable_config(game_id, name)?.ok_or_else(|| {
-        anyhow::anyhow!("no executable named '{name}' is configured for {game_id}")
-    })?;
+    let row = db
+        .load_executable_config(&GameId::from(game_id), name)?
+        .ok_or_else(|| {
+            anyhow::anyhow!("no executable named '{name}' is configured for {game_id}")
+        })?;
     if !row.enabled {
         anyhow::bail!("executable '{name}' is disabled for {game_id}");
     }
@@ -341,7 +344,7 @@ pub fn handle_list(game_id: &str) -> Result<()> {
 /// Show status of all gaming tools for a game.
 pub fn handle_status(game_id: &str) -> Result<()> {
     let db = ModdeDb::open().context("failed to open database")?;
-    let stored = db.load_tool_configs(game_id)?;
+    let stored = db.load_tool_configs(&GameId::from(game_id))?;
     let game_plugin = modde_games::resolve_game_plugin(game_id);
     let install_dir = game_plugin.and_then(modde_games::GamePlugin::detect_install);
 
@@ -371,7 +374,7 @@ pub fn handle_status(game_id: &str) -> Result<()> {
 
         // Check if files are applied
         let applied_count = db
-            .load_applied_files(game_id, tool.tool_id())
+            .load_applied_files(&GameId::from(game_id), tool.tool_id())
             .map_or(0, |f| f.len());
 
         let status_str = if applied_count > 0 {
@@ -459,7 +462,7 @@ pub fn handle_enable(tool_id: &str, game_id: &str) -> Result<()> {
     let context = modde_games::resolve_game_plugin(game_id).map(|plugin| {
         modde_games::tools::ToolGameContext::from_parts(game_id, plugin.display_name(), None, None)
     });
-    let mut config = if let Some(row) = db.load_tool_config(game_id, tool_id)? {
+    let mut config = if let Some(row) = db.load_tool_config(&GameId::from(game_id), tool_id)? {
         modde_games::tools::ToolConfig {
             tool_id: row.tool_id,
             enabled: true,
@@ -474,7 +477,7 @@ pub fn handle_enable(tool_id: &str, game_id: &str) -> Result<()> {
     config.enabled = true;
 
     let settings_json = serde_json::to_string(&config.settings)?;
-    db.save_tool_config(game_id, tool_id, true, &settings_json)?;
+    db.save_tool_config(&GameId::from(game_id), tool_id, true, &settings_json)?;
 
     println!("Enabled {} for {game_id}", tool.display_name());
 
@@ -500,10 +503,10 @@ pub fn handle_disable(tool_id: &str, game_id: &str) -> Result<()> {
 
     // Load existing config to preserve settings
     let settings_json = db
-        .load_tool_config(game_id, tool_id)?
+        .load_tool_config(&GameId::from(game_id), tool_id)?
         .map_or_else(|| "{}".into(), |r| r.settings_json);
 
-    db.save_tool_config(game_id, tool_id, false, &settings_json)?;
+    db.save_tool_config(&GameId::from(game_id), tool_id, false, &settings_json)?;
 
     println!("Disabled {} for {game_id}", tool.display_name());
 
@@ -521,7 +524,7 @@ pub fn handle_configure(tool_id: &str, game_id: &str, settings: &[String]) -> Re
     let context = modde_games::resolve_game_plugin(game_id).map(|plugin| {
         modde_games::tools::ToolGameContext::from_parts(game_id, plugin.display_name(), None, None)
     });
-    let mut config = match db.load_tool_config(game_id, tool_id)? {
+    let mut config = match db.load_tool_config(&GameId::from(game_id), tool_id)? {
         Some(row) => modde_games::tools::ToolConfig {
             tool_id: row.tool_id,
             enabled: row.enabled,
@@ -555,7 +558,12 @@ pub fn handle_configure(tool_id: &str, game_id: &str, settings: &[String]) -> Re
     }
 
     let settings_json = serde_json::to_string(&config.settings)?;
-    db.save_tool_config(game_id, tool_id, config.enabled, &settings_json)?;
+    db.save_tool_config(
+        &GameId::from(game_id),
+        tool_id,
+        config.enabled,
+        &settings_json,
+    )?;
 
     // Regenerate config file
     config.set("_game_id", serde_json::json!(game_id));
@@ -595,7 +603,7 @@ pub fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
         Some(install_dir.clone()),
         None,
     );
-    let mut config = match db.load_tool_config(game_id, tool_id)? {
+    let mut config = match db.load_tool_config(&GameId::from(game_id), tool_id)? {
         Some(row) => modde_games::tools::ToolConfig {
             tool_id: row.tool_id,
             enabled: row.enabled,
@@ -621,7 +629,7 @@ pub fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
         .map(|p| p.to_string_lossy().to_string())
         .collect();
 
-    db.save_applied_files(game_id, tool_id, &rel_paths)?;
+    db.save_applied_files(&GameId::from(game_id), tool_id, &rel_paths)?;
     if tool_id == "optiscaler" {
         let mut updated_config = config.clone();
         updated_config.set(
@@ -629,7 +637,7 @@ pub fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
             modde_games::tools::optiscaler::managed_manifest_json(&install_dir, &applied),
         );
         let settings_json = serde_json::to_string(&updated_config.settings)?;
-        db.save_tool_config(game_id, tool_id, true, &settings_json)?;
+        db.save_tool_config(&GameId::from(game_id), tool_id, true, &settings_json)?;
     }
 
     println!(
@@ -662,7 +670,7 @@ pub fn handle_revert(tool_id: &str, game_id: &str) -> Result<()> {
 
     let db = ModdeDb::open().context("failed to open database")?;
 
-    let files = db.load_applied_files(game_id, tool_id)?;
+    let files = db.load_applied_files(&GameId::from(game_id), tool_id)?;
     if files.is_empty() {
         println!("No applied files to revert for {}", tool.display_name());
         return Ok(());
@@ -673,7 +681,7 @@ pub fn handle_revert(tool_id: &str, game_id: &str) -> Result<()> {
     };
 
     tool.revert(&install_dir, &applied)?;
-    db.clear_applied_files(game_id, tool_id)?;
+    db.clear_applied_files(&GameId::from(game_id), tool_id)?;
 
     println!(
         "Reverted {} ({} files) from {}",
@@ -750,7 +758,12 @@ pub async fn handle_install_release(
     let config = load_tool_config_or_default(&db, game_id, tool_id, tool)?;
     let config = tool.install_release(game_id, config, tag, asset).await?;
     let settings_json = serde_json::to_string(&config.settings)?;
-    db.save_tool_config(game_id, tool_id, config.enabled, &settings_json)?;
+    db.save_tool_config(
+        &GameId::from(game_id),
+        tool_id,
+        config.enabled,
+        &settings_json,
+    )?;
 
     println!(
         "Installed {} {} ({}) for {}",
@@ -782,7 +795,12 @@ pub async fn handle_install_release_from_path(
         .install_release_from_path(game_id, config, tag, asset, path)
         .await?;
     let settings_json = serde_json::to_string(&config.settings)?;
-    db.save_tool_config(game_id, tool_id, config.enabled, &settings_json)?;
+    db.save_tool_config(
+        &GameId::from(game_id),
+        tool_id,
+        config.enabled,
+        &settings_json,
+    )?;
 
     println!(
         "Installed {} {} ({}) for {}",
@@ -803,14 +821,16 @@ fn load_tool_config_or_default(
     let context = modde_games::resolve_game_plugin(game_id).map(|plugin| {
         modde_games::tools::ToolGameContext::from_parts(game_id, plugin.display_name(), None, None)
     });
-    Ok(match db.load_tool_config(game_id, tool_id)? {
-        Some(row) => modde_games::tools::ToolConfig {
-            tool_id: row.tool_id,
-            enabled: row.enabled,
-            settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+    Ok(
+        match db.load_tool_config(&GameId::from(game_id), tool_id)? {
+            Some(row) => modde_games::tools::ToolConfig {
+                tool_id: row.tool_id,
+                enabled: row.enabled,
+                settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+            },
+            None => tool.default_config_for(context.as_ref()),
         },
-        None => tool.default_config_for(context.as_ref()),
-    })
+    )
 }
 
 /// Snapshot a directory's file listing (relative paths).

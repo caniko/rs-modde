@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use modde_core::manifest::wabbajack::{ArchiveEntry, ArchiveState, WabbajackManifest};
+use modde_core::{NexusFileId, NexusModId};
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
@@ -146,7 +147,11 @@ pub fn normalize_nexus_game_domain(game_name: &str) -> String {
     }
 }
 
-pub fn nexus_browser_url(game_name: &str, mod_id: u64, file_id: u64) -> Option<String> {
+pub fn nexus_browser_url(
+    game_name: &str,
+    mod_id: NexusModId,
+    file_id: NexusFileId,
+) -> Option<String> {
     let domain = normalize_nexus_game_domain(game_name);
     Some(format!(
         "https://www.nexusmods.com/{domain}/mods/{mod_id}?tab=files&file_id={file_id}"
@@ -852,8 +857,8 @@ mod tests {
                     size: nexus.len() as u64,
                     state: Some(ArchiveState::NexusDownloader {
                         game_name: "SkyrimSpecialEdition".into(),
-                        mod_id: 631,
-                        file_id: 5118,
+                        mod_id: 631.into(),
+                        file_id: 5118.into(),
                     }),
                 },
             ],
@@ -935,7 +940,12 @@ mod tests {
     fn modding_tools_nexus_entries_get_site_browser_url() {
         assert_eq!(normalize_nexus_game_domain("ModdingTools"), "site");
         assert_eq!(
-            nexus_browser_url("ModdingTools", 631, 5118).unwrap(),
+            nexus_browser_url(
+                "ModdingTools",
+                NexusModId::from(631),
+                NexusFileId::from(5118),
+            )
+            .unwrap(),
             "https://www.nexusmods.com/site/mods/631?tab=files&file_id=5118"
         );
     }

@@ -3,6 +3,7 @@ use tracing::info;
 
 use modde_core::ModdeDb;
 use modde_core::fs::count_files;
+use modde_core::resolver::GameId;
 use modde_core::stock::StockGameManager;
 
 use crate::StockAction;
@@ -34,7 +35,7 @@ pub async fn handle(action: StockAction) -> Result<()> {
 
             // Create snapshot
             let snapshot = mgr
-                .snapshot(&game_id, &install_path)
+                .snapshot(&GameId::from(game_id.as_str()), &install_path)
                 .await
                 .context("failed to create stock snapshot")?;
 
@@ -46,7 +47,7 @@ pub async fn handle(action: StockAction) -> Result<()> {
             println!("  Files:         {file_count}");
         }
         StockAction::Verify { game_id } => {
-            let ok = mgr.verify(&game_id).await?;
+            let ok = mgr.verify(&GameId::from(game_id.as_str())).await?;
             if ok {
                 println!("Stock snapshot for {game_id}: OK");
             } else {

@@ -19,7 +19,7 @@ pub async fn handle(
     let pm = ProfileManager::open().context("failed to open profile database")?;
     let profile = load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref())?;
 
-    let classifier = modde_games::resolve_collision_classifier(&profile.game_id)
+    let classifier = modde_games::resolve_collision_classifier(profile.game_id.as_str())
         .ok_or_else(|| anyhow::anyhow!("no collision classifier for game '{}'", profile.game_id))?;
 
     let resolved = resolver::resolve(&profile).context("failed to resolve load order")?;

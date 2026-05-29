@@ -55,7 +55,7 @@ pub async fn handle_check(
         .filter_map(|m| {
             Some(TrackedMod {
                 mod_id: m.mod_id.clone(),
-                nexus_mod_id: m.nexus_mod_id? as u64,
+                nexus_mod_id: m.nexus_mod_id?,
                 nexus_game_domain: m.nexus_game_domain.clone()?,
                 installed_version: m.version.clone(),
                 installed_timestamp: m.installed_timestamp?,
@@ -172,7 +172,7 @@ pub async fn handle_apply(options: ApplyOptions) -> Result<()> {
         .filter_map(|m| {
             Some(TrackedMod {
                 mod_id: m.mod_id.clone(),
-                nexus_mod_id: m.nexus_mod_id? as u64,
+                nexus_mod_id: m.nexus_mod_id?,
                 nexus_game_domain: m.nexus_game_domain.clone()?,
                 installed_version: m.version.clone(),
                 installed_timestamp: m.installed_timestamp?,
@@ -357,25 +357,26 @@ pub async fn handle_apply(options: ApplyOptions) -> Result<()> {
         // `mod_id`, `file_id`, `version`, and `installed_timestamp`.
         if let Some(slot) = profile.mods.iter_mut().find(|m| m.mod_id == u.mod_id) {
             slot.mod_id = new_mod_id_str.clone();
-            slot.nexus_file_id = Some(new_file_id as i64);
+            slot.nexus_file_id = Some(new_file_id);
             slot.version = Some(mod_info.version.clone());
             slot.installed_timestamp = file.uploaded_timestamp.map(|t| t as i64);
-            slot.install_status = Some(
-                match &outcome {
-                    InstallOutcome::Installed(_) | InstallOutcome::AlreadyStaged => {
-                        InstallStatus::Installed
-                    }
-                    InstallOutcome::PendingUserInput { .. } => InstallStatus::PendingUserInput,
-                    InstallOutcome::Unknown { .. } => InstallStatus::Unknown,
+            slot.install_status = Some(match &outcome {
+                InstallOutcome::Installed(_) | InstallOutcome::AlreadyStaged => {
+                    InstallStatus::Installed
                 }
-                .as_str()
-                .to_string(),
-            );
+                InstallOutcome::PendingUserInput { .. } => InstallStatus::PendingUserInput,
+                InstallOutcome::Unknown { .. } => InstallStatus::Unknown,
+            });
         }
 
         if let InstallOutcome::Installed(plan) = &outcome {
-            db.record_install(profile_id, &new_mod_id_str, plan, InstallStatus::Installed)
-                .context("failed to persist install plan")?;
+            db.record_install(
+                profile_id,
+                &modde_core::ModId::from(new_mod_id_str.as_str()),
+                plan,
+                InstallStatus::Installed,
+            )
+            .context("failed to persist install plan")?;
         }
 
         applied += 1;

@@ -7,6 +7,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use modde_core::resolver::GameId;
 use tracing::{debug, info};
 
 /// INI files tracked per profile for each Bethesda game.
@@ -52,8 +53,8 @@ pub fn game_ini_dir(steam_app_id: &str, my_games_dir: &str) -> Option<PathBuf> {
 ///
 /// Copies INI files from the game directory into the profile's `ini/` subdirectory.
 /// Existing profile INIs are overwritten.
-pub fn capture_inis(game_id: &str, profile_name: &str, game_ini_path: &Path) -> Result<usize> {
-    let inis = tracked_inis(game_id);
+pub fn capture_inis(game_id: &GameId, profile_name: &str, game_ini_path: &Path) -> Result<usize> {
+    let inis = tracked_inis(game_id.as_str());
     if inis.is_empty() {
         return Ok(0);
     }
@@ -93,8 +94,8 @@ pub fn capture_inis(game_id: &str, profile_name: &str, game_ini_path: &Path) -> 
 ///
 /// Copies INI files from the profile's `ini/` subdirectory back to the game directory.
 /// Only overwrites game INIs for files that exist in the profile's storage.
-pub fn restore_inis(game_id: &str, profile_name: &str, game_ini_path: &Path) -> Result<usize> {
-    let inis = tracked_inis(game_id);
+pub fn restore_inis(game_id: &GameId, profile_name: &str, game_ini_path: &Path) -> Result<usize> {
+    let inis = tracked_inis(game_id.as_str());
     if inis.is_empty() {
         return Ok(0);
     }
@@ -140,7 +141,7 @@ pub fn restore_inis(game_id: &str, profile_name: &str, game_ini_path: &Path) -> 
 /// 1. Capture current game INIs into the outgoing profile (if provided)
 /// 2. Restore incoming profile's INIs to the game directory
 pub fn swap_inis(
-    game_id: &str,
+    game_id: &GameId,
     outgoing_profile: Option<&str>,
     incoming_profile: &str,
     game_ini_path: &Path,
@@ -217,7 +218,12 @@ mod tests {
 
         // Swap with no outgoing should not error
         // (can't easily test the full swap without overriding paths, but we test the logic)
-        let result = swap_inis("skyrim-se", None, "new_profile", game_dir.path());
+        let result = swap_inis(
+            &GameId::from("skyrim-se"),
+            None,
+            "new_profile",
+            game_dir.path(),
+        );
         // This will succeed - restore will just find no stored INIs
         assert!(result.is_ok());
     }

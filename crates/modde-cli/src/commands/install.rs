@@ -4,7 +4,6 @@ use anyhow::{Context, Result, bail};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
-use modde_core::ModdeDb;
 use modde_core::installer::{
     self as installer, DossierContext, InstallMethod, InstallStatus, InstallerError,
 };
@@ -13,6 +12,7 @@ use modde_core::paths;
 use modde_core::profile::{
     EnabledMod, LoadOrderLock, LockReason, Profile, ProfileManager, ProfileSource,
 };
+use modde_core::{ModdeDb, NexusFileId, NexusModId};
 use modde_sources::nexus::api::NexusApi;
 use modde_sources::nexus::auth::load_api_key;
 use modde_sources::nexus::cdn::generate_download_link;
@@ -239,7 +239,7 @@ pub fn find_fomod_config(mod_dir: &Path) -> Option<std::path::PathBuf> {
 /// Supports URLs like:
 /// - `https://www.nexusmods.com/skyrimspecialedition/mods/12345`
 /// - `https://www.nexusmods.com/skyrimspecialedition/mods/12345?tab=files&file_id=67890`
-fn parse_nexus_url(url: &str) -> Result<(String, u64, Option<u64>)> {
+fn parse_nexus_url(url: &str) -> Result<(String, NexusModId, Option<NexusFileId>)> {
     // Extract path segments: /GAME/mods/MOD_ID
     let url_parsed = url::Url::parse(url).context("invalid URL")?;
 
@@ -253,15 +253,16 @@ fn parse_nexus_url(url: &str) -> Result<(String, u64, Option<u64>)> {
     }
 
     let game_domain = segments[0].to_string();
-    let mod_id: u64 = segments[2]
-        .parse()
+    let mod_id = segments[2]
+        .parse::<u64>()
+        .map(NexusModId::from)
         .with_context(|| format!("invalid mod ID in URL: {}", segments[2]))?;
 
     // Check for file_id in query params
     let file_id = url_parsed
         .query_pairs()
         .find(|(k, _)| k == "file_id")
-        .and_then(|(_, v)| v.parse().ok());
+        .and_then(|(_, v)| v.parse::<u64>().ok().map(NexusFileId::from));
 
     Ok((game_domain, mod_id, file_id))
 }
@@ -609,14 +610,20 @@ pub fn configure_wine_overrides(
 
     // Collect tool env vars for the launch wrapper
     let tool_env_vars = match modde_core::db::ModdeDb::open() {
-        Ok(db) => modde_games::launcher::collect_tool_env_vars(game_id, &db).unwrap_or_default(),
+        Ok(db) => {
+            modde_games::launcher::collect_tool_env_vars(&modde_core::GameId::from(game_id), &db)
+                .unwrap_or_default()
+        }
         Err(_) => Vec::new(),
     };
 
     // Generate a launch wrapper that restores mod DLLs deleted by fgmod + exports tool env vars
-    if let Some(wrapper) =
-        modde_games::launcher::generate_launch_wrapper(game_dir, staging, game_id, &tool_env_vars)?
-    {
+    if let Some(wrapper) = modde_games::launcher::generate_launch_wrapper(
+        game_dir,
+        staging,
+        &modde_core::GameId::from(game_id),
+        &tool_env_vars,
+    )? {
         report.wrapper_registration =
             modde_games::launcher::register_heroic_wrapper(&launcher, &wrapper.path)?;
         report.launch_wrapper = Some(wrapper);
@@ -924,10 +931,10 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
             display_name: Some(mod_info.name.clone()),
             enabled: true,
             version: Some(mod_info.version.clone()),
-            nexus_mod_id: Some(mod_id as i64),
-            nexus_file_id: Some(file_id as i64),
+            nexus_mod_id: Some(mod_id),
+            nexus_file_id: Some(file_id),
             nexus_game_domain: Some(game_domain.clone()),
-            install_status: Some(status.as_str().to_string()),
+            install_status: Some(status),
             fomod_config: None,
             ..Default::default()
         });
@@ -944,8 +951,13 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
             .context("failed to reload profile to get id")?
             .id
             .ok_or_else(|| anyhow::anyhow!("saved profile has no database id"))?;
-        db.record_install(profile_id, &mod_id_str, plan, InstallStatus::Installed)
-            .context("failed to persist install plan")?;
+        db.record_install(
+            profile_id,
+            &modde_core::ModId::from(mod_id_str.as_str()),
+            plan,
+            InstallStatus::Installed,
+        )
+        .context("failed to persist install plan")?;
     }
 
     match install_outcome {
@@ -1005,8 +1017,8 @@ impl InstallOutcome {
 fn write_unknown_dossier(
     extracted_dir: &Path,
     game_domain: &str,
-    mod_id: u64,
-    file_id: u64,
+    mod_id: NexusModId,
+    file_id: NexusFileId,
     mod_info: &modde_sources::nexus::api::NexusMod,
     method: &InstallMethod,
     source_hash: &str,
@@ -1068,7 +1080,7 @@ mod tests {
         let (game, mod_id, file_id) =
             parse_nexus_url("https://www.nexusmods.com/skyrimspecialedition/mods/12345").unwrap();
         assert_eq!(game, "skyrimspecialedition");
-        assert_eq!(mod_id, 12345);
+        assert_eq!(mod_id, NexusModId::from(12345));
         assert_eq!(file_id, None);
     }
 
@@ -1079,8 +1091,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(game, "skyrimspecialedition");
-        assert_eq!(mod_id, 12345);
-        assert_eq!(file_id, Some(67890));
+        assert_eq!(mod_id, NexusModId::from(12345));
+        assert_eq!(file_id, Some(NexusFileId::from(67890)));
     }
 
     #[test]
@@ -1088,8 +1100,8 @@ mod tests {
         let (game, mod_id, file_id) =
             parse_nexus_url("https://www.nexusmods.com/fallout4/mods/999?file_id=42").unwrap();
         assert_eq!(game, "fallout4");
-        assert_eq!(mod_id, 999);
-        assert_eq!(file_id, Some(42));
+        assert_eq!(mod_id, NexusModId::from(999));
+        assert_eq!(file_id, Some(NexusFileId::from(42)));
     }
 
     #[test]
@@ -1099,7 +1111,7 @@ mod tests {
         assert!(result.is_ok());
         let (game, mod_id, _) = result.unwrap();
         assert_eq!(game, "skyrimspecialedition");
-        assert_eq!(mod_id, 12345);
+        assert_eq!(mod_id, NexusModId::from(12345));
     }
 
     #[test]
@@ -1132,7 +1144,7 @@ mod tests {
             let url = format!("https://www.nexusmods.com/{domain}/mods/1");
             let (game, mod_id, _) = parse_nexus_url(&url).unwrap();
             assert_eq!(game, *domain);
-            assert_eq!(mod_id, 1);
+            assert_eq!(mod_id, NexusModId::from(1));
         }
     }
 

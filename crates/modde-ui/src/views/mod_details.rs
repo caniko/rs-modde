@@ -6,13 +6,14 @@
 //! gallery). See `crates/modde-ui/src/app.rs` for the fetch flow.
 
 use iced::widget::image;
+use modde_core::NexusModId;
 
 /// Live state for the currently-selected mod's detail panel.
 #[derive(Debug, Clone)]
 pub struct ModDetailsState {
     /// Nexus mod id — used to reject stale async results when the user
     /// clicks on a different mod before the previous fetch completes.
-    pub nexus_mod_id: i64,
+    pub nexus_mod_id: NexusModId,
     /// Nexus game domain (e.g. `"skyrimspecialedition"`).
     pub game_domain: String,
     /// Full URL to the mod page on nexusmods.com — the "Open in Nexus" link
@@ -60,7 +61,12 @@ impl ModDetailsState {
     /// Construct the initial "loading" state as soon as a Nexus-tracked mod
     /// is selected, before any HTTP requests complete.
     #[must_use]
-    pub fn loading(nexus_mod_id: i64, game_domain: String, name: String, version: String) -> Self {
+    pub fn loading(
+        nexus_mod_id: NexusModId,
+        game_domain: String,
+        name: String,
+        version: String,
+    ) -> Self {
         let mod_page_url = format!("https://www.nexusmods.com/{game_domain}/mods/{nexus_mod_id}");
         Self {
             nexus_mod_id,

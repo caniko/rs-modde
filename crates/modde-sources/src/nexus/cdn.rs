@@ -1,6 +1,8 @@
 use reqwest::Client;
 use serde::Deserialize;
 
+use modde_core::{NexusFileId, NexusModId};
+
 use super::auth;
 use crate::error::{SourceError, SourceResult, status_error};
 use crate::wabbajack::acquire::normalize_nexus_game_domain;
@@ -18,8 +20,8 @@ pub async fn generate_download_link(
     client: &Client,
     api_key: &str,
     game_domain: &str,
-    mod_id: u64,
-    file_id: u64,
+    mod_id: NexusModId,
+    file_id: NexusFileId,
 ) -> SourceResult<String> {
     // Verify premium status
     let is_premium = auth::check_premium_source(client, api_key).await?;

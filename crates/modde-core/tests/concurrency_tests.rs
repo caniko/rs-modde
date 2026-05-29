@@ -774,14 +774,17 @@ async fn test_stock_concurrent_snapshot_and_verify() {
 
     let store = TempDir::new().unwrap();
     let mgr = StockGameManager::new(store.path().to_path_buf());
-    let snap = mgr.snapshot("test-game", src.path()).await.unwrap();
+    let snap = mgr
+        .snapshot(&GameId::from("test-game"), src.path())
+        .await
+        .unwrap();
     assert!(!snap.hash.is_empty());
 
     // Verify should pass
-    assert!(mgr.verify("test-game").await.unwrap());
+    assert!(mgr.verify(&GameId::from("test-game")).await.unwrap());
 
     // Modify a file in the snapshot → verify should fail
     let tampered = store.path().join("test-game/file_5.dat");
     std::fs::write(&tampered, "tampered data").unwrap();
-    assert!(!mgr.verify("test-game").await.unwrap());
+    assert!(!mgr.verify(&GameId::from("test-game")).await.unwrap());
 }

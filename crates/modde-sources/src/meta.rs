@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use modde_core::{NexusFileId, NexusModId};
 use serde::{Deserialize, Serialize};
 
 /// JSON sidecar file stored alongside a download (e.g. `mod_file.zip.meta`).
@@ -17,9 +18,9 @@ pub struct DownloadMeta {
     #[serde(default)]
     pub total_bytes: Option<u64>,
     #[serde(default)]
-    pub nexus_mod_id: Option<u64>,
+    pub nexus_mod_id: Option<NexusModId>,
     #[serde(default)]
-    pub nexus_file_id: Option<u64>,
+    pub nexus_file_id: Option<NexusFileId>,
     #[serde(default)]
     pub game_domain: Option<String>,
     #[serde(default)]
@@ -76,8 +77,8 @@ mod tests {
             expected_hash: Some(0xDEAD_BEEF),
             bytes_downloaded: 1024,
             total_bytes: Some(4096),
-            nexus_mod_id: Some(42),
-            nexus_file_id: Some(99),
+            nexus_mod_id: Some(NexusModId::from(42)),
+            nexus_file_id: Some(NexusFileId::from(99)),
             game_domain: Some("skyrimspecialedition".into()),
             mod_name: Some("Cool Mod".into()),
             version: Some("1.2.3".into()),

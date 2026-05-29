@@ -776,7 +776,7 @@ fn browse_nexus_game_change_clears_results_and_starts_load() {
     let mut app = test_app();
     app.browse_nexus.selected_game_id = Some("skyrim-se".to_string());
     app.browse_nexus.mods = vec![modde_sources::nexus::graphql::GqlModTile {
-        mod_id: 1,
+        mod_id: 1.into(),
         name: "SkyUI".to_string(),
         summary: None,
         version: None,
@@ -992,7 +992,7 @@ fn test_select_game() {
 fn wabbajack_select_entry_prefills_profiled_game_dir() {
     let mut app = test_app();
     app.settings
-        .set_game_path("skyrim-se", PathBuf::from("/games/skyrim"));
+        .set_game_path(&GameId::from("skyrim-se"), PathBuf::from("/games/skyrim"));
     app.active_view = View::WabbajackInstaller(WabbajackInstallerState {
         entries: vec![modde_sources::wabbajack::catalog::WabbajackCatalogEntry {
             title: "Legends of the Frost".to_string(),
@@ -1031,7 +1031,7 @@ fn wabbajack_select_entry_prefills_profiled_game_dir() {
 fn wabbajack_game_dir_manual_edit_is_not_overwritten() {
     let mut app = test_app();
     app.settings
-        .set_game_path("skyrim-se", PathBuf::from("/games/skyrim"));
+        .set_game_path(&GameId::from("skyrim-se"), PathBuf::from("/games/skyrim"));
     app.active_view = View::WabbajackInstaller(WabbajackInstallerState::default());
 
     let _ = app.update(Message::WabbajackHmGameDirChanged(
@@ -1240,7 +1240,7 @@ fn apply_tool_marks_tool_busy_immediately() {
     let mut app = test_app();
     app.selected_game = Some("skyrim-se".to_string());
     app.settings
-        .set_game_path("skyrim-se", temp.path().to_path_buf());
+        .set_game_path(&GameId::from("skyrim-se"), temp.path().to_path_buf());
 
     let _ = app.update(Message::ApplyTool("optiscaler".to_string()));
 
@@ -1254,7 +1254,7 @@ fn optiscaler_activate_marks_tool_busy_immediately() {
     let mut app = test_app();
     app.selected_game = Some("skyrim-se".to_string());
     app.settings
-        .set_game_path("skyrim-se", temp.path().to_path_buf());
+        .set_game_path(&GameId::from("skyrim-se"), temp.path().to_path_buf());
 
     let _ = app.update(Message::ActivateOptiScaler);
 
@@ -1268,7 +1268,7 @@ fn optiscaler_deactivate_marks_tool_busy_immediately() {
     let mut app = test_app();
     app.selected_game = Some("skyrim-se".to_string());
     app.settings
-        .set_game_path("skyrim-se", temp.path().to_path_buf());
+        .set_game_path(&GameId::from("skyrim-se"), temp.path().to_path_buf());
 
     let _ = app.update(Message::DeactivateOptiScaler);
 
@@ -1404,7 +1404,7 @@ fn optiscaler_apply_preserves_stellar_blade_selected_release() {
     config.set("enable_optipatcher", serde_json::json!(false));
     let db = modde_core::db::ModdeDb::open().expect("db opens");
     db.save_tool_config(
-        "stellar-blade",
+        &GameId::from("stellar-blade"),
         "optiscaler",
         false,
         &serde_json::to_string(&config.settings).expect("settings json"),
@@ -1429,7 +1429,7 @@ fn optiscaler_apply_preserves_stellar_blade_selected_release() {
 
     assert_eq!(result.applied_file_count, 2);
     let row = db
-        .load_tool_config("stellar-blade", "optiscaler")
+        .load_tool_config(&GameId::from("stellar-blade"), "optiscaler")
         .expect("load tool config")
         .expect("tool config exists");
     let saved: serde_json::Value = serde_json::from_str(&row.settings_json).expect("settings json");
@@ -1601,8 +1601,13 @@ fn optiscaler_release_loaded_resets_stale_asset() {
         "release_tag": "official:v0.9.1",
         "release_asset": "stale.zip"
     });
-    db.save_tool_config("skyrim-se", "optiscaler", false, &settings.to_string())
-        .expect("save stale settings");
+    db.save_tool_config(
+        &GameId::from("skyrim-se"),
+        "optiscaler",
+        false,
+        &settings.to_string(),
+    )
+    .expect("save stale settings");
 
     let releases = vec![modde_games::tools::ToolReleaseSummary {
         tag: "official:v0.9.1".to_string(),
@@ -1617,7 +1622,7 @@ fn optiscaler_release_loaded_resets_stale_asset() {
     let _ = app.update(Message::OptiScalerReleasesLoaded(Ok(releases)));
 
     let row = db
-        .load_tool_config("skyrim-se", "optiscaler")
+        .load_tool_config(&GameId::from("skyrim-se"), "optiscaler")
         .expect("load tool config")
         .expect("tool config exists");
     let saved: serde_json::Value = serde_json::from_str(&row.settings_json).expect("settings json");
@@ -1668,7 +1673,7 @@ fn optiscaler_release_tag_update_resets_asset() {
 
     let db = modde_core::db::ModdeDb::open().expect("db opens");
     let row = db
-        .load_tool_config("skyrim-se", "optiscaler")
+        .load_tool_config(&GameId::from("skyrim-se"), "optiscaler")
         .expect("load tool config")
         .expect("tool config exists");
     let saved: serde_json::Value = serde_json::from_str(&row.settings_json).expect("settings json");
@@ -1689,8 +1694,13 @@ fn optiscaler_official_source_filters_out_goverlay_releases() {
         "release_tag": "official:v0.9.1",
         "release_asset": "Optiscaler_0.9.1.7z"
     });
-    db.save_tool_config("skyrim-se", "optiscaler", false, &settings.to_string())
-        .expect("save settings");
+    db.save_tool_config(
+        &GameId::from("skyrim-se"),
+        "optiscaler",
+        false,
+        &settings.to_string(),
+    )
+    .expect("save settings");
 
     let _ = app.update(Message::OptiScalerReleasesLoaded(Ok(vec![
         optiscaler_release("official:v0.9.1", "Optiscaler_0.9.1.7z", None),
@@ -1736,7 +1746,7 @@ fn optiscaler_goverlay_source_filters_by_channel_and_resets_selection() {
 
     let db = modde_core::db::ModdeDb::open().expect("db opens");
     let row = db
-        .load_tool_config("skyrim-se", "optiscaler")
+        .load_tool_config(&GameId::from("skyrim-se"), "optiscaler")
         .expect("load tool config")
         .expect("tool config exists");
     let saved: serde_json::Value = serde_json::from_str(&row.settings_json).expect("settings json");
@@ -1757,7 +1767,7 @@ fn optiscaler_goverlay_source_filters_by_channel_and_resets_selection() {
         value: serde_json::json!("master"),
     });
     let row = db
-        .load_tool_config("skyrim-se", "optiscaler")
+        .load_tool_config(&GameId::from("skyrim-se"), "optiscaler")
         .expect("load tool config")
         .expect("tool config exists");
     let saved: serde_json::Value = serde_json::from_str(&row.settings_json).expect("settings json");
@@ -1795,8 +1805,13 @@ fn proton_versions_loaded_resets_stale_selected_version() {
 
     let db = modde_core::db::ModdeDb::open().expect("db opens");
     let settings = serde_json::json!({ "selected_version": "GE-Proton9-stale" });
-    db.save_tool_config("skyrim-se", "proton", false, &settings.to_string())
-        .expect("save stale settings");
+    db.save_tool_config(
+        &GameId::from("skyrim-se"),
+        "proton",
+        false,
+        &settings.to_string(),
+    )
+    .expect("save stale settings");
 
     let _ = app.update(Message::ProtonVersionsLoaded(Ok(vec![
         "latest".to_string(),
@@ -1804,7 +1819,7 @@ fn proton_versions_loaded_resets_stale_selected_version() {
     ])));
 
     let row = db
-        .load_tool_config("skyrim-se", "proton")
+        .load_tool_config(&GameId::from("skyrim-se"), "proton")
         .expect("load tool config")
         .expect("tool config exists");
     let saved: serde_json::Value = serde_json::from_str(&row.settings_json).expect("settings json");
@@ -1968,7 +1983,7 @@ fn loaded_test_app(name: &str) -> Modde {
 /// this (not `app.loaded_profile`) to verify *persisted* state.
 fn reload_seeded(name: &str) -> modde_core::profile::Profile {
     let pm = ProfileManager::open().expect("open isolated DB");
-    pm.load(name, Some("test-game"))
+    pm.load(name, Some(&GameId::from("test-game")))
         .expect("load seeded profile")
 }
 
@@ -2005,13 +2020,15 @@ fn select_game_filters_profiles_to_game_and_loads_active_profile() {
         ))
         .expect("seed active cyberpunk profile");
     pm.db()
-        .set_active_profile("cyberpunk2077", active_id)
+        .set_active_profile(&GameId::from("cyberpunk2077"), active_id)
         .expect("set active cyberpunk profile");
     drop(pm);
 
     let mut app = test_app();
-    app.settings
-        .set_game_path("cyberpunk2077", game_dir.path().to_path_buf());
+    app.settings.set_game_path(
+        &GameId::from("cyberpunk2077"),
+        game_dir.path().to_path_buf(),
+    );
     let _ = app.update(Message::SelectGame("cyberpunk2077".to_string()));
 
     let profile_names: Vec<_> = app.profiles.iter().map(|p| p.name.as_str()).collect();
@@ -2045,8 +2062,10 @@ fn select_game_falls_back_to_first_profile_for_game() {
     drop(pm);
 
     let mut app = test_app();
-    app.settings
-        .set_game_path("cyberpunk2077", game_dir.path().to_path_buf());
+    app.settings.set_game_path(
+        &GameId::from("cyberpunk2077"),
+        game_dir.path().to_path_buf(),
+    );
     let _ = app.update(Message::SelectGame("cyberpunk2077".to_string()));
 
     assert_eq!(app.active_profile.as_deref(), Some("alpha"));
@@ -2064,8 +2083,10 @@ fn select_game_with_no_profiles_clears_profile_context() {
     let mut app = test_app();
     app.active_profile = Some("old".to_string());
     app.loaded_profile = Some(profile_for_game("old", "skyrim-se", vec![]));
-    app.settings
-        .set_game_path("cyberpunk2077", game_dir.path().to_path_buf());
+    app.settings.set_game_path(
+        &GameId::from("cyberpunk2077"),
+        game_dir.path().to_path_buf(),
+    );
 
     let _ = app.update(Message::SelectGame("cyberpunk2077".to_string()));
 
@@ -2091,7 +2112,7 @@ fn select_game_clears_stale_selection_state() {
     let mut app = test_app();
     app.selected_mod_index = Some(4);
     app.selected_mod_details = Some(crate::views::mod_details::ModDetailsState::loading(
-        1,
+        1.into(),
         "skyrimspecialedition".to_string(),
         "Old mod".to_string(),
         "1.0".to_string(),
@@ -2120,8 +2141,10 @@ fn select_game_clears_stale_selection_state() {
         file_count: 0,
         fingerprint: None,
     }];
-    app.settings
-        .set_game_path("cyberpunk2077", game_dir.path().to_path_buf());
+    app.settings.set_game_path(
+        &GameId::from("cyberpunk2077"),
+        game_dir.path().to_path_buf(),
+    );
 
     let _ = app.update(Message::SelectGame("cyberpunk2077".to_string()));
 
@@ -2158,7 +2181,7 @@ fn game_path_dialog_selection_stores_path_and_switches_context() {
     assert!(!app.game_path_dialog_open);
     assert_eq!(app.selected_game.as_deref(), Some("custom-game"));
     assert_eq!(
-        app.settings.game_path("custom-game"),
+        app.settings.game_path(&GameId::from("custom-game")),
         Some(&game_dir.path().to_path_buf())
     );
     assert_eq!(app.active_profile.as_deref(), Some("custom-profile"));
@@ -2218,7 +2241,7 @@ fn add_custom_game_submit_registers_and_selects_game() {
     assert_eq!(app.selected_game.as_deref(), Some(custom_id));
     assert_eq!(app.settings.selected_game.as_deref(), Some(custom_id));
     assert_eq!(
-        app.settings.game_path(custom_id),
+        app.settings.game_path(&GameId::from(custom_id)),
         Some(&install.path().to_path_buf())
     );
     assert!(

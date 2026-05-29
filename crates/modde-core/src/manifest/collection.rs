@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::nexus_id::{NexusFileId, NexusModId};
+
 /// Nexus Collections API response for `/v1/collections`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CollectionManifest {
@@ -32,8 +34,8 @@ pub struct CollectionGame {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CollectionMod {
-    pub mod_id: u64,
-    pub file_id: u64,
+    pub mod_id: NexusModId,
+    pub file_id: NexusFileId,
     pub name: String,
     pub version: String,
     #[serde(default)]

@@ -177,8 +177,10 @@ macro_rules! mod_list_simulator {
         let __collapsed = std::collections::HashSet::new();
         let __categories: Vec<(Option<i64>, String)> = vec![];
         let __criteria: Vec<modde_core::filter::FilterCriterion> = vec![];
+        let __filter_keys: Vec<String> = vec![];
         let mut $ui = simulator(modde_ui::views::mod_list::view_filtered(
             $mods,
+            &__filter_keys,
             "",
             None,
             modde_core::filter::FilterMode::default(),

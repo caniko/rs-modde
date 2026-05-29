@@ -5,7 +5,6 @@ use anyhow::{Context, Result};
 use tracing::{info, warn};
 
 use modde_core::collision;
-use modde_core::db::decode_install_method;
 use modde_core::fs::{symlink_async, walk_files_relative};
 use modde_core::installer::InstallMethod;
 use modde_core::paths;
@@ -23,13 +22,14 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     let name = &profile.name;
     info!(profile = %name, game = %profile.game_id, "deploying profile");
 
-    let game_plugin = modde_games::resolve_game_plugin(&profile.game_id).ok_or_else(|| {
-        anyhow::anyhow!(
-            "unsupported game: '{}'\nSupported games: {}",
-            profile.game_id,
-            modde_games::supported_game_ids().join(", ")
-        )
-    })?;
+    let game_plugin =
+        modde_games::resolve_game_plugin(profile.game_id.as_str()).ok_or_else(|| {
+            anyhow::anyhow!(
+                "unsupported game: '{}'\nSupported games: {}",
+                profile.game_id,
+                modde_games::supported_game_ids().join(", ")
+            )
+        })?;
 
     let install_dir = game_plugin.detect_install().ok_or_else(|| {
         anyhow::anyhow!(
@@ -66,7 +66,7 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
             .post_deploy(&install_dir)
             .context("post-deploy hook failed")?;
 
-        super::install::configure_wine_overrides(&profile.game_id, &install_dir, &staging)
+        super::install::configure_wine_overrides(profile.game_id.as_str(), &install_dir, &staging)
             .context("Wine DLL override configuration failed")?;
 
         println!("Deployed Wabbajack profile: {name}");
@@ -86,7 +86,7 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     let store = paths::store_dir();
 
     // Build archive-aware conflict map using the collision system.
-    let classifier = modde_games::resolve_collision_classifier(&profile.game_id);
+    let classifier = modde_games::resolve_collision_classifier(profile.game_id.as_str());
 
     let conflict_map = if let Some(ref cls) = classifier {
         collision::build_full_conflict_map(&store, &resolved.order, cls.as_ref())
@@ -203,7 +203,7 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     // This ensures Nexus/Manual profiles also get WINEDLLOVERRIDES set when mods
     // deploy proxy DLLs (e.g. version.dll for CET, winmm.dll for ASI loaders).
     let staging_dir = paths::staging_dir().join(name);
-    super::install::configure_wine_overrides(&profile.game_id, &install_dir, &staging_dir)
+    super::install::configure_wine_overrides(profile.game_id.as_str(), &install_dir, &staging_dir)
         .context("Wine DLL override configuration failed")?;
 
     // Generate per-game tool configs and apply tool environment to launcher
@@ -280,18 +280,10 @@ async fn deploy_alt_target_mods(
         if !em.enabled {
             continue;
         }
-        let Some(raw) = em.install_method.as_deref() else {
+        let Some(method) = em.install_method.as_ref() else {
             continue;
         };
-        let method = match decode_install_method(Some(raw)) {
-            Ok(Some(m)) => m,
-            Ok(None) => continue,
-            Err(e) => {
-                warn!(mod_id = %em.mod_id, error = %e, "failed to decode install_method");
-                continue;
-            }
-        };
-        let target_id = match &method {
+        let target_id = match method {
             InstallMethod::UserConfigOverlay { target_id } => target_id.as_str(),
             _ => continue,
         };

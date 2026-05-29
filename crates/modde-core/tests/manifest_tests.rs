@@ -23,7 +23,7 @@ fn wabbajack_download_directives() {
 
     assert!(matches!(
         &downloads[0],
-        DownloadDirective::Nexus { mod_id: 42, .. }
+        DownloadDirective::Nexus { mod_id, .. } if mod_id.get() == 42
     ));
     assert!(matches!(&downloads[1], DownloadDirective::GitHub { repo, .. } if repo == "test-repo"));
     assert!(matches!(&downloads[2], DownloadDirective::DirectURL { .. }));

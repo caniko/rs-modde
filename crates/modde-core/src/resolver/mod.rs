@@ -54,13 +54,6 @@ macro_rules! define_id_newtype {
             }
         }
 
-        impl std::ops::Deref for $Name {
-            type Target = str;
-            fn deref(&self) -> &str {
-                &self.0
-            }
-        }
-
         impl AsRef<str> for $Name {
             fn as_ref(&self) -> &str {
                 &self.0

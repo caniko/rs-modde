@@ -226,7 +226,7 @@ pub fn handle(
         let pm = ProfileManager::open().context("failed to open profile database")?;
 
         // Load existing profile or create a new one.
-        let mut profile = if let Ok(p) = pm.load(profile_name, Some(&game)) {
+        let mut profile = if let Ok(p) = pm.load(profile_name, Some(&GameId::from(game.as_str()))) {
             p
         } else {
             println!("Creating new profile '{profile_name}' for game '{game}'");

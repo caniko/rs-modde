@@ -13,6 +13,7 @@ use modde_core::ModdeDb;
 use modde_core::installer::dossiers_dir;
 use modde_core::paths;
 use modde_core::profile::ProfileManager;
+use modde_core::resolver::ModId;
 
 /// Remove `mod_id` from `profile_name`. If `profile_name` is `None`,
 /// the unambiguous default profile is used.
@@ -39,7 +40,7 @@ pub async fn handle(mod_id: String, profile_name: Option<String>) -> Result<()> 
     // rows + the profile_mods entry in one transaction.
     let mut db = ModdeDb::open().context("failed to open mod db")?;
     let staged_files = db
-        .remove_installed_mod(profile_id, &mod_id)
+        .remove_installed_mod(profile_id, &ModId::from(mod_id.as_str()))
         .context("failed to clear installed_mod_files rows")?;
 
     // Wipe the mod's store directory. The store dir name convention

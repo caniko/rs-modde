@@ -6,6 +6,7 @@ use tracing::info;
 
 use crate::error::{CoreError, Result};
 use crate::installer::{InstallMethod, InstallPlan, InstallStatus, StagedFile};
+use crate::nexus_id::{NexusFileId, NexusIdError, NexusModId};
 use crate::profile::{EnabledMod, LoadOrderLock, LockReason, Profile, ProfileSource};
 use crate::resolver::{GameId, LoadOrderRule, ModId};
 
@@ -513,7 +514,7 @@ impl ModdeDb {
     }
 
     /// Load a profile by name and `game_id`.
-    pub fn load_profile(&self, name: &str, game_id: &str) -> Result<Profile> {
+    pub fn load_profile(&self, name: &str, game_id: &GameId) -> Result<Profile> {
         let (id, source_type, source_data, overrides, load_order_lock) = self
             .conn
             .query_row(
@@ -577,7 +578,7 @@ impl ModdeDb {
         self.assemble_profile(
             id,
             &name,
-            &game_id,
+            &GameId::from(game_id),
             &source_type,
             source_data.as_deref(),
             &overrides,
@@ -612,7 +613,7 @@ impl ModdeDb {
                 self.assemble_profile(
                     *id,
                     name,
-                    game_id,
+                    &GameId::from(game_id.clone()),
                     source_type,
                     source_data.as_deref(),
                     overrides,
@@ -682,7 +683,7 @@ impl ModdeDb {
     }
 
     /// Delete a profile by name and `game_id`.
-    pub fn delete_profile(&self, name: &str, game_id: &str) -> Result<()> {
+    pub fn delete_profile(&self, name: &str, game_id: &GameId) -> Result<()> {
         let changes = self.conn.execute(
             "DELETE FROM profiles WHERE name = ?1 AND game_id = ?2",
             params![name, game_id],
@@ -696,7 +697,7 @@ impl ModdeDb {
     }
 
     /// List profile summaries, optionally filtered by game.
-    pub fn list_profiles(&self, game_id: Option<&str>) -> Result<Vec<ProfileSummary>> {
+    pub fn list_profiles(&self, game_id: Option<&GameId>) -> Result<Vec<ProfileSummary>> {
         let (sql, bind) = match game_id {
             Some(gid) => (
                 "SELECT p.id, p.name, p.game_id, p.source_type,
@@ -817,7 +818,7 @@ impl ModdeDb {
     // ── Active Profile Tracking ────────────────────────────────────
 
     /// Set the active profile for a game, replacing any previous one.
-    pub fn set_active_profile(&self, game_id: &str, profile_id: i64) -> Result<()> {
+    pub fn set_active_profile(&self, game_id: &GameId, profile_id: i64) -> Result<()> {
         self.conn.execute(
             "INSERT INTO active_profiles (game_id, profile_id)
              VALUES (?1, ?2)
@@ -830,7 +831,7 @@ impl ModdeDb {
     }
 
     /// Get the active profile for a game, returning (`profile_id`, `profile_name`).
-    pub fn get_active_profile(&self, game_id: &str) -> Result<Option<(i64, String)>> {
+    pub fn get_active_profile(&self, game_id: &GameId) -> Result<Option<(i64, String)>> {
         let result = self.conn.query_row(
             "SELECT a.profile_id, p.name FROM active_profiles a
              JOIN profiles p ON p.id = a.profile_id
@@ -847,7 +848,7 @@ impl ModdeDb {
     }
 
     /// Clear the active profile for a game.
-    pub fn clear_active_profile(&self, game_id: &str) -> Result<()> {
+    pub fn clear_active_profile(&self, game_id: &GameId) -> Result<()> {
         self.conn.execute(
             "DELETE FROM active_profiles WHERE game_id = ?1",
             params![game_id],
@@ -858,7 +859,7 @@ impl ModdeDb {
     // ── Experiment Stack ──────────────────────────────────────────
 
     /// Push a profile onto the experiment stack for a game.
-    pub fn push_experiment(&self, game_id: &str, profile_id: i64) -> Result<()> {
+    pub fn push_experiment(&self, game_id: &GameId, profile_id: i64) -> Result<()> {
         let depth = self.experiment_depth(game_id)?;
         self.conn.execute(
             "INSERT INTO experiment_stack (game_id, profile_id, depth)
@@ -869,7 +870,7 @@ impl ModdeDb {
     }
 
     /// Pop the top entry from the experiment stack, returning the `profile_id`.
-    pub fn pop_experiment(&self, game_id: &str) -> Result<Option<i64>> {
+    pub fn pop_experiment(&self, game_id: &GameId) -> Result<Option<i64>> {
         let result = self.conn.query_row(
             "SELECT id, profile_id FROM experiment_stack
              WHERE game_id = ?1 ORDER BY depth DESC LIMIT 1",
@@ -889,7 +890,7 @@ impl ModdeDb {
     }
 
     /// Get the experiment stack depth for a game.
-    pub fn experiment_depth(&self, game_id: &str) -> Result<usize> {
+    pub fn experiment_depth(&self, game_id: &GameId) -> Result<usize> {
         let count: i64 = self.conn.query_row(
             "SELECT COUNT(*) FROM experiment_stack WHERE game_id = ?1",
             params![game_id],
@@ -899,7 +900,7 @@ impl ModdeDb {
     }
 
     /// Clear the entire experiment stack for a game.
-    pub fn clear_experiment_stack(&self, game_id: &str) -> Result<()> {
+    pub fn clear_experiment_stack(&self, game_id: &GameId) -> Result<()> {
         self.conn.execute(
             "DELETE FROM experiment_stack WHERE game_id = ?1",
             params![game_id],
@@ -912,7 +913,7 @@ impl ModdeDb {
     /// Insert or update a stock snapshot record.
     pub fn upsert_snapshot(
         &self,
-        game_id: &str,
+        game_id: &GameId,
         snapshot_path: &Path,
         tree_hash: &str,
         file_count: usize,
@@ -936,7 +937,7 @@ impl ModdeDb {
     }
 
     /// Get snapshot metadata for a game.
-    pub fn get_snapshot(&self, game_id: &str) -> Result<Option<SnapshotMeta>> {
+    pub fn get_snapshot(&self, game_id: &GameId) -> Result<Option<SnapshotMeta>> {
         let result = self.conn.query_row(
             "SELECT game_id, snapshot_path, tree_hash, file_count, created_at
              FROM stock_snapshots WHERE game_id = ?1",
@@ -962,7 +963,7 @@ impl ModdeDb {
     // ── Hidden Files ─────────────────────────────────────────────
 
     /// Hide a file from a mod in a profile (prevents deployment).
-    pub fn hide_file(&self, profile_id: i64, mod_id: &str, rel_path: &str) -> Result<()> {
+    pub fn hide_file(&self, profile_id: i64, mod_id: &ModId, rel_path: &str) -> Result<()> {
         self.conn.execute(
             "INSERT OR IGNORE INTO hidden_files (profile_id, mod_id, rel_path)
              VALUES (?1, ?2, ?3)",
@@ -972,7 +973,7 @@ impl ModdeDb {
     }
 
     /// Unhide a previously hidden file.
-    pub fn unhide_file(&self, profile_id: i64, mod_id: &str, rel_path: &str) -> Result<()> {
+    pub fn unhide_file(&self, profile_id: i64, mod_id: &ModId, rel_path: &str) -> Result<()> {
         self.conn.execute(
             "DELETE FROM hidden_files WHERE profile_id = ?1 AND mod_id = ?2 AND rel_path = ?3",
             params![profile_id, mod_id, rel_path],
@@ -997,7 +998,11 @@ impl ModdeDb {
     }
 
     /// List hidden files for a specific mod in a profile.
-    pub fn list_hidden_files_for_mod(&self, profile_id: i64, mod_id: &str) -> Result<Vec<String>> {
+    pub fn list_hidden_files_for_mod(
+        &self,
+        profile_id: i64,
+        mod_id: &ModId,
+    ) -> Result<Vec<String>> {
         let mut stmt = self
             .conn
             .prepare("SELECT rel_path FROM hidden_files WHERE profile_id = ?1 AND mod_id = ?2")?;
@@ -1125,7 +1130,7 @@ impl ModdeDb {
     pub fn set_mod_category(
         &self,
         profile_id: i64,
-        mod_id: &str,
+        mod_id: &ModId,
         category_id: Option<i64>,
     ) -> Result<()> {
         self.conn.execute(
@@ -1136,7 +1141,12 @@ impl ModdeDb {
     }
 
     /// Set notes for a mod.
-    pub fn set_mod_notes(&self, profile_id: i64, mod_id: &str, notes: Option<&str>) -> Result<()> {
+    pub fn set_mod_notes(
+        &self,
+        profile_id: i64,
+        mod_id: &ModId,
+        notes: Option<&str>,
+    ) -> Result<()> {
         self.conn.execute(
             "UPDATE profile_mods SET notes = ?1 WHERE profile_id = ?2 AND mod_id = ?3",
             params![notes, profile_id, mod_id],
@@ -1144,11 +1154,12 @@ impl ModdeDb {
         Ok(())
     }
 
-    /// Set tags for a mod (stored as JSON array).
-    pub fn set_mod_tags(&self, profile_id: i64, mod_id: &str, tags: Option<&str>) -> Result<()> {
+    /// Set tags for a mod (stored as a JSON array in the TEXT column).
+    pub fn set_mod_tags(&self, profile_id: i64, mod_id: &ModId, tags: &[String]) -> Result<()> {
+        let encoded_tags = encode_tags(tags)?;
         self.conn.execute(
             "UPDATE profile_mods SET tags = ?1 WHERE profile_id = ?2 AND mod_id = ?3",
-            params![tags, profile_id, mod_id],
+            params![encoded_tags, profile_id, mod_id],
         )?;
         Ok(())
     }
@@ -1157,9 +1168,9 @@ impl ModdeDb {
     pub fn set_mod_nexus_meta(
         &self,
         profile_id: i64,
-        mod_id: &str,
-        nexus_mod_id: i64,
-        nexus_file_id: i64,
+        mod_id: &ModId,
+        nexus_mod_id: NexusModId,
+        nexus_file_id: NexusFileId,
         nexus_game_domain: &str,
         installed_timestamp: i64,
     ) -> Result<()> {
@@ -1168,8 +1179,8 @@ impl ModdeDb {
                     nexus_game_domain = ?3, installed_timestamp = ?4
              WHERE profile_id = ?5 AND mod_id = ?6",
             params![
-                nexus_mod_id,
-                nexus_file_id,
+                nexus_mod_id.to_i64()?,
+                nexus_file_id.to_i64()?,
                 nexus_game_domain,
                 installed_timestamp,
                 profile_id,
@@ -1197,7 +1208,7 @@ impl ModdeDb {
     pub fn record_install(
         &mut self,
         profile_id: i64,
-        mod_id: &str,
+        mod_id: &ModId,
         plan: &InstallPlan,
         status: InstallStatus,
     ) -> Result<()> {
@@ -1251,7 +1262,7 @@ impl ModdeDb {
     pub fn installed_files_for_mod(
         &self,
         profile_id: i64,
-        mod_id: &str,
+        mod_id: &ModId,
     ) -> Result<Vec<StagedFile>> {
         let mut stmt = self.conn.prepare(
             "SELECT rel_path, origin_rel_path, size, merge_group
@@ -1280,7 +1291,7 @@ impl ModdeDb {
     pub fn remove_installed_mod(
         &mut self,
         profile_id: i64,
-        mod_id: &str,
+        mod_id: &ModId,
     ) -> Result<Vec<StagedFile>> {
         let files = self.installed_files_for_mod(profile_id, mod_id)?;
         let tx = self.conn.transaction()?;
@@ -1401,6 +1412,34 @@ impl ModdeDb {
 
     // ── Internal helpers ──────────────────────────────────────────
 
+    fn nexus_mod_id_from_row(
+        row: &rusqlite::Row<'_>,
+        idx: usize,
+    ) -> rusqlite::Result<Option<NexusModId>> {
+        let raw: Option<i64> = row.get(idx)?;
+        raw.map(NexusModId::try_from)
+            .transpose()
+            .map_err(Self::nexus_id_row_error)
+    }
+
+    fn nexus_file_id_from_row(
+        row: &rusqlite::Row<'_>,
+        idx: usize,
+    ) -> rusqlite::Result<Option<NexusFileId>> {
+        let raw: Option<i64> = row.get(idx)?;
+        raw.map(NexusFileId::try_from)
+            .transpose()
+            .map_err(Self::nexus_id_row_error)
+    }
+
+    fn nexus_id_row_error(err: NexusIdError) -> rusqlite::Error {
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Integer, Box::new(err))
+    }
+
+    fn core_row_error(err: CoreError) -> rusqlite::Error {
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(err))
+    }
+
     fn insert_mods(&self, profile_id: i64, mods: &[EnabledMod]) -> Result<()> {
         let mut stmt = self.conn.prepare(
             "INSERT INTO profile_mods (profile_id, mod_id, display_name, enabled, version, fomod_config, sort_index,
@@ -1412,6 +1451,15 @@ impl ModdeDb {
 
         for (idx, m) in mods.iter().enumerate() {
             let lock_reason = encode_lock_reason(m.lock.as_ref());
+            let nexus_mod_id = m.nexus_mod_id.map(NexusModId::to_i64).transpose()?;
+            let nexus_file_id = m.nexus_file_id.map(NexusFileId::to_i64).transpose()?;
+            let tags = encode_tags(&m.tags)?;
+            let install_method = m
+                .install_method
+                .as_ref()
+                .map(encode_install_method)
+                .transpose()?;
+            let install_status = m.install_status.map(InstallStatus::as_str);
             stmt.execute(params![
                 profile_id,
                 m.mod_id,
@@ -1420,17 +1468,17 @@ impl ModdeDb {
                 m.version,
                 m.fomod_config,
                 idx as i64,
-                m.nexus_mod_id,
-                m.nexus_file_id,
+                nexus_mod_id,
+                nexus_file_id,
                 m.nexus_game_domain,
                 m.installed_timestamp,
                 m.category_id,
                 m.notes,
-                m.tags,
+                tags,
                 lock_reason,
-                m.install_method,
+                install_method,
                 m.source_archive_hash,
-                m.install_status,
+                install_status,
             ])?;
         }
 
@@ -1473,24 +1521,31 @@ impl ModdeDb {
         let mods = stmt
             .query_map(params![profile_id], |row| {
                 let lock_reason_raw: Option<String> = row.get(12)?;
+                let nexus_mod_id = Self::nexus_mod_id_from_row(row, 5)?;
+                let nexus_file_id = Self::nexus_file_id_from_row(row, 6)?;
+                let tags_raw: Option<String> = row.get(11)?;
+                let install_method_raw: Option<String> = row.get(13)?;
+                let install_status_raw: Option<String> = row.get(15)?;
                 Ok(EnabledMod {
                     mod_id: row.get(0)?,
                     display_name: row.get(1)?,
                     enabled: row.get(2)?,
                     version: row.get(3)?,
                     fomod_config: row.get(4)?,
-                    nexus_mod_id: row.get(5)?,
-                    nexus_file_id: row.get(6)?,
+                    nexus_mod_id,
+                    nexus_file_id,
                     nexus_game_domain: row.get(7)?,
                     installed_timestamp: row.get(8)?,
                     category_id: row.get(9)?,
                     notes: row.get(10)?,
-                    tags: row.get(11)?,
+                    tags: decode_tags(tags_raw.as_deref()).map_err(Self::core_row_error)?,
                     lock: decode_lock_reason(lock_reason_raw.as_deref())
-                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?,
-                    install_method: row.get(13)?,
+                        .map_err(Self::core_row_error)?,
+                    install_method: decode_install_method(install_method_raw.as_deref())
+                        .map_err(Self::core_row_error)?,
                     source_archive_hash: row.get(14)?,
-                    install_status: row.get(15)?,
+                    install_status: decode_install_status(install_status_raw.as_deref())
+                        .map_err(Self::core_row_error)?,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -1542,7 +1597,7 @@ impl ModdeDb {
         &self,
         id: i64,
         name: &str,
-        game_id: &str,
+        game_id: &GameId,
         source_type: &str,
         source_data: Option<&str>,
         overrides: &str,
@@ -1556,7 +1611,7 @@ impl ModdeDb {
         Ok(Profile {
             id: Some(id),
             name: name.to_string(),
-            game_id: GameId::from(game_id),
+            game_id: game_id.clone(),
             source,
             mods,
             overrides: PathBuf::from(overrides),
@@ -1679,11 +1734,40 @@ pub fn decode_install_method(raw: Option<&str>) -> Result<Option<InstallMethod>>
     }
 }
 
-fn new_tool_setting_node_id(game_id: &str, tool_id: &str) -> String {
+fn encode_tags(tags: &[String]) -> Result<Option<String>> {
+    if tags.is_empty() {
+        Ok(None)
+    } else {
+        serde_json::to_string(tags)
+            .map(Some)
+            .map_err(CoreError::Json)
+    }
+}
+
+fn decode_tags(raw: Option<&str>) -> Result<Vec<String>> {
+    match raw {
+        None => Ok(Vec::new()),
+        Some(s) if s.is_empty() => Ok(Vec::new()),
+        Some(s) => serde_json::from_str::<Vec<String>>(s)
+            .map_err(|e| CoreError::Other(format!("failed to parse tags JSON: {e}").into())),
+    }
+}
+
+fn decode_install_status(raw: Option<&str>) -> Result<Option<InstallStatus>> {
+    match raw {
+        None => Ok(None),
+        Some(s) if s.is_empty() => Ok(None),
+        Some(s) => InstallStatus::parse(s)
+            .map(Some)
+            .ok_or_else(|| CoreError::Other(format!("unknown install_status: {s}").into())),
+    }
+}
+
+fn new_tool_setting_node_id(game_id: &GameId, tool_id: &str) -> String {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |duration| duration.as_nanos());
-    let game = sanitize_node_id_part(game_id);
+    let game = sanitize_node_id_part(game_id.as_str());
     let tool = sanitize_node_id_part(tool_id);
     format!("tool-{game}-{tool}-{nanos}-{}", std::process::id())
 }
@@ -1761,7 +1845,7 @@ impl ModdeDb {
     /// Save (insert or update) a tool configuration for a game.
     pub fn save_tool_config(
         &self,
-        game_id: &str,
+        game_id: &GameId,
         tool_id: &str,
         enabled: bool,
         settings_json: &str,
@@ -1772,7 +1856,7 @@ impl ModdeDb {
     /// Save a tool configuration and append a history node.
     pub fn save_tool_config_with_reason(
         &self,
-        game_id: &str,
+        game_id: &GameId,
         tool_id: &str,
         enabled: bool,
         settings_json: &str,
@@ -1821,7 +1905,7 @@ impl ModdeDb {
     /// Load recent settings history nodes for a tool.
     pub fn list_tool_setting_history(
         &self,
-        game_id: &str,
+        game_id: &GameId,
         tool_id: &str,
         limit: usize,
     ) -> Result<Vec<ToolSettingHistoryNode>> {
@@ -1856,7 +1940,7 @@ impl ModdeDb {
     /// Load DAG edges for a tool's recorded settings history.
     pub fn list_tool_setting_edges(
         &self,
-        game_id: &str,
+        game_id: &GameId,
         tool_id: &str,
     ) -> Result<Vec<ToolSettingHistoryEdge>> {
         let mut stmt = self.conn.prepare(
@@ -1881,7 +1965,7 @@ impl ModdeDb {
     /// Restore a settings node by appending a new child node with copied state.
     pub fn restore_tool_setting_node(
         &self,
-        game_id: &str,
+        game_id: &GameId,
         tool_id: &str,
         node_id: &str,
     ) -> Result<()> {
@@ -1895,7 +1979,11 @@ impl ModdeDb {
         self.save_tool_config_with_reason(game_id, tool_id, enabled, &settings_json, &reason)
     }
 
-    fn current_tool_setting_node_id(&self, game_id: &str, tool_id: &str) -> Result<Option<String>> {
+    fn current_tool_setting_node_id(
+        &self,
+        game_id: &GameId,
+        tool_id: &str,
+    ) -> Result<Option<String>> {
         let result = self.conn.query_row(
             "SELECT current_node_id FROM game_tools WHERE game_id = ?1 AND tool_id = ?2",
             params![game_id, tool_id],
@@ -1910,7 +1998,7 @@ impl ModdeDb {
     }
 
     /// Load all tool configurations for a game.
-    pub fn load_tool_configs(&self, game_id: &str) -> Result<Vec<ToolConfigRow>> {
+    pub fn load_tool_configs(&self, game_id: &GameId) -> Result<Vec<ToolConfigRow>> {
         let mut stmt = self
             .conn
             .prepare("SELECT tool_id, enabled, settings FROM game_tools WHERE game_id = ?1")?;
@@ -1929,7 +2017,11 @@ impl ModdeDb {
     }
 
     /// Load a single tool configuration for a game.
-    pub fn load_tool_config(&self, game_id: &str, tool_id: &str) -> Result<Option<ToolConfigRow>> {
+    pub fn load_tool_config(
+        &self,
+        game_id: &GameId,
+        tool_id: &str,
+    ) -> Result<Option<ToolConfigRow>> {
         let result = self.conn.query_row(
             "SELECT tool_id, enabled, settings FROM game_tools
              WHERE game_id = ?1 AND tool_id = ?2",
@@ -1953,7 +2045,7 @@ impl ModdeDb {
     /// Record files applied by a tool to a game directory.
     pub fn save_applied_files(
         &self,
-        game_id: &str,
+        game_id: &GameId,
         tool_id: &str,
         rel_paths: &[String],
     ) -> Result<()> {
@@ -1970,7 +2062,7 @@ impl ModdeDb {
     }
 
     /// Load files previously applied by a tool.
-    pub fn load_applied_files(&self, game_id: &str, tool_id: &str) -> Result<Vec<String>> {
+    pub fn load_applied_files(&self, game_id: &GameId, tool_id: &str) -> Result<Vec<String>> {
         let mut stmt = self.conn.prepare(
             "SELECT rel_path FROM tool_applied_files
              WHERE game_id = ?1 AND tool_id = ?2",
@@ -1984,7 +2076,7 @@ impl ModdeDb {
     }
 
     /// Clear all applied file records for a tool on a game.
-    pub fn clear_applied_files(&self, game_id: &str, tool_id: &str) -> Result<()> {
+    pub fn clear_applied_files(&self, game_id: &GameId, tool_id: &str) -> Result<()> {
         self.conn.execute(
             "DELETE FROM tool_applied_files WHERE game_id = ?1 AND tool_id = ?2",
             params![game_id, tool_id],
@@ -2030,7 +2122,7 @@ impl ModdeDb {
     }
 
     /// Load every executable configured for a game, ordered by display name.
-    pub fn load_executable_configs(&self, game_id: &str) -> Result<Vec<ExecutableConfigRow>> {
+    pub fn load_executable_configs(&self, game_id: &GameId) -> Result<Vec<ExecutableConfigRow>> {
         let mut stmt = self.conn.prepare(
             "SELECT game_id, name, executable_path, arguments, working_dir,
                     environment, wine_dll_overrides, output_mod, enabled
@@ -2049,7 +2141,7 @@ impl ModdeDb {
     /// Load a single named executable for a game.
     pub fn load_executable_config(
         &self,
-        game_id: &str,
+        game_id: &GameId,
         name: &str,
     ) -> Result<Option<ExecutableConfigRow>> {
         let result = self.conn.query_row(
@@ -2069,7 +2161,7 @@ impl ModdeDb {
     }
 
     /// Delete a named executable for a game. Returns whether a row was removed.
-    pub fn delete_executable_config(&self, game_id: &str, name: &str) -> Result<bool> {
+    pub fn delete_executable_config(&self, game_id: &GameId, name: &str) -> Result<bool> {
         let affected = self.conn.execute(
             "DELETE FROM executable_configs WHERE game_id = ?1 AND name = ?2",
             params![game_id, name],
@@ -2141,7 +2233,7 @@ mod tests {
         let id = db.create_profile(&profile).unwrap();
         assert!(id > 0);
 
-        let loaded = db.load_profile("test", "skyrim-se").unwrap();
+        let loaded = db.load_profile("test", &GameId::from("skyrim-se")).unwrap();
         assert_eq!(loaded.name, "test");
         assert_eq!(loaded.game_id, "skyrim-se");
         assert_eq!(loaded.mods.len(), 2);
@@ -2150,6 +2242,101 @@ mod tests {
         assert_eq!(loaded.mods[1].mod_id, "mod_b");
         assert!(!loaded.mods[1].enabled);
         assert_eq!(loaded.load_order_rules.len(), 1);
+    }
+
+    #[test]
+    fn nexus_ids_roundtrip_with_unchanged_sqlite_values() {
+        let db = test_db();
+        let mut profile = sample_profile("test", "skyrim-se");
+        profile.mods[0].nexus_mod_id = Some(NexusModId::from(42));
+        profile.mods[0].nexus_file_id = Some(NexusFileId::from(99));
+
+        db.create_profile(&profile).unwrap();
+
+        let stored: (i64, i64) = db
+            .conn
+            .query_row(
+                "SELECT nexus_mod_id, nexus_file_id FROM profile_mods WHERE mod_id = 'mod_a'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(stored, (42, 99));
+
+        let loaded = db.load_profile("test", &GameId::from("skyrim-se")).unwrap();
+        assert_eq!(loaded.mods[0].nexus_mod_id, Some(NexusModId::from(42)));
+        assert_eq!(loaded.mods[0].nexus_file_id, Some(NexusFileId::from(99)));
+    }
+
+    #[test]
+    fn negative_nexus_ids_fail_closed_on_load() {
+        let db = test_db();
+        let profile = sample_profile("test", "skyrim-se");
+        db.create_profile(&profile).unwrap();
+        db.conn
+            .execute(
+                "UPDATE profile_mods SET nexus_mod_id = -1 WHERE mod_id = 'mod_a'",
+                [],
+            )
+            .unwrap();
+
+        let err = db
+            .load_profile("test", &GameId::from("skyrim-se"))
+            .unwrap_err();
+        assert!(matches!(err, CoreError::Database(_)));
+    }
+
+    #[test]
+    fn legacy_installer_metadata_loads_typed_and_roundtrips_storage() {
+        let db = test_db();
+        let profile = sample_profile("test", "skyrim-se");
+        db.create_profile(&profile).unwrap();
+
+        let method_raw = encode_install_method(&InstallMethod::BareExtract).unwrap();
+        let tags_raw = r#"["quest","ui"]"#;
+        db.conn
+            .execute(
+                "UPDATE profile_mods
+                    SET install_status = ?1, install_method = ?2, tags = ?3
+                  WHERE mod_id = 'mod_a'",
+                params!["pending_user_input", method_raw, tags_raw],
+            )
+            .unwrap();
+
+        let loaded = db.load_profile("test", &GameId::from("skyrim-se")).unwrap();
+        assert_eq!(
+            loaded.mods[0].install_status,
+            Some(InstallStatus::PendingUserInput)
+        );
+        assert_eq!(
+            loaded.mods[0].install_method,
+            Some(InstallMethod::BareExtract)
+        );
+        assert_eq!(
+            loaded.mods[0].tags,
+            vec!["quest".to_string(), "ui".to_string()]
+        );
+        assert_eq!(loaded.mods[1].install_status, None);
+
+        db.update_profile(&loaded).unwrap();
+        let stored: (String, String, String) = db
+            .conn
+            .query_row(
+                "SELECT install_status, install_method, tags
+                   FROM profile_mods
+                  WHERE mod_id = 'mod_a'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            stored,
+            (
+                "pending_user_input".to_string(),
+                method_raw,
+                tags_raw.to_string()
+            )
+        );
     }
 
     #[test]
@@ -2191,7 +2378,7 @@ mod tests {
         db.create_profile(&sample_profile("hardcore", "skyrim-se"))
             .unwrap();
 
-        let profiles = db.list_profiles(Some("skyrim-se")).unwrap();
+        let profiles = db.list_profiles(Some(&GameId::from("skyrim-se"))).unwrap();
         assert_eq!(profiles.len(), 3);
     }
 
@@ -2211,7 +2398,7 @@ mod tests {
 
         db.update_profile(&profile).unwrap();
 
-        let loaded = db.load_profile("test", "skyrim-se").unwrap();
+        let loaded = db.load_profile("test", &GameId::from("skyrim-se")).unwrap();
         assert_eq!(loaded.mods.len(), 3);
     }
 
@@ -2220,9 +2407,12 @@ mod tests {
         let db = test_db();
         db.create_profile(&sample_profile("test", "skyrim-se"))
             .unwrap();
-        db.delete_profile("test", "skyrim-se").unwrap();
+        db.delete_profile("test", &GameId::from("skyrim-se"))
+            .unwrap();
 
-        let err = db.load_profile("test", "skyrim-se").unwrap_err();
+        let err = db
+            .load_profile("test", &GameId::from("skyrim-se"))
+            .unwrap_err();
         assert!(matches!(err, CoreError::ProfileNotFound(_)));
     }
 
@@ -2238,7 +2428,8 @@ mod tests {
         let saves = db.list_saves(id).unwrap();
         assert_eq!(saves.len(), 1);
 
-        db.delete_profile("test", "skyrim-se").unwrap();
+        db.delete_profile("test", &GameId::from("skyrim-se"))
+            .unwrap();
 
         // Saves and mods should be cascade-deleted
         let saves = db.list_saves(id).unwrap();
@@ -2290,16 +2481,32 @@ mod tests {
     fn snapshot_upsert_and_get() {
         let db = test_db();
 
-        db.upsert_snapshot("skyrim-se", Path::new("/stock/skyrim-se"), "abc123", 5000)
+        db.upsert_snapshot(
+            &GameId::from("skyrim-se"),
+            Path::new("/stock/skyrim-se"),
+            "abc123",
+            5000,
+        )
+        .unwrap();
+        let meta = db
+            .get_snapshot(&GameId::from("skyrim-se"))
+            .unwrap()
             .unwrap();
-        let meta = db.get_snapshot("skyrim-se").unwrap().unwrap();
         assert_eq!(meta.tree_hash, "abc123");
         assert_eq!(meta.file_count, 5000);
 
         // Upsert updates
-        db.upsert_snapshot("skyrim-se", Path::new("/stock/skyrim-se"), "def456", 5001)
+        db.upsert_snapshot(
+            &GameId::from("skyrim-se"),
+            Path::new("/stock/skyrim-se"),
+            "def456",
+            5001,
+        )
+        .unwrap();
+        let meta = db
+            .get_snapshot(&GameId::from("skyrim-se"))
+            .unwrap()
             .unwrap();
-        let meta = db.get_snapshot("skyrim-se").unwrap().unwrap();
         assert_eq!(meta.tree_hash, "def456");
         assert_eq!(meta.file_count, 5001);
     }
@@ -2307,7 +2514,11 @@ mod tests {
     #[test]
     fn snapshot_not_found() {
         let db = test_db();
-        assert!(db.get_snapshot("nonexistent").unwrap().is_none());
+        assert!(
+            db.get_snapshot(&GameId::from("nonexistent"))
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -2323,10 +2534,10 @@ mod tests {
         let all = db.list_profiles(None).unwrap();
         assert_eq!(all.len(), 3);
 
-        let skyrim = db.list_profiles(Some("skyrim-se")).unwrap();
+        let skyrim = db.list_profiles(Some(&GameId::from("skyrim-se"))).unwrap();
         assert_eq!(skyrim.len(), 2);
 
-        let fallout = db.list_profiles(Some("fallout4")).unwrap();
+        let fallout = db.list_profiles(Some(&GameId::from("fallout4"))).unwrap();
         assert_eq!(fallout.len(), 1);
     }
 
@@ -2340,7 +2551,7 @@ mod tests {
         };
 
         db.create_profile(&profile).unwrap();
-        let loaded = db.load_profile("test", "skyrim-se").unwrap();
+        let loaded = db.load_profile("test", &GameId::from("skyrim-se")).unwrap();
 
         match loaded.source {
             ProfileSource::NexusCollection { slug, version } => {
@@ -2360,7 +2571,7 @@ mod tests {
         };
 
         db.create_profile(&profile).unwrap();
-        let loaded = db.load_profile("test", "skyrim-se").unwrap();
+        let loaded = db.load_profile("test", &GameId::from("skyrim-se")).unwrap();
 
         match loaded.source {
             ProfileSource::Wabbajack { manifest_hash } => {
@@ -2373,7 +2584,9 @@ mod tests {
     #[test]
     fn profile_not_found() {
         let db = test_db();
-        let err = db.load_profile("nonexistent", "skyrim-se").unwrap_err();
+        let err = db
+            .load_profile("nonexistent", &GameId::from("skyrim-se"))
+            .unwrap_err();
         assert!(matches!(err, CoreError::ProfileNotFound(_)));
     }
 
@@ -2406,16 +2619,21 @@ mod tests {
 
         db.save_executable_config(&row).unwrap();
         let loaded = db
-            .load_executable_config("skyrim-se", "xEdit")
+            .load_executable_config(&GameId::from("skyrim-se"), "xEdit")
             .unwrap()
             .unwrap();
         assert_eq!(loaded, row);
 
-        let all = db.load_executable_configs("skyrim-se").unwrap();
+        let all = db
+            .load_executable_configs(&GameId::from("skyrim-se"))
+            .unwrap();
         assert_eq!(all.len(), 1);
-        assert!(db.delete_executable_config("skyrim-se", "xEdit").unwrap());
         assert!(
-            db.load_executable_config("skyrim-se", "xEdit")
+            db.delete_executable_config(&GameId::from("skyrim-se"), "xEdit")
+                .unwrap()
+        );
+        assert!(
+            db.load_executable_config(&GameId::from("skyrim-se"), "xEdit")
                 .unwrap()
                 .is_none()
         );

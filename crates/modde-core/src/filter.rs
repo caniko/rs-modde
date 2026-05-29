@@ -243,7 +243,13 @@ impl CsvColumn {
             Self::Version => m.version.clone().unwrap_or_default(),
             Self::Category => m.category_id.map(|id| id.to_string()).unwrap_or_default(),
             Self::Notes => m.notes.clone().unwrap_or_default(),
-            Self::Tags => m.tags.clone().unwrap_or_default(),
+            Self::Tags => {
+                if m.tags.is_empty() {
+                    String::new()
+                } else {
+                    serde_json::to_string(&m.tags).unwrap_or_default()
+                }
+            }
             Self::NexusModId => m.nexus_mod_id.map(|id| id.to_string()).unwrap_or_default(),
         }
     }

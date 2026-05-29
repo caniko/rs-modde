@@ -43,8 +43,8 @@ fn test_download_directives_all_types() {
             size: 100,
             state: Some(ArchiveState::NexusDownloader {
                 game_name: "SkyrimSE".to_string(),
-                mod_id: 42,
-                file_id: 99,
+                mod_id: 42.into(),
+                file_id: 99.into(),
             }),
         },
         ArchiveEntry {
@@ -91,7 +91,7 @@ fn test_download_directives_all_types() {
     // Verify each type via pattern matching
     assert!(matches!(
         &directives[0],
-        DownloadDirective::Nexus { mod_id: 42, .. }
+        DownloadDirective::Nexus { mod_id, .. } if mod_id.get() == 42
     ));
     assert!(matches!(&directives[1], DownloadDirective::GitHub { user, .. } if user == "user"));
     assert!(matches!(&directives[2], DownloadDirective::GoogleDrive { id, .. } if id == "abc123"));
@@ -190,8 +190,8 @@ fn test_roundtrip_serialization() {
         size: 1000,
         state: Some(ArchiveState::NexusDownloader {
             game_name: "SkyrimSE".to_string(),
-            mod_id: 10,
-            file_id: 20,
+            mod_id: 10.into(),
+            file_id: 20.into(),
         }),
     });
 

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use modde_core::GameId;
 use modde_core::ModdeDb;
 use modde_core::error::CoreError;
+use modde_core::installer::{InstallMethod, InstallStatus};
 use modde_core::profile::{EnabledMod, Profile, ProfileManager, ProfileSource};
 use modde_core::resolver::{LoadOrderRule, ModId};
 use pretty_assertions::assert_eq;
@@ -42,6 +43,31 @@ fn assert_profiles_eq(a: &Profile, b: &Profile) {
     let a_toml = toml::to_string_pretty(a).expect("serialize a");
     let b_toml = toml::to_string_pretty(b).expect("serialize b");
     assert_eq!(a_toml, b_toml);
+}
+
+#[test]
+fn legacy_enabled_mod_metadata_deserializes_to_typed_fields() {
+    let method_raw = toml::to_string(&InstallMethod::BareExtract).unwrap();
+    let legacy = format!(
+        "mod_id = \"legacy\"\n\
+         enabled = true\n\
+         install_status = \"pending_user_input\"\n\
+         install_method = {method_raw:?}\n\
+         tags = '[\"quest\",\"ui\"]'\n"
+    );
+
+    let enabled: EnabledMod = toml::from_str(&legacy).unwrap();
+    assert_eq!(
+        enabled.install_status,
+        Some(InstallStatus::PendingUserInput)
+    );
+    assert_eq!(enabled.install_method, Some(InstallMethod::BareExtract));
+    assert_eq!(enabled.tags, vec!["quest".to_string(), "ui".to_string()]);
+
+    let missing_status: EnabledMod =
+        toml::from_str("mod_id = \"legacy-missing\"\nenabled = true\n").unwrap();
+    assert_eq!(missing_status.install_status, None);
+    assert!(missing_status.tags.is_empty());
 }
 
 // ===========================================================================
@@ -94,7 +120,9 @@ fn test_profile_load_nonexistent() {
 fn test_profile_load_nonexistent_by_game() {
     let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
 
-    let err = pm.load("does-not-exist", Some("skyrim-se")).unwrap_err();
+    let err = pm
+        .load("does-not-exist", Some(&GameId::from("skyrim-se")))
+        .unwrap_err();
     assert!(
         matches!(err, CoreError::ProfileNotFound(_)),
         "expected ProfileNotFound error, got: {err:?}"

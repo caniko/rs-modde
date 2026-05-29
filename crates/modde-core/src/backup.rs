@@ -9,6 +9,7 @@ use tracing::info;
 use crate::PluginEntry;
 use crate::error::{CoreError, Result};
 use crate::paths;
+use crate::resolver::{GameId, ModId};
 
 // ── Backup Manager ──────────────────────────────────────────────
 
@@ -47,8 +48,8 @@ impl BackupManager {
     }
 
     /// Create a backup of a mod directory, stored as a zip file.
-    pub fn create_mod_backup(&self, mod_id: &str, mod_dir: &Path) -> Result<BackupEntry> {
-        let dest_dir = self.backup_dir.join("mods").join(mod_id);
+    pub fn create_mod_backup(&self, mod_id: &ModId, mod_dir: &Path) -> Result<BackupEntry> {
+        let dest_dir = self.backup_dir.join("mods").join(mod_id.as_str());
         fs::create_dir_all(&dest_dir)?;
 
         let timestamp = unix_timestamp();
@@ -71,7 +72,7 @@ impl BackupManager {
     }
 
     /// Restore a mod from its latest backup zip into `dest_dir`.
-    pub fn restore_mod_backup(&self, mod_id: &str, dest_dir: &Path) -> Result<BackupEntry> {
+    pub fn restore_mod_backup(&self, mod_id: &ModId, dest_dir: &Path) -> Result<BackupEntry> {
         let entries = self.list_mod_backups(mod_id)?;
         let latest = entries.last().ok_or_else(|| {
             CoreError::Other(format!("no backups found for mod '{mod_id}'").into())
@@ -85,8 +86,8 @@ impl BackupManager {
     }
 
     /// List available backups for a mod, sorted oldest-first.
-    pub fn list_mod_backups(&self, mod_id: &str) -> Result<Vec<BackupEntry>> {
-        let dir = self.backup_dir.join("mods").join(mod_id);
+    pub fn list_mod_backups(&self, mod_id: &ModId) -> Result<Vec<BackupEntry>> {
+        let dir = self.backup_dir.join("mods").join(mod_id.as_str());
         if !dir.exists() {
             return Ok(Vec::new());
         }
@@ -116,10 +117,10 @@ impl BackupManager {
     pub fn backup_plugin_order(
         &self,
         profile: &str,
-        game: &str,
+        game: &GameId,
         plugins: &[PluginEntry],
     ) -> Result<PathBuf> {
-        let dir = self.backup_dir.join("plugins").join(game);
+        let dir = self.backup_dir.join("plugins").join(game.as_str());
         fs::create_dir_all(&dir)?;
 
         let timestamp = unix_timestamp();
@@ -143,8 +144,8 @@ impl BackupManager {
     }
 
     /// Restore the most recent plugin load order backup for a profile+game.
-    pub fn restore_plugin_order(&self, profile: &str, game: &str) -> Result<Vec<PluginEntry>> {
-        let dir = self.backup_dir.join("plugins").join(game);
+    pub fn restore_plugin_order(&self, profile: &str, game: &GameId) -> Result<Vec<PluginEntry>> {
+        let dir = self.backup_dir.join("plugins").join(game.as_str());
         if !dir.exists() {
             return Err(CoreError::Other(
                 format!("no plugin backups for game '{game}'").into(),
@@ -311,10 +312,12 @@ mod tests {
             },
         ];
 
-        mgr.backup_plugin_order("default", "skyrim-se", &plugins)
+        mgr.backup_plugin_order("default", &GameId::from("skyrim-se"), &plugins)
             .unwrap();
 
-        let restored = mgr.restore_plugin_order("default", "skyrim-se").unwrap();
+        let restored = mgr
+            .restore_plugin_order("default", &GameId::from("skyrim-se"))
+            .unwrap();
         assert_eq!(restored.len(), 2);
         assert_eq!(restored[0].plugin_name, "Skyrim.esm");
         assert!(restored[0].enabled);
@@ -334,7 +337,9 @@ mod tests {
         )
         .unwrap();
 
-        let restored = mgr.restore_plugin_order("default", "skyrim-se").unwrap();
+        let restored = mgr
+            .restore_plugin_order("default", &GameId::from("skyrim-se"))
+            .unwrap();
         assert_eq!(restored.len(), 2);
         assert_eq!(restored[0].plugin_name, "One.esm");
         assert!(restored[0].enabled);

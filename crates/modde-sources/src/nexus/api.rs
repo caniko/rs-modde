@@ -1,5 +1,6 @@
 use anyhow::{Result, bail};
 use modde_core::manifest::collection::CollectionManifest;
+use modde_core::{NexusFileId, NexusModId};
 use reqwest::Client;
 use serde::Deserialize;
 use tracing::warn;
@@ -12,7 +13,7 @@ pub struct NexusApi {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct NexusMod {
-    pub mod_id: u64,
+    pub mod_id: NexusModId,
     pub name: String,
     pub summary: Option<String>,
     pub version: String,
@@ -52,13 +53,13 @@ pub struct NexusEndorsement {
 /// A single entry in the user's tracked-mods list.
 #[derive(Debug, Clone, Deserialize)]
 pub struct NexusTrackedMod {
-    pub mod_id: u64,
+    pub mod_id: NexusModId,
     pub domain_name: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct NexusModFile {
-    pub file_id: u64,
+    pub file_id: NexusFileId,
     pub name: String,
     pub version: Option<String>,
     pub size_kb: Option<u64>,
@@ -105,7 +106,7 @@ pub struct NexusSearchResults {
 
 #[derive(Debug, Deserialize)]
 pub struct NexusUpdatedMod {
-    pub mod_id: u64,
+    pub mod_id: NexusModId,
     pub latest_file_update: u64,
     pub latest_mod_activity: u64,
 }
@@ -152,7 +153,7 @@ impl NexusApi {
     }
 
     /// Get mod details.
-    pub async fn get_mod(&self, game_domain: &str, mod_id: u64) -> Result<NexusMod> {
+    pub async fn get_mod(&self, game_domain: &str, mod_id: NexusModId) -> Result<NexusMod> {
         let url = format!(
             "{}/games/{game_domain}/mods/{mod_id}.json",
             super::base_url()
@@ -287,7 +288,11 @@ impl NexusApi {
     /// The GraphQL schema is undocumented and may change; on any error this
     /// function returns an `Err` and the caller should fall back to the
     /// single `picture_url` from the v1 `get_mod` response.
-    pub async fn get_mod_media(&self, game_domain: &str, mod_id: u64) -> Result<Vec<String>> {
+    pub async fn get_mod_media(
+        &self,
+        game_domain: &str,
+        mod_id: NexusModId,
+    ) -> Result<Vec<String>> {
         let query = r"query ModMedia($modId: Int!, $gameDomain: String!) {
   mod(modId: $modId, gameDomain: $gameDomain) {
     modImages { url }
@@ -296,7 +301,7 @@ impl NexusApi {
         let body = serde_json::json!({
             "query": query,
             "variables": {
-                "modId": mod_id,
+                "modId": mod_id.get(),
                 "gameDomain": game_domain,
             },
         });
@@ -334,7 +339,11 @@ impl NexusApi {
     }
 
     /// Get files for a mod.
-    pub async fn get_mod_files(&self, game_domain: &str, mod_id: u64) -> Result<NexusModFiles> {
+    pub async fn get_mod_files(
+        &self,
+        game_domain: &str,
+        mod_id: NexusModId,
+    ) -> Result<NexusModFiles> {
         let url = format!(
             "{}/games/{game_domain}/mods/{mod_id}/files.json",
             super::base_url()
@@ -435,7 +444,12 @@ impl NexusApi {
     /// installs. Callers should pass the version string from the currently
     /// loaded `NexusMod` response (not the local install, which may be
     /// stale).
-    pub async fn endorse_mod(&self, game_domain: &str, mod_id: u64, version: &str) -> Result<()> {
+    pub async fn endorse_mod(
+        &self,
+        game_domain: &str,
+        mod_id: NexusModId,
+        version: &str,
+    ) -> Result<()> {
         let url = format!(
             "{}/games/{game_domain}/mods/{mod_id}/endorse.json",
             super::base_url()
@@ -451,7 +465,12 @@ impl NexusApi {
     }
 
     /// Abstain from endorsing (won't be asked again).
-    pub async fn abstain_mod(&self, game_domain: &str, mod_id: u64, version: &str) -> Result<()> {
+    pub async fn abstain_mod(
+        &self,
+        game_domain: &str,
+        mod_id: NexusModId,
+        version: &str,
+    ) -> Result<()> {
         let url = format!(
             "{}/games/{game_domain}/mods/{mod_id}/abstain.json",
             super::base_url()
@@ -475,7 +494,7 @@ impl NexusApi {
     }
 
     /// Track a mod (receive Nexus notifications).
-    pub async fn track_mod(&self, game_domain: &str, mod_id: u64) -> Result<()> {
+    pub async fn track_mod(&self, game_domain: &str, mod_id: NexusModId) -> Result<()> {
         let url = format!("{}/user/tracked_mods.json", super::base_url());
         self.client
             .post(&url)
@@ -491,7 +510,7 @@ impl NexusApi {
     }
 
     /// Stop tracking a mod.
-    pub async fn untrack_mod(&self, game_domain: &str, mod_id: u64) -> Result<()> {
+    pub async fn untrack_mod(&self, game_domain: &str, mod_id: NexusModId) -> Result<()> {
         let url = format!("{}/user/tracked_mods.json", super::base_url());
         self.delete_req(
             &url,

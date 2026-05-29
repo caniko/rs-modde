@@ -22,6 +22,9 @@ pub enum CoreError {
     #[error("database error: {0}")]
     Database(#[from] rusqlite::Error),
 
+    #[error("invalid Nexus id: {0}")]
+    NexusId(#[from] crate::nexus_id::NexusIdError),
+
     #[error("hash mismatch for {path}: expected {expected}, got {actual}")]
     HashMismatch {
         path: PathBuf,

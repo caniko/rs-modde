@@ -32,6 +32,7 @@ use anyhow::Result;
 
 use modde_core::PluginEntry;
 use modde_core::profile::{Profile, ProfileManager};
+use modde_core::resolver::GameId;
 use modde_core::save::SaveFingerprint;
 
 /// Resolve the game's save directory via the `GamePlugin` trait.
@@ -90,7 +91,7 @@ pub fn compute_fingerprint(
     if !supports_save_profiles(game_id).ok()? {
         return None;
     }
-    let profile = pm.load(name, Some(game_id)).ok()?;
+    let profile = pm.load(name, Some(&GameId::from(game_id))).ok()?;
     let game_plugin = modde_games::resolve_game_plugin(game_id)?;
     let staging_dir = ProfileManager::staging_dir(&profile.name);
 
@@ -108,7 +109,7 @@ pub fn load_profile_or_default(
     game_id: Option<&str>,
 ) -> Result<Profile> {
     if let Some(name) = name {
-        Ok(pm.load(name, game_id)?)
+        Ok(pm.load(name, game_id.map(GameId::from).as_ref())?)
     } else {
         let profiles = pm.list()?;
         let first = profiles.first().ok_or_else(|| {

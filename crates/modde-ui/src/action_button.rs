@@ -4,6 +4,7 @@ use crate::app::{Message, ReorderDirection, SidebarGroup, View, WabbajackTab};
 use crate::views::browse_nexus::BrowseTab;
 use iced::Element;
 use iced::widget::{Button, mouse_area};
+use modde_core::NexusModId;
 use modde_core::filter::FilterKind;
 
 static NEXT_BUTTON_HOVER_ID: AtomicU64 = AtomicU64::new(1);
@@ -52,7 +53,7 @@ pub enum ButtonAction {
     BrowseTabSwitched(BrowseTab),
     BrowseInstallMod {
         game_domain: String,
-        mod_id: u64,
+        mod_id: NexusModId,
     },
     LoadWabbajackCatalog,
     WabbajackTabChanged(WabbajackTab),
@@ -606,7 +607,7 @@ mod tests {
                 "Install",
                 ButtonAction::BrowseInstallMod {
                     game_domain: "skyrimspecialedition".to_string(),
-                    mod_id: 1,
+                    mod_id: 1.into(),
                 },
             ),
             ("Refresh", ButtonAction::LoadWabbajackCatalog),

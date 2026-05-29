@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use crate::nexus_id::{NexusFileId, NexusModId};
 use crate::resolver::GameId;
 
 /// Deserialize a Wabbajack hash — accepts base64 string or plain integer.
@@ -219,9 +220,9 @@ pub enum ArchiveState {
         #[serde(rename = "GameName")]
         game_name: String,
         #[serde(rename = "ModID")]
-        mod_id: u64,
+        mod_id: NexusModId,
         #[serde(rename = "FileID")]
-        file_id: u64,
+        file_id: NexusFileId,
     },
     #[serde(alias = "GitHubDownloader, Wabbajack.Lib")]
     GitHubDownloader {
@@ -385,8 +386,8 @@ pub enum RawDirective {
 pub enum DownloadDirective {
     Nexus {
         game_id: GameId,
-        mod_id: u64,
-        file_id: u64,
+        mod_id: NexusModId,
+        file_id: NexusFileId,
         hash: u64,
     },
     GitHub {

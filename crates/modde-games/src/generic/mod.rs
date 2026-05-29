@@ -90,7 +90,7 @@ impl GamePlugin for GenericGame {
             return Some(path);
         }
 
-        crate::detection::find_game_install(self.game_id())
+        crate::detection::find_game_install(&modde_core::GameId::from(self.game_id()))
     }
 
     fn mod_directory(&self, install: &Path) -> PathBuf {

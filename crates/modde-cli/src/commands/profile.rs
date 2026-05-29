@@ -6,6 +6,7 @@ use modde_core::error::CoreError;
 use modde_core::profile::{
     ActivateResult, LoadOrderLock, LockReason, Profile, ProfileManager, ProfileSource,
 };
+use modde_core::resolver::GameId;
 use modde_core::save::SaveFingerprint;
 
 use super::{compute_fingerprint, resolve_save_dir, supports_save_profiles};
@@ -67,7 +68,7 @@ pub fn handle(action: ProfileAction) -> Result<()> {
     match action {
         ProfileAction::List { game } => {
             let profiles = match game {
-                Some(ref g) => pm.list_for_game(g)?,
+                Some(ref g) => pm.list_for_game(&GameId::from(g.as_str()))?,
                 None => pm.list()?,
             };
             if profiles.is_empty() {
@@ -84,7 +85,12 @@ pub fn handle(action: ProfileAction) -> Result<()> {
         ProfileAction::Switch { name, game } => {
             let save_dir = resolve_save_dir(&game);
             let fp = compute_fingerprint(&pm, &name, &game);
-            match pm.activate_with_fingerprint(&name, &game, save_dir.as_deref(), fp.as_ref())? {
+            match pm.activate_with_fingerprint(
+                &name,
+                &GameId::from(game.as_str()),
+                save_dir.as_deref(),
+                fp.as_ref(),
+            )? {
                 ActivateResult::Activated => {
                     info!(profile = %name, "switched to profile");
                     if save_dir.is_some() {
@@ -119,14 +125,21 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             println!("Created profile: {name} (game: {game})");
         }
         ProfileAction::Delete { name, game } => {
-            pm.delete(&name, game.as_deref())?;
+            pm.delete(&name, game.as_deref().map(GameId::from).as_ref())?;
             println!("Deleted profile: {name}");
         }
         ProfileAction::Try { name, game } => {
             let save_dir = resolve_save_dir(&game);
             let fp = compute_fingerprint(&pm, &name, &game);
-            pm.try_profile_with_fingerprint(&name, &game, save_dir.as_deref(), fp.as_ref())?;
-            let depth = pm.active(&game)?.map_or(0, |a| a.experiment_depth);
+            pm.try_profile_with_fingerprint(
+                &name,
+                &GameId::from(game.as_str()),
+                save_dir.as_deref(),
+                fp.as_ref(),
+            )?;
+            let depth = pm
+                .active(&GameId::from(game.as_str()))?
+                .map_or(0, |a| a.experiment_depth);
             println!("Experimenting with profile: {name} (stack depth: {depth})");
             println!(
                 "Use `modde profile rollback --game {game}` to undo, or `modde profile commit --game {game}` to accept."
@@ -136,7 +149,7 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             let save_dir = resolve_save_dir(&game);
 
             // Compute fingerprint for the current (about-to-be-rolled-back) profile
-            let fp = pm.active(&game)?.and_then(|info| {
+            let fp = pm.active(&GameId::from(game.as_str()))?.and_then(|info| {
                 if !supports_save_profiles(&game).ok()? {
                     return None;
                 }
@@ -148,15 +161,19 @@ pub fn handle(action: ProfileAction) -> Result<()> {
                 }))
             });
 
-            let restored = pm.rollback_with_fingerprint(&game, save_dir.as_deref(), fp.as_ref())?;
+            let restored = pm.rollback_with_fingerprint(
+                &GameId::from(game.as_str()),
+                save_dir.as_deref(),
+                fp.as_ref(),
+            )?;
             println!("Rolled back to profile: {restored}");
         }
         ProfileAction::Commit { game } => {
-            pm.commit(&game)?;
+            pm.commit(&GameId::from(game.as_str()))?;
             println!("Experiment accepted. Rollback stack cleared for game: {game}");
         }
         ProfileAction::Active { game } => {
-            match pm.active(&game)? {
+            match pm.active(&GameId::from(game.as_str()))? {
                 Some(info) => {
                     println!(
                         "Active profile: {} (game: {})",
@@ -199,7 +216,7 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             let id = pm.fork_with_options(
                 &source,
                 &name,
-                &game,
+                &GameId::from(game.as_str()),
                 modde_core::profile::ForkOptions { unlock },
             )?;
             if unlock {
@@ -211,7 +228,7 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             }
         }
         ProfileAction::Lock { name, game, note } => {
-            let mut profile = pm.load(&name, game.as_deref())?;
+            let mut profile = pm.load(&name, game.as_deref().map(GameId::from).as_ref())?;
             if let Some(existing) = profile.load_order_lock.as_ref() {
                 anyhow::bail!(
                     "profile '{name}' is already locked by {} — unlock first to re-lock",
@@ -228,7 +245,7 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             }
         }
         ProfileAction::Unlock { name, game } => {
-            let mut profile = pm.load(&name, game.as_deref())?;
+            let mut profile = pm.load(&name, game.as_deref().map(GameId::from).as_ref())?;
             match profile.load_order_lock.take() {
                 None => println!("Profile '{name}' was not locked."),
                 Some(prior) => {
@@ -242,7 +259,7 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             }
         }
         ProfileAction::LockInfo { name, game } => {
-            let profile = pm.load(&name, game.as_deref())?;
+            let profile = pm.load(&name, game.as_deref().map(GameId::from).as_ref())?;
             match profile.load_order_lock.as_ref() {
                 None => println!("Profile '{name}' is not locked."),
                 Some(lock) => {
@@ -293,7 +310,7 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             // A per-mod pin is independent of the profile-level lock. If the
             // profile is already Wabbajack-locked, lock-mod still succeeds —
             // the pin takes effect after a later `unlock` or `fork --unlock`.
-            let mut profile = pm.load(&name, game.as_deref())?;
+            let mut profile = pm.load(&name, game.as_deref().map(GameId::from).as_ref())?;
             let idx = find_mod_or_bail(&profile, &mod_id)?;
             if let Some(existing) = profile.mods[idx].lock.as_ref() {
                 anyhow::bail!(
@@ -309,7 +326,7 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             }
         }
         ProfileAction::UnlockMod { name, mod_id, game } => {
-            let mut profile = pm.load(&name, game.as_deref())?;
+            let mut profile = pm.load(&name, game.as_deref().map(GameId::from).as_ref())?;
             let idx = find_mod_or_bail(&profile, &mod_id)?;
             match profile.mods[idx].lock.take() {
                 None => println!("'{mod_id}' was not pinned"),
@@ -342,7 +359,7 @@ fn dedup(
     manifest_path: Option<&std::path::Path>,
     apply: bool,
 ) -> Result<()> {
-    let mut profile = pm.load(name, game)?;
+    let mut profile = pm.load(name, game.map(GameId::from).as_ref())?;
 
     // ── Layer 1: pure-DB heuristic ────────────────────────────────
     //
