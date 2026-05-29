@@ -53,6 +53,8 @@ pub fn socket_dir() -> PathBuf {
 }
 
 fn euid() -> u32 {
+    // SAFETY: `geteuid()` takes no arguments, never fails, and cannot cause
+    // undefined behaviour — it just reads the calling process's effective UID.
     unsafe { libc::geteuid() }
 }
 
