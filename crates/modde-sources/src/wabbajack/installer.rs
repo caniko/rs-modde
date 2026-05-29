@@ -161,6 +161,9 @@ pub enum InstallProgress {
 /// Orchestrate a full Wabbajack install pipeline.
 pub struct WabbajackInstaller {
     manifest: WabbajackManifest,
+    /// Maps each archive hash to its index into `manifest.archives` (keep-first
+    /// semantics, matching the legacy `.iter().find()` lookups).
+    archives_by_hash: std::collections::HashMap<u64, usize>,
     /// Path to the `.wabbajack` zip file (needed for `InlineFile` and `PatchedFromArchive` data).
     wabbajack_path: PathBuf,
     store_dir: PathBuf,
@@ -188,8 +191,13 @@ impl WabbajackInstaller {
         store_dir: PathBuf,
         staging_dir: PathBuf,
     ) -> Self {
+        let mut archives_by_hash = std::collections::HashMap::new();
+        for (idx, archive) in manifest.archives.iter().enumerate() {
+            archives_by_hash.entry(archive.hash).or_insert(idx);
+        }
         Self {
             manifest,
+            archives_by_hash,
             wabbajack_path,
             store_dir,
             staging_dir,
@@ -436,6 +444,10 @@ impl WabbajackInstaller {
             .filter(|&n| n > 0)
             .unwrap_or(1);
         let patch_batch_gate = Arc::new(Semaphore::new(patch_max_in_flight));
+        // Read apply-weight tunables once; env does not change mid-run, so we
+        // avoid re-parsing it per directive/per batch in the fan-out below.
+        let directive_weights = DirectiveWeights::from_env();
+        let archive_batch_weights = ArchiveBatchWeights::from_env();
         info!(
             archive_batch_count,
             inline_directive_count = inline_directives.len(),
@@ -472,7 +484,7 @@ impl WabbajackInstaller {
                 let sizes = Arc::clone(&archive_size_by_hash);
                 let inline_source = inline_source.clone();
                 async move {
-                    let weight = estimate_directive_weight(directive, &sizes);
+                    let weight = estimate_directive_weight(directive, &sizes, &directive_weights);
                     let _permit = gate.acquire(weight).await;
                     if let Err(e) = self.check_diagnostics_abort() {
                         return (i, Err(e));
@@ -529,7 +541,8 @@ impl WabbajackInstaller {
                     // The batch's whole-archive memory cost is the archive
                     // size itself (decompression working set, conservatively
                     // half), regardless of how many directives it serves.
-                    let archive_weight = estimate_archive_batch_weight(&batch);
+                    let archive_weight =
+                        estimate_archive_batch_weight(&batch, &archive_batch_weights);
                     let _permit = gate.acquire(archive_weight).await;
                     if let Err(e) = self.check_diagnostics_abort() {
                         return batch
@@ -676,10 +689,9 @@ impl WabbajackInstaller {
         }
 
         let Some(directive) = self
-            .manifest
-            .download_directives()
-            .into_iter()
-            .find(|directive| directive.hash() == archive_hash)
+            .archives_by_hash
+            .get(&archive_hash)
+            .and_then(|&i| self.manifest.archives[i].download_directive())
         else {
             bail!(
                 "archive {archive_hash:016x} is not present in store and has no download directive"
@@ -2036,10 +2048,9 @@ impl WabbajackInstaller {
 
     fn game_file_source_path(&self, archive_hash: u64) -> Result<Option<GameFileSourcePath>> {
         let Some(archive) = self
-            .manifest
-            .archives
-            .iter()
-            .find(|a| a.hash == archive_hash)
+            .archives_by_hash
+            .get(&archive_hash)
+            .map(|&i| &self.manifest.archives[i])
         else {
             return Ok(None);
         };
@@ -2368,63 +2379,109 @@ async fn write_bytes_maybe_zstd(path: &Path, data: &[u8]) -> Result<()> {
 /// patch into bsdiff. We intentionally over-count rather than under-count:
 /// being throttled too aggressively just slows the install, while admitting
 /// a worker that the host can't satisfy crashes it.
+/// Apply-weight tunables for per-directive weighting.
+///
+/// Read once from the environment before the apply fan-out so that
+/// `estimate_directive_weight` does not touch `std::env` per directive.
+#[derive(Debug, Clone, Copy)]
+struct DirectiveWeights {
+    from_archive_factor: f64,
+    patched_factor: f64,
+    create_bsa_floor_mb: u64,
+}
+
+impl DirectiveWeights {
+    /// Read the tunables from the environment (site operators can dial without rebuilding).
+    fn from_env() -> Self {
+        let from_archive_factor: f64 = std::env::var("MODDE_APPLY_WEIGHT_FROM_ARCHIVE_FACTOR")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|&v: &f64| v > 0.0)
+            .unwrap_or(0.5);
+        let patched_factor: f64 = std::env::var("MODDE_APPLY_WEIGHT_PATCHED_FACTOR")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|&v: &f64| v > 0.0)
+            .unwrap_or(3.0);
+        let create_bsa_floor_mb: u64 = std::env::var("MODDE_APPLY_WEIGHT_BSA_FLOOR_MB")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(64);
+        Self {
+            from_archive_factor,
+            patched_factor,
+            create_bsa_floor_mb,
+        }
+    }
+}
+
+/// Apply-weight tunables for per-archive-batch weighting.
+///
+/// Read once from the environment before the apply fan-out so that
+/// `estimate_archive_batch_weight` does not touch `std::env` per batch.
+#[derive(Debug, Clone, Copy)]
+struct ArchiveBatchWeights {
+    patched_factor: f64,
+    archive_factor: f64,
+}
+
+impl ArchiveBatchWeights {
+    /// Read the tunables from the environment (site operators can dial without rebuilding).
+    fn from_env() -> Self {
+        let patched_factor: f64 = std::env::var("MODDE_APPLY_WEIGHT_PATCHED_BATCH_FACTOR")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .filter(|&v| v > 0.0)
+            .unwrap_or(1.0);
+        let archive_factor: f64 = std::env::var("MODDE_APPLY_WEIGHT_ARCHIVE_BATCH_FACTOR")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .filter(|&v| v > 0.0)
+            .unwrap_or(0.5);
+        Self {
+            patched_factor,
+            archive_factor,
+        }
+    }
+}
+
 fn estimate_directive_weight(
     directive: &InstallDirective,
     archive_size_by_hash: &HashMap<u64, u64>,
+    weights: &DirectiveWeights,
 ) -> u64 {
-    // Tunable through env vars so site operators can dial without rebuilding.
-    let from_archive_factor: f64 = std::env::var("MODDE_APPLY_WEIGHT_FROM_ARCHIVE_FACTOR")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .filter(|&v: &f64| v > 0.0)
-        .unwrap_or(0.5);
-    let patched_factor: f64 = std::env::var("MODDE_APPLY_WEIGHT_PATCHED_FACTOR")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .filter(|&v: &f64| v > 0.0)
-        .unwrap_or(3.0);
-    let create_bsa_floor_mb: u64 = std::env::var("MODDE_APPLY_WEIGHT_BSA_FLOOR_MB")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(64);
-
     const FLOOR_BYTES: u64 = 8 * 1024 * 1024; // 8 MiB
 
     let raw = match directive {
         InstallDirective::InlineFile { .. } => FLOOR_BYTES,
         InstallDirective::FromArchive { archive_hash, .. } => {
             let size = archive_size_by_hash.get(archive_hash).copied().unwrap_or(0);
-            ((size as f64) * from_archive_factor) as u64
+            ((size as f64) * weights.from_archive_factor) as u64
         }
         InstallDirective::PatchedFromArchive { archive_hash, .. } => {
             let size = archive_size_by_hash.get(archive_hash).copied().unwrap_or(0);
-            ((size as f64) * patched_factor) as u64
+            ((size as f64) * weights.patched_factor) as u64
         }
         InstallDirective::CreateBSA { file_states, .. } => file_states
             .iter()
             .map(|fs| fs.size)
             .sum::<u64>()
-            .max(create_bsa_floor_mb * 1024 * 1024),
+            .max(weights.create_bsa_floor_mb * 1024 * 1024),
     };
 
     raw.max(FLOOR_BYTES)
 }
 
-fn estimate_archive_batch_weight(batch: &ArchiveInstallBatch) -> u64 {
+fn estimate_archive_batch_weight(
+    batch: &ArchiveInstallBatch,
+    weights: &ArchiveBatchWeights,
+) -> u64 {
     const FLOOR_BYTES: u64 = 8 * 1024 * 1024;
     let has_patch = archive_batch_has_patch(batch);
     let factor = if has_patch {
-        std::env::var("MODDE_APPLY_WEIGHT_PATCHED_BATCH_FACTOR")
-            .ok()
-            .and_then(|v| v.parse::<f64>().ok())
-            .filter(|&v| v > 0.0)
-            .unwrap_or(1.0)
+        weights.patched_factor
     } else {
-        std::env::var("MODDE_APPLY_WEIGHT_ARCHIVE_BATCH_FACTOR")
-            .ok()
-            .and_then(|v| v.parse::<f64>().ok())
-            .filter(|&v| v > 0.0)
-            .unwrap_or(0.5)
+        weights.archive_factor
     };
     (((batch.archive_size_bytes as f64) * factor) as u64).max(FLOOR_BYTES)
 }

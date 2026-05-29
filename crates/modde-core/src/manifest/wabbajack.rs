@@ -143,6 +143,73 @@ pub struct ArchiveEntry {
     pub state: Option<ArchiveState>,
 }
 
+impl ArchiveEntry {
+    /// Build this archive's download directive (`None` if it carries no downloadable state).
+    #[must_use]
+    pub fn download_directive(&self) -> Option<DownloadDirective> {
+        let state = self.state.as_ref()?;
+        Some(match state {
+            ArchiveState::NexusDownloader {
+                game_name,
+                mod_id,
+                file_id,
+            } => DownloadDirective::Nexus {
+                game_id: GameId::from(game_name.clone()),
+                mod_id: *mod_id,
+                file_id: *file_id,
+                hash: self.hash,
+            },
+            ArchiveState::GitHubDownloader {
+                user,
+                repo,
+                tag,
+                asset,
+            } => DownloadDirective::GitHub {
+                user: user.clone(),
+                repo: repo.clone(),
+                tag: tag.clone(),
+                asset: asset.clone(),
+                hash: self.hash,
+            },
+            ArchiveState::GoogleDriveDownloader { id } => DownloadDirective::GoogleDrive {
+                id: id.clone(),
+                hash: self.hash,
+            },
+            ArchiveState::MegaDownloader { url } => DownloadDirective::Mega {
+                url: url.clone(),
+                hash: self.hash,
+            },
+            ArchiveState::MediaFireDownloader { url } => DownloadDirective::MediaFire {
+                url: url.clone(),
+                hash: self.hash,
+            },
+            ArchiveState::ManualDownloader { url, prompt } => DownloadDirective::Manual {
+                url: url.clone(),
+                prompt: prompt.clone(),
+                hash: self.hash,
+                expected_name: self.name.clone(),
+            },
+            ArchiveState::HttpDownloader { url, headers } => DownloadDirective::DirectURL {
+                url: url.clone(),
+                headers: headers.clone(),
+                mirror_resolver: None,
+                hash: self.hash,
+            },
+            ArchiveState::ModDBDownloader { url, .. } => DownloadDirective::DirectURL {
+                url: url.clone(),
+                headers: HashMap::new(),
+                mirror_resolver: moddb_html_mirror_resolver(url),
+                hash: self.hash,
+            },
+            ArchiveState::WabbajackCDNDownloader { metadata } => DownloadDirective::WabbajackCdn {
+                url: wabbajack_cdn_url(metadata)?,
+                hash: self.hash,
+            },
+            ArchiveState::GameFileSourceDownloader { .. } => return None,
+        })
+    }
+}
+
 /// Source-specific metadata for an archive.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "$type")]
@@ -509,70 +576,7 @@ impl WabbajackManifest {
     pub fn download_directives(&self) -> Vec<DownloadDirective> {
         self.archives
             .iter()
-            .filter_map(|archive| {
-                let state = archive.state.as_ref()?;
-                Some(match state {
-                    ArchiveState::NexusDownloader {
-                        game_name,
-                        mod_id,
-                        file_id,
-                    } => DownloadDirective::Nexus {
-                        game_id: GameId::from(game_name.clone()),
-                        mod_id: *mod_id,
-                        file_id: *file_id,
-                        hash: archive.hash,
-                    },
-                    ArchiveState::GitHubDownloader {
-                        user,
-                        repo,
-                        tag,
-                        asset,
-                    } => DownloadDirective::GitHub {
-                        user: user.clone(),
-                        repo: repo.clone(),
-                        tag: tag.clone(),
-                        asset: asset.clone(),
-                        hash: archive.hash,
-                    },
-                    ArchiveState::GoogleDriveDownloader { id } => DownloadDirective::GoogleDrive {
-                        id: id.clone(),
-                        hash: archive.hash,
-                    },
-                    ArchiveState::MegaDownloader { url } => DownloadDirective::Mega {
-                        url: url.clone(),
-                        hash: archive.hash,
-                    },
-                    ArchiveState::MediaFireDownloader { url } => DownloadDirective::MediaFire {
-                        url: url.clone(),
-                        hash: archive.hash,
-                    },
-                    ArchiveState::ManualDownloader { url, prompt } => DownloadDirective::Manual {
-                        url: url.clone(),
-                        prompt: prompt.clone(),
-                        hash: archive.hash,
-                        expected_name: archive.name.clone(),
-                    },
-                    ArchiveState::HttpDownloader { url, headers } => DownloadDirective::DirectURL {
-                        url: url.clone(),
-                        headers: headers.clone(),
-                        mirror_resolver: None,
-                        hash: archive.hash,
-                    },
-                    ArchiveState::ModDBDownloader { url, .. } => DownloadDirective::DirectURL {
-                        url: url.clone(),
-                        headers: HashMap::new(),
-                        mirror_resolver: moddb_html_mirror_resolver(url),
-                        hash: archive.hash,
-                    },
-                    ArchiveState::WabbajackCDNDownloader { metadata } => {
-                        DownloadDirective::WabbajackCdn {
-                            url: wabbajack_cdn_url(metadata)?,
-                            hash: archive.hash,
-                        }
-                    }
-                    ArchiveState::GameFileSourceDownloader { .. } => return None,
-                })
-            })
+            .filter_map(ArchiveEntry::download_directive)
             .collect()
     }
 
