@@ -121,42 +121,65 @@ fn extract_zip<R: std::io::Read + Seek>(
     label: String,
     requests: &[ArchiveRequest],
 ) -> Result<ArchiveBatchOutput> {
+    let by_path = requests_by_normalized_path(requests);
     let mut archive = zip::ZipArchive::new(reader)
         .with_context(|| format!("failed to read zip archive {label}"))?;
     let mut output = ArchiveBatchOutput::default();
     let mut found = HashSet::new();
 
-    for request in requests {
-        let entry_name = find_zip_entry(&archive, &request.from)?;
-        let mut entry = archive.by_name(&entry_name)?;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)?;
         validate_zip_entry(&entry)?;
-        if request.inner_path.is_none() {
-            validate_declared_entry_size(entry.size(), std::slice::from_ref(request))?;
+        let key = normalize_path(entry.name()).to_lowercase();
+        let Some(matched_requests) = by_path.get(&key) else {
+            continue;
+        };
+
+        if matched_requests
+            .iter()
+            .all(|request| request.inner_path.is_none())
+        {
+            validate_declared_entry_size(entry.size(), matched_requests)?;
         }
-        if request.inner_path.is_some() {
+
+        if matched_requests
+            .iter()
+            .any(|request| request.inner_path.is_some())
+        {
             let mut data = Vec::new();
             entry.read_to_end(&mut data)?;
-            satisfy_maybe_nested_requests_from_bytes(
-                &data,
-                std::slice::from_ref(request),
-                &mut output,
+            satisfy_maybe_nested_requests_from_bytes(&data, matched_requests, &mut output)?;
+        } else if matched_requests
+            .iter()
+            .any(|request| matches!(request.kind, ArchiveRequestKind::Bytes))
+        {
+            let data = read_to_vec(&mut entry, expected_write_size(matched_requests)?)?;
+            satisfy_requests_from_bytes(&data, matched_requests, &mut output)?;
+        } else {
+            let mut writers = Vec::new();
+            for request in matched_requests {
+                if let ArchiveRequestKind::WriteFile { to, .. } = &request.kind {
+                    writers
+                        .push(File::create(to).with_context(|| {
+                            format!("failed to create output {}", to.display())
+                        })?);
+                }
+            }
+            copy_streaming_to_many(
+                &mut entry,
+                &mut writers,
+                expected_write_size(matched_requests)?,
             )?;
-            found.insert(request.directive_index);
-            continue;
         }
-        match &request.kind {
-            ArchiveRequestKind::WriteFile { to, expected_size } => {
-                let mut out = File::create(to)
-                    .with_context(|| format!("failed to create output {}", to.display()))?;
-                copy_streaming(&mut entry, &mut out, *expected_size)?;
-            }
-            ArchiveRequestKind::Bytes => {
-                let mut data = Vec::with_capacity(entry.size() as usize);
-                entry.read_to_end(&mut data)?;
-                output.bytes.insert(request.directive_index, data);
-            }
+
+        found.extend(
+            matched_requests
+                .iter()
+                .map(|request| request.directive_index),
+        );
+        if found.len() == requests.len() {
+            break;
         }
-        found.insert(request.directive_index);
     }
 
     ensure_all_found(&label, requests, &found)?;
@@ -383,27 +406,6 @@ fn satisfy_maybe_nested_requests_from_bytes(
     Ok(())
 }
 
-fn copy_streaming(
-    input: &mut dyn std::io::Read,
-    output: &mut dyn std::io::Write,
-    expected_size: Option<u64>,
-) -> std::io::Result<u64> {
-    let mut buf = vec![0_u8; COPY_BUFFER];
-    let mut total = 0_u64;
-    loop {
-        let n = input.read(&mut buf)?;
-        if n == 0 {
-            break;
-        }
-        total += n as u64;
-        validate_output_size(total, expected_size)?;
-        output.write_all(&buf[..n])?;
-    }
-    output.flush()?;
-    validate_final_output_size(total, expected_size)?;
-    Ok(total)
-}
-
 fn copy_streaming_to_many(
     input: &mut dyn std::io::Read,
     outputs: &mut [File],
@@ -606,28 +608,6 @@ fn bytes_have_zip_magic(bytes: &[u8]) -> bool {
 
 fn bytes_have_bethesda_magic(bytes: &[u8]) -> bool {
     bytes.starts_with(b"BSA\0") || bytes.starts_with(b"BTDX")
-}
-
-fn find_zip_entry<R: std::io::Read + Seek>(
-    archive: &zip::ZipArchive<R>,
-    path: &str,
-) -> Result<String> {
-    let normalized = normalize_path(path);
-    let backslash = path.replace('/', "\\");
-    for i in 0..archive.len() {
-        let name = archive.name_for_index(i).unwrap_or_default();
-        if name == path || name == normalized || name == backslash {
-            return Ok(name.to_string());
-        }
-        let lower = name.to_lowercase();
-        if lower == path.to_lowercase()
-            || lower == normalized.to_lowercase()
-            || lower == backslash.to_lowercase()
-        {
-            return Ok(name.to_string());
-        }
-    }
-    bail!("entry not found: {path}");
 }
 
 fn validate_zip_entry<R: std::io::Read + ?Sized>(entry: &zip::read::ZipFile<'_, R>) -> Result<()> {

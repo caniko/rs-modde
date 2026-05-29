@@ -25,6 +25,7 @@ const UNCATEGORIZED_LABEL: &str = "Uncategorized";
 /// gesture the handler will reject).
 pub fn view_filtered<'a>(
     mods: &'a [EnabledMod],
+    mod_id_filter_keys: &'a [String],
     filter_text: &'a str,
     selected_index: Option<usize>,
     filter_mode: FilterMode,
@@ -116,7 +117,13 @@ pub fn view_filtered<'a>(
     .padding([4, 0]);
 
     // ── Apply filters ──
-    let filtered_indices = filter::apply_filters(mods, filter_text, active_filters, filter_mode);
+    let filtered_indices = filter::apply_filters_with_mod_id_keys(
+        mods,
+        mod_id_filter_keys,
+        filter_text,
+        active_filters,
+        filter_mode,
+    );
 
     let total_shown = filtered_indices.len();
 

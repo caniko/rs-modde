@@ -109,6 +109,7 @@ pub struct Modde {
     /// selected mod has no `nexus_mod_id`).
     pub selected_mod_details: Option<crate::views::mod_details::ModDetailsState>,
     pub mod_filter: String,
+    pub mod_id_filter_keys: Vec<String>,
     pub theme_name: String,
     pub wabbajack_manifest: Option<modde_core::WabbajackManifest>,
     pub active_downloads: Vec<crate::views::collections::CollectionDownload>,
@@ -1581,11 +1582,13 @@ impl Modde {
                             })
                     };
 
+                    self.mod_id_filter_keys = modde_core::filter::mod_id_filter_keys(&profile.mods);
                     self.loaded_profile = Some(profile);
                 }
             }
         } else {
             self.loaded_profile = None;
+            self.mod_id_filter_keys.clear();
         }
 
         self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Idle;
@@ -1600,6 +1603,7 @@ impl Modde {
             self.profiles.clear();
             self.active_profile = None;
             self.loaded_profile = None;
+            self.mod_id_filter_keys.clear();
             self.status_message = "Failed to open profile database".to_string();
             return;
         };
@@ -1616,6 +1620,7 @@ impl Modde {
             self.reload_profile();
         } else {
             self.loaded_profile = None;
+            self.mod_id_filter_keys.clear();
             self.refresh_data_tab_conflicts();
             self.refresh_tools_state();
         }
@@ -3787,6 +3792,7 @@ impl Modde {
             selected_mod_index: None,
             selected_mod_details: None,
             mod_filter: String::new(),
+            mod_id_filter_keys: Vec::new(),
             theme_name,
             wabbajack_manifest: None,
             active_downloads: Vec::new(),
@@ -4120,6 +4126,7 @@ impl Modde {
                     self.profiles.clear();
                     self.active_profile = None;
                     self.loaded_profile = None;
+                    self.mod_id_filter_keys.clear();
                     self.status_message = "Game selection cancelled".to_string();
                 }
                 self.save_settings();
@@ -7017,6 +7024,7 @@ impl Modde {
         let content: Element<Message> = match &self.active_view {
             View::ModList => crate::views::mod_list::view_filtered(
                 mods,
+                &self.mod_id_filter_keys,
                 &self.mod_filter,
                 self.selected_mod_index,
                 self.filter_mode,

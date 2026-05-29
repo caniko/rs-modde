@@ -28,6 +28,7 @@ fn test_app() -> Modde {
         selected_mod_index: None,
         selected_mod_details: None,
         mod_filter: String::new(),
+        mod_id_filter_keys: Vec::new(),
         theme_name: "Dark".to_string(),
         wabbajack_manifest: None,
         active_downloads: Vec::new(),

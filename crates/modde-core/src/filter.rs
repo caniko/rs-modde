@@ -141,15 +141,50 @@ pub fn apply_filters(
     criteria: &[FilterCriterion],
     mode: FilterMode,
 ) -> Vec<usize> {
+    let mod_id_keys = mod_id_filter_keys(mods);
+    apply_filters_with_mod_id_keys(mods, &mod_id_keys, text_filter, criteria, mode)
+}
+
+/// Precompute Unicode-lowercased `mod_id` keys for repeated filter passes.
+#[must_use]
+pub fn mod_id_filter_keys(mods: &[EnabledMod]) -> Vec<String> {
+    mods.iter().map(|m| m.mod_id.to_lowercase()).collect()
+}
+
+/// Apply filters using precomputed Unicode-lowercased `mod_id` keys.
+///
+/// The `mod_id_keys` slice must be produced from the same `mods` slice by
+/// [`mod_id_filter_keys`]. Keeping the keys alongside the view model avoids a
+/// `String` allocation for every row on every render while preserving
+/// `str::to_lowercase` matching semantics. If callers provide stale keys, this
+/// function falls back to local key generation instead of filtering against
+/// mismatched rows.
+#[must_use]
+pub fn apply_filters_with_mod_id_keys(
+    mods: &[EnabledMod],
+    mod_id_keys: &[String],
+    text_filter: &str,
+    criteria: &[FilterCriterion],
+    mode: FilterMode,
+) -> Vec<usize> {
+    let fallback_keys;
+    let mod_id_keys = if mods.len() == mod_id_keys.len() {
+        mod_id_keys
+    } else {
+        fallback_keys = mod_id_filter_keys(mods);
+        &fallback_keys
+    };
+
     let text_lower = text_filter.to_lowercase();
     let active_criteria: Vec<&FilterCriterion> =
         criteria.iter().filter(|c| c.state.is_active()).collect();
 
     mods.iter()
+        .zip(mod_id_keys)
         .enumerate()
-        .filter(|(_, m)| {
+        .filter(|(_, (m, mod_id_key))| {
             // Text filter always applies (AND with criteria)
-            if !text_lower.is_empty() && !m.mod_id.to_lowercase().contains(&text_lower) {
+            if !text_lower.is_empty() && !mod_id_key.contains(&text_lower) {
                 return false;
             }
 
