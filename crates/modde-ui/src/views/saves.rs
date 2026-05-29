@@ -100,7 +100,9 @@ pub fn view<'a>(
             // Fingerprint indicator
             let fp_indicator: Element<Message> = match &snap.fingerprint {
                 Some(fp) if current_fingerprint.is_some() => {
-                    let check = snap.check_compatibility(current_fingerprint.unwrap());
+                    let check = snap.check_compatibility(
+                        current_fingerprint.expect("guarded by is_some() in match arm"),
+                    );
                     match check {
                         modde_core::save::FingerprintCheck::Compatible => text(fp.short_hash())
                             .size(11)

@@ -122,7 +122,7 @@ where
             }
         }
     }
-    unreachable!()
+    unreachable!("the 0..MAX_RETRIES loop always returns Ok or the final Err")
 }
 
 /// Simple download: GET, stream to file, verify hash, return `VerifiedFile`.

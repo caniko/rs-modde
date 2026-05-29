@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use smallvec::SmallVec;
 
 use crate::traits::{DetectedSave, SaveTracker};
@@ -71,7 +71,9 @@ impl PatternSaveTracker {
     }
 
     fn detect_in_dir(self, base: &Path, dir: &Path, saves: &mut Vec<DetectedSave>) -> Result<()> {
-        for entry in std::fs::read_dir(dir)? {
+        for entry in std::fs::read_dir(dir)
+            .with_context(|| format!("failed to read directory: {}", dir.display()))?
+        {
             let entry = entry?;
             let path = entry.path();
             let metadata = entry.metadata()?;

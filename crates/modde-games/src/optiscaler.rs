@@ -48,13 +48,6 @@ pub struct OptiScalerProfile {
     pub notes: &'static str,
 }
 
-/// Opt-in provider for games with known `OptiScaler` compatibility profiles.
-pub trait OptiScalerProfiles {
-    fn optiscaler_profiles(&self) -> &'static [OptiScalerProfile] {
-        &[]
-    }
-}
-
 static MERGED_PROFILE_CACHE: OnceLock<DashMap<String, &'static [OptiScalerProfile]>> =
     OnceLock::new();
 

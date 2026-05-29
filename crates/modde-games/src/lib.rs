@@ -28,7 +28,7 @@ pub use generic::manage::{
     remove_user_game,
 };
 pub use optiscaler::{
-    OptiScalerIniOverride, OptiScalerProfile, OptiScalerProfiles, default_optiscaler_profile,
+    OptiScalerIniOverride, OptiScalerProfile, default_optiscaler_profile,
     resolve_optiscaler_profiles,
 };
 pub use registry::{

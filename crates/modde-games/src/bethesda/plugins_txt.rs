@@ -62,7 +62,8 @@ pub fn write_plugins_txt(app_id: u32, game_name: &str, entries: &[PluginEntry]) 
 /// Write plugins.txt to an explicit path.
 pub fn write_plugins_txt_to(path: &Path, entries: &[PluginEntry]) -> Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
     }
 
     let content = format_plugins_txt(entries);

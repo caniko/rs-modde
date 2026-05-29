@@ -5,7 +5,6 @@ description = "Core types and logic for the modde mod manager"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-license-file = "../../LICENSE"
 repository.workspace = true
 authors.workspace = true
 keywords.workspace = true

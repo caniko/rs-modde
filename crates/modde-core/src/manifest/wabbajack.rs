@@ -19,7 +19,9 @@ fn deserialize_b64_hash<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u6
                     bytes.len()
                 )));
             }
-            Ok(u64::from_le_bytes(bytes.try_into().unwrap()))
+            Ok(u64::from_le_bytes(
+                bytes.try_into().expect("length checked to be 8 above"),
+            ))
         }
         serde_json::Value::Number(n) => n
             .as_u64()
@@ -66,7 +68,9 @@ pub fn parse_b64_hash(s: &str) -> Option<u64> {
     if bytes.len() != 8 {
         return None;
     }
-    Some(u64::from_le_bytes(bytes.try_into().unwrap()))
+    Some(u64::from_le_bytes(
+        bytes.try_into().expect("length checked to be 8 above"),
+    ))
 }
 
 /// Top-level manifest from a `.wabbajack` archive (which is a zip containing JSON).
@@ -368,6 +372,16 @@ pub struct HtmlMirrorResolver {
     pub user_agent: Option<String>,
 }
 
+/// Truncate `s` to at most `max` bytes, backing up to a char boundary so a
+/// multibyte codepoint is never split (a byte slice mid-codepoint panics).
+fn truncate_str(s: &str, max: usize) -> &str {
+    let mut end = s.len().min(max);
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 impl DownloadDirective {
     /// Extract the expected hash from any directive variant.
     #[must_use]
@@ -395,14 +409,12 @@ impl DownloadDirective {
             Self::Nexus { mod_id, .. } => format!("nexus:{mod_id}").into(),
             Self::GitHub { repo, .. } => format!("github:{repo}").into(),
             Self::GoogleDrive { id, .. } => format!("gdrive:{id}").into(),
-            Self::Mega { url, .. } => format!("mega:{}", &url[..url.len().min(30)]).into(),
-            Self::MediaFire { url, .. } => {
-                format!("mediafire:{}", &url[..url.len().min(40)]).into()
-            }
+            Self::Mega { url, .. } => format!("mega:{}", truncate_str(url, 30)).into(),
+            Self::MediaFire { url, .. } => format!("mediafire:{}", truncate_str(url, 40)).into(),
             Self::Manual { expected_name, .. } => format!("manual:{expected_name}").into(),
-            Self::DirectURL { url, .. } => format!("http:{}", &url[..url.len().min(30)]).into(),
+            Self::DirectURL { url, .. } => format!("http:{}", truncate_str(url, 30)).into(),
             Self::WabbajackCdn { url, .. } => {
-                format!("wabbajack-cdn:{}", &url[..url.len().min(30)]).into()
+                format!("wabbajack-cdn:{}", truncate_str(url, 30)).into()
             }
         }
     }
@@ -731,6 +743,22 @@ fn moddb_download_id(url: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn truncate_str_never_splits_a_codepoint() {
+        // 1 ASCII byte + 3-byte chars => byte 30 lands mid-codepoint.
+        let s = format!("x{}", "€".repeat(20));
+        assert!(!s.is_char_boundary(30));
+        let t = truncate_str(&s, 30);
+        assert!(t.len() <= 30 && s.is_char_boundary(t.len()));
+        assert_eq!(truncate_str("abc", 30), "abc");
+    }
+
+    #[test]
+    fn display_name_does_not_panic_on_multibyte_url() {
+        let url = format!("https://mega.nz/{}", "€".repeat(20));
+        let _ = DownloadDirective::Mega { url, hash: 0 }.display_name();
+    }
 
     #[test]
     fn game_file_source_downloader_parses_and_is_not_downloaded() {

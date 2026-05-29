@@ -61,7 +61,8 @@ pub fn deploy_if_available(game_dir: &Path) -> Result<()> {
         return Ok(());
     }
 
-    let mod_dirs: Vec<PathBuf> = std::fs::read_dir(&mods_dir)?
+    let mod_dirs: Vec<PathBuf> = std::fs::read_dir(&mods_dir)
+        .with_context(|| format!("failed to read directory: {}", mods_dir.display()))?
         .filter_map(std::result::Result::ok)
         .filter(|e| e.path().is_dir())
         .map(|e| e.path())

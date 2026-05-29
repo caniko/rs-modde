@@ -6,7 +6,7 @@ pub mod scanner;
 
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use smallvec::SmallVec;
 
@@ -99,17 +99,22 @@ impl GamePlugin for Cyberpunk2077 {
 
     fn deploy(&self, staging: &Path, target: &Path) -> Result<()> {
         if !target.exists() {
-            std::fs::create_dir_all(target)?;
+            std::fs::create_dir_all(target)
+                .with_context(|| format!("failed to create {}", target.display()))?;
         }
         // Symlink each mod directory from staging into game mods dir
-        for entry in std::fs::read_dir(staging)? {
+        for entry in std::fs::read_dir(staging)
+            .with_context(|| format!("failed to read directory: {}", staging.display()))?
+        {
             let entry = entry?;
             let dst = target.join(entry.file_name());
             if dst.exists() || dst.symlink_metadata().is_ok() {
                 if dst.is_dir() {
-                    std::fs::remove_dir_all(&dst)?;
+                    std::fs::remove_dir_all(&dst)
+                        .with_context(|| format!("failed to remove {}", dst.display()))?;
                 } else {
-                    std::fs::remove_file(&dst)?;
+                    std::fs::remove_file(&dst)
+                        .with_context(|| format!("failed to remove {}", dst.display()))?;
                 }
             }
             modde_core::fs::symlink(&entry.path(), &dst)?;

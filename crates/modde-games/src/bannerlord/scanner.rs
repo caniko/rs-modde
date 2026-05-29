@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::traits::{DiscoveredMod, ModScanner, ModSource, ScanContext, walk_files_relative};
 
@@ -18,7 +18,10 @@ impl ModScanner for BannerlordScanner {
         }
 
         let mut out = Vec::new();
-        for entry in std::fs::read_dir(&modules_dir)?.flatten() {
+        for entry in std::fs::read_dir(&modules_dir)
+            .with_context(|| format!("failed to read directory: {}", modules_dir.display()))?
+            .flatten()
+        {
             if !entry.file_type().is_ok_and(|ty| ty.is_dir()) {
                 continue;
             }

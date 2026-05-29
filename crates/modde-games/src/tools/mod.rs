@@ -16,7 +16,7 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
@@ -527,7 +527,8 @@ pub trait GameTool: Send + Sync {
         for rel in &applied.files {
             let path = game_dir.join(rel);
             if path.exists() {
-                std::fs::remove_file(&path)?;
+                std::fs::remove_file(&path)
+                    .with_context(|| format!("failed to remove {}", path.display()))?;
             }
         }
         Ok(())
@@ -884,14 +885,11 @@ mod tests {
                 let tempdir = tempfile::TempDir::new().expect("create tempdir");
                 let data_dir = tempdir.path().join("data");
                 std::fs::create_dir_all(&data_dir).expect("create data dir");
-                let candidate = data_dir.clone();
-                if std::panic::catch_unwind(|| modde_core::paths::set_data_dir(candidate)).is_err()
-                {
-                    std::mem::forget(tempdir);
-                    return modde_core::paths::modde_data_dir();
-                }
+                // set_data_dir is idempotent (first caller wins); return whatever
+                // actually became the override — ours, or a parallel test's.
+                modde_core::paths::set_data_dir(data_dir);
                 std::mem::forget(tempdir);
-                data_dir
+                modde_core::paths::modde_data_dir()
             })
             .clone()
     }

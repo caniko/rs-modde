@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use super::manifest::RedModManifest;
 use crate::scanner_patterns::{DirectoryModRule, SingleFileModRule};
@@ -118,7 +118,10 @@ fn scan_redmod_mods(install: &Path, out: &mut Vec<DiscoveredMod>) -> Result<()> 
         return Ok(());
     }
 
-    for entry in std::fs::read_dir(&mods_dir)?.flatten() {
+    for entry in std::fs::read_dir(&mods_dir)
+        .with_context(|| format!("failed to read directory: {}", mods_dir.display()))?
+        .flatten()
+    {
         if !entry.path().is_dir() {
             continue;
         }

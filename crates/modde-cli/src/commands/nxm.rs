@@ -11,8 +11,11 @@ pub struct NxmUri {
     pub game_domain: String,
     pub mod_id: u64,
     pub file_id: u64,
+    /// Authorization key from a premium nxm:// link. Parsed for a complete
+    /// representation of the URI; not yet consumed by the download flow.
     #[allow(dead_code)]
     pub key: Option<String>,
+    /// Expiry timestamp from a premium nxm:// link (see `key`).
     #[allow(dead_code)]
     pub expires: Option<u64>,
 }

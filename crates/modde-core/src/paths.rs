@@ -5,9 +5,11 @@ static DATA_DIR_OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
 
 /// Set a custom data directory. Must be called before any path functions.
 pub fn set_data_dir(path: PathBuf) {
-    DATA_DIR_OVERRIDE
-        .set(path)
-        .expect("data directory already set");
+    // First caller wins. In production this is invoked once at startup, so a
+    // repeat is benign; making it idempotent also stops parallel tests — each
+    // of which installs its own tempdir data dir — from racing on the OnceLock
+    // and panicking the loser.
+    let _ = DATA_DIR_OVERRIDE.set(path);
 }
 
 /// Platform-aware base data directory.

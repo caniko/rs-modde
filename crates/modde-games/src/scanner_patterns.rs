@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use anyhow::Context;
+
 use crate::traits::{DiscoveredFile, DiscoveredMod, ModSource, walk_files_relative};
 
 #[derive(Debug, Clone, Copy)]
@@ -20,7 +22,10 @@ impl DirectoryModRule {
             return Ok(());
         }
 
-        for entry in std::fs::read_dir(&dir)?.flatten() {
+        for entry in std::fs::read_dir(&dir)
+            .with_context(|| format!("failed to read directory: {}", dir.display()))?
+            .flatten()
+        {
             if !entry.path().is_dir() {
                 continue;
             }
@@ -70,7 +75,10 @@ impl SingleFileModRule {
             return Ok(());
         }
 
-        for entry in std::fs::read_dir(&dir)?.flatten() {
+        for entry in std::fs::read_dir(&dir)
+            .with_context(|| format!("failed to read directory: {}", dir.display()))?
+            .flatten()
+        {
             let path = entry.path();
             if path.is_dir()
                 || !path

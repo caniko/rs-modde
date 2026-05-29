@@ -1653,11 +1653,17 @@ fn run_command(cli: Cli) -> Result<()> {
                 | ToolAction::Disable { .. }
                 | ToolAction::Configure { .. }
                 | ToolAction::Apply { .. }
-                | ToolAction::Revert { .. } => unreachable!(),
+                | ToolAction::Revert { .. } => {
+                    unreachable!(
+                        "these ToolAction variants are dispatched in the pre-tokio sync block"
+                    )
+                }
             },
             Commands::Nxm { action } => match action {
                 NxmAction::Handle { uri, profile } => commands::nxm::handle(uri, profile).await?,
-                NxmAction::Install => unreachable!(),
+                NxmAction::Install => {
+                    unreachable!("NxmAction::Install is dispatched in the pre-tokio sync block")
+                }
             },
             Commands::Exec { action } => match action {
                 ExecAction::Run {
@@ -1670,7 +1676,7 @@ fn run_command(cli: Cli) -> Result<()> {
                 }
                 // Sync arms handled in the pre-tokio block above.
                 ExecAction::Add { .. } | ExecAction::List { .. } | ExecAction::Remove { .. } => {
-                    unreachable!()
+                    unreachable!("Exec sync arms are dispatched in the pre-tokio block above")
                 }
             },
             Commands::Wabbajack { action } => commands::wabbajack::handle(action).await?,
@@ -1688,7 +1694,9 @@ fn run_command(cli: Cli) -> Result<()> {
             | Commands::Fomod { .. }
             | Commands::Loot { .. }
             | Commands::Skill { .. }
-            | Commands::Gui => unreachable!(),
+            | Commands::Gui => {
+                unreachable!("these commands are dispatched before the async runtime block")
+            }
         }
         Ok(())
     })

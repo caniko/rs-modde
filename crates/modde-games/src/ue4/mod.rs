@@ -8,7 +8,7 @@ use modde_core::installer::InstallMethod;
 use modde_core::paths;
 use smallvec::SmallVec;
 
-use crate::optiscaler::{OptiScalerProfile, OptiScalerProfiles};
+use crate::optiscaler::OptiScalerProfile;
 use crate::policies::{CollisionPolicy, ContentPolicy, DllOverridePolicy, StagingDllSearch};
 use crate::traits::{ContentCategory, DeployTarget, DeployTargetKind, GamePlugin, ModSafety};
 
@@ -186,15 +186,6 @@ pub(crate) const STELLAR_BLADE_OPTISCALER_PROFILES: &[OptiScalerProfile] = &[Opt
     ini_overrides: &[],
     notes: "Use OptiPatcher to unlock DLSS and DLSS-FG inputs without spoofing. The community compatibility notes report that the game may crash on first boot but work afterwards, and that setting the in-game sharpness slider to 0 can fix DLSSG HUD interpolation.",
 }];
-
-impl OptiScalerProfiles for Ue4Game {
-    fn optiscaler_profiles(&self) -> &'static [OptiScalerProfile] {
-        match self.game_id {
-            "stellar-blade" => STELLAR_BLADE_OPTISCALER_PROFILES,
-            _ => &[],
-        }
-    }
-}
 
 impl GamePlugin for Ue4Game {
     fn game_id(&self) -> &str {

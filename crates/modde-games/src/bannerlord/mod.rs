@@ -3,6 +3,7 @@ pub mod scanner;
 
 use std::path::{Path, PathBuf};
 
+use anyhow::Context;
 use modde_core::installer::InstallMethod;
 
 use crate::policies::{BareLayoutPolicy, ContentPolicy};
@@ -47,7 +48,8 @@ pub struct BannerlordModuleInfo {
 }
 
 pub fn parse_submodule_xml(path: &Path) -> anyhow::Result<BannerlordModuleInfo> {
-    let content = std::fs::read_to_string(path)?;
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read {}", path.display()))?;
     let id = attr_after(&content, "<Id", "value").unwrap_or_else(|| {
         path.parent()
             .and_then(|parent| parent.file_name())

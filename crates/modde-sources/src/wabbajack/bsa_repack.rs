@@ -204,7 +204,12 @@ async fn create_bsa_inner(
         } else {
             folder_name.as_bytes().to_vec()
         };
-        buf.write_all(&[name_bytes.len() as u8 + 1])?; // length includes null terminator
+        // BSA folder-name length is a u8 that includes the null terminator.
+        let name_len = u8::try_from(name_bytes.len())
+            .ok()
+            .and_then(|n| n.checked_add(1))
+            .with_context(|| format!("BSA folder name exceeds 254 bytes: {folder_name}"))?;
+        buf.write_all(&[name_len])?; // length includes null terminator
         buf.write_all(&name_bytes)?;
         buf.write_all(&[0])?; // null terminator
 
@@ -212,14 +217,18 @@ async fn create_bsa_inner(
         for entry_index in files_in_folder {
             let entry = &entries[*entry_index];
             let name_hash = bsa_hash_file(&entry.file_name);
-            let mut data_size = entry.payload.len() as u32;
+            let mut data_size = u32::try_from(entry.payload.len())
+                .with_context(|| format!("BSA file exceeds 4 GiB: {}", entry.file_name))?;
             if !entry.compressed {
                 data_size |= BSA_SIZE_COMPRESS_TOGGLE;
             }
 
             write_u64_le(&mut buf, name_hash)?;
             write_u32_le(&mut buf, data_size)?;
-            write_u32_le(&mut buf, data_offset as u32)?;
+            write_u32_le(
+                &mut buf,
+                u32::try_from(data_offset).context("BSA data offset exceeds 4 GiB")?,
+            )?;
 
             data_offset += entry.payload.len() as u64;
         }
@@ -281,7 +290,7 @@ async fn create_ba2(file_states: &[BSAFileState], staging_dir: &Path, output: &P
         file_contents.push(data);
     }
 
-    let file_count = file_states.len() as u32;
+    let file_count = u32::try_from(file_states.len()).context("BA2 file count exceeds u32")?;
 
     // Header size: 24 bytes
     // File records: 36 bytes each
@@ -338,7 +347,11 @@ async fn create_ba2(file_states: &[BSAFileState], staging_dir: &Path, output: &P
         write_u32_le(&mut buf, 0)?; // flags (uncompressed)
         write_u64_le(&mut buf, offsets[i])?;
         write_u32_le(&mut buf, 0)?; // packed_size = 0 means uncompressed
-        write_u32_le(&mut buf, file_contents[i].len() as u32)?;
+        write_u32_le(
+            &mut buf,
+            u32::try_from(file_contents[i].len())
+                .with_context(|| format!("BA2 file exceeds 4 GiB: {}", state.path))?,
+        )?;
         write_u32_le(&mut buf, 0xBAAD_F00D)?;
     }
 

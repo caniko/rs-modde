@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::traits::{DiscoveredFile, DiscoveredMod, ModScanner, ModSource, ScanContext};
 
@@ -31,7 +31,10 @@ impl ModScanner for GamebryoScanner {
         }
 
         let mut mods = Vec::new();
-        for entry in std::fs::read_dir(&data_dir)?.flatten() {
+        for entry in std::fs::read_dir(&data_dir)
+            .with_context(|| format!("failed to read directory: {}", data_dir.display()))?
+            .flatten()
+        {
             let path = entry.path();
             if path.is_dir() {
                 continue;

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use super::plugins_txt;
 use crate::scanner_patterns::SingleFileModRule;
@@ -139,7 +139,10 @@ impl ModScanner for BethesdaScanner {
         }
 
         // Also scan for plugins NOT in plugins.txt (disabled or unmanaged).
-        for entry in std::fs::read_dir(&data_dir)?.flatten() {
+        for entry in std::fs::read_dir(&data_dir)
+            .with_context(|| format!("failed to read directory: {}", data_dir.display()))?
+            .flatten()
+        {
             let path = entry.path();
             if path.is_dir() {
                 continue;

@@ -393,6 +393,11 @@ fn mod_root_dir(m: &modde_games::DiscoveredMod) -> Option<String> {
             common_len = n;
         }
     }
+    // common_len is a byte count from a byte-wise prefix comparison; walk back to
+    // a char boundary so slicing a path with multibyte characters can't panic.
+    while !first.is_char_boundary(common_len) {
+        common_len -= 1;
+    }
     let common = &first[..common_len];
     common.rfind('/').map(|i| common[..=i].to_string())
 }

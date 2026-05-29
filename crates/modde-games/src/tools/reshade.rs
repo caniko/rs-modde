@@ -104,7 +104,8 @@ impl GameTool for ReShade {
                 }
             });
 
-        std::fs::create_dir_all(&target_dir)?;
+        std::fs::create_dir_all(&target_dir)
+            .with_context(|| format!("failed to create {}", target_dir.display()))?;
 
         let mut applied = AppliedFiles::default();
 
@@ -123,7 +124,8 @@ impl GameTool for ReShade {
         let ini = source_dir.join("ReShade.ini");
         if ini.exists() {
             let dest = target_dir.join("ReShade.ini");
-            std::fs::copy(&ini, &dest)?;
+            std::fs::copy(&ini, &dest)
+                .with_context(|| format!("failed to copy ReShade.ini to {}", dest.display()))?;
             let rel = dest.strip_prefix(game_dir).unwrap_or(&dest).to_path_buf();
             applied.files.push(rel);
         }
@@ -233,7 +235,8 @@ fn preview_source_file(
     dest: &Path,
     preview: &mut ToolApplyPreview,
 ) -> Result<()> {
-    let expected = std::fs::read(src)?;
+    let expected =
+        std::fs::read(src).with_context(|| format!("failed to read {}", src.display()))?;
     preview_bytes(game_dir, dest, &expected, preview);
     Ok(())
 }
@@ -250,7 +253,10 @@ fn preview_dir_recursive(
     dest: &Path,
     preview: &mut ToolApplyPreview,
 ) -> Result<()> {
-    for entry in std::fs::read_dir(src)?.flatten() {
+    for entry in std::fs::read_dir(src)
+        .with_context(|| format!("failed to read directory: {}", src.display()))?
+        .flatten()
+    {
         let ty = entry.file_type()?;
         let src_path = entry.path();
         let dest_path = dest.join(entry.file_name());
@@ -271,9 +277,13 @@ fn copy_dir_recursive(
     game_dir: &Path,
     applied: &mut AppliedFiles,
 ) -> Result<()> {
-    std::fs::create_dir_all(dest)?;
+    std::fs::create_dir_all(dest)
+        .with_context(|| format!("failed to create {}", dest.display()))?;
 
-    for entry in std::fs::read_dir(src)?.flatten() {
+    for entry in std::fs::read_dir(src)
+        .with_context(|| format!("failed to read directory: {}", src.display()))?
+        .flatten()
+    {
         let ty = entry.file_type()?;
         let src_path = entry.path();
         let dest_path = dest.join(entry.file_name());
@@ -281,7 +291,8 @@ fn copy_dir_recursive(
         if ty.is_dir() {
             copy_dir_recursive(&src_path, &dest_path, game_dir, applied)?;
         } else {
-            std::fs::copy(&src_path, &dest_path)?;
+            std::fs::copy(&src_path, &dest_path)
+                .with_context(|| format!("failed to copy {}", dest_path.display()))?;
             let rel = dest_path
                 .strip_prefix(game_dir)
                 .unwrap_or(&dest_path)

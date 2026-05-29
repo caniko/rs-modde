@@ -22,7 +22,7 @@ use std::io::{Read as _, Seek as _, SeekFrom};
 use std::path::Path;
 use std::time::SystemTime;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use smallvec::SmallVec;
 
 use crate::save_patterns::{CaptureSummary, PatternSaveTracker, PrefixSaveRule};
@@ -106,7 +106,9 @@ impl SaveTracker for BethesdaSaveTracker {
             return Ok(saves);
         }
 
-        for entry in std::fs::read_dir(save_dir)? {
+        for entry in std::fs::read_dir(save_dir)
+            .with_context(|| format!("failed to read directory: {}", save_dir.display()))?
+        {
             let entry = entry?;
             let path = entry.path();
 
@@ -228,7 +230,8 @@ struct SaveHeader {
 /// Returns `Err` if the file is unreadable, too short, or doesn't start
 /// with the expected magic bytes (wrong game).
 fn read_save_header(path: &Path, expected_magic: &[u8]) -> anyhow::Result<SaveHeader> {
-    let mut file = std::fs::File::open(path)?;
+    let mut file =
+        std::fs::File::open(path).with_context(|| format!("failed to open {}", path.display()))?;
 
     // Read and verify magic
     let mut magic_buf = vec![0u8; expected_magic.len()];

@@ -20,7 +20,9 @@ pub fn scan_mod_ini_tweaks(mod_id: &str, mod_dir: &Path) -> Result<Vec<IniTweak>
         return Ok(tweaks);
     }
 
-    for entry in std::fs::read_dir(mod_dir)? {
+    for entry in std::fs::read_dir(mod_dir)
+        .with_context(|| format!("failed to read directory: {}", mod_dir.display()))?
+    {
         let entry = entry?;
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) != Some("ini") {
@@ -30,7 +32,11 @@ pub fn scan_mod_ini_tweaks(mod_id: &str, mod_dir: &Path) -> Result<Vec<IniTweak>
             continue;
         }
 
-        let ini_file = path.file_name().unwrap().to_string_lossy().to_string();
+        let ini_file = path
+            .file_name()
+            .expect("read_dir entry always has a file name")
+            .to_string_lossy()
+            .to_string();
         let content = std::fs::read_to_string(&path)
             .with_context(|| format!("failed to read INI: {}", path.display()))?;
 

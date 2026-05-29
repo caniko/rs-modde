@@ -1001,6 +1001,16 @@ impl WabbajackInstaller {
                         ));
                     }
                     Ok(None) => {
+                        // Validate against path traversal / zip-slip before joining
+                        // onto the staging dir (mirrors apply_from_archive). The batch
+                        // extractor validates `from`/`inner_path` but never the `to`
+                        // destination, so a malicious manifest `to` must be rejected here.
+                        if let Err(e) =
+                            validate_archive_entry(from).and_then(|()| validate_archive_entry(to))
+                        {
+                            results.push((indexed.directive_index, Err(e)));
+                            continue;
+                        }
                         let output_path = self.staging_dir.join(normalize_path(to));
                         native_requests.push(ArchiveRequest {
                             directive_index: indexed.directive_index,
@@ -2533,6 +2543,17 @@ fn find_entry_in_archive(archive: &zip::ZipArchive<std::fs::File>, path: &str) -
 mod tests {
     use super::*;
     use crate::wabbajack::staging::{StagingPrepareStatus, StagingStore, compressed_path};
+
+    #[test]
+    fn validate_archive_entry_rejects_traversal_and_absolute() {
+        // The batch FromArchive path (install_directives) relies on this to block
+        // zip-slip via a malicious manifest `to` field.
+        assert!(validate_archive_entry("mods/Foo/textures/x.dds").is_ok());
+        assert!(validate_archive_entry("../escape.txt").is_err());
+        assert!(validate_archive_entry("a/b/../../../escape").is_err());
+        assert!(validate_archive_entry("..\\escape.txt").is_err());
+        assert!(validate_archive_entry("/etc/passwd").is_err());
+    }
     use std::collections::HashMap;
     use std::io::{Read as _, Write as _};
     use std::net::TcpListener;

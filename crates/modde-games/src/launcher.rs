@@ -684,7 +684,8 @@ pub fn generate_tool_configs(game_id: &str, db: &modde_core::db::ModdeDb) -> Res
 
         if let Some(generated) = tool.generate_config(&config) {
             if let Some(parent) = generated.path.parent() {
-                std::fs::create_dir_all(parent)?;
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("failed to create {}", parent.display()))?;
             }
             std::fs::write(&generated.path, &generated.content).with_context(|| {
                 format!("failed to write tool config: {}", generated.path.display())

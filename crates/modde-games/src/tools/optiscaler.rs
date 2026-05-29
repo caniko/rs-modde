@@ -455,7 +455,8 @@ impl GameTool for OptiScaler {
             .and_then(|context| context.executable_dir.clone())
             .unwrap_or_else(|| legacy_target_dir(game_dir, config));
 
-        std::fs::create_dir_all(&target_dir)?;
+        std::fs::create_dir_all(&target_dir)
+            .with_context(|| format!("failed to create {}", target_dir.display()))?;
         let applied_paths = managed_paths_from_config(config);
         let existing = scan_optiscaler_install_in_dir(&target_dir, &applied_paths)?;
         if matches!(
@@ -501,7 +502,10 @@ impl GameTool for OptiScaler {
 
         // Copy additional DLLs from source (fakenvapi, nvngx-wrapper, etc.)
         if config.get_bool("copy_companion_files") {
-            for entry in std::fs::read_dir(&source_dir)?.flatten() {
+            for entry in std::fs::read_dir(&source_dir)
+                .with_context(|| format!("failed to read directory: {}", source_dir.display()))?
+                .flatten()
+            {
                 let src = entry.path();
                 if !src.is_file() {
                     continue;
@@ -515,7 +519,8 @@ impl GameTool for OptiScaler {
                     && name.to_ascii_lowercase().ends_with(".dll")
                 {
                     let dest = target_dir.join(name);
-                    std::fs::copy(&src, &dest)?;
+                    std::fs::copy(&src, &dest)
+                        .with_context(|| format!("failed to copy {}", dest.display()))?;
                     let rel = relative_to_game(game_dir, &dest)?;
                     applied.files.push(rel);
                 }
@@ -546,7 +551,8 @@ impl GameTool for OptiScaler {
             }
             let dest = target_dir.join("plugins").join(OPTIPATCHER_ASSET);
             if let Some(parent) = dest.parent() {
-                std::fs::create_dir_all(parent)?;
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("failed to create {}", parent.display()))?;
             }
             std::fs::copy(&optipatcher_src, &dest)
                 .with_context(|| format!("failed to copy OptiPatcher.asi to {}", dest.display()))?;
@@ -624,7 +630,10 @@ impl GameTool for OptiScaler {
         }
 
         if config.get_bool("copy_companion_files") {
-            for entry in std::fs::read_dir(&source_dir)?.flatten() {
+            for entry in std::fs::read_dir(&source_dir)
+                .with_context(|| format!("failed to read directory: {}", source_dir.display()))?
+                .flatten()
+            {
                 let src = entry.path();
                 if !src.is_file() {
                     continue;
@@ -863,7 +872,8 @@ pub async fn install_optiscaler_release_asset(tag: &str, asset_name: &str) -> Re
     }
 
     let cache_dir = cached_release_dir(&normalized_tag);
-    std::fs::create_dir_all(&cache_dir)?;
+    std::fs::create_dir_all(&cache_dir)
+        .with_context(|| format!("failed to create {}", cache_dir.display()))?;
     let archive_path = cache_dir.join(&asset.name);
     download_release_asset(asset, &archive_path).await?;
     extract_optiscaler_archive_flat(&archive_path, &cache_dir)?;
@@ -881,7 +891,8 @@ pub fn install_optiscaler_release_asset_from_path(
     }
 
     let cache_dir = cached_release_dir(&normalized_tag);
-    std::fs::create_dir_all(&cache_dir)?;
+    std::fs::create_dir_all(&cache_dir)
+        .with_context(|| format!("failed to create {}", cache_dir.display()))?;
     let archive_path = cache_dir.join(asset_name);
     std::fs::copy(path, &archive_path).with_context(|| {
         format!(
@@ -1058,7 +1069,8 @@ fn release_assets_named(
 
 async fn download_release_asset(asset: &ToolReleaseAsset, dest: &Path) -> Result<()> {
     if let Some(parent) = dest.parent() {
-        std::fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
     }
     let client = Client::new();
     let response = client
@@ -1067,7 +1079,9 @@ async fn download_release_asset(asset: &ToolReleaseAsset, dest: &Path) -> Result
         .send()
         .await?
         .error_for_status()?;
-    let mut file = tokio::fs::File::create(dest).await?;
+    let mut file = tokio::fs::File::create(dest)
+        .await
+        .with_context(|| format!("failed to create {}", dest.display()))?;
     let mut stream = response.bytes_stream();
     while let Some(chunk) = stream.next().await {
         file.write_all(&chunk?).await?;
@@ -1217,7 +1231,8 @@ fn preview_source_file(
     dest: &Path,
     preview: &mut ToolApplyPreview,
 ) -> Result<()> {
-    let expected = std::fs::read(src)?;
+    let expected =
+        std::fs::read(src).with_context(|| format!("failed to read {}", src.display()))?;
     preview_bytes(game_dir, dest, &expected, preview);
     Ok(())
 }
@@ -1234,7 +1249,10 @@ fn preview_dir_recursive(
     dest: &Path,
     preview: &mut ToolApplyPreview,
 ) -> Result<()> {
-    for entry in std::fs::read_dir(src)?.flatten() {
+    for entry in std::fs::read_dir(src)
+        .with_context(|| format!("failed to read directory: {}", src.display()))?
+        .flatten()
+    {
         let ty = entry.file_type()?;
         let src_path = entry.path();
         let dest_path = dest.join(entry.file_name());
@@ -1422,7 +1440,8 @@ pub fn extract_optiscaler_archive_flat(archive_path: &Path, dest_dir: &Path) -> 
 }
 
 fn extract_zip_flat(archive_path: &Path, dest_dir: &Path) -> Result<()> {
-    let file = std::fs::File::open(archive_path)?;
+    let file = std::fs::File::open(archive_path)
+        .with_context(|| format!("failed to open {}", archive_path.display()))?;
     let mut archive = zip::ZipArchive::new(file)?;
     let mut copied = 0usize;
     let mut copied_optiscaler = false;
@@ -1446,9 +1465,11 @@ fn extract_zip_flat(archive_path: &Path, dest_dir: &Path) -> Result<()> {
         }
         let out = optiscaler_payload_dest(dest_dir, &enclosed, &name);
         if let Some(parent) = out.parent() {
-            std::fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create {}", parent.display()))?;
         }
-        let mut output = std::fs::File::create(&out)?;
+        let mut output = std::fs::File::create(&out)
+            .with_context(|| format!("failed to create {}", out.display()))?;
         std::io::copy(&mut entry, &mut output)?;
         copied += 1;
         copied_optiscaler |= lower == "optiscaler.dll";
@@ -1461,7 +1482,8 @@ fn extract_zip_flat(archive_path: &Path, dest_dir: &Path) -> Result<()> {
 
 fn extract_7z_flat(archive_path: &Path, dest_dir: &Path) -> Result<()> {
     let tmp_base = modde_core::paths::modde_data_dir().join("tmp");
-    std::fs::create_dir_all(&tmp_base)?;
+    std::fs::create_dir_all(&tmp_base)
+        .with_context(|| format!("failed to create {}", tmp_base.display()))?;
     let extract_dir = tmp_base.join(format!(
         "modde-optiscaler-{}-{}",
         std::process::id(),
@@ -1469,7 +1491,8 @@ fn extract_7z_flat(archive_path: &Path, dest_dir: &Path) -> Result<()> {
             .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos()
     ));
-    std::fs::create_dir_all(&extract_dir)?;
+    std::fs::create_dir_all(&extract_dir)
+        .with_context(|| format!("failed to create {}", extract_dir.display()))?;
     let out_arg = format!("-o{}", extract_dir.display());
     let archive_arg = archive_path.to_string_lossy().to_string();
     let mut extracted = false;
@@ -1500,7 +1523,9 @@ fn copy_optiscaler_payload_flat(source_root: &Path, dest_dir: &Path) -> Result<(
     let mut copied = 0usize;
     let mut copied_optiscaler = false;
     while let Some(dir) = stack.pop() {
-        for entry in std::fs::read_dir(&dir)? {
+        for entry in std::fs::read_dir(&dir)
+            .with_context(|| format!("failed to read directory: {}", dir.display()))?
+        {
             let entry = entry?;
             let path = entry.path();
             let metadata = path.symlink_metadata()?;
@@ -1519,9 +1544,11 @@ fn copy_optiscaler_payload_flat(source_root: &Path, dest_dir: &Path) -> Result<(
                 let relative = path.strip_prefix(source_root).unwrap_or(&path);
                 let dest = optiscaler_payload_dest(dest_dir, relative, std::ffi::OsStr::new(name));
                 if let Some(parent) = dest.parent() {
-                    std::fs::create_dir_all(parent)?;
+                    std::fs::create_dir_all(parent)
+                        .with_context(|| format!("failed to create {}", parent.display()))?;
                 }
-                std::fs::copy(&path, dest)?;
+                std::fs::copy(&path, &dest)
+                    .with_context(|| format!("failed to copy {}", dest.display()))?;
                 copied += 1;
                 copied_optiscaler |= lower == "optiscaler.dll";
             }
@@ -1633,7 +1660,7 @@ fn apply_ini_overrides_with_existing(
     config: &ToolConfig,
 ) -> Result<()> {
     let content = build_ini_with_overrides(src, existing, config)?;
-    std::fs::write(dest, content)?;
+    std::fs::write(dest, content).with_context(|| format!("failed to write {}", dest.display()))?;
     Ok(())
 }
 
@@ -1642,7 +1669,8 @@ fn build_ini_with_overrides(
     existing: Option<&Path>,
     config: &ToolConfig,
 ) -> Result<String> {
-    let mut content = std::fs::read_to_string(src)?;
+    let mut content = std::fs::read_to_string(src)
+        .with_context(|| format!("failed to read {}", src.display()))?;
     if let Some(existing) = existing
         && let Ok(existing_content) = std::fs::read_to_string(existing)
     {
@@ -1967,9 +1995,11 @@ pub fn backup_optiscaler_install(
         let dst = backup_dir.join(&file.rel_path);
         if src.is_file() {
             if let Some(parent) = dst.parent() {
-                std::fs::create_dir_all(parent)?;
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("failed to create {}", parent.display()))?;
             }
-            std::fs::copy(&src, &dst)?;
+            std::fs::copy(&src, &dst)
+                .with_context(|| format!("failed to copy {}", dst.display()))?;
         }
     }
     let manifest = serde_json::json!({
@@ -1984,11 +2014,11 @@ pub fn backup_optiscaler_install(
             })
         }).collect::<Vec<_>>(),
     });
-    std::fs::create_dir_all(&backup_dir)?;
-    std::fs::write(
-        backup_dir.join("modde-optiscaler-backup.json"),
-        serde_json::to_string_pretty(&manifest)?,
-    )?;
+    std::fs::create_dir_all(&backup_dir)
+        .with_context(|| format!("failed to create {}", backup_dir.display()))?;
+    let manifest_path = backup_dir.join("modde-optiscaler-backup.json");
+    std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest)?)
+        .with_context(|| format!("failed to write {}", manifest_path.display()))?;
     Ok(Some(backup_dir))
 }
 
@@ -2116,7 +2146,9 @@ fn collect_detected_dir(
     managed_paths: &BTreeSet<String>,
     out: &mut Vec<OptiScalerDetectedFile>,
 ) -> Result<()> {
-    for entry in std::fs::read_dir(dir)? {
+    for entry in std::fs::read_dir(dir)
+        .with_context(|| format!("failed to read directory: {}", dir.display()))?
+    {
         let entry = entry?;
         let path = entry.path();
         let metadata = path.symlink_metadata()?;
@@ -2133,7 +2165,9 @@ fn collect_detected_dir(
 }
 
 fn collect_relative_files(game_dir: &Path, dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
-    for entry in std::fs::read_dir(dir)? {
+    for entry in std::fs::read_dir(dir)
+        .with_context(|| format!("failed to read directory: {}", dir.display()))?
+    {
         let entry = entry?;
         let path = entry.path();
         if path.is_dir() {
@@ -2146,22 +2180,27 @@ fn collect_relative_files(game_dir: &Path, dir: &Path, out: &mut Vec<PathBuf>) -
 }
 
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
-    std::fs::create_dir_all(dst)?;
-    for entry in std::fs::read_dir(src)? {
+    std::fs::create_dir_all(dst).with_context(|| format!("failed to create {}", dst.display()))?;
+    for entry in std::fs::read_dir(src)
+        .with_context(|| format!("failed to read directory: {}", src.display()))?
+    {
         let entry = entry?;
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
         if src_path.is_dir() {
             copy_dir_recursive(&src_path, &dst_path)?;
         } else if src_path.is_file() {
-            std::fs::copy(&src_path, &dst_path)?;
+            std::fs::copy(&src_path, &dst_path)
+                .with_context(|| format!("failed to copy {}", dst_path.display()))?;
         }
     }
     Ok(())
 }
 
 fn restore_dir_contents(src: &Path, dst: &Path) -> Result<()> {
-    for entry in std::fs::read_dir(src)? {
+    for entry in std::fs::read_dir(src)
+        .with_context(|| format!("failed to read directory: {}", src.display()))?
+    {
         let entry = entry?;
         if entry.file_name() == "modde-optiscaler-backup.json" {
             continue;
@@ -2172,9 +2211,11 @@ fn restore_dir_contents(src: &Path, dst: &Path) -> Result<()> {
             restore_dir_contents(&src_path, &dst_path)?;
         } else if src_path.is_file() {
             if let Some(parent) = dst_path.parent() {
-                std::fs::create_dir_all(parent)?;
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("failed to create {}", parent.display()))?;
             }
-            std::fs::copy(&src_path, &dst_path)?;
+            std::fs::copy(&src_path, &dst_path)
+                .with_context(|| format!("failed to copy {}", dst_path.display()))?;
         }
     }
     Ok(())
@@ -2185,7 +2226,8 @@ fn normalize_rel_path(path: impl AsRef<str>) -> String {
 }
 
 fn file_hash_hex(path: &Path) -> Result<String> {
-    let mut file = std::fs::File::open(path)?;
+    let mut file =
+        std::fs::File::open(path).with_context(|| format!("failed to open {}", path.display()))?;
     let mut hasher = Xxh64::new(0);
     let mut buf = [0_u8; 8192];
     loop {

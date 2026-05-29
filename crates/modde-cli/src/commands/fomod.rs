@@ -31,7 +31,12 @@ fn load_fomod(mod_path: &Path) -> Result<(String, ModuleConfig, String)> {
     let xml = std::fs::read_to_string(&config_path).context("failed to read ModuleConfig.xml")?;
     let config = ModuleConfig::parse(&xml).context("failed to parse ModuleConfig.xml")?;
 
-    let fomod_dir = config_path.parent().unwrap();
+    let fomod_dir = config_path.parent().ok_or_else(|| {
+        anyhow::anyhow!(
+            "fomod config path {} has no parent directory",
+            config_path.display()
+        )
+    })?;
     let info_path = fomod_dir.join("info.xml");
     let rev = if info_path.exists() {
         let info_xml = std::fs::read_to_string(&info_path).ok();
@@ -129,7 +134,13 @@ fn handle_inspect(mod_path: &str) -> Result<()> {
                             let desc = desc.trim();
                             if !desc.is_empty() {
                                 let preview = if desc.len() > 100 {
-                                    format!("{}...", &desc[..97])
+                                    // Walk back to a char boundary so a multibyte
+                                    // description can't panic the slice.
+                                    let mut end = 97;
+                                    while !desc.is_char_boundary(end) {
+                                        end -= 1;
+                                    }
+                                    format!("{}...", &desc[..end])
                                 } else {
                                     desc.to_string()
                                 };

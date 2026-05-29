@@ -3,7 +3,7 @@ pub mod scanner;
 
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use modde_core::installer::InstallMethod;
 
 use crate::policies::{BareLayoutPolicy, ContentPolicy};
@@ -81,7 +81,8 @@ pub fn save_dir_from_steam_default() -> Option<PathBuf> {
 }
 
 pub fn read_modsettings(path: &Path) -> Result<Vec<String>> {
-    let content = std::fs::read_to_string(path)?;
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read {}", path.display()))?;
     Ok(content
         .lines()
         .filter_map(|line| line.split_once("value=\""))
@@ -93,7 +94,8 @@ pub fn read_modsettings(path: &Path) -> Result<Vec<String>> {
 
 pub fn write_modsettings(path: &Path, mods: &[String]) -> Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
     }
     let module_nodes = mods
         .iter()
@@ -115,7 +117,8 @@ pub fn write_modsettings(path: &Path, mods: &[String]) -> Result<()> {
 </save>
 "#
         ),
-    )?;
+    )
+    .with_context(|| format!("failed to write {}", path.display()))?;
     Ok(())
 }
 
@@ -172,7 +175,10 @@ impl GamePlugin for LarianBg3Game {
         let mods_dir = mods_dir_from_install(install);
         let mut mods = Vec::new();
         if mods_dir.is_dir() {
-            for entry in std::fs::read_dir(&mods_dir)?.flatten() {
+            for entry in std::fs::read_dir(&mods_dir)
+                .with_context(|| format!("failed to read directory: {}", mods_dir.display()))?
+                .flatten()
+            {
                 let path = entry.path();
                 if path
                     .extension()

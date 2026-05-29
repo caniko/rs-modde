@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use smallvec::SmallVec;
 
 use crate::save_patterns::{CaptureSummary, PatternSaveTracker};
@@ -30,7 +30,9 @@ impl SaveTracker for StardewSaveTracker {
         if !save_dir.exists() {
             return Ok(saves);
         }
-        for entry in std::fs::read_dir(save_dir)? {
+        for entry in std::fs::read_dir(save_dir)
+            .with_context(|| format!("failed to read directory: {}", save_dir.display()))?
+        {
             let entry = entry?;
             if !entry.file_type()?.is_dir() {
                 continue;

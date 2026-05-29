@@ -44,7 +44,12 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
     };
 
     // Module name from the config.
-    let module_name = &installer.config().module_name.value;
+    let Some(config) = installer.config() else {
+        return column![text("No FOMOD config available.").size(16)]
+            .spacing(10)
+            .into();
+    };
+    let module_name = &config.module_name.value;
 
     // ── Header: module image, name, step progress, completion bar ──
     let mut header = column![].spacing(5);
