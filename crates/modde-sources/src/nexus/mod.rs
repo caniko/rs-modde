@@ -38,6 +38,7 @@ use tracing::debug;
 use modde_core::manifest::wabbajack::DownloadDirective;
 
 use crate::common::simple_download;
+use crate::error::{SourceError, SourceResult};
 use crate::traits::{DownloadHandle, DownloadSource, ProgressCallback, VerifiedFile};
 
 /// `NexusMods` download source.
@@ -67,7 +68,7 @@ impl DownloadSource for NexusSource {
         matches!(directive, DownloadDirective::Nexus { .. })
     }
 
-    async fn resolve(&self, directive: &DownloadDirective) -> Result<DownloadHandle> {
+    async fn resolve(&self, directive: &DownloadDirective) -> SourceResult<DownloadHandle> {
         let DownloadDirective::Nexus {
             game_id,
             mod_id,
@@ -75,7 +76,7 @@ impl DownloadSource for NexusSource {
             hash,
         } = directive
         else {
-            anyhow::bail!("not a Nexus directive");
+            return Err(SourceError::other(anyhow::anyhow!("not a Nexus directive")));
         };
 
         let download_url = cdn::generate_download_link(
@@ -103,7 +104,7 @@ impl DownloadSource for NexusSource {
         handle: DownloadHandle,
         dest: &Path,
         progress: ProgressCallback,
-    ) -> Result<VerifiedFile> {
+    ) -> SourceResult<VerifiedFile> {
         simple_download(&self.client, &handle, dest, &progress).await
     }
 }

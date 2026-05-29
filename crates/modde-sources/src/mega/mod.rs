@@ -16,6 +16,7 @@ use tracing::debug;
 use modde_core::manifest::wabbajack::DownloadDirective;
 
 use crate::common::{ensure_parent, verify_and_wrap};
+use crate::error::{SourceError, SourceResult, status_error};
 use crate::traits::{DownloadHandle, DownloadSource, ProgressCallback, VerifiedFile};
 
 const MEGA_API_URL: &str = "https://g.api.mega.co.nz/cs";
@@ -97,30 +98,24 @@ impl DownloadSource for MegaSource {
         matches!(directive, DownloadDirective::Mega { .. })
     }
 
-    async fn resolve(&self, directive: &DownloadDirective) -> Result<DownloadHandle> {
+    async fn resolve(&self, directive: &DownloadDirective) -> SourceResult<DownloadHandle> {
         let DownloadDirective::Mega { url, hash } = directive else {
-            anyhow::bail!("not a Mega directive");
+            return Err(SourceError::other(anyhow::anyhow!("not a Mega directive")));
         };
 
-        let (handle_id, key_b64) = parse_mega_url(url)?;
+        let (handle_id, key_b64) = parse_mega_url(url).map_err(SourceError::other)?;
 
         // Call Mega API to get download URL
         let api_url = format!("{MEGA_API_URL}?id=0");
         let payload = serde_json::json!([{"a": "g", "g": 1, "p": handle_id}]);
 
-        let resp = self
-            .client
-            .post(&api_url)
-            .json(&payload)
-            .send()
-            .await?
-            .error_for_status()?;
+        let resp = status_error(self.client.post(&api_url).json(&payload).send().await?)?;
 
         let body: Vec<MegaFileResponse> = resp.json().await?;
         let file_info = body
             .into_iter()
             .next()
-            .ok_or_else(|| anyhow::anyhow!("empty response from Mega API"))?;
+            .ok_or_else(|| SourceError::other(anyhow::anyhow!("empty response from Mega API")))?;
 
         debug!(download_url = %file_info.g, size = file_info.s, "resolved Mega download URL");
 
@@ -141,23 +136,22 @@ impl DownloadSource for MegaSource {
         handle: DownloadHandle,
         dest: &Path,
         progress: ProgressCallback,
-    ) -> Result<VerifiedFile> {
+    ) -> SourceResult<VerifiedFile> {
         ensure_parent(dest).await?;
 
         let key_b64 = handle
             .headers
             .get("x-mega-key")
-            .ok_or_else(|| anyhow::anyhow!("missing x-mega-key header in download handle"))?
+            .ok_or_else(|| {
+                SourceError::other(anyhow::anyhow!(
+                    "missing x-mega-key header in download handle"
+                ))
+            })?
             .clone();
 
-        let (aes_key, iv) = decode_mega_key(&key_b64)?;
+        let (aes_key, iv) = decode_mega_key(&key_b64).map_err(SourceError::other)?;
 
-        let resp = self
-            .client
-            .get(&handle.url)
-            .send()
-            .await?
-            .error_for_status()?;
+        let resp = status_error(self.client.get(&handle.url).send().await?)?;
 
         let total = resp.content_length().or(handle.size_hint).unwrap_or(0);
         let mut file = tokio::fs::File::create(dest).await?;

@@ -7,6 +7,7 @@ use tracing::{debug, info};
 use modde_core::manifest::wabbajack::DownloadDirective;
 
 use crate::direct::DirectSource;
+use crate::error::{SourceError, SourceResult, status_error};
 use crate::traits::{DownloadHandle, DownloadSource, ProgressCallback, VerifiedFile};
 
 /// `MediaFire` download source. Resolves the file page to its underlying direct URL,
@@ -31,12 +32,16 @@ impl DownloadSource for MediaFireSource {
         matches!(directive, DownloadDirective::MediaFire { .. })
     }
 
-    async fn resolve(&self, directive: &DownloadDirective) -> Result<DownloadHandle> {
+    async fn resolve(&self, directive: &DownloadDirective) -> SourceResult<DownloadHandle> {
         let DownloadDirective::MediaFire { url, hash } = directive else {
-            anyhow::bail!("not a MediaFire directive");
+            return Err(SourceError::other(anyhow::anyhow!(
+                "not a MediaFire directive"
+            )));
         };
 
-        let direct_url = scrape_mediafire_direct(&self.client, url).await?;
+        let direct_url = scrape_mediafire_direct(&self.client, url)
+            .await
+            .map_err(SourceError::other)?;
         info!(page = %url, direct = %direct_url, "resolved MediaFire direct URL");
 
         Ok(DownloadHandle {
@@ -53,32 +58,32 @@ impl DownloadSource for MediaFireSource {
         handle: DownloadHandle,
         dest: &Path,
         progress: ProgressCallback,
-    ) -> Result<VerifiedFile> {
+    ) -> SourceResult<VerifiedFile> {
         self.direct
             .download_with_progress(handle, dest, progress)
             .await
     }
 }
 
-async fn scrape_mediafire_direct(client: &Client, page_url: &str) -> Result<String> {
-    let html = client
-        .get(page_url)
-        .header(
-            "User-Agent",
-            "Mozilla/5.0 (X11; Linux x86_64) modde/wabbajack",
-        )
-        .send()
-        .await
-        .with_context(|| format!("failed to fetch MediaFire page {page_url}"))?
-        .error_for_status()
-        .with_context(|| format!("MediaFire page returned an error for {page_url}"))?
-        .text()
-        .await
-        .context("failed to read MediaFire page body")?;
+async fn scrape_mediafire_direct(client: &Client, page_url: &str) -> SourceResult<String> {
+    let html = status_error(
+        client
+            .get(page_url)
+            .header(
+                "User-Agent",
+                "Mozilla/5.0 (X11; Linux x86_64) modde/wabbajack",
+            )
+            .send()
+            .await?,
+    )?
+    .text()
+    .await?;
 
-    extract_mediafire_direct(&html).with_context(|| {
-        format!("could not find MediaFire direct download link on page {page_url}")
-    })
+    extract_mediafire_direct(&html)
+        .with_context(|| {
+            format!("could not find MediaFire direct download link on page {page_url}")
+        })
+        .map_err(SourceError::other)
 }
 
 /// Extracts the actual download URL from a `MediaFire` file page.

@@ -24,7 +24,7 @@ use crate::commands::wabbajack::{acquire_missing, acquire_status_label};
 /// Build a shared HTTP client with sensible timeouts for mod downloads.
 fn build_http_client() -> Result<reqwest::Client> {
     reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5 * 60))
+        .timeout(std::time::Duration::from_mins(5))
         .connect_timeout(std::time::Duration::from_secs(30))
         .build()
         .context("failed to build HTTP client")
@@ -160,13 +160,14 @@ async fn download_file(client: &reqwest::Client, url: &str, dest: &Path) -> Resu
         tokio::fs::create_dir_all(parent).await?;
     }
 
-    let resp = client
-        .get(url)
-        .send()
-        .await
-        .context("download request failed")?
-        .error_for_status()
-        .context("download returned error status")?;
+    let resp = modde_sources::error::status_error(
+        client
+            .get(url)
+            .send()
+            .await
+            .context("download request failed")?,
+    )
+    .context("download returned error status")?;
 
     let bytes = resp.bytes().await.context("failed to read download body")?;
     tokio::fs::write(dest, &bytes)

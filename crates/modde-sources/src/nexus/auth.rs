@@ -8,6 +8,8 @@ use reqwest::Client;
 use serde::Deserialize;
 use tracing::{debug, info, warn};
 
+use crate::error::{SourceResult, status_error};
+
 const KEYRING_SERVICE: &str = "modde";
 const KEYRING_KEY: &str = "nexus-api-key";
 
@@ -260,15 +262,21 @@ fn resolve_api_key_from_sources(
 
 /// Check if the given API key belongs to a premium account.
 pub async fn check_premium(client: &Client, api_key: &str) -> Result<bool> {
+    Ok(check_premium_source(client, api_key).await?)
+}
+
+/// Check premium status, preserving typed HTTP failures for download sources.
+pub async fn check_premium_source(client: &Client, api_key: &str) -> SourceResult<bool> {
     let validate_url = format!("{}/users/validate.json", super::base_url());
-    let resp: ValidateResponse = client
-        .get(&validate_url)
-        .header("apikey", api_key)
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
+    let resp: ValidateResponse = status_error(
+        client
+            .get(&validate_url)
+            .header("apikey", api_key)
+            .send()
+            .await?,
+    )?
+    .json()
+    .await?;
 
     info!(
         user = resp.name.as_deref().unwrap_or("unknown"),

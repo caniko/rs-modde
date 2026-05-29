@@ -1,12 +1,13 @@
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use futures::StreamExt;
 use tokio::io::AsyncWriteExt;
 use tracing::{debug, warn};
 use xxhash_rust::xxh3::Xxh3;
 use xxhash_rust::xxh64::Xxh64;
 
+use crate::error::{SourceError, SourceResult, status_error};
 use crate::traits::{DownloadHandle, ProgressCallback, VerifiedFile};
 
 pub const MAX_RETRIES: u32 = 3;
@@ -43,7 +44,7 @@ pub async fn stream_to_file_verified(
     expected_hash: u64,
     total_hint: u64,
     progress: &ProgressCallback,
-) -> Result<VerifiedFile> {
+) -> SourceResult<VerifiedFile> {
     let total = resp.content_length().unwrap_or(total_hint);
     let mut file = tokio::fs::File::create(dest).await?;
     let mut downloaded: u64 = 0;
@@ -70,19 +71,19 @@ pub async fn stream_to_file_verified(
     }
 
     let _ = tokio::fs::remove_file(dest).await;
-    anyhow::bail!(
-        "hash verification failed for {} (expected {:016x}, got xxh64 {:016x})",
-        dest.display(),
-        expected_hash,
-        h64
-    );
+    Err(SourceError::hash_mismatch(dest, expected_hash, h64))
 }
 
 /// Verify hash (xxh64 then xxh3 fallback) and return a `VerifiedFile`.
-pub async fn verify_and_wrap(dest: &Path, expected_hash: u64) -> Result<VerifiedFile> {
+pub async fn verify_and_wrap(dest: &Path, expected_hash: u64) -> SourceResult<VerifiedFile> {
     modde_core::hash::verify_xxhash_compat(dest, expected_hash)
         .await
-        .context("hash verification failed (tried xxh64 and xxh3)")?;
+        .map_err(|error| match error {
+            modde_core::CoreError::HashMismatch { .. } => {
+                SourceError::HashMismatch { source: error }
+            }
+            error => SourceError::other(error),
+        })?;
     Ok(VerifiedFile {
         path: dest.to_path_buf(),
         hash: expected_hash,
@@ -90,7 +91,7 @@ pub async fn verify_and_wrap(dest: &Path, expected_hash: u64) -> Result<Verified
 }
 
 /// Ensure parent directory exists.
-pub async fn ensure_parent(dest: &Path) -> Result<()> {
+pub async fn ensure_parent(dest: &Path) -> SourceResult<()> {
     if let Some(parent) = dest.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
@@ -98,15 +99,18 @@ pub async fn ensure_parent(dest: &Path) -> Result<()> {
 }
 
 /// Execute an async operation with exponential backoff retries.
-pub async fn with_retry<F, Fut, T>(label: &str, f: F) -> Result<T>
+pub async fn with_retry<F, Fut, T>(label: &str, f: F) -> SourceResult<T>
 where
     F: Fn() -> Fut,
-    Fut: std::future::Future<Output = Result<T>>,
+    Fut: std::future::Future<Output = SourceResult<T>>,
 {
     for attempt in 0..MAX_RETRIES {
         match f().await {
             Ok(val) => return Ok(val),
             Err(e) => {
+                if !e.is_retryable() {
+                    return Err(e);
+                }
                 if attempt + 1 < MAX_RETRIES {
                     let base_delay = BACKOFF_BASE_MS * (1 << attempt);
                     // Add deterministic jitter: up to 50% of base delay, derived from attempt index
@@ -117,7 +121,9 @@ where
                     warn!(attempt = attempt + 1, delay_ms = delay, error = %e, "{label} failed, retrying");
                     tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                 } else {
-                    return Err(e).context(format!("{label} failed after {MAX_RETRIES} attempts"));
+                    return Err(SourceError::other(anyhow::anyhow!(
+                        "{label} failed after {MAX_RETRIES} attempts: {e:#}"
+                    )));
                 }
             }
         }
@@ -133,10 +139,10 @@ pub async fn simple_download(
     handle: &DownloadHandle,
     dest: &Path,
     progress: &ProgressCallback,
-) -> Result<VerifiedFile> {
+) -> SourceResult<VerifiedFile> {
     ensure_parent(dest).await?;
 
-    let resp = client.get(&handle.url).send().await?.error_for_status()?;
+    let resp = status_error(client.get(&handle.url).send().await?)?;
 
     let verified = stream_to_file_verified(
         resp,

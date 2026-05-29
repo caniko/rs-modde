@@ -7,6 +7,7 @@ use reqwest::Client;
 use modde_core::manifest::wabbajack::DownloadDirective;
 
 use crate::common::ensure_parent;
+use crate::error::{SourceError, SourceResult};
 use crate::traits::{DownloadHandle, DownloadSource, ProgressCallback, VerifiedFile};
 
 use super::catalog::download_authored_file_to_path;
@@ -36,9 +37,11 @@ impl DownloadSource for WabbajackCdnSource {
         matches!(directive, DownloadDirective::WabbajackCdn { .. })
     }
 
-    async fn resolve(&self, directive: &DownloadDirective) -> Result<DownloadHandle> {
+    async fn resolve(&self, directive: &DownloadDirective) -> SourceResult<DownloadHandle> {
         let DownloadDirective::WabbajackCdn { url, hash } = directive else {
-            anyhow::bail!("not a WabbajackCdn directive");
+            return Err(SourceError::other(anyhow::anyhow!(
+                "not a WabbajackCdn directive"
+            )));
         };
 
         Ok(DownloadHandle {
@@ -55,7 +58,7 @@ impl DownloadSource for WabbajackCdnSource {
         handle: DownloadHandle,
         dest: &Path,
         progress: ProgressCallback,
-    ) -> Result<VerifiedFile> {
+    ) -> SourceResult<VerifiedFile> {
         ensure_parent(dest).await?;
         download_authored_file_to_path(
             &self.client,
@@ -64,7 +67,8 @@ impl DownloadSource for WabbajackCdnSource {
             Some(handle.expected_hash),
             Some(&progress),
         )
-        .await?;
+        .await
+        .map_err(SourceError::other)?;
         Ok(VerifiedFile {
             path: dest.to_path_buf(),
             hash: handle.expected_hash,

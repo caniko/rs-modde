@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::Result;
-
 use modde_core::manifest::wabbajack::DownloadDirective;
+
+use crate::error::SourceResult;
 
 /// Progress callback: (`bytes_downloaded`, `total_bytes`).
 /// `total_bytes` may be 0 if unknown.
@@ -40,7 +40,7 @@ pub trait DownloadSource: Send + Sync {
     fn resolve(
         &self,
         directive: &DownloadDirective,
-    ) -> impl std::future::Future<Output = Result<DownloadHandle>> + Send;
+    ) -> impl std::future::Future<Output = SourceResult<DownloadHandle>> + Send;
 
     /// Download the file to `dest` with progress reporting and verify its hash.
     fn download_with_progress(
@@ -48,14 +48,14 @@ pub trait DownloadSource: Send + Sync {
         handle: DownloadHandle,
         dest: &Path,
         progress: ProgressCallback,
-    ) -> impl std::future::Future<Output = Result<VerifiedFile>> + Send;
+    ) -> impl std::future::Future<Output = SourceResult<VerifiedFile>> + Send;
 
     /// Download the file to `dest` and verify its hash (no-op progress).
     fn download(
         &self,
         handle: DownloadHandle,
         dest: &Path,
-    ) -> impl std::future::Future<Output = Result<VerifiedFile>> + Send {
+    ) -> impl std::future::Future<Output = SourceResult<VerifiedFile>> + Send {
         let noop: ProgressCallback = Arc::new(|_, _| {});
         self.download_with_progress(handle, dest, noop)
     }
@@ -113,7 +113,7 @@ impl DownloadSource for AnySource {
         dispatch!(self, can_handle(directive))
     }
 
-    async fn resolve(&self, directive: &DownloadDirective) -> Result<DownloadHandle> {
+    async fn resolve(&self, directive: &DownloadDirective) -> SourceResult<DownloadHandle> {
         dispatch_async!(self, resolve(directive))
     }
 
@@ -122,7 +122,7 @@ impl DownloadSource for AnySource {
         handle: DownloadHandle,
         dest: &Path,
         progress: ProgressCallback,
-    ) -> Result<VerifiedFile> {
+    ) -> SourceResult<VerifiedFile> {
         dispatch_async!(self, download_with_progress(handle, dest, progress))
     }
 }

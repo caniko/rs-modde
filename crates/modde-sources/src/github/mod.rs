@@ -10,6 +10,7 @@ use tracing::info;
 use modde_core::manifest::wabbajack::DownloadDirective;
 
 use crate::common::{ensure_parent, simple_download, with_retry};
+use crate::error::{SourceError, SourceResult, status_error};
 use crate::traits::{DownloadHandle, DownloadSource, ProgressCallback, VerifiedFile};
 
 /// GitHub Releases download source.
@@ -53,12 +54,12 @@ impl GitHubSource {
         Self { client, token }
     }
 
-    async fn get_json<T: for<'de> Deserialize<'de>>(&self, url: &str) -> Result<T> {
+    async fn get_json<T: for<'de> Deserialize<'de>>(&self, url: &str) -> SourceResult<T> {
         let mut req = self.client.get(url).header("User-Agent", "modde");
         if let Some(token) = &self.token {
             req = req.header("Authorization", format!("Bearer {token}"));
         }
-        Ok(req.send().await?.error_for_status()?.json().await?)
+        Ok(status_error(req.send().await?)?.json().await?)
     }
 
     pub async fn list_releases(&self, user: &str, repo: &str) -> Result<Vec<GitHubReleaseSummary>> {
@@ -101,12 +102,7 @@ impl GitHubSource {
         };
         ensure_parent(dest).await?;
         let progress: ProgressCallback = Arc::new(|_, _| {});
-        let resp = self
-            .client
-            .get(&handle.url)
-            .send()
-            .await?
-            .error_for_status()?;
+        let resp = status_error(self.client.get(&handle.url).send().await?)?;
         let total = handle.size_hint.unwrap_or(0);
         let mut file = tokio::fs::File::create(dest).await?;
         let mut stream = resp.bytes_stream();
@@ -149,7 +145,7 @@ impl DownloadSource for GitHubSource {
         matches!(directive, DownloadDirective::GitHub { .. })
     }
 
-    async fn resolve(&self, directive: &DownloadDirective) -> Result<DownloadHandle> {
+    async fn resolve(&self, directive: &DownloadDirective) -> SourceResult<DownloadHandle> {
         let DownloadDirective::GitHub {
             user,
             repo,
@@ -158,7 +154,9 @@ impl DownloadSource for GitHubSource {
             hash,
         } = directive
         else {
-            anyhow::bail!("not a GitHub directive");
+            return Err(SourceError::other(anyhow::anyhow!(
+                "not a GitHub directive"
+            )));
         };
 
         let url = format!("https://api.github.com/repos/{user}/{repo}/releases/tags/{tag}");
@@ -168,13 +166,17 @@ impl DownloadSource for GitHubSource {
             req = req.header("Authorization", format!("Bearer {token}"));
         }
 
-        let release: Release = req.send().await?.error_for_status()?.json().await?;
+        let release: Release = status_error(req.send().await?)?.json().await?;
 
         let found = release
             .assets
             .iter()
             .find(|a| a.name == *asset)
-            .ok_or_else(|| anyhow::anyhow!("asset '{asset}' not found in release {tag}"))?;
+            .ok_or_else(|| {
+                SourceError::other(anyhow::anyhow!(
+                    "asset '{asset}' not found in release {tag}"
+                ))
+            })?;
 
         info!(repo = %format!("{user}/{repo}"), tag, asset, "resolved GitHub release asset");
 
@@ -192,7 +194,7 @@ impl DownloadSource for GitHubSource {
         handle: DownloadHandle,
         dest: &Path,
         progress: ProgressCallback,
-    ) -> Result<VerifiedFile> {
+    ) -> SourceResult<VerifiedFile> {
         let client = self.client.clone();
         let handle_ref = &handle;
         let dest_ref = dest;

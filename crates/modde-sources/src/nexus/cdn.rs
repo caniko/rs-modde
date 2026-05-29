@@ -1,8 +1,8 @@
-use anyhow::{Result, bail};
 use reqwest::Client;
 use serde::Deserialize;
 
 use super::auth;
+use crate::error::{SourceError, SourceResult, status_error};
 use crate::wabbajack::acquire::normalize_nexus_game_domain;
 
 #[derive(Debug, Deserialize)]
@@ -20,14 +20,14 @@ pub async fn generate_download_link(
     game_domain: &str,
     mod_id: u64,
     file_id: u64,
-) -> Result<String> {
+) -> SourceResult<String> {
     // Verify premium status
-    let is_premium = auth::check_premium(client, api_key).await?;
+    let is_premium = auth::check_premium_source(client, api_key).await?;
     if !is_premium {
-        bail!(
+        return Err(SourceError::other(anyhow::anyhow!(
             "Nexus Premium is required for automated downloads. \
              Please upgrade at https://next.nexusmods.com/premium"
-        );
+        )));
     }
 
     let game_domain = normalize_nexus_game_domain(game_domain);
@@ -36,18 +36,14 @@ pub async fn generate_download_link(
         super::base_url()
     );
 
-    let links: Vec<DownloadLink> = client
-        .get(&url)
-        .header("apikey", api_key)
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
+    let links: Vec<DownloadLink> =
+        status_error(client.get(&url).header("apikey", api_key).send().await?)?
+            .json()
+            .await?;
 
     links
         .into_iter()
         .next()
         .map(|l| l.uri)
-        .ok_or_else(|| anyhow::anyhow!("no download links returned"))
+        .ok_or_else(|| SourceError::other(anyhow::anyhow!("no download links returned")))
 }

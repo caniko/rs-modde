@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use anyhow::Result;
 use futures::StreamExt;
 use reqwest::Client;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt};
@@ -11,6 +10,7 @@ use xxhash_rust::xxh64::Xxh64;
 use modde_core::manifest::wabbajack::DownloadDirective;
 
 use crate::common::{ensure_parent, with_retry};
+use crate::error::{SourceError, SourceResult, status_error};
 use crate::mirror::resolve_html_mirrors;
 use crate::traits::{DownloadHandle, DownloadSource, ProgressCallback, VerifiedFile};
 
@@ -31,7 +31,7 @@ impl DownloadSource for DirectSource {
         matches!(directive, DownloadDirective::DirectURL { .. })
     }
 
-    async fn resolve(&self, directive: &DownloadDirective) -> Result<DownloadHandle> {
+    async fn resolve(&self, directive: &DownloadDirective) -> SourceResult<DownloadHandle> {
         let DownloadDirective::DirectURL {
             url,
             headers,
@@ -39,11 +39,15 @@ impl DownloadSource for DirectSource {
             hash,
         } = directive
         else {
-            anyhow::bail!("not a DirectURL directive");
+            return Err(SourceError::other(anyhow::anyhow!(
+                "not a DirectURL directive"
+            )));
         };
 
         let candidate_urls = if let Some(resolver) = mirror_resolver {
-            resolve_html_mirrors(&self.client, resolver).await?
+            resolve_html_mirrors(&self.client, resolver)
+                .await
+                .map_err(SourceError::other)?
         } else {
             Vec::new()
         };
@@ -70,7 +74,7 @@ impl DownloadSource for DirectSource {
         handle: DownloadHandle,
         dest: &Path,
         progress: ProgressCallback,
-    ) -> Result<VerifiedFile> {
+    ) -> SourceResult<VerifiedFile> {
         ensure_parent(dest).await?;
 
         let client = self.client.clone();
@@ -83,6 +87,7 @@ impl DownloadSource for DirectSource {
         };
 
         let mut errors = Vec::new();
+        let mut last_error = None;
         for (idx, url) in candidates.iter().enumerate() {
             let mut candidate = handle.clone();
             candidate.url = url.clone();
@@ -99,12 +104,19 @@ impl DownloadSource for DirectSource {
                 }
                 Err(e) => {
                     errors.push(format!("{}: {e:#}", candidate.url));
+                    last_error = Some(e);
                     let _ = tokio::fs::remove_file(dest).await;
                 }
             }
         }
 
-        anyhow::bail!(
+        if candidates.len() == 1
+            && let Some(error) = last_error
+        {
+            return Err(error);
+        }
+
+        Err(SourceError::other(anyhow::anyhow!(
             "all {} direct download candidate(s) failed:\n{}",
             candidates.len(),
             errors
@@ -112,7 +124,7 @@ impl DownloadSource for DirectSource {
                 .map(|error| format!("  - {error}"))
                 .collect::<Vec<_>>()
                 .join("\n")
-        )
+        )))
     }
 }
 
@@ -121,7 +133,7 @@ async fn download_with_resume(
     handle: &DownloadHandle,
     dest: &Path,
     progress: &ProgressCallback,
-) -> Result<VerifiedFile> {
+) -> SourceResult<VerifiedFile> {
     let existing_len = tokio::fs::metadata(dest).await.map_or(0, |m| m.len());
 
     let mut req = client.get(&handle.url);
@@ -134,7 +146,7 @@ async fn download_with_resume(
         req = req.header("Range", format!("bytes={existing_len}-"));
     }
 
-    let resp = req.send().await?.error_for_status()?;
+    let resp = status_error(req.send().await?)?;
     let status = resp.status();
     let total = resp.content_length().or(handle.size_hint).unwrap_or(0);
 
@@ -197,12 +209,7 @@ async fn download_with_resume(
     }
 
     let _ = tokio::fs::remove_file(dest).await;
-    anyhow::bail!(
-        "hash verification failed for {} (expected {:016x}, got xxh64 {:016x})",
-        dest.display(),
-        handle.expected_hash,
-        h64
-    );
+    Err(SourceError::hash_mismatch(dest, handle.expected_hash, h64))
 }
 
 #[cfg(test)]

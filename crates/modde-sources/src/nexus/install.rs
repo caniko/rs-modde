@@ -175,13 +175,14 @@ pub async fn install_single_mod(
 async fn download_with_reqwest(client: &Client, url: &str, dest: &Path) -> Result<()> {
     use tokio::io::AsyncWriteExt as _;
 
-    let resp = client
-        .get(url)
-        .send()
-        .await
-        .context("download GET failed")?
-        .error_for_status()
-        .context("download HTTP error")?;
+    let resp = crate::error::status_error(
+        client
+            .get(url)
+            .send()
+            .await
+            .context("download GET failed")?,
+    )
+    .context("download HTTP error")?;
     let bytes = resp.bytes().await.context("failed to read download body")?;
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;

@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use anyhow::{Context, Result};
 use reqwest::Client;
 use tracing::debug;
 
 use modde_core::manifest::wabbajack::DownloadDirective;
 
 use crate::common::{ensure_parent, stream_to_file_verified};
+use crate::error::{SourceError, SourceResult, status_error};
 use crate::traits::{DownloadHandle, DownloadSource, ProgressCallback, VerifiedFile};
 
 /// Google Drive download source.
@@ -29,9 +29,11 @@ impl DownloadSource for GoogleDriveSource {
         matches!(directive, DownloadDirective::GoogleDrive { .. })
     }
 
-    async fn resolve(&self, directive: &DownloadDirective) -> Result<DownloadHandle> {
+    async fn resolve(&self, directive: &DownloadDirective) -> SourceResult<DownloadHandle> {
         let DownloadDirective::GoogleDrive { id, hash } = directive else {
-            anyhow::bail!("not a Google Drive directive");
+            return Err(SourceError::other(anyhow::anyhow!(
+                "not a Google Drive directive"
+            )));
         };
 
         // Modern Google Drive flow: hit the usercontent host directly with confirm=t,
@@ -56,12 +58,10 @@ impl DownloadSource for GoogleDriveSource {
         handle: DownloadHandle,
         dest: &Path,
         progress: ProgressCallback,
-    ) -> Result<VerifiedFile> {
+    ) -> SourceResult<VerifiedFile> {
         ensure_parent(dest).await?;
 
-        do_download(&self.client, &handle, dest, &progress)
-            .await
-            .context("Google Drive download failed")
+        do_download(&self.client, &handle, dest, &progress).await
     }
 }
 
@@ -70,8 +70,8 @@ async fn do_download(
     handle: &DownloadHandle,
     dest: &Path,
     progress: &ProgressCallback,
-) -> Result<VerifiedFile> {
-    let resp = client.get(&handle.url).send().await?.error_for_status()?;
+) -> SourceResult<VerifiedFile> {
+    let resp = status_error(client.get(&handle.url).send().await?)?;
     let content_type = resp
         .headers()
         .get("content-type")
@@ -84,15 +84,13 @@ async fn do_download(
         debug!("got virus scan warning page, extracting confirm token");
         let body = resp.text().await?;
         let confirm_token = extract_confirm_token(&body).ok_or_else(|| {
-            anyhow::anyhow!("failed to extract confirm token from virus scan page")
+            SourceError::other(anyhow::anyhow!(
+                "failed to extract confirm token from virus scan page"
+            ))
         })?;
 
         let confirmed_url = format!("{}&confirm={confirm_token}", handle.url);
-        let resp = client
-            .get(&confirmed_url)
-            .send()
-            .await?
-            .error_for_status()?;
+        let resp = status_error(client.get(&confirmed_url).send().await?)?;
         return stream_to_file_verified(
             resp,
             dest,

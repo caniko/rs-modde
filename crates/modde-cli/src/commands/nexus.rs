@@ -3,6 +3,7 @@ use std::io::Write;
 use anyhow::{Context, Result};
 use tracing::info;
 
+use modde_sources::SourceError;
 use modde_sources::nexus::auth;
 
 use crate::NexusAction;
@@ -17,7 +18,7 @@ pub async fn handle(action: NexusAction) -> Result<()> {
 /// Build a reqwest client with Nexus-appropriate timeouts.
 fn nexus_client() -> Result<reqwest::Client> {
     reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5 * 60))
+        .timeout(std::time::Duration::from_mins(5))
         .connect_timeout(std::time::Duration::from_secs(30))
         .build()
         .context("failed to build HTTP client")
@@ -25,6 +26,25 @@ fn nexus_client() -> Result<reqwest::Client> {
 
 /// Map Nexus API errors to user-friendly messages with actionable advice.
 fn map_nexus_error(e: anyhow::Error, rejected_advice: &str) -> anyhow::Error {
+    if matches!(
+        e.downcast_ref::<SourceError>(),
+        Some(SourceError::Unauthorized { .. })
+    ) {
+        return anyhow::anyhow!(
+            "API key rejected by Nexus (HTTP 401/403). {rejected_advice}\n\
+             Cause: {e}"
+        );
+    }
+    if matches!(
+        e.downcast_ref::<SourceError>(),
+        Some(SourceError::RateLimited { .. })
+    ) {
+        return anyhow::anyhow!(
+            "Nexus API rate limit exceeded (HTTP 429). Wait a few minutes and try again.\n\
+             Cause: {e}"
+        );
+    }
+
     let msg = e.to_string();
     if msg.contains("401") || msg.contains("403") {
         anyhow::anyhow!(

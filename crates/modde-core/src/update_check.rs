@@ -11,7 +11,7 @@ use crate::settings::AppSettings;
 
 const DEFAULT_RELEASE_URL: &str =
     "https://codeberg.org/api/v1/repos/caniko/rs-modde/releases/latest";
-const CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+const CACHE_TTL: Duration = Duration::from_hours(24);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UpdateInfo {

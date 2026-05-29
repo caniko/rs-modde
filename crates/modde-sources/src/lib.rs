@@ -2,6 +2,7 @@ pub mod cache;
 pub mod common;
 pub mod decompress;
 pub mod direct;
+pub mod error;
 pub mod gdrive;
 pub mod github;
 pub mod installers;
@@ -16,4 +17,5 @@ pub mod queue;
 pub mod traits;
 pub mod wabbajack;
 
+pub use error::{SourceError, SourceResult};
 pub use traits::{AnySource, DownloadHandle, DownloadSource, ProgressCallback, VerifiedFile};
