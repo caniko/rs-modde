@@ -1,3 +1,7 @@
+//! Central registry of every supported game: the [`GameRegistration`] records
+//! that bind a `game_id` to its plugin, scanner, save tracker, and launcher IDs,
+//! plus the lookup helpers ([`resolve_game`], [`all_games`]) used across the crate.
+
 use std::sync::{OnceLock, RwLock};
 
 use crate::generic::loader::load_user_games;
@@ -5,8 +9,10 @@ use crate::optiscaler::OptiScalerProfile;
 use crate::policies::{CollisionPolicy, PolicyCollisionClassifier};
 use crate::traits::{GamePlugin, ModScanner, SaveTracker};
 
+/// Factory producing a boxed collision classifier for a registered game.
 pub type CollisionClassifierFactory = fn() -> Box<dyn modde_core::collision::CollisionClassifier>;
 
+/// The modding engine a game is built on, used to share engine-wide behaviour.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EngineFamily {
     Bethesda,
@@ -20,6 +26,7 @@ pub enum EngineFamily {
     Witcher,
 }
 
+/// Per-launcher identifiers used to locate a game install across Steam and Heroic.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LauncherIds {
     pub steam_app_id: Option<&'static str>,
@@ -28,6 +35,9 @@ pub struct LauncherIds {
     pub heroic_epic_app_id: Option<&'static str>,
 }
 
+/// A single supported game's metadata and capability wiring: it ties a
+/// `game_id` to its [`GamePlugin`], optional [`ModScanner`]/[`SaveTracker`],
+/// launcher IDs, and Nexus/Wabbajack identifiers.
 #[derive(Clone, Copy)]
 pub struct GameRegistration {
     pub game_id: &'static str,
@@ -46,6 +56,8 @@ pub struct GameRegistration {
 }
 
 impl GameRegistration {
+    /// Yield this game's Wabbajack names lowercased and stripped to ASCII
+    /// alphanumerics, for robust matching against manifest game strings.
     pub fn normalized_wabbajack_names(self) -> impl Iterator<Item = String> {
         self.wabbajack_names.iter().map(|name| {
             name.chars()
@@ -460,6 +472,7 @@ fn build_registry_snapshot() -> &'static [GameRegistration] {
     )
 }
 
+/// Return the current registry snapshot of all registered games.
 #[must_use]
 pub fn all_games() -> &'static [GameRegistration] {
     *REGISTRY
@@ -468,6 +481,7 @@ pub fn all_games() -> &'static [GameRegistration] {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+/// Rebuild the registry snapshot, picking up newly added user-defined games.
 pub fn reload_registry() {
     let registry = REGISTRY.get_or_init(|| RwLock::new(build_registry_snapshot()));
     *registry
@@ -475,11 +489,13 @@ pub fn reload_registry() {
         .unwrap_or_else(std::sync::PoisonError::into_inner) = build_registry_snapshot();
 }
 
+/// List the `game_id` of every registered game.
 #[must_use]
 pub fn supported_game_ids() -> Vec<&'static str> {
     all_games().iter().map(|game| game.game_id).collect()
 }
 
+/// Look up a game registration by its `game_id`.
 #[must_use]
 pub fn resolve_game(game_id: &str) -> Option<&'static GameRegistration> {
     all_games().iter().find(|game| game.game_id == game_id)
@@ -497,6 +513,7 @@ pub fn resolve_game_by_nexus_domain(domain: &str) -> Option<&'static GameRegistr
         .find(|game| game.nexus_domain == Some(domain))
 }
 
+/// Iterate over games that have at least one known launcher (Steam or Heroic) ID.
 pub fn launcher_games() -> impl Iterator<Item = &'static GameRegistration> {
     all_games().iter().filter(|game| {
         game.launcher.steam_app_id.is_some()

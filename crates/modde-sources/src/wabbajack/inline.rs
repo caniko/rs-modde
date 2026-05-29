@@ -1,3 +1,7 @@
+//! Reads inline data entries embedded in a `.wabbajack` zip archive, guarding
+//! against unsafe (absolute, traversal, or symlink) entry paths. See
+//! [`InlineSource`].
+
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read as _;

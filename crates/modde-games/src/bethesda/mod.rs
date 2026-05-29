@@ -1,3 +1,8 @@
+//! Data-driven support for Bethesda Creation Engine games (Skyrim, Fallout,
+//! Starfield), grouping per-game submodules (archives, INI handling, FOMOD,
+//! plugin scanning, saves) and defining [`BethesdaGame`], a single
+//! [`GamePlugin`] implementation parameterized by static per-title metadata.
+
 pub mod archive_index;
 pub mod archives;
 pub mod collision;

@@ -1,3 +1,7 @@
+//! Selective archive extraction: pull a chosen set of entries out of `zip`,
+//! `7z`, Bethesda (`BSA`/`BA2`), and (optionally) `rar` archives in one pass,
+//! validating sizes and rejecting unsafe entry paths.
+
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
 use std::io::{Cursor, Read as _, Seek, Write as _};
@@ -7,6 +11,8 @@ use anyhow::{Context, Result, bail};
 
 const COPY_BUFFER: usize = 1 << 20;
 
+/// How a single extracted entry should be delivered: written to disk or
+/// returned as in-memory bytes.
 #[derive(Debug, Clone)]
 pub enum ArchiveRequestKind {
     WriteFile {
@@ -16,6 +22,9 @@ pub enum ArchiveRequestKind {
     Bytes,
 }
 
+/// One requested entry: the archive path to extract, an optional nested inner
+/// path, and how to deliver it. `directive_index` ties the result back to the
+/// caller's request.
 #[derive(Debug, Clone)]
 pub struct ArchiveRequest {
     pub directive_index: usize,
@@ -24,19 +33,29 @@ pub struct ArchiveRequest {
     pub kind: ArchiveRequestKind,
 }
 
+/// Results of a batch extraction: in-memory bytes keyed by `directive_index`
+/// for entries requested as [`ArchiveRequestKind::Bytes`].
 #[derive(Debug, Default)]
 pub struct ArchiveBatchOutput {
     pub bytes: HashMap<usize, Vec<u8>>,
 }
 
+/// Source of an archive to extract from: a file path or in-memory bytes.
 pub enum ArchiveInput<'a> {
     Path(&'a Path),
     Bytes { name: &'a str, bytes: &'a [u8] },
 }
 
+/// Stateless entry point for selective, single-pass archive extraction.
 pub struct ArchiveBatchExtractor;
 
 impl ArchiveBatchExtractor {
+    /// Extract the requested entries from the archive at `path`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for unsupported formats, unsafe entry paths, size
+    /// mismatches, or any requested entry that is missing.
     pub fn extract_selected(
         path: &Path,
         requests: &[ArchiveRequest],
@@ -44,6 +63,12 @@ impl ArchiveBatchExtractor {
         Self::extract_selected_from(ArchiveInput::Path(path), requests)
     }
 
+    /// Extract the requested entries from `input` (a path or in-memory bytes).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for unsupported formats, unsafe entry paths, size
+    /// mismatches, or any requested entry that is missing.
     pub fn extract_selected_from(
         input: ArchiveInput<'_>,
         requests: &[ArchiveRequest],

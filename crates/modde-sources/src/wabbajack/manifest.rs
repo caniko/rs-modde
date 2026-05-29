@@ -1,3 +1,5 @@
+//! Reading the JSON manifest embedded inside a `.wabbajack` archive.
+
 use std::io::Read;
 use std::path::Path;
 

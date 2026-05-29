@@ -1,3 +1,5 @@
+//! Save detection for Oblivion Remastered.
+
 use std::path::Path;
 
 use anyhow::Result;
@@ -6,6 +8,7 @@ use smallvec::SmallVec;
 use crate::save_patterns::{CaptureSummary, PatternSaveTracker};
 use crate::traits::{DetectedSave, SaveTracker};
 
+/// [`SaveTracker`] for Oblivion Remastered save directories.
 pub struct OblivionRemasteredSaveTracker;
 
 pub static OBLIVION_REMASTERED_SAVE_TRACKER: OblivionRemasteredSaveTracker =

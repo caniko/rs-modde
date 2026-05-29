@@ -1,3 +1,6 @@
+//! HTML mirror-listing resolution: fetch a mirror index page and extract the
+//! candidate download URLs, preferring the least-loaded mirror.
+
 use anyhow::{Context, Result, bail};
 use modde_core::manifest::wabbajack::HtmlMirrorResolver;
 use reqwest::{Client, Url};
@@ -9,6 +12,13 @@ struct MirrorCandidate {
     order: usize,
 }
 
+/// Fetch the mirror listing described by `resolver` and return the resolved
+/// mirror URLs, ordered best-first.
+///
+/// # Errors
+///
+/// Returns an error if the listing cannot be fetched or parsed, or if it yields
+/// no mirrors.
 pub async fn resolve_html_mirrors(
     client: &Client,
     resolver: &HtmlMirrorResolver,
@@ -51,6 +61,12 @@ pub async fn resolve_html_mirrors(
     Ok(mirrors)
 }
 
+/// Parse `html` for mirror links matching `link_id`, resolving them against
+/// `base_url` and ordering them best-first by reported load.
+///
+/// # Errors
+///
+/// Returns an error if `base_url` is not a valid URL.
 pub fn extract_html_mirror_links(html: &str, base_url: &str, link_id: &str) -> Result<Vec<String>> {
     let base =
         Url::parse(base_url).with_context(|| format!("invalid mirror base URL {base_url}"))?;

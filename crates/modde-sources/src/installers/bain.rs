@@ -1,3 +1,6 @@
+//! `BAIN` (Bash Installer) package detection: recognise mod archives laid out
+//! as numbered sub-package directories.
+
 use std::path::Path;
 
 use anyhow::Result;
@@ -10,6 +13,7 @@ pub struct BainPackage {
     pub sub_packages: Vec<BainSubPackage>,
 }
 
+/// One numbered sub-package inside a [`BainPackage`].
 #[derive(Debug, Clone)]
 pub struct BainSubPackage {
     pub index: u32,

@@ -1,3 +1,6 @@
+//! Nexus `OAuth2` authorization-code flow: obtaining, persisting, and
+//! refreshing access tokens via the system keyring.
+
 use anyhow::Result;
 use keyring_core::Entry;
 use tracing::info;

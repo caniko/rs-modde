@@ -1,3 +1,6 @@
+//! The Oblivion Remastered game plugin: a UE5 wrapper around the Gamebryo
+//! engine, mixing `~mods` `.pak` layout with Bethesda-style plugins.
+
 pub mod saves;
 pub mod scanner;
 
@@ -8,6 +11,7 @@ use modde_core::installer::InstallMethod;
 use crate::policies::{BareLayoutPolicy, ContentPolicy, DllOverridePolicy, StagingDllSearch};
 use crate::traits::{ContentCategory, GamePlugin, ModSafety};
 
+/// [`GamePlugin`] for The Elder Scrolls IV: Oblivion Remastered.
 pub struct OblivionRemasteredGame;
 
 pub static OBLIVION_REMASTERED: OblivionRemasteredGame = OblivionRemasteredGame;
@@ -51,6 +55,7 @@ const OR_DLL_POLICY: DllOverridePolicy = DllOverridePolicy {
     staging_search: StagingDllSearch::DirectChildDirs,
 };
 
+/// The UE5 `Content/Paks` directory for Oblivion Remastered, relative to `install`.
 #[must_use]
 pub fn paks_root(install: &Path) -> PathBuf {
     install.join(PROJECT_NAME).join("Content").join("Paks")

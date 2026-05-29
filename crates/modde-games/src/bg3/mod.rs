@@ -1,3 +1,6 @@
+//! The Baldur's Gate 3 game plugin: Larian `.pak` mod layout, `modsettings.lsx`
+//! load-order management, and Proton-prefix path resolution.
+
 pub mod saves;
 pub mod scanner;
 
@@ -9,6 +12,7 @@ use modde_core::installer::InstallMethod;
 use crate::policies::{BareLayoutPolicy, ContentPolicy};
 use crate::traits::{ContentCategory, GamePlugin, ModSafety};
 
+/// [`GamePlugin`] for Baldur's Gate 3 (Larian's Divinity engine).
 pub struct LarianBg3Game;
 
 pub static BALDURS_GATE3: LarianBg3Game = LarianBg3Game;
@@ -41,6 +45,8 @@ const BG3_BARE_LAYOUT_POLICY: BareLayoutPolicy = BareLayoutPolicy {
     case_insensitive_dirs: true,
 };
 
+/// Resolve BG3's `AppData/Local` data root, preferring the Steam Proton prefix
+/// derived from `install` and falling back to an install-relative path.
 #[must_use]
 pub fn data_root_from_install(install: &Path) -> PathBuf {
     let proton = install
@@ -57,16 +63,19 @@ pub fn data_root_from_install(install: &Path) -> PathBuf {
     proton.unwrap_or_else(|| install.join("Larian Studios/Baldur's Gate 3"))
 }
 
+/// The BG3 `Mods` directory derived from [`data_root_from_install`].
 #[must_use]
 pub fn mods_dir_from_install(install: &Path) -> PathBuf {
     data_root_from_install(install).join("Mods")
 }
 
+/// Path to the `modsettings.lsx` load-order file derived from `install`.
 #[must_use]
 pub fn modsettings_path_from_install(install: &Path) -> PathBuf {
     data_root_from_install(install).join("PlayerProfiles/Public/modsettings.lsx")
 }
 
+/// BG3 savegame directory inside the default Steam Proton prefix, if it exists.
 #[must_use]
 pub fn save_dir_from_steam_default() -> Option<PathBuf> {
     Some(
@@ -80,6 +89,7 @@ pub fn save_dir_from_steam_default() -> Option<PathBuf> {
     )
 }
 
+/// Read the ordered list of enabled module folders from a `modsettings.lsx` file.
 pub fn read_modsettings(path: &Path) -> Result<Vec<String>> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read {}", path.display()))?;
@@ -92,6 +102,7 @@ pub fn read_modsettings(path: &Path) -> Result<Vec<String>> {
         .collect())
 }
 
+/// Write a `modsettings.lsx` file enabling the given module folders in order.
 pub fn write_modsettings(path: &Path, mods: &[String]) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)

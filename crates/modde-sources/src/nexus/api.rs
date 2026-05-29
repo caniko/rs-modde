@@ -1,3 +1,5 @@
+//! Typed Nexus Mods v1 REST API client and the response types it deserializes.
+
 use anyhow::{Result, bail};
 use modde_core::manifest::collection::CollectionManifest;
 use modde_core::{NexusFileId, NexusModId};
@@ -11,6 +13,7 @@ pub struct NexusApi {
     api_key: String,
 }
 
+/// A mod's metadata as returned by the Nexus v1 mod endpoint.
 #[derive(Debug, Clone, Deserialize)]
 pub struct NexusMod {
     pub mod_id: NexusModId,
@@ -57,6 +60,7 @@ pub struct NexusTrackedMod {
     pub domain_name: String,
 }
 
+/// Metadata for a single downloadable file attached to a mod.
 #[derive(Debug, Deserialize)]
 pub struct NexusModFile {
     pub file_id: NexusFileId,
@@ -83,27 +87,32 @@ pub struct NexusCollectionMeta {
     pub latest_published_revision: Option<NexusCollectionRevision>,
 }
 
+/// The game a collection belongs to.
 #[derive(Debug, Deserialize)]
 pub struct NexusCollectionGame {
     pub domain_name: String,
 }
 
+/// A published revision of a collection.
 #[derive(Debug, Deserialize)]
 pub struct NexusCollectionRevision {
     pub revision_number: u64,
 }
 
+/// The file listing for a mod.
 #[derive(Debug, Deserialize)]
 pub struct NexusModFiles {
     pub files: Vec<NexusModFile>,
 }
 
+/// A page of mod search results plus the total match count.
 #[derive(Debug, Deserialize)]
 pub struct NexusSearchResults {
     pub results: Vec<NexusMod>,
     pub total: u64,
 }
 
+/// An entry from the "recently updated mods" feed.
 #[derive(Debug, Deserialize)]
 pub struct NexusUpdatedMod {
     pub mod_id: NexusModId,
@@ -112,6 +121,7 @@ pub struct NexusUpdatedMod {
 }
 
 impl NexusApi {
+    /// Create a client authenticated with the given `api_key`.
     #[must_use]
     pub fn new(client: Client, api_key: String) -> Self {
         Self { client, api_key }

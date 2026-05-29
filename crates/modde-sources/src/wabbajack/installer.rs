@@ -1,3 +1,7 @@
+//! The Wabbajack install engine: drives the full pipeline of downloading
+//! archives, extracting and patching files, repacking BSAs, and writing the
+//! finished modlist into the install directory, with resumable apply state.
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -34,6 +38,8 @@ const DEFAULT_CONCURRENCY: usize = 4;
 const APPLY_STATE_VERSION: u32 = 1;
 const DEFAULT_ARCHIVE_MEMORY_MAX_BYTES: u64 = 256 * 1024 * 1024;
 
+/// What to do with downloaded source archives once they have been applied:
+/// keep them, prune the applied ones, or decide automatically.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ArchiveRetentionPolicy {
@@ -44,6 +50,8 @@ pub enum ArchiveRetentionPolicy {
 }
 
 impl ArchiveRetentionPolicy {
+    /// Read the policy from the `MODDE_ARCHIVE_RETENTION` environment variable,
+    /// defaulting to [`ArchiveRetentionPolicy::Keep`].
     #[must_use]
     pub fn from_env() -> Self {
         match std::env::var("MODDE_ARCHIVE_RETENTION")
@@ -187,6 +195,9 @@ pub struct WabbajackInstaller {
 }
 
 impl WabbajackInstaller {
+    /// Create an installer for `manifest`, reading archive data from
+    /// `wabbajack_path` and using `store_dir` and `staging_dir` as the download
+    /// store and working staging area.
     #[must_use]
     pub fn new(
         manifest: WabbajackManifest,
@@ -224,14 +235,17 @@ impl WabbajackInstaller {
         self.continue_on_error = value;
     }
 
+    /// Attach a diagnostics sink for heartbeat and progress reporting.
     pub fn set_diagnostics(&mut self, diagnostics: WabbajackDiagnostics) {
         self.diagnostics = Some(diagnostics);
     }
 
+    /// Set the retention policy applied to downloaded archives after install.
     pub fn set_archive_retention(&mut self, policy: ArchiveRetentionPolicy) {
         self.archive_retention = policy;
     }
 
+    /// Set how missing source archives are handled during install.
     pub fn set_missing_archive_policy(&mut self, policy: MissingArchivePolicy) {
         self.missing_archive_policy = policy;
     }

@@ -1,3 +1,5 @@
+//! Mod scanner for Cyberpunk 2077.
+
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -6,6 +8,7 @@ use super::manifest::RedModManifest;
 use crate::scanner_patterns::{DirectoryModRule, SingleFileModRule};
 use crate::traits::{DiscoveredMod, ModScanner, ModSource, ScanContext, walk_files_relative};
 
+/// [`ModScanner`] that discovers installed Cyberpunk 2077 mods.
 pub struct CyberpunkScanner;
 
 pub static CYBERPUNK_SCANNER: CyberpunkScanner = CyberpunkScanner;

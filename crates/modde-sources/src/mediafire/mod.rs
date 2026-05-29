@@ -1,3 +1,6 @@
+//! `MediaFire` download source: resolves a file page to its direct URL, then
+//! delegates the transfer to the direct-HTTP source.
+
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -18,6 +21,7 @@ pub struct MediaFireSource {
 }
 
 impl MediaFireSource {
+    /// Create a source that resolves and downloads over the given HTTP `client`.
     #[must_use]
     pub fn new(client: Client) -> Self {
         Self {

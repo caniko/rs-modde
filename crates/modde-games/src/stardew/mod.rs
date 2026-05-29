@@ -1,3 +1,5 @@
+//! The Stardew Valley (SMAPI) game plugin and its mod-layout policies.
+
 pub mod saves;
 pub mod scanner;
 
@@ -8,6 +10,7 @@ use modde_core::installer::InstallMethod;
 use crate::policies::{BareLayoutPolicy, ContentPolicy};
 use crate::traits::{ContentCategory, GamePlugin, ModSafety};
 
+/// [`GamePlugin`] for Stardew Valley, modded via the SMAPI loader.
 pub struct SmapiGame;
 
 pub static STARDEW_VALLEY: SmapiGame = SmapiGame;

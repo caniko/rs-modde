@@ -1,3 +1,5 @@
+//! Save detection for The Witcher 3.
+
 use std::path::Path;
 
 use anyhow::Result;
@@ -6,6 +8,7 @@ use smallvec::SmallVec;
 use crate::save_patterns::{CaptureSummary, PatternSaveTracker};
 use crate::traits::{DetectedSave, SaveTracker};
 
+/// [`SaveTracker`] for The Witcher 3 save files.
 pub struct Witcher3SaveTracker;
 
 pub static WITCHER3_SAVE_TRACKER: Witcher3SaveTracker = Witcher3SaveTracker;

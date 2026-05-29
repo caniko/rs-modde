@@ -1,3 +1,8 @@
+//! Manages the on-disk Wabbajack staging area via [`StagingStore`], transparently
+//! zstd-compressing eligible large files while resolving, hashing, and
+//! materializing logical paths regardless of their compressed state, and tracking
+//! a versioned [`StagingCompressionPolicy`] layout for resumable installs.
+
 use std::ffi::OsString;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};

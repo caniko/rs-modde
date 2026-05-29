@@ -1,3 +1,5 @@
+//! Types for parsing the `REDmod` `info.json` mod manifest.
+
 use serde::Deserialize;
 
 /// `REDmod` mod manifest (`info.json`).
@@ -11,6 +13,7 @@ pub struct RedModManifest {
     pub scripts: Vec<ScriptEntry>,
 }
 
+/// A custom sound entry declared in a `REDmod` manifest.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CustomSound {
     pub name: String,
@@ -19,6 +22,7 @@ pub struct CustomSound {
     pub file: String,
 }
 
+/// A script entry declared in a `REDmod` manifest.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScriptEntry {
     pub name: String,

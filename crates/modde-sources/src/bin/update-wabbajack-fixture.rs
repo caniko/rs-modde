@@ -1,3 +1,8 @@
+//! Developer binary that downloads a published Wabbajack modlist, trims its
+//! manifest down to a small representative slice, and writes the reduced
+//! `*_manifest.json` plus a `*_manifest.metadata.json` provenance record into
+//! the crate's `tests/fixtures` directory for regression testing.
+
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;

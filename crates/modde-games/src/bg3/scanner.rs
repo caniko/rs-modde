@@ -1,8 +1,11 @@
+//! Mod scanner for Baldur's Gate 3.
+
 use anyhow::Result;
 
 use crate::scanner_patterns::SingleFileModRule;
 use crate::traits::{DiscoveredMod, ModScanner, ScanContext};
 
+/// [`ModScanner`] that discovers installed BG3 `.pak` mods.
 pub struct Bg3Scanner;
 
 pub static BG3_SCANNER: Bg3Scanner = Bg3Scanner;

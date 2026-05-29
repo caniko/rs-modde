@@ -1,9 +1,12 @@
+//! Mod scanner for Gamebryo-engine games.
+
 use std::path::Path;
 
 use anyhow::{Context, Result};
 
 use crate::traits::{DiscoveredFile, DiscoveredMod, ModScanner, ModSource, ScanContext};
 
+/// [`ModScanner`] for a specific Gamebryo-engine game.
 pub struct GamebryoScanner {
     pub game_id: &'static str,
 }

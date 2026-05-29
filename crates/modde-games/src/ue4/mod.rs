@@ -1,3 +1,6 @@
+//! Data-driven support for Unreal Engine 4 games: a shared [`Ue4Game`] plugin
+//! (pak `~mods` layout, proxy-DLL overrides) parameterised per title.
+
 pub mod saves;
 pub mod scanner;
 
@@ -37,6 +40,8 @@ pub struct Ue4Game {
 }
 
 impl Ue4Game {
+    /// Construct a UE4 game definition; save-profile support defaults off
+    /// (enable it via [`Ue4Game::with_save_profiles`]).
     #[must_use]
     pub const fn new(
         game_id: &'static str,
@@ -71,6 +76,7 @@ impl Ue4Game {
         install.join(self.project_name).join("Content").join("Paks")
     }
 
+    /// The UE4 project short name (the folder under the install root).
     #[must_use]
     pub fn project_name(&self) -> &'static str {
         self.project_name

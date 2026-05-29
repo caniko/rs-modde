@@ -1,3 +1,6 @@
+//! Shared download helpers reused across sources: streaming a response body to
+//! disk with hash verification, retry/backoff, and parent-directory setup.
+
 use std::path::Path;
 
 use anyhow::Result;

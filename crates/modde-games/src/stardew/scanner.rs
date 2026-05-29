@@ -1,8 +1,11 @@
+//! Mod scanner for Stardew Valley (SMAPI mods).
+
 use anyhow::Result;
 
 use crate::scanner_patterns::DirectoryModRule;
 use crate::traits::{DiscoveredMod, ModScanner, ScanContext};
 
+/// [`ModScanner`] that discovers installed SMAPI mods.
 pub struct StardewScanner;
 
 pub static STARDEW_SCANNER: StardewScanner = StardewScanner;

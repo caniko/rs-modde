@@ -1,3 +1,6 @@
+//! `.meta` sidecar files that record per-download progress and Nexus metadata
+//! so paused or interrupted downloads can be resumed.
+
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};

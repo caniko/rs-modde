@@ -1,7 +1,10 @@
+//! Mod scanner for Mount & Blade II: Bannerlord.
+
 use anyhow::{Context, Result};
 
 use crate::traits::{DiscoveredMod, ModScanner, ModSource, ScanContext, walk_files_relative};
 
+/// [`ModScanner`] that discovers installed Bannerlord modules.
 pub struct BannerlordScanner;
 
 pub static BANNERLORD_SCANNER: BannerlordScanner = BannerlordScanner;

@@ -1,3 +1,7 @@
+//! Declarative [`SaveTracker`] implementation that locates game save files by
+//! filename-prefix and extension rules, classifying matches into categories and
+//! summarizing what was captured.
+
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;

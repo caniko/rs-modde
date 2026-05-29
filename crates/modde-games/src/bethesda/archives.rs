@@ -1,3 +1,7 @@
+//! BSA/BA2 archive awareness for Bethesda games: detects archive files by
+//! extension and resolves where they belong in the staging tree, since these
+//! games load archives directly without extraction.
+
 use std::path::{Path, PathBuf};
 
 /// BSA/BA2 archive path awareness.

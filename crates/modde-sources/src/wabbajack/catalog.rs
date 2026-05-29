@@ -1,3 +1,7 @@
+//! Wabbajack modlist catalog: fetching and parsing the official, repository,
+//! and authored-file listings, filtering and deduplicating entries, and
+//! emitting Home Manager configuration snippets for a chosen modlist.
+
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -32,6 +36,7 @@ pub(crate) struct AuthoredFileAvailability {
     pub(crate) status: reqwest::StatusCode,
 }
 
+/// Which catalog listings to draw modlist entries from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CatalogSource {
@@ -41,17 +46,20 @@ pub enum CatalogSource {
 }
 
 impl CatalogSource {
+    /// Whether this source includes official/repository modlists.
     #[must_use]
     pub fn includes_official(self) -> bool {
         matches!(self, Self::Official | Self::Both)
     }
 
+    /// Whether this source includes authored-file modlists.
     #[must_use]
     pub fn includes_authored(self) -> bool {
         matches!(self, Self::Authored | Self::Both)
     }
 }
 
+/// Which listing a particular catalog entry originated from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CatalogEntrySource {
@@ -59,6 +67,7 @@ pub enum CatalogEntrySource {
     Authored,
 }
 
+/// Reported size figures for a modlist (download, installed, totals).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WabbajackSizeMetadata {
     pub modlist_size: Option<u64>,
@@ -69,6 +78,7 @@ pub struct WabbajackSizeMetadata {
     pub total_size: Option<u64>,
 }
 
+/// A single modlist entry in the catalog, with its metadata and download URL.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WabbajackCatalogEntry {
     pub title: String,
@@ -90,6 +100,7 @@ pub struct WabbajackCatalogEntry {
     pub source: CatalogEntrySource,
 }
 
+/// Criteria for filtering catalog entries (query, game, and content toggles).
 #[derive(Debug, Clone, Default)]
 pub struct CatalogFilter {
     pub query: Option<String>,

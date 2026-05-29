@@ -1,3 +1,6 @@
+//! User-defined "generic" games: a configurable [`GamePlugin`] driven by a
+//! TOML [`spec::GameSpec`], plus loading/managing those user specs from disk.
+
 pub(crate) mod leak;
 pub mod loader;
 pub mod manage;
@@ -25,6 +28,7 @@ pub struct GenericGame {
 }
 
 impl GenericGame {
+    /// Build a generic game from its core fields, leaving optional metadata empty.
     pub fn new(
         id: impl Into<String>,
         name: impl Into<String>,
@@ -44,6 +48,7 @@ impl GenericGame {
         }
     }
 
+    /// Build a generic game from a deserialized [`GameSpec`].
     pub fn from_spec(spec: GameSpec) -> Self {
         Self {
             id: spec.id,

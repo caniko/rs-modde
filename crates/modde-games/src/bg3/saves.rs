@@ -1,3 +1,5 @@
+//! Save detection for Baldur's Gate 3.
+
 use std::path::Path;
 
 use anyhow::Result;
@@ -6,6 +8,7 @@ use smallvec::SmallVec;
 use crate::save_patterns::{CaptureSummary, PatternSaveTracker};
 use crate::traits::{DetectedSave, SaveTracker};
 
+/// [`SaveTracker`] for Baldur's Gate 3 save directories.
 pub struct Bg3SaveTracker;
 
 pub static BG3_SAVE_TRACKER: Bg3SaveTracker = Bg3SaveTracker;

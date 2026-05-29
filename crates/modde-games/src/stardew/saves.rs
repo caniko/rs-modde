@@ -1,3 +1,5 @@
+//! Save detection for Stardew Valley.
+
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -6,6 +8,7 @@ use smallvec::SmallVec;
 use crate::save_patterns::{CaptureSummary, PatternSaveTracker};
 use crate::traits::{DetectedSave, SaveTracker};
 
+/// [`SaveTracker`] for Stardew Valley save directories.
 pub struct StardewSaveTracker;
 
 pub static STARDEW_SAVE_TRACKER: StardewSaveTracker = StardewSaveTracker;

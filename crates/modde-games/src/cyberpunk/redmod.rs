@@ -1,3 +1,5 @@
+//! Integration with Cyberpunk 2077's `REDmod` tool for deploying `REDmods`.
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

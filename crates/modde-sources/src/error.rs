@@ -1,47 +1,63 @@
+//! Error and result types for the download-source boundary.
+//!
+//! Defines [`SourceError`] and the [`SourceResult`] alias used throughout the
+//! crate, plus helpers that map HTTP responses onto typed errors.
+
 use std::path::PathBuf;
 use std::time::Duration;
 
 use reqwest::header::RETRY_AFTER;
 
+/// Convenience result alias for fallible source operations.
 pub type SourceResult<T> = std::result::Result<T, SourceError>;
 
 /// Errors raised at the download-source boundary.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum SourceError {
+    /// The remote rejected the request as unauthorized (`401`/`403`).
     #[error("unauthorized while accessing {url}")]
     Unauthorized { url: String },
 
+    /// The remote rate-limited the request (`429`); `retry_after` carries any
+    /// `Retry-After` hint.
     #[error("rate limited while accessing {url}")]
     RateLimited {
         url: String,
         retry_after: Option<Duration>,
     },
 
+    /// The requested resource was not found (`404`).
     #[error("not found while accessing {url}")]
     NotFound { url: String },
 
+    /// A downloaded file failed hash verification.
     #[error("hash verification failed: {source}")]
     HashMismatch {
         #[source]
         source: modde_core::CoreError,
     },
 
+    /// A transport-level network error from `reqwest`.
     #[error("network error: {0}")]
     Network(#[from] reqwest::Error),
 
+    /// A filesystem I/O error.
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
+    /// Any other error, type-erased via `anyhow`.
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }
 
 impl SourceError {
+    /// Wrap an arbitrary error as [`SourceError::Other`].
     pub fn other(error: impl Into<anyhow::Error>) -> Self {
         Self::Other(error.into())
     }
 
+    /// Build a [`SourceError::HashMismatch`] from `expected` and `actual` hashes.
     pub fn hash_mismatch(path: impl Into<PathBuf>, expected: u64, actual: u64) -> Self {
         Self::HashMismatch {
             source: modde_core::CoreError::HashMismatch {
@@ -57,6 +73,14 @@ impl SourceError {
     }
 }
 
+/// Map a non-success HTTP `response` onto a typed [`SourceError`].
+///
+/// Returns the response unchanged on success; otherwise translates common
+/// status codes (`401`/`403`, `429`, `404`) into their dedicated variants.
+///
+/// # Errors
+///
+/// Returns a [`SourceError`] whenever `response` carries a non-success status.
 pub fn status_error(response: reqwest::Response) -> SourceResult<reqwest::Response> {
     let status = response.status();
     if status.is_success() {

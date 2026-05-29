@@ -1,3 +1,7 @@
+//! The Gamebryo-engine game plugin (Oblivion, Fallout 3/New Vegas): a
+//! data-driven [`GamePlugin`] shared across the supported Gamebryo titles,
+//! plus `plugins.txt`-style load-order file helpers.
+
 pub mod saves;
 pub mod scanner;
 
@@ -8,6 +12,7 @@ use modde_core::installer::InstallMethod;
 use crate::policies::{BareLayoutPolicy, ContentPolicy};
 use crate::traits::{ContentCategory, GamePlugin, ModSafety};
 
+/// A configurable [`GamePlugin`] instance for a specific Gamebryo-engine game.
 pub struct GamebryoGame {
     game_id: &'static str,
     display_name: &'static str,
@@ -102,6 +107,8 @@ pub const OBLIVION: GamebryoGame = GamebryoGame::new(
     "oblivion",
 );
 
+/// Read a `plugins.txt`-style load-order file, stripping comments and the
+/// leading `*` enabled-marker from each plugin name.
 pub fn read_plugin_order_file(path: &Path) -> std::io::Result<Vec<String>> {
     let content = std::fs::read_to_string(path)?;
     Ok(content
@@ -112,6 +119,8 @@ pub fn read_plugin_order_file(path: &Path) -> std::io::Result<Vec<String>> {
         .collect())
 }
 
+/// Write a `plugins.txt`-style load-order file, marking every plugin enabled
+/// with a leading `*`.
 pub fn write_plugin_order_file(path: &Path, plugins: &[String]) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;

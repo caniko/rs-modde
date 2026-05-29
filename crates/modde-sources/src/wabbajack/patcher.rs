@@ -1,3 +1,7 @@
+//! Applies `OctoDiff` binary delta patches to a basis file to reconstruct a
+//! target file, with bounds and output-size checks to reject malformed patches.
+//! See [`apply_patch`] and [`apply_patch_to_writer`].
+
 use std::io::{Cursor, Read, Write};
 
 use anyhow::{Context, Result, bail};

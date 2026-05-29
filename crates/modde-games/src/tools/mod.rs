@@ -522,7 +522,7 @@ pub trait GameTool: Send + Sync {
         Ok(ToolApplyPreview::default())
     }
 
-    /// Revert files previously applied by [`apply`].
+    /// Revert files previously applied by [`Self::apply`].
     fn revert(&self, game_dir: &Path, applied: &AppliedFiles) -> Result<()> {
         for rel in &applied.files {
             let path = game_dir.join(rel);

@@ -1,3 +1,8 @@
+//! Reconstructs Bethesda BSA (Skyrim) and BA2 (Fallout 4) archives from
+//! `CreateBSA` directive file states, choosing the on-disk format from the
+//! output extension and computing the Bethesda/BA2 name hashes the games
+//! expect. See [`create_bsa`] for the entry point.
+
 use std::io::{Cursor, Write};
 use std::path::Path;
 

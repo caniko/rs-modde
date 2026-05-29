@@ -1,3 +1,5 @@
+//! Save detection patterns for Unreal Engine 4 games.
+
 use std::path::Path;
 
 use crate::save_patterns::{CaptureSummary, PatternSaveTracker};

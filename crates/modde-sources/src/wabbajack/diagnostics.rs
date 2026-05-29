@@ -1,3 +1,8 @@
+//! Runtime diagnostics for Wabbajack installs: tracks install phase, active
+//! archive batches and patches, and process/cgroup memory, emitting periodic
+//! JSONL heartbeats and aborting on a memory-saturated stall. See
+//! [`WabbajackDiagnostics`].
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

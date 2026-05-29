@@ -1,3 +1,8 @@
+//! Pre-install check that verifies Wabbajack CDN authored files referenced by a
+//! manifest are still downloadable, failing fast with actionable remediation via
+//! [`MissingAuthoredArtifacts`] when any are unavailable. See
+//! [`preflight_authored_files`].
+
 use std::fmt::Write as _;
 
 use anyhow::{Result, bail};

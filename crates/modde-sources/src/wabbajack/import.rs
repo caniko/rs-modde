@@ -1,3 +1,8 @@
+//! Imports user-supplied archive files into the Wabbajack download store by
+//! matching their xxHash64 against a [`WabbajackManifest`], hard-linking or
+//! copying matches into place and classifying each input via
+//! [`ArchiveImportStatus`].
+
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};

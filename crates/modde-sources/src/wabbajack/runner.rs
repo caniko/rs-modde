@@ -1,3 +1,7 @@
+//! High-level entry points that drive a complete Wabbajack install: build the
+//! HTTP client, wire up sources, run the installer, register a profile, and
+//! configure Wine DLL overrides.
+
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
 
@@ -22,6 +26,7 @@ use crate::wabbajack::impact::{MissingArchiveImpact, MissingArchivePolicy};
 use crate::wabbajack::installer::{ArchiveRetentionPolicy, InstallProgress, WabbajackInstaller};
 use crate::wabbajack::staging::{StagingStore, is_compressed_path, logical_path_from_compressed};
 
+/// User-supplied options controlling a single Wabbajack install run.
 #[derive(Debug, Clone)]
 pub struct WabbajackInstallOptions {
     pub path: PathBuf,
@@ -38,6 +43,7 @@ pub struct WabbajackInstallOptions {
     pub missing_archive_policy: MissingArchivePolicy,
 }
 
+/// Safety toggles that relax or skip parts of the install pipeline.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct WabbajackInstallSafety {
     /// When true, log per-archive download / per-directive apply failures
@@ -50,6 +56,7 @@ pub struct WabbajackInstallSafety {
     pub skip_validate: bool,
 }
 
+/// Result summary returned after a successful install.
 #[derive(Debug, Clone)]
 pub struct WabbajackInstallSummary {
     pub profile_name: String,
@@ -59,6 +66,12 @@ pub struct WabbajackInstallSummary {
     pub manifest_hash: String,
 }
 
+/// Build the shared HTTP client used for Wabbajack downloads, with sensible
+/// connect and request timeouts.
+///
+/// # Errors
+///
+/// Returns an error if the underlying `reqwest` client cannot be built.
 pub fn build_http_client() -> Result<reqwest::Client> {
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_mins(5))
@@ -67,6 +80,11 @@ pub fn build_http_client() -> Result<reqwest::Client> {
         .context("failed to build HTTP client")
 }
 
+/// Parse the JSON manifest out of the `.wabbajack` archive at `path`.
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be opened, read as a zip, or parsed.
 pub fn parse_wabbajack_manifest(path: &Path) -> Result<WabbajackManifest> {
     let file = std::fs::File::open(path)
         .with_context(|| format!("failed to open wabbajack file: {}", path.display()))?;
@@ -284,6 +302,12 @@ fn save_profile_and_settings(
     Ok(())
 }
 
+/// Detect DLLs that need Wine `dll-override` entries for the installed modlist
+/// and apply them, returning a report of what was configured.
+///
+/// # Errors
+///
+/// Returns an error if launcher configuration fails.
 pub fn configure_wine_overrides(
     game_id: &GameId,
     game_dir: &Path,

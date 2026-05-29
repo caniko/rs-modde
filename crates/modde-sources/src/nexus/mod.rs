@@ -1,3 +1,6 @@
+//! Nexus Mods integration: the typed REST/GraphQL client, API-key and OAuth
+//! authentication, CDN download links, update checks, and collection installs.
+
 pub mod api;
 pub mod auth;
 pub mod cdn;

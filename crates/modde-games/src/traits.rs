@@ -1,3 +1,6 @@
+//! Core game-plugin abstractions: content classification, save tracking, and
+//! the [`ModScanner`] / [`GamePlugin`] interfaces every supported game implements.
+
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -302,7 +305,7 @@ pub trait GamePlugin: Send + Sync {
     /// Claim an extracted archive as a game-specific install method.
     ///
     /// Runs **before** the generic probes (FOMOD, BAIN, DLL overlay) in
-    /// [`modde_core::installer::analyze`], so a game can authoritatively
+    /// [`analyze`](modde_core::installer::analyze()), so a game can authoritatively
     /// identify layouts it knows about — e.g. Cyberpunk recognizing a
     /// `REDmod` by `info.json` + `archives/` presence, or ENB for Bethesda.
     ///
@@ -319,9 +322,9 @@ pub trait GamePlugin: Send + Sync {
     /// top-level `Data/` directory, or a Cyberpunk archive with `r6/`).
     ///
     /// Called as the last fallback by
-    /// [`modde_core::installer::analyze`] — if this returns `true` the
+    /// [`analyze`](modde_core::installer::analyze()) — if this returns `true` the
     /// plan becomes `InstallMethod::BareExtract`, otherwise the analyzer
-    /// falls through to [`InstallMethod::Unknown`] and the caller dumps
+    /// falls through to [`InstallMethod::Unknown`](modde_core::installer::InstallMethod::Unknown) and the caller dumps
     /// a dossier for the skill path.
     fn recognizes_bare_layout(&self, _extracted_dir: &Path) -> bool {
         false
@@ -492,22 +495,27 @@ pub trait SaveTracker: Send + Sync {
 
 // ── Mod Scanner ─────────────────────────────────────────────────
 
+/// Input handed to a [`ModScanner`]: the game install directory to scan.
 pub struct ScanContext<'a> {
     pub install_dir: &'a Path,
 }
 
+/// A single file belonging to a [`DiscoveredMod`], with its install-relative path and size.
 #[derive(Debug, Clone)]
 pub struct DiscoveredFile {
     pub rel_path: String,
     pub size: u64,
 }
 
+/// Where a [`DiscoveredMod`] was found: an on-disk location or inside an archive.
 #[derive(Debug, Clone)]
 pub enum ModSource {
     Filesystem { location: String },
     Archive { archive_name: String },
 }
 
+/// A mod found by a [`ModScanner`], with its identity, files, source, and a
+/// `confidence` score for how certain the scanner is about the detection.
 #[derive(Debug, Clone)]
 pub struct DiscoveredMod {
     pub mod_id: String,
@@ -518,8 +526,15 @@ pub struct DiscoveredMod {
     pub confidence: f64,
 }
 
+/// Game-specific discovery of already-installed mods.
+///
+/// Each game implements this to recognise its own mod layout (directory
+/// conventions, loose files, archives) and report what it finds. This is the
+/// central scanning interface the installer and profile importer rely on.
 pub trait ModScanner: Send + Sync {
+    /// Install-relative directories this scanner inspects for mods.
     fn scan_directories(&self) -> &[&str];
+    /// Scan the filesystem for installed mods and return what was discovered.
     fn scan_filesystem(&self, ctx: &ScanContext<'_>) -> anyhow::Result<Vec<DiscoveredMod>>;
 
     /// Inverse of [`ModScanner::scan_filesystem`]'s `mod_id` scheme: given

@@ -1,3 +1,6 @@
+//! Checking installed mods against the Nexus "recently updated" feed to find
+//! available updates.
+
 use std::collections::HashMap;
 
 use anyhow::Result;

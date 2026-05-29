@@ -1,3 +1,6 @@
+//! The Mount & Blade II: Bannerlord game plugin: `Modules` layout plus
+//! `SubModule.xml` parsing and dependency checking.
+
 pub mod saves;
 pub mod scanner;
 
@@ -9,6 +12,7 @@ use modde_core::installer::InstallMethod;
 use crate::policies::{BareLayoutPolicy, ContentPolicy};
 use crate::traits::{ContentCategory, GamePlugin, ModSafety};
 
+/// [`GamePlugin`] for Mount & Blade II: Bannerlord.
 pub struct BannerlordGame;
 
 pub static BANNERLORD: BannerlordGame = BannerlordGame;
@@ -40,6 +44,7 @@ const BANNERLORD_BARE_LAYOUT_POLICY: BareLayoutPolicy = BareLayoutPolicy {
     case_insensitive_dirs: true,
 };
 
+/// Module identity and declared dependencies parsed from a `SubModule.xml`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BannerlordModuleInfo {
     pub id: String,
@@ -47,6 +52,7 @@ pub struct BannerlordModuleInfo {
     pub dependencies: Vec<String>,
 }
 
+/// Parse a Bannerlord `SubModule.xml` into a [`BannerlordModuleInfo`].
 pub fn parse_submodule_xml(path: &Path) -> anyhow::Result<BannerlordModuleInfo> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read {}", path.display()))?;
@@ -69,6 +75,8 @@ pub fn parse_submodule_xml(path: &Path) -> anyhow::Result<BannerlordModuleInfo> 
     })
 }
 
+/// Find dependencies referenced by modules that are not present in the set,
+/// returned as `(module_id, missing_dependency_id)` pairs.
 #[must_use]
 pub fn missing_dependencies(modules: &[BannerlordModuleInfo]) -> Vec<(String, String)> {
     let available = modules

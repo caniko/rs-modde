@@ -1,3 +1,7 @@
+//! [`DownloadSource`] implementation for archives hosted on the Wabbajack
+//! authored-files CDN, resolving and fetching `WabbajackCdn` download
+//! directives through the chunked authored-files API.
+
 use std::collections::HashMap;
 use std::path::Path;
 

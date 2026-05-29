@@ -1,3 +1,5 @@
+//! Mod scanner for Unreal Engine 4 pak-based games.
+
 use anyhow::Result;
 
 use crate::scanner_patterns::FileGroupRule;

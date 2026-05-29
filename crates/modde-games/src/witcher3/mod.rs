@@ -1,3 +1,6 @@
+//! The Witcher 3 game plugin: `REDkit` mod layout, script-conflict detection,
+//! and save/scanner wiring.
+
 pub mod saves;
 pub mod scanner;
 
@@ -9,6 +12,7 @@ use modde_core::installer::InstallMethod;
 use crate::policies::{BareLayoutPolicy, ContentPolicy, DllOverridePolicy, StagingDllSearch};
 use crate::traits::{ContentCategory, GamePlugin, ModSafety};
 
+/// [`GamePlugin`] implementation for The Witcher 3: Wild Hunt.
 pub struct Witcher3Game;
 
 pub static WITCHER3: Witcher3Game = Witcher3Game;
@@ -47,6 +51,8 @@ const WITCHER_DLL_POLICY: DllOverridePolicy = DllOverridePolicy {
     staging_search: StagingDllSearch::DirectChildDirs,
 };
 
+/// Returns `true` if a mod directory contains any `.ws` script files, which
+/// can conflict with other mods' scripts.
 #[must_use]
 pub fn has_script_conflict(mod_dir: &Path) -> bool {
     let mut stack = vec![mod_dir.to_path_buf()];
@@ -72,6 +78,8 @@ pub fn has_script_conflict(mod_dir: &Path) -> bool {
     false
 }
 
+/// List relative `.ws` script paths provided by more than one installed mod
+/// under `mods_root` (i.e. the scripts that actually collide).
 #[must_use]
 pub fn script_conflict_paths(mods_root: &Path) -> Vec<String> {
     let mut providers: std::collections::BTreeMap<String, usize> =

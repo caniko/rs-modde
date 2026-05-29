@@ -1,3 +1,6 @@
+//! Synchronous download queue bookkeeping: track download state, enforce a
+//! concurrency budget, and surface which queued downloads may start next.
+
 use std::path::PathBuf;
 
 /// Tracks an active or completed download.
@@ -31,6 +34,7 @@ pub struct DownloadManager {
 }
 
 impl DownloadManager {
+    /// Create an empty manager allowing up to `max_concurrent` active downloads.
     #[must_use]
     pub fn new(max_concurrent: usize) -> Self {
         Self {

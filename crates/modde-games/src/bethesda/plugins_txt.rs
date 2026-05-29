@@ -1,3 +1,7 @@
+//! Reading, parsing, formatting, and writing the Bethesda `plugins.txt` load
+//! order file, including locating it inside a game's Steam Proton prefix and
+//! representing each line as a [`PluginEntry`].
+
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};

@@ -1,3 +1,8 @@
+//! Filesystem scanners that discover installed Bethesda mods, pairing plugin
+//! files with companion archives. [`BethesdaScanner`] uses `plugins.txt` for
+//! authoritative load order, while [`BethesdaArchiveScanner`] handles titles
+//! like Fallout 76 that load loose `.ba2` archives without a local load order.
+
 use std::path::Path;
 
 use anyhow::{Context, Result};

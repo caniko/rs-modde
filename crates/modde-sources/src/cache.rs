@@ -1,3 +1,6 @@
+//! In-memory byte cache for extracted archive entries, keyed by archive hash
+//! and inner path, with a configurable byte budget and LRU eviction.
+
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -5,12 +8,15 @@ use bytes::Bytes;
 use lru::LruCache;
 use parking_lot::Mutex;
 
+/// Cache key identifying one extracted entry: its source archive hash plus the
+/// inner path within that archive.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ByteCacheKey {
     pub archive_hash: u64,
     pub inner_path: String,
 }
 
+/// Byte-budgeted LRU cache of extracted archive entry contents.
 pub struct ByteLruCache {
     map: Mutex<LruCache<ByteCacheKey, Bytes>>,
     bytes_budget: AtomicU64,
@@ -18,6 +24,8 @@ pub struct ByteLruCache {
 }
 
 impl ByteLruCache {
+    /// Build a cache sized from the `MODDE_BYTE_CACHE_MIB` environment variable
+    /// (defaulting to 512 MiB).
     #[must_use]
     pub fn from_env() -> Self {
         let mib = std::env::var("MODDE_BYTE_CACHE_MIB")
@@ -27,6 +35,7 @@ impl ByteLruCache {
         Self::new(mib * 1024 * 1024)
     }
 
+    /// Build a cache holding at most `bytes_budget` bytes of cached entries.
     #[must_use]
     pub fn new(bytes_budget: u64) -> Self {
         Self {
@@ -36,11 +45,14 @@ impl ByteLruCache {
         }
     }
 
+    /// Return the cached bytes for `key`, marking the entry most-recently-used.
     #[must_use]
     pub fn get(&self, key: &ByteCacheKey) -> Option<Bytes> {
         self.map.lock().get(key).cloned()
     }
 
+    /// Insert `bytes` under `key`, evicting least-recently-used entries to stay
+    /// within budget; returns the inserted `bytes` for chaining.
     pub fn insert(&self, key: ByteCacheKey, bytes: Bytes) -> Bytes {
         let len = bytes.len() as u64;
         let budget = self.bytes_budget.load(Ordering::Relaxed);
@@ -65,6 +77,7 @@ impl ByteLruCache {
         bytes
     }
 
+    /// Drop all cached entries belonging to the given `archive_hash`.
     pub fn invalidate_archive(&self, archive_hash: u64) {
         let mut map = self.map.lock();
         let keys = map
@@ -79,6 +92,7 @@ impl ByteLruCache {
         }
     }
 
+    /// Return the total number of bytes currently held in the cache.
     #[must_use]
     pub fn bytes_used(&self) -> u64 {
         self.bytes_used.load(Ordering::Relaxed)

@@ -1,3 +1,7 @@
+//! Core download-source contract: the [`DownloadSource`] trait, the
+//! [`AnySource`] enum-dispatch wrapper, and the supporting value types
+//! ([`DownloadHandle`], [`VerifiedFile`], [`ProgressCallback`]).
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

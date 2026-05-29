@@ -1,3 +1,6 @@
+//! Wabbajack modlist support: parsing `.wabbajack` files, acquiring their
+//! archives, and running the installer that materializes a modlist on disk.
+
 pub mod acquire;
 pub mod bsa_repack;
 pub mod catalog;

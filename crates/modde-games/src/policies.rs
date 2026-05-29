@@ -1,3 +1,7 @@
+//! Reusable, data-driven policies that let games describe their content
+//! classification, archive layout, DLL overrides, mod directory, and collision
+//! rules declaratively instead of hand-writing per-game scanning logic.
+
 use std::path::{Path, PathBuf};
 
 use smallvec::SmallVec;
@@ -16,6 +20,7 @@ pub struct ContentPolicy {
 }
 
 impl ContentPolicy {
+    /// Map a file extension (lowercase, no dot) to its [`ContentCategory`].
     #[must_use]
     pub fn classify_extension(self, ext: &str) -> ContentCategory {
         self.categories
@@ -24,6 +29,7 @@ impl ContentPolicy {
             .unwrap_or(ContentCategory::Other)
     }
 
+    /// Walk a mod directory and classify it as save-breaking, save-safe, or unknown.
     #[must_use]
     pub fn classify_mod(self, mod_dir: &Path) -> ModSafety {
         if !mod_dir.exists() {
@@ -80,6 +86,9 @@ impl ContentPolicy {
     }
 }
 
+/// Recognizes a "bare" mod layout — files/dirs that belong directly at the mod
+/// root (e.g. a `meshes/`, `textures/` folder or a loose `.esp`) rather than
+/// being wrapped in an extra top-level directory.
 #[derive(Debug, Clone, Copy)]
 pub struct BareLayoutPolicy {
     pub root_dirs: &'static [&'static str],
@@ -88,6 +97,8 @@ pub struct BareLayoutPolicy {
 }
 
 impl BareLayoutPolicy {
+    /// Returns `true` if `extracted_dir` directly contains a recognised root
+    /// directory or file extension (i.e. it is already a bare mod layout).
     #[must_use]
     pub fn recognizes(self, extracted_dir: &Path) -> bool {
         let Ok(entries) = std::fs::read_dir(extracted_dir) else {
@@ -120,12 +131,17 @@ impl BareLayoutPolicy {
     }
 }
 
+/// Strategy for locating proxy DLLs within a staging tree.
 #[derive(Debug, Clone, Copy)]
 pub enum StagingDllSearch {
+    /// Look one level deep, inside each direct child directory.
     DirectChildDirs,
+    /// Look inside each `mods/<mod>/bin/x64` subtree.
     NestedModsBinX64,
 }
 
+/// Identifies which proxy/loader DLLs (e.g. `dxgi`, `winmm`) a game install
+/// uses so they can be registered as Wine DLL overrides.
 #[derive(Debug, Clone, Copy)]
 pub struct DllOverridePolicy {
     pub proxy_dlls: &'static [&'static str],
@@ -133,6 +149,7 @@ pub struct DllOverridePolicy {
 }
 
 impl DllOverridePolicy {
+    /// Detect proxy DLLs present directly in the game executable directory.
     #[must_use]
     pub fn from_executable_dir(self, executable_dir: &Path) -> SmallVec<[String; 4]> {
         let mut out = SmallVec::new();
@@ -144,6 +161,7 @@ impl DllOverridePolicy {
         out
     }
 
+    /// Detect proxy DLLs within a staging tree using the configured [`StagingDllSearch`].
     #[must_use]
     pub fn from_staging(self, staging: &Path) -> SmallVec<[String; 4]> {
         match self.staging_search {
@@ -209,13 +227,17 @@ impl DllOverridePolicy {
     }
 }
 
+/// Describes where a game expects deployed mods to live, relative to its install dir.
 #[derive(Debug, Clone, Copy)]
 pub enum ModDirectoryLayout {
+    /// A path relative to the install root.
     Relative(&'static str),
+    /// The Unreal Engine 4 `<Project>/Content/Paks/~mods` convention.
     Ue4PaksMods { project_name: &'static str },
 }
 
 impl ModDirectoryLayout {
+    /// Resolve the mod directory against a concrete `install` path.
     #[must_use]
     pub fn resolve(self, install: &Path) -> PathBuf {
         match self {
@@ -229,6 +251,8 @@ impl ModDirectoryLayout {
     }
 }
 
+/// Maps file extensions to a [`CollisionSeverity`] so file conflicts between
+/// mods can be ranked (e.g. plugin overwrites are worse than loose-texture overwrites).
 #[derive(Debug, Clone, Copy)]
 pub struct CollisionPolicy {
     pub archive_extensions: &'static [&'static str],
@@ -236,6 +260,7 @@ pub struct CollisionPolicy {
 }
 
 impl CollisionPolicy {
+    /// Classify the collision severity of `file_path` from its extension.
     #[must_use]
     pub fn classify_severity(self, file_path: &str) -> CollisionSeverity {
         let ext = file_path.rsplit('.').next().unwrap_or("").to_lowercase();
@@ -246,6 +271,8 @@ impl CollisionPolicy {
     }
 }
 
+/// Adapts a [`CollisionPolicy`] into a `modde_core` `CollisionClassifier`,
+/// letting policy-driven games plug into the shared collision engine.
 #[derive(Debug, Clone, Copy)]
 pub struct PolicyCollisionClassifier {
     pub policy: CollisionPolicy,

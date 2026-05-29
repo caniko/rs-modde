@@ -1,3 +1,5 @@
+//! Save detection for Mount & Blade II: Bannerlord.
+
 use std::path::Path;
 
 use anyhow::Result;
@@ -6,6 +8,7 @@ use smallvec::SmallVec;
 use crate::save_patterns::{CaptureSummary, PatternSaveTracker};
 use crate::traits::{DetectedSave, SaveTracker};
 
+/// [`SaveTracker`] for Bannerlord save directories.
 pub struct BannerlordSaveTracker;
 
 pub static BANNERLORD_SAVE_TRACKER: BannerlordSaveTracker = BannerlordSaveTracker;

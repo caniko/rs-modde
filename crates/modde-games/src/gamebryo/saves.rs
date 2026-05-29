@@ -1,3 +1,5 @@
+//! Save detection for Gamebryo-engine games.
+
 use std::path::Path;
 
 use anyhow::Result;
@@ -6,6 +8,7 @@ use smallvec::SmallVec;
 use crate::save_patterns::{CaptureSummary, PatternSaveTracker};
 use crate::traits::{DetectedSave, SaveTracker};
 
+/// [`SaveTracker`] for Gamebryo-engine game save directories.
 pub struct GamebryoSaveTracker;
 
 pub static GAMEBRYO_SAVE_TRACKER: GamebryoSaveTracker = GamebryoSaveTracker;

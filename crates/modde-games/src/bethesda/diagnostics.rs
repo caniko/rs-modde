@@ -1,3 +1,7 @@
+//! Bethesda-specific diagnostic rules (missing masters, Form 43 plugins in
+//! SSE/AE, orphaned overrides) and [`bethesda_diagnostics`], which assembles
+//! them onto the shared [`DiagnosticEngine`].
+
 use std::path::PathBuf;
 
 use modde_core::diagnostics::{

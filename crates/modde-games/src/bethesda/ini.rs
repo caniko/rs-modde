@@ -1,3 +1,6 @@
+//! Comment- and formatting-preserving INI patching: updates a key within a
+//! section in place, appending the key or creating the section when absent.
+
 use std::path::Path;
 
 use anyhow::{Context, Result};

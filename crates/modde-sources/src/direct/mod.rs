@@ -1,3 +1,6 @@
+//! Plain HTTPS download source with `Range`-based resume and HTML mirror
+//! resolution.
+
 use std::path::Path;
 
 use futures::StreamExt;
@@ -20,6 +23,7 @@ pub struct DirectSource {
 }
 
 impl DirectSource {
+    /// Create a source that downloads over the given HTTP `client`.
     #[must_use]
     pub fn new(client: Client) -> Self {
         Self { client }

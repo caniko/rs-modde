@@ -1,3 +1,6 @@
+//! Per-download state machine backed by `.meta` sidecars, used to resume,
+//! pause, and report progress for individual download tasks.
+
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -38,7 +41,7 @@ pub struct DownloadTask {
 /// Synchronous download queue that tracks tasks and enforces concurrency limits.
 ///
 /// This is a pure data structure — it does not perform I/O. The caller is
-/// responsible for taking tasks via [`take_next`], spawning async downloads,
+/// responsible for taking tasks via [`take_next`](DownloadQueue::take_next), spawning async downloads,
 /// and updating task state when downloads progress or complete.
 pub struct DownloadQueue {
     tasks: Vec<DownloadTask>,

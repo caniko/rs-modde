@@ -1,3 +1,8 @@
+//! Download-source backends for modde: a uniform [`traits::DownloadSource`]
+//! contract over Nexus, GitHub, Google Drive, Mega, `MediaFire`, direct HTTPS,
+//! and manual sources, plus the Wabbajack modlist installer and supporting
+//! archive, cache, and staging machinery.
+
 pub mod cache;
 pub mod common;
 pub mod decompress;

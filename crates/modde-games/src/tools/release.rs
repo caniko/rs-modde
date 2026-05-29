@@ -1,3 +1,6 @@
+//! Queries the GitHub releases API to enumerate tool releases and their assets,
+//! mapping them into [`ToolReleaseSummary`] values for tool installation.
+
 use anyhow::Result;
 use reqwest::Client;
 use serde::Deserialize;

@@ -1,3 +1,5 @@
+//! Resolution of Nexus CDN download links for a given mod file.
+
 use reqwest::Client;
 use serde::Deserialize;
 

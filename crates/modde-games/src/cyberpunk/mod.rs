@@ -1,3 +1,6 @@
+//! The Cyberpunk 2077 game plugin: `REDengine` mod layout, `REDmod` deploy,
+//! and the associated scanner, save tracker, and collision classifier.
+
 pub mod collision;
 pub mod manifest;
 pub mod redmod;
@@ -13,6 +16,7 @@ use smallvec::SmallVec;
 use crate::policies::{BareLayoutPolicy, ContentPolicy, DllOverridePolicy, StagingDllSearch};
 use crate::traits::{ContentCategory, GamePlugin, ModSafety};
 
+/// [`GamePlugin`] for Cyberpunk 2077 (`REDengine` 4).
 pub struct Cyberpunk2077;
 
 pub static CYBERPUNK2077: Cyberpunk2077 = Cyberpunk2077;

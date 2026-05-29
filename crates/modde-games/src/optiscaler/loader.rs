@@ -1,3 +1,7 @@
+//! Loads user-defined `OptiScaler` profiles from per-game `*.optiscaler.toml`
+//! files in the modde data directory, converting the deserialized spec types
+//! into leaked-`'static` [`OptiScalerProfile`] values cached per game id.
+
 use std::fs;
 use std::sync::OnceLock;
 

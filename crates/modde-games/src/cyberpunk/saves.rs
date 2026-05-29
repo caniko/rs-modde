@@ -1,3 +1,5 @@
+//! Save detection for Cyberpunk 2077.
+
 use std::path::Path;
 
 use anyhow::Result;
@@ -6,6 +8,7 @@ use smallvec::SmallVec;
 use crate::save_patterns::{CaptureSummary, PatternSaveTracker, PrefixSaveRule};
 use crate::traits::{DetectedSave, SaveTracker};
 
+/// [`SaveTracker`] for Cyberpunk 2077 save directories.
 pub struct CyberpunkSaveTracker;
 
 pub static CYBERPUNK_SAVE_TRACKER: CyberpunkSaveTracker = CyberpunkSaveTracker;

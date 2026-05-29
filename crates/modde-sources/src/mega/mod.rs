@@ -1,3 +1,6 @@
+//! Mega.nz download source, including client-side AES-128-CTR decryption of
+//! the encrypted payload.
+
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -87,6 +90,7 @@ fn decode_mega_key(key_b64: &str) -> Result<([u8; 16], [u8; 16])> {
 }
 
 impl MegaSource {
+    /// Create a source that downloads over the given HTTP `client`.
     #[must_use]
     pub fn new(client: Client) -> Self {
         Self { client }

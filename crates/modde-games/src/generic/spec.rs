@@ -1,3 +1,5 @@
+//! TOML specification for user-defined generic games and its validation.
+
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Result, bail};
@@ -5,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::registry::SUPPORTED_GAME_IDS;
 
+/// Deserialized configuration for a user-defined generic game.
 #[derive(Debug, Clone, Deserialize)]
 pub struct GameSpec {
     pub id: String,
@@ -19,6 +22,7 @@ pub struct GameSpec {
     pub proxy_dlls: Vec<String>,
 }
 
+/// Borrowing serialization view of a [`GameSpec`] for writing TOML.
 #[derive(Debug, Clone, Serialize)]
 pub struct GameSpecToml<'a> {
     pub id: &'a str,
@@ -38,6 +42,7 @@ pub struct GameSpecToml<'a> {
     pub proxy_dlls: Vec<&'a str>,
 }
 
+/// Serialize a [`GameSpec`] to a pretty TOML string.
 pub fn serialize(game: &GameSpec) -> Result<String> {
     let toml = GameSpecToml {
         id: &game.id,
@@ -55,6 +60,8 @@ pub fn serialize(game: &GameSpec) -> Result<String> {
 }
 
 impl GameSpec {
+    /// Validate the spec: well-formed `id`, no built-in collision, relative
+    /// install-root paths, and a non-empty display name.
     pub fn validate(&self) -> Result<()> {
         if !is_valid_game_id(&self.id) {
             bail!(

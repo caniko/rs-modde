@@ -1,3 +1,7 @@
+//! Serde spec types for the `OptiScaler` profile TOML format, covering both the
+//! owned deserialization shapes used when reading profiles and the borrowed
+//! serialization shapes used by [`serialize`] when exporting them.
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize)]

@@ -1,3 +1,7 @@
+//! Loads user-defined games from TOML specs in modde's data directory,
+//! validating and deduplicating each [`GameSpec`] before turning it into a
+//! [`GenericGame`]-backed [`GameRegistration`] for the game registry.
+
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;

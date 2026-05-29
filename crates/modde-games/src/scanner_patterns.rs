@@ -1,3 +1,7 @@
+//! Composable scanning rules that turn common mod-layout conventions
+//! (one-directory-per-mod, one-file-per-mod, grouped-by-stem) into
+//! [`DiscoveredMod`] entries, so game scanners can be assembled declaratively.
+
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -5,6 +9,7 @@ use anyhow::Context;
 
 use crate::traits::{DiscoveredFile, DiscoveredMod, ModSource, walk_files_relative};
 
+/// Treats each immediate subdirectory of `rel_dir` as one mod.
 #[derive(Debug, Clone, Copy)]
 pub struct DirectoryModRule {
     pub rel_dir: &'static str,
@@ -16,6 +21,7 @@ pub struct DirectoryModRule {
 }
 
 impl DirectoryModRule {
+    /// Scan `install` under this rule, appending discovered mods to `out`.
     pub fn scan(self, install: &Path, out: &mut Vec<DiscoveredMod>) -> anyhow::Result<()> {
         let dir = install.join(self.rel_dir);
         if !dir.is_dir() {
@@ -58,6 +64,7 @@ impl DirectoryModRule {
     }
 }
 
+/// Treats each file with `extension` directly inside `rel_dir` as one mod.
 #[derive(Debug, Clone, Copy)]
 pub struct SingleFileModRule {
     pub rel_dir: &'static str,
@@ -69,6 +76,7 @@ pub struct SingleFileModRule {
 }
 
 impl SingleFileModRule {
+    /// Scan `install` under this rule, appending discovered mods to `out`.
     pub fn scan(self, install: &Path, out: &mut Vec<DiscoveredMod>) -> anyhow::Result<()> {
         let dir = install.join(self.rel_dir);
         if !dir.is_dir() {
@@ -127,6 +135,8 @@ impl SingleFileModRule {
     }
 }
 
+/// Groups files sharing a stem (across the configured `extensions`) into a
+/// single mod — e.g. a `.pak` plus its sidecar `.ucas`/`.utoc`.
 #[derive(Debug, Clone, Copy)]
 pub struct FileGroupRule {
     pub rel_dir: &'static str,
@@ -137,11 +147,13 @@ pub struct FileGroupRule {
 }
 
 impl FileGroupRule {
+    /// Scan `install`'s `rel_dir`, appending grouped mods to `out`.
     pub fn scan(self, install: &Path, out: &mut Vec<DiscoveredMod>) {
         let dir = install.join(self.rel_dir);
         self.scan_dir(install, &dir, out);
     }
 
+    /// Scan an explicit `dir` (relative paths still resolved against `install`).
     pub fn scan_dir(self, install: &Path, dir: &Path, out: &mut Vec<DiscoveredMod>) {
         if !dir.is_dir() {
             return;

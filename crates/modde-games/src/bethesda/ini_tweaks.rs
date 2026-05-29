@@ -1,3 +1,6 @@
+//! Mod-supplied INI tweaks: scans a mod's `.ini` files into [`IniTweak`]
+//! records and applies them to the game's INI files in load-order priority.
+
 use std::path::Path;
 
 use anyhow::{Context, Result};

@@ -1,3 +1,8 @@
+//! Analyzes which Wabbajack install directives are blocked by archives missing
+//! from the local store and derives, per [`MissingArchivePolicy`], a skip plan
+//! for installing the remainder. See [`MissingArchiveImpact`] and
+//! [`MissingArchiveSkipPlan`].
+
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 

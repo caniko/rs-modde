@@ -1,3 +1,7 @@
+//! Per-game support for modde: the game registry plus each game's plugin,
+//! scanner, save tracker, and tool integrations, exposed through `game_id`-keyed
+//! resolver functions.
+
 use anyhow::{Context, Result};
 use smallvec::SmallVec;
 

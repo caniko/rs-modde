@@ -267,6 +267,7 @@ fn decode_mod_list(data: &Value) -> Result<Vec<GqlModTile>> {
 
 // ── Collections feed ─────────────────────────────────────────────
 
+/// A collection as it appears in the GraphQL collections feed (tile view).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GqlCollectionTile {
     pub slug: String,

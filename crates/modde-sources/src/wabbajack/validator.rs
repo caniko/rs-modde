@@ -1,3 +1,7 @@
+//! Post-install verification for Wabbajack modlists: re-hashes staged files
+//! against the expected output hashes carried by a [`WabbajackManifest`]'s
+//! directives, plus a cheap existence-only preflight check.
+
 use std::path::Path;
 
 use anyhow::Result;

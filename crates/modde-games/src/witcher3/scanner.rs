@@ -1,8 +1,11 @@
+//! Mod scanner for The Witcher 3.
+
 use anyhow::Result;
 
 use crate::scanner_patterns::DirectoryModRule;
 use crate::traits::{DiscoveredMod, ModScanner, ScanContext};
 
+/// [`ModScanner`] that discovers installed Witcher 3 mods.
 pub struct Witcher3Scanner;
 
 pub static WITCHER3_SCANNER: Witcher3Scanner = Witcher3Scanner;

@@ -1,8 +1,11 @@
+//! Mod scanner for Oblivion Remastered.
+
 use anyhow::Result;
 
 use crate::scanner_patterns::{FileGroupRule, SingleFileModRule};
 use crate::traits::{DiscoveredMod, ModScanner, ScanContext};
 
+/// [`ModScanner`] that discovers installed Oblivion Remastered mods.
 pub struct OblivionRemasteredScanner;
 
 pub static OBLIVION_REMASTERED_SCANNER: OblivionRemasteredScanner = OblivionRemasteredScanner;

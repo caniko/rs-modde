@@ -1,3 +1,7 @@
+//! Acquiring Wabbajack source archives that are missing from the local store:
+//! resolving direct downloads, driving browser-assisted downloads, and
+//! importing/verifying the resulting files.
+
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -18,6 +22,7 @@ use super::installer::archive_path;
 const STABLE_FOR: Duration = Duration::from_secs(2);
 const POLL_EVERY: Duration = Duration::from_millis(500);
 
+/// The kind of source a missing archive must be acquired from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MissingArchiveSourceKind {
@@ -25,6 +30,7 @@ pub enum MissingArchiveSourceKind {
     Nexus,
 }
 
+/// An archive required by a modlist that is not yet present in the store.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MissingArchive {
     pub hash: u64,
@@ -35,6 +41,7 @@ pub struct MissingArchive {
     pub source_hint: String,
 }
 
+/// Outcome status for an attempt to acquire a single missing archive.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum AcquireStatus {
@@ -54,6 +61,7 @@ pub enum AcquireStatus {
     UnsupportedSource,
 }
 
+/// The result of acquiring one archive: its status and, if obtained, the file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AcquireResult {
     pub archive: MissingArchive,
@@ -63,6 +71,7 @@ pub struct AcquireResult {
     pub message: Option<String>,
 }
 
+/// A newly-observed download file matched against the expected archives.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WatchedDownload {
     pub path: PathBuf,
@@ -72,11 +81,13 @@ pub struct WatchedDownload {
     pub matched_hash: Option<u64>,
 }
 
+/// An event signalling that a browser-driven download produced a file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrowserDownloadEvent {
     pub path: PathBuf,
 }
 
+/// The outcome of attempting to acquire an archive via a direct download.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DirectAcquireOutcome {
     Resolved(AcquireResult),
@@ -140,6 +151,7 @@ fn missing_archive_entry(archive: &ArchiveEntry, include_nexus: bool) -> Option<
     }
 }
 
+/// Normalize a Wabbajack game name into its canonical Nexus game domain.
 pub fn normalize_nexus_game_domain(game_name: &str) -> String {
     match game_name.to_ascii_lowercase().as_str() {
         "moddingtools" | "modding-tools" | "site" => "site".to_string(),
@@ -147,6 +159,7 @@ pub fn normalize_nexus_game_domain(game_name: &str) -> String {
     }
 }
 
+/// Build the Nexus mod-file page URL a user can open to download manually.
 pub fn nexus_browser_url(
     game_name: &str,
     mod_id: NexusModId,
@@ -158,6 +171,8 @@ pub fn nexus_browser_url(
     ))
 }
 
+/// Return `true` if `path` looks like an in-progress/partial download file
+/// (e.g. `.part`, `.crdownload`).
 pub fn partial_download_path(path: &Path) -> bool {
     let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
         return true;
@@ -334,6 +349,7 @@ pub async fn wait_for_next_matching_download(
     }
 }
 
+/// Return the downloaded file path carried by a [`BrowserDownloadEvent`].
 pub fn browser_event_download_path(event: &BrowserDownloadEvent) -> &Path {
     &event.path
 }

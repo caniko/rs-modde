@@ -1,3 +1,6 @@
+//! Google Drive download source, including handling of the large-file virus
+//! scan confirmation page.
+
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -18,6 +21,7 @@ pub struct GoogleDriveSource {
 }
 
 impl GoogleDriveSource {
+    /// Create a source that downloads over the given HTTP `client`.
     #[must_use]
     pub fn new(client: Client) -> Self {
         Self { client }

@@ -1,3 +1,6 @@
+//! Source for manual-download directives, which cannot be fetched
+//! automatically and instead fail fast with a pointer to the upstream URL.
+
 use std::path::Path;
 
 use modde_core::manifest::wabbajack::DownloadDirective;
@@ -12,6 +15,7 @@ use crate::traits::{DownloadHandle, DownloadSource, ProgressCallback, VerifiedFi
 pub struct ManualSource;
 
 impl ManualSource {
+    /// Create a new manual source.
     #[must_use]
     pub fn new() -> Self {
         Self

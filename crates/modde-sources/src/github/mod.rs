@@ -1,3 +1,6 @@
+//! GitHub Releases download source: resolves release assets and downloads
+//! them, honouring `GITHUB_TOKEN` when present.
+
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -33,6 +36,7 @@ struct ReleaseAsset {
     size: u64,
 }
 
+/// Summary of a single GitHub release: its tag, optional name, and assets.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitHubReleaseSummary {
     pub tag: String,
@@ -40,6 +44,7 @@ pub struct GitHubReleaseSummary {
     pub assets: Vec<GitHubReleaseAsset>,
 }
 
+/// A downloadable asset attached to a GitHub release.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitHubReleaseAsset {
     pub name: String,
@@ -48,6 +53,8 @@ pub struct GitHubReleaseAsset {
 }
 
 impl GitHubSource {
+    /// Create a source over the given HTTP `client`, picking up `GITHUB_TOKEN`
+    /// from the environment for authenticated requests.
     #[must_use]
     pub fn new(client: Client) -> Self {
         let token = std::env::var("GITHUB_TOKEN").ok();

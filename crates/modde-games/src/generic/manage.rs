@@ -1,3 +1,6 @@
+//! Managing user-defined game specs on disk: add, remove, read, and detect
+//! candidate install directories.
+
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -10,12 +13,15 @@ use modde_core::paths;
 
 use super::spec::GameSpec;
 
+/// Outcome of [`add_user_game`]: where the spec was written and whether it existed already.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AddUserGameResult {
     pub path: PathBuf,
     pub existed: bool,
 }
 
+/// A candidate game directory found by [`detect_candidates`], with its
+/// executables and total size to help rank likely game roots.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DetectCandidateDir {
     pub relative_dir: String,
@@ -52,16 +58,19 @@ struct GameSpecToml<'a> {
     proxy_dlls: Vec<&'a str>,
 }
 
+/// Directory where user-defined game specs are stored.
 #[must_use]
 pub fn games_dir() -> PathBuf {
     paths::modde_data_dir().join("games")
 }
 
+/// Path to the TOML spec file for the user game with the given `id`.
 #[must_use]
 pub fn user_game_path(id: &str) -> PathBuf {
     games_dir().join(format!("{id}.toml"))
 }
 
+/// Render a path as a forward-slash string suitable for embedding in TOML.
 #[must_use]
 pub fn path_to_toml_string(path: &Path) -> String {
     let parts: Vec<String> = path

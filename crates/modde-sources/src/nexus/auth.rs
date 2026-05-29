@@ -1,3 +1,7 @@
+//! Nexus API-key acquisition and storage: resolving a key from the configured
+//! sources (`OAuth`, config file, environment, system keyring) and validating
+//! it against the Nexus API.
+
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -20,6 +24,7 @@ struct ValidateResponse {
     name: Option<String>,
 }
 
+/// Where a resolved Nexus API key was loaded from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ApiKeySource {
     OAuth,
@@ -31,6 +36,7 @@ pub enum ApiKeySource {
 }
 
 impl ApiKeySource {
+    /// A short human-readable label naming this key source.
     #[must_use]
     pub fn label(&self) -> &'static str {
         match self {
@@ -44,6 +50,7 @@ impl ApiKeySource {
     }
 }
 
+/// A resolved Nexus API key together with the source it came from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoadedApiKey {
     pub key: String,
