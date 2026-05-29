@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use modde_core::profile::ProfileManager;
 use modde_core::resolver::GameId;
 
+use super::state::ToolLoadRequest;
 use super::tool_settings::{
     apply_derived_tool_settings, build_tool_derived_facts, current_tool_config,
     format_tool_availability, normalize_tool_settings_for_specs, patch_tool_setting_options,
@@ -11,8 +12,8 @@ use super::tool_settings::{
     tool_apply_signature, tool_options,
 };
 use super::{
-    ExecutableDraft, ExecutableUiEntry, ToolApplyResult, ToolHistoryUiEntry, ToolLoadRequest,
-    ToolLoadSnapshot, ToolOptionCatalog, ToolReleaseSupport, ToolRevertResult, ToolUiEntry,
+    ExecutableDraft, ExecutableUiEntry, ToolApplyResult, ToolHistoryUiEntry, ToolLoadSnapshot,
+    ToolOptionCatalog, ToolReleaseSupport, ToolRevertResult, ToolUiEntry,
 };
 
 pub(super) async fn load_tool_releases(

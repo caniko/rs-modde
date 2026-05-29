@@ -5,6 +5,7 @@ use iced::{Element, Length, Task};
 use modde_core::profile::ProfileManager;
 use modde_core::resolver::GameId;
 
+use super::state::ToolLoadRequest;
 use super::tool_ops::{load_executables_for_game, load_tools_state};
 use super::tool_settings::{
     apply_derived_tool_settings, build_tool_derived_facts, current_tool_config,
@@ -12,10 +13,10 @@ use super::tool_settings::{
     set_tool_options, sync_optiscaler_release_options, tool_apply_is_pending, tool_options,
 };
 use super::{
-    Message, Modde, SettingsState, ToolHistoryUiEntry, ToolLoadRequest, ToolLoadSnapshot,
-    ToolReleaseSupport, ToolUiEntry, View, WabbajackInstallerState, build_conflict_rows,
-    build_default_download_meta, detected_game_ids, format_diagnostic_entry, load_active_plugins,
-    load_hidden_files, settings_game_install_paths,
+    Message, Modde, SettingsState, ToolHistoryUiEntry, ToolLoadSnapshot, ToolReleaseSupport,
+    ToolUiEntry, View, WabbajackInstallerState, build_conflict_rows, build_default_download_meta,
+    detected_game_ids, format_diagnostic_entry, load_active_plugins, load_hidden_files,
+    settings_game_install_paths,
 };
 
 impl Modde {
