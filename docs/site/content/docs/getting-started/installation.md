@@ -71,7 +71,12 @@ nix run codeberg:caniko/rs-modde
 
 ## Debian / Ubuntu (apt)
 
-The canonical `modde.rs` host serves the APT repository at
+> The APT channel is not yet live: the `modde.rs` host and the signed
+> repository are still being provisioned, so the steps below do not work yet.
+> They are the canonical install flow and will work unchanged once the channel
+> is published.
+
+Once published, the canonical `modde.rs` host will serve the APT repository at
 `https://modde.rs/apt/`; the release workflow publishes the same signed
 repository tree from the Codeberg Pages origin.
 

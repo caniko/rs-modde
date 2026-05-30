@@ -78,11 +78,13 @@ both the old and new public keys.
 
 ## APT Repository Signing Key
 
-The Debian/Ubuntu APT repository at `https://modde.rs/apt/` is signed with a
-dedicated repository GPG key, separate from the maintainer tag-signing key and
-the minisign release-manifest key. Users should install the repository key from
-`https://modde.rs/apt/key.gpg.asc` into `/etc/apt/keyrings/modde.gpg` and use a
-`signed-by=/etc/apt/keyrings/modde.gpg` source entry.
+The Debian/Ubuntu APT repository (served at `https://modde.rs/apt/` once the
+channel is live; not yet published) is signed with a dedicated repository GPG
+key, separate from the maintainer tag-signing key and the minisign
+release-manifest key. Once the channel is live, users should install the
+repository key from `https://modde.rs/apt/key.gpg.asc` into
+`/etc/apt/keyrings/modde.gpg` and use a `signed-by=/etc/apt/keyrings/modde.gpg`
+source entry.
 
 APT repository signing-key rotation is independent from release transport. To
 rotate the signing key, generate a new repository-only GPG key, update the
