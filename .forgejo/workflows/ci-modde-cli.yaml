@@ -12,9 +12,16 @@ concurrency:
 jobs:
   test:
     runs-on: atlas-nix-trusted
+    env:
+      NIX_CONFIG: "experimental-features = nix-command flakes"
+      XDG_CACHE_HOME: "/tmp/.cache"
+      CARGO_HOME: "/tmp/.cargo"
     steps:
       - name: Checkout
         uses: https://code.forgejo.org/actions/checkout@v4
+
+      - name: Add cargo bin to PATH
+        run: echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
 
       - name: Check flake
         run: nix flake check
@@ -32,4 +39,4 @@ jobs:
         run: nix develop -c cargo clippy -p modde-cli --all-targets -- --deny warnings
 
       - name: Package crate
-        run: nix develop -c cargo package -p modde-cli --allow-dirty
+        run: nix develop -c cargo package -p modde-cli --allow-dirty --list
