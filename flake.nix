@@ -26,7 +26,7 @@
     };
 
     simit = {
-      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=5ebd4e63e66a3226243ff49f6319f92e88738501";
+      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/tags/0.16.0&rev=38af6d9c47c77ff9da29abdc2bdb956ac47eb041";
       inputs.rs-harbor.follows = "rs-harbor";
       inputs.nixpkgs.follows = "rs-harbor/nixpkgs";
       inputs.rust-overlay.follows = "rs-harbor/rust-overlay";
@@ -1321,6 +1321,108 @@
       };
       simitConfig = {
         release.smoke.command = "nix run .#release-smoke --";
+        release.codeberg = {
+          repo = "caniko/rs-modde";
+          target_branch = "trunk";
+        };
+        release.artifacts = {
+          runner = "atlas";
+          version_attr = "modde";
+          substituters = ["https://attic.candee.baby/canix" "https://cache.nixos.org"];
+          trusted_public_keys = ["canix:uqr0nD3I0mfj9BYfZgTZHMaDKfI2yCTtSA5JGTWKUeg=" "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="];
+          supply_chain_command = "nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#cargo-deny -c cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses";
+          checksum_globs = ["*.tar.gz" "*.zip" "*.AppImage" "*.deb" "*.src.rpm" "*.cdx.json" "*.spdx.json"];
+          sbom_commands = [
+            ''
+              nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#gcc -c bash <<'SBOM'
+              set -euo pipefail
+              export CARGO_INSTALL_ROOT="$PWD/.cargo-tools"; export PATH="$CARGO_INSTALL_ROOT/bin:$PATH"
+              cargo install --locked cargo-about --version 0.9.0 --features cli
+              cargo install --locked cargo-sbom --version 0.10.0
+              cargo about generate --output-file release/THIRD_PARTY_LICENSES.html about-template.hbs
+              cargo sbom --output-format cyclone_dx_json_1_5 > "release/modde-''${VERSION}.cdx.json"
+              cargo sbom --output-format spdx_json_2_3 > "release/modde-''${VERSION}.spdx.json"
+              SBOM
+            ''
+          ];
+          build_commands = [
+            ''
+              copy_nix_binary() {
+                result_dir="$1"; binary="$2"; destination="$3"
+                if [ -f "''${result_dir}/bin/.''${binary}-wrapped" ]; then cp "''${result_dir}/bin/.''${binary}-wrapped" "$destination"; else cp "''${result_dir}/bin/''${binary}" "$destination"; fi
+              }
+
+              nix build .#modde --out-link linux-result
+              mkdir -p release/linux-x86_64
+              copy_nix_binary linux-result modde release/linux-x86_64/modde
+              copy_nix_binary linux-result modde-ui release/linux-x86_64/modde-ui
+              tar czf "release/modde-''${VERSION}-x86_64-linux.tar.gz" -C release/linux-x86_64 modde modde-ui
+              cp release/linux-x86_64/modde "release/modde-''${VERSION}-x86_64-linux"
+              cp release/linux-x86_64/modde-ui "release/modde-ui-''${VERSION}-x86_64-linux"
+
+              nix build .#modde-aarch64-linux --out-link aarch64-linux-result
+              mkdir -p release/linux-aarch64
+              copy_nix_binary aarch64-linux-result modde release/linux-aarch64/modde
+              copy_nix_binary aarch64-linux-result modde-ui release/linux-aarch64/modde-ui
+              tar czf "release/modde-''${VERSION}-aarch64-linux.tar.gz" -C release/linux-aarch64 modde modde-ui
+              cp release/linux-aarch64/modde "release/modde-''${VERSION}-aarch64-linux"
+              cp release/linux-aarch64/modde-ui "release/modde-ui-''${VERSION}-aarch64-linux"
+
+              nix build .#modde-windows --out-link windows-result
+              mkdir -p release/windows-x86_64
+              cp windows-result/bin/modde.exe windows-result/bin/modde-ui.exe release/windows-x86_64/
+              # Windows tar.gz/zip and individual signed .exe assets are produced
+              # by the Authenticode signing step, after the .exe files are signed.
+
+              nix build .#modde-darwin-x86_64 --out-link darwin-x86-result
+              mkdir -p release/darwin-x86_64
+              cp darwin-x86-result/bin/modde darwin-x86-result/bin/modde-ui release/darwin-x86_64/
+              tar czf "release/modde-''${VERSION}-x86_64-darwin.tar.gz" -C release/darwin-x86_64 modde modde-ui
+
+              nix build .#modde-darwin-aarch64 --out-link darwin-arm-result
+              mkdir -p release/darwin-aarch64
+              cp darwin-arm-result/bin/modde darwin-arm-result/bin/modde-ui release/darwin-aarch64/
+              tar czf "release/modde-''${VERSION}-aarch64-darwin.tar.gz" -C release/darwin-aarch64 modde modde-ui
+
+              nix build .#appimage-ui --out-link appimage-ui-result
+              cp appimage-ui-result "release/modde-ui-''${VERSION}-x86_64.AppImage"
+              nix build .#appimage-cli --out-link appimage-cli-result
+              cp appimage-cli-result "release/modde-''${VERSION}-x86_64.AppImage"
+
+              git archive --format=tar.gz --prefix=rs-modde/ -o "release/rs-modde-''${VERSION}.tar.gz" HEAD
+              source_sha256="$(sha256sum "release/rs-modde-''${VERSION}.tar.gz" | awk '{print $1}')"
+              nix build .#flatpak-manifest --out-link flatpak-result
+              cp flatpak-result release/com.tartanoglu.modde.json
+              sed -i "s/@SOURCE_TARBALL_SHA256@/''${source_sha256}/" release/com.tartanoglu.modde.json
+              nix run .#flatpak-cargo-generator -- Cargo.lock -o release/cargo-sources.json
+              cp srpms/*.src.rpm release/ 2>/dev/null || true
+            ''
+          ];
+        };
+        release.attic = {
+          cache = "canix";
+          url = "https://attic.candee.baby";
+          token_name = "rs-modde";
+          result_links = ["linux-result" "aarch64-linux-result" "windows-result" "darwin-x86-result" "darwin-arm-result" "appimage-ui-result" "appimage-cli-result" "flatpak-result"];
+        };
+        release.announce = {};
+        release.windows_signing = {
+          binaries = ["modde" "modde-ui"];
+          sign_name = "modde";
+          sign_url = "https://modde.tartanoglu.com";
+          tar_archive = "modde-{version}-x86_64-windows.tar.gz";
+          zip_archive = "modde-{version}-x86_64-windows.zip";
+        };
+        flatpak = {
+          repo = "flathub/com.tartanoglu.modde";
+          app_id = "com.tartanoglu.modde";
+          manifest_files = ["com.tartanoglu.modde.json" "cargo-sources.json"];
+        };
+        winget = {
+          package_id = "Caniko.Modde";
+          download_repo = "caniko/rs-modde";
+          zip_archive = "modde-{version}-x86_64-windows.zip";
+        };
         homebrew = {
           tap_url = "https://codeberg.org/caniko/homebrew-modde.git";
           download_repo = "caniko/rs-modde";
@@ -1329,6 +1431,78 @@
           homepage = "https://modde.rs";
           license = "GPL-3.0-only";
           archive_pattern = "modde-{version}-{arch}-{os}.tar.gz";
+        };
+        chocolatey = {
+          name = "modde";
+          download_repo = "caniko/rs-modde";
+          description = "Cross-platform game mod manager";
+          project_url = "https://modde.rs";
+          authors = "Can H. Tartanoglu";
+          license_url = "https://codeberg.org/caniko/rs-modde/raw/branch/trunk/LICENSE";
+          archive_pattern = "modde-{version}-{arch}-windows.zip";
+          # Interim: pull choco + simit from the fork that ships the chocolatey
+          # package (caniko/nixpkgs add-chocolatey-scoop). Drop the nixpkgs ref to
+          # plain `nixpkgs#chocolatey` once it lands upstream.
+          nix_tool = "github:caniko/nixpkgs/add-chocolatey-scoop#chocolatey git+https://codeberg.org/caniko/simit";
+          api_key_from_runner = true;
+          api_key_env = "CHOCOLATEY_API_KEY";
+        };
+        scoop = {
+          name = "modde";
+          bucket_url = "https://codeberg.org/caniko/scoop-modde.git";
+          download_repo = "caniko/rs-modde";
+          description = "Cross-platform game mod manager";
+          homepage = "https://modde.rs";
+          license = "GPL-3.0-only";
+          archive_pattern = "modde-{version}-{arch}-windows.zip";
+          binaries = ["modde" "modde-ui"];
+        };
+        aur = {
+          name = "modde";
+          description = "Cross-platform game mod manager";
+          license = "GPL-3.0-only";
+          maintainer = "Can H. Tartanoglu <caniko@codeberg.org>";
+          maintainer_gpg = "818D507F1E62139F8A17EAA64623DEA06FDACFE1";
+          depends = ["dbus" "gcc-libs" "glibc" "libxkbcommon" "openssl" "sqlite" "vulkan-icd-loader" "wayland"];
+          makedepends = ["cargo" "cmake" "pkgconf" "rust"];
+          bin_glibc_min = "2.38";
+          binaries = ["modde" "modde-ui"];
+          assets = [
+            {
+              source = "dist/modde-ui.desktop";
+              dest = "usr/share/applications/com.tartanoglu.modde.desktop";
+            }
+            {
+              source = "dist/com.tartanoglu.modde.png";
+              dest = "usr/share/icons/hicolor/512x512/apps/com.tartanoglu.modde.png";
+            }
+            {
+              source = "dist/com.tartanoglu.modde.metainfo.xml";
+              dest = "usr/share/metainfo/com.tartanoglu.modde.metainfo.xml";
+            }
+          ];
+          download_repo = "caniko/rs-modde";
+        };
+        copr = {
+          name = "modde";
+          summary = "Cross-platform game mod manager";
+          description = "modde is a cross-platform game mod manager with CLI and GUI interfaces.\nIt supports Nexus Mods, Wabbajack modlists, FOMOD installers, and BAIN\npackages for games like Skyrim, Fallout, Starfield, and Cyberpunk 2077.";
+          license = "GPL-3.0-only";
+          download_repo = "caniko/rs-modde";
+          build_requires = ["rust >= 1.85" "cargo" "gcc" "pkg-config" "openssl-devel" "dbus-devel" "wayland-devel" "libxkbcommon-devel" "vulkan-loader-devel"];
+          binaries = ["modde" "modde-ui"];
+          project = "caniko/rs-modde";
+        };
+        apt = {
+          repo_url = "ssh://git@codeberg.org/caniko/rs-modde-apt.git";
+          label = "modde";
+          # cargo-target=deb-name (cargo-deb names the file after [metadata.deb].name)
+          packages = ["modde-cli=modde" "modde-ui=modde-ui"];
+          build_deps = ["ca-certificates" "gcc" "libdbus-1-dev" "libsqlite3-dev" "libssl-dev" "libvulkan-dev" "libwayland-dev" "libxkbcommon-dev" "pkg-config"];
+          gpg_key_secret = "modde_apt_repo_gpg_key";
+          gpg_key_id_secret = "modde_apt_repo_gpg_key_id";
+          gpg_passphrase_secret = "modde_apt_repo_gpg_passphrase";
+          ssh_key_secret = "modde_apt_repo_ssh_key";
         };
       };
     }
