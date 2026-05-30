@@ -1,7 +1,7 @@
 %global crate modde
 
 Name:           modde
-Version:        0.1.0
+Version:        0.2.0
 Release:        1%{?dist}
 Summary:        Cross-platform game mod manager
 
@@ -49,7 +49,3 @@ install -Dm755 target/release/modde-ui %{buildroot}%{_bindir}/modde-ui
 %doc README.md CHANGELOG.md
 %{_bindir}/modde
 %{_bindir}/modde-ui
-
-%changelog
-* Mon Apr 14 2026 Can H. Tartanoglu <caniko@codeberg.org> - 0.1.0-1
-- Initial package

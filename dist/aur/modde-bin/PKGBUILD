@@ -11,8 +11,6 @@ depends=('dbus' 'gcc-libs' 'glibc>=2.38' 'libxkbcommon' 'openssl' 'sqlite' 'vulk
 makedepends=('patchelf')
 provides=('modde')
 conflicts=('modde' 'modde-git')
-# The upstream release currently publishes a single Arch-supported binary
-# archive for this package, so the x86_64 artifact name is intentionally fixed.
 source=(
   "modde-${pkgver}-x86_64-linux.tar.gz::https://codeberg.org/caniko/rs-modde/releases/download/${pkgver}/modde-${pkgver}-x86_64-linux.tar.gz"
   "rs-modde-${pkgver}.tar.gz::https://codeberg.org/caniko/rs-modde/releases/download/${pkgver}/rs-modde-${pkgver}.tar.gz"

@@ -1,0 +1,7 @@
+Origin: modde
+Label: modde
+Codename: stable
+Architectures: amd64
+Components: main
+Description: modde apt repository
+SignWith: yes
