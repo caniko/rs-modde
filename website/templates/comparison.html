@@ -76,9 +76,11 @@
         <tr><td>VFS deployment</td><td><span class="badge high">Done</span></td><td>Symlink-farm deployment, rollback, and conflict resolution are strong differentiators on Linux.</td></tr>
         <tr><td>Bethesda plugin pipeline</td><td><span class="badge high">Done</span></td><td>LOOT parsing, plugin validation, real plugin-order backup/restore, and archive-aware conflict analysis are shipped.</td></tr>
         <tr><td>Nexus / Wabbajack / Collections</td><td><span class="badge high">Done</span></td><td>These are the first-class install flows today.</td></tr>
+        <tr><td>Executable management &amp; external tools</td><td><span class="badge high">Done</span></td><td>Named executables with arguments, working directory, environment, Wine DLL overrides, and a configurable output mod run with overwrite capture — in both the CLI and UI.</td></tr>
         <tr><td>Data Files / Diagnostics / Tools / Downloads views</td><td><span class="badge mid">Partial</span></td><td>All are now reachable and data-backed, but they are not yet MO2-complete.</td></tr>
         <tr><td>BAIN and non-Nexus source breadth</td><td><span class="badge mid">Partial</span></td><td>Core plumbing exists, but the UX and positioning are still incomplete.</td></tr>
-        <tr><td>Starfield save tracking</td><td><span class="badge high">Done</span></td><td>Starfield `.sfs` files use the shared save tracker path; `GenericGame` remains internal-only.</td></tr>
+        <tr><td>Generic / user-defined games</td><td><span class="badge mid">Partial</span></td><td>`modde game add` registers arbitrary titles, but without a bespoke scanner or save tracker.</td></tr>
+        <tr><td>Starfield save tracking</td><td><span class="badge high">Done</span></td><td>Starfield `.sfs` files use the shared save tracker path.</td></tr>
       </tbody>
     </table>
   </div>
@@ -87,8 +89,7 @@
     <h2>Where MO2 is ahead</h2>
     <p class="section-subtitle">These are the gaps that still matter most for any serious “replace MO2/Vortex” claim.</p>
     <ul class="gap-list">
-      <li><strong>Executables management</strong> — named executables, args, working dir, per-executable output mods, shortcut creation, and DLL injection semantics</li>
-      <li><strong>Mod Information Dialog</strong> — file tree, conflict tabs, image preview, text/INI editing, and optional plugin management</li>
+      <li><strong>Mod Information Dialog</strong> — file tree, conflict tabs, image preview, text/INI editing, and optional plugin management (modde ships a Nexus-metadata side panel, not the full dialog)</li>
       <li><strong>Durable download pipeline</strong> — transport-level pause/resume/cancel, ETA, concurrency, and update-all workflows</li>
       <li><strong>Merged VFS browser</strong> — a true Data tab with archive visibility, overwrite workflows, and conflict navigation</li>
       <li><strong>Sharper load-order UX</strong> — richer LOOT reports, plugin pinning, and clearer load-order governance</li>

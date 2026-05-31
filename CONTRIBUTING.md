@@ -82,6 +82,53 @@ Game plugins implement traits in `crates/modde-games/src/traits.rs`:
 
 See `crates/modde-games/src/cyberpunk/` for a complete example.
 
+### Where things are
+
+When adding tests, benches, or coverage to the workspace, model new work on the
+existing scaffolding rather than re-deriving it:
+
+| Area | Entry point |
+| ---- | ----------- |
+| CLI test fixtures (isolates `MODDE_DATA_DIR` / `HOME` / XDG) | `crates/modde-cli/tests/common/mod.rs` |
+| Wiremock HTTP-mocking pattern | `crates/modde-cli/tests/cli_nexus_status.rs`, `crates/modde-cli/tests/cli_install_mod.rs` |
+| Criterion bench scaffolding | `crates/modde-core/benches/vfs_deploy.rs` |
+| Proptest scaffolding | `crates/modde-core/tests/resolver_proptest.rs` |
+| Concurrency / stress tests | `crates/modde-core/tests/concurrency_tests.rs` |
+| Nexus base-URL override (point a client at a mock server) | `crates/modde-sources/src/nexus/mod.rs` — `base_url()` / `graphql_url()` |
+
+The Nexus client honors `MODDE_NEXUS_BASE_URL` and `MODDE_NEXUS_GRAPHQL_URL`
+environment variables so integration tests can point its REST v1 and GraphQL v2
+calls at a wiremock instance instead of the live Nexus API.
+
+#### Coverage
+
+Coverage runs through the xtask wrapper (`cargo-llvm-cov` is in the devShell):
+
+```sh
+# Terminal summary
+cargo xtask coverage
+
+# HTML report at target/llvm-cov/html/
+cargo xtask coverage --html
+
+# lcov.info at target/llvm-cov/lcov.info (for badge/upload tooling)
+cargo xtask coverage --lcov
+
+# CI mode: gather once, write lcov + summary, fail under a threshold
+cargo xtask coverage --ci --fail-under <N>
+```
+
+`--ci` is what Forgejo Actions runs; `--lcov` writes
+`target/llvm-cov/lcov.info`, which is the input for any coverage badge or upload
+step.
+
+#### Fuzzing
+
+`cargo-fuzz` requires nightly Rust, while `flake.nix` pins a stable toolchain.
+Property-style fuzzing that must run on stable should use `arbitrary`-based
+proptest targets (model after the proptest scaffolding above) rather than
+`cargo-fuzz`.
+
 ## Reporting Issues
 
 Please file issues on the [Codeberg issue tracker](https://codeberg.org/caniko/rs-modde/issues).
@@ -110,7 +157,55 @@ See [docs/copr-release.md](docs/copr-release.md) for the Fedora COPR wiring (one
 - Keep the `## [Unreleased]` heading in `CHANGELOG.md` exactly as-is so simit can update it.
 - rs-modde does not run `simit init-ci --check` or `simit init-flake --check`.
 - Those checks would treat this repo's bespoke `atlas` workflows and rs-harbor-driven flake as drift.
-- The rationale, revisit conditions, and other non-obvious choices live in [docs/architecture-decisions.md](docs/architecture-decisions.md).
+- The rationale, revisit conditions, and other non-obvious choices live in the [Architecture reference](https://modde.rs/docs/reference/architecture.html) (see its "Release, packaging, and tooling decisions" section).
+
+### Distribution channels
+
+A stable tag fans out to several downstream channels from the single
+`.forgejo/workflows/release.yml` run; prerelease tags publish only the
+prerelease-safe subset. Each external channel is gated on its credential being
+present and **skips with a warning when the secret is unset**, so pull requests
+and dry-run tags never fail on a missing publish credential. A production
+release should treat such a skip as a release blocker for that channel.
+
+| Channel | Artifact / target | Publish gate | State |
+| ------- | ----------------- | ------------ | ----- |
+| Codeberg release | tarballs, AppImages, SRPM, SBOMs, signatures | always (stable + prerelease) | Live |
+| Nix flake / home-manager | flake outputs | n/a (consumed directly from the repo) | Live |
+| Attic cache | `https://attic.candee.baby/canix` | always | Live |
+| Fedora COPR | SRPM upload | always; prereleases land in `caniko/rs-modde-testing` | Wired, not publicly discoverable |
+| Debian/Ubuntu APT | `.deb` via reprepro pushed to `caniko/rs-modde-apt` | stable only; `modde_apt_repo_ssh_key` | Staged, host not provisioned |
+| Arch AUR | `modde`, `modde-bin`, `modde-git` PKGBUILDs | stable only; `AUR_SSH_KEY` | Staged, not pushed |
+| Flathub | `com.tartanoglu.modde` manifest PR | stable only; `FLATHUB_TOKEN` | Staged, submission not accepted |
+| crates.io | per-crate `cargo publish` | stable only | Stable-only |
+| Homebrew tap | `caniko/homebrew-modde` formula | stable only | Staged |
+| winget | `Caniko.Modde` PR to `microsoft/winget-pkgs` | stable only; `WINGET_PAT` | Staged |
+| Scoop | `caniko/scoop-modde` bucket | stable only; `SCOOP_BUCKET_TOKEN` | Staged |
+
+Only the Nix flake, home-manager module, and the Attic cache are live for end
+users today. The honest per-channel status that ships to users lives in
+[docs/src/getting-started/installation.md](docs/src/getting-started/installation.md);
+keep that page and this table consistent when a channel goes live.
+
+Channel notes worth remembering across releases:
+
+- **Prerelease gating.** Tags matching `X.Y.Z-rc.N` / `-beta.N` / `-alpha.N`
+  run the full build, sign, smoke, Codeberg release, and Attic push, are marked
+  `prerelease: true` on Codeberg, and skip every stable-only channel
+  (crates.io, Homebrew, AUR, winget, Scoop, Flathub, APT). COPR still builds
+  but lands in `caniko/rs-modde-testing`.
+- **Windows binaries are repackaged as `.zip`** alongside the `.tar.gz` for
+  winget and Scoop, which do not accept `.tar.gz`. The Scoop `hash` matches the
+  downloaded `.zip`, not the binaries inside it.
+- **APT publishes over SSH**, not an HTTPS token: the runner pushes a
+  reprepro-built tree to the `pages` branch of `caniko/rs-modde-apt` using the
+  `modde_apt_repo_ssh_key` deploy key (write access), pinning `codeberg.org`'s
+  host key and using `--force-with-lease`. The repository signing key
+  fingerprint and key-rotation procedure are documented in
+  [SECURITY.md](SECURITY.md).
+- **macOS/Windows artifacts are experimental.** They build in CI but there is no
+  published Codeberg release asset for them yet; do not advertise them as
+  shipped.
 
 ### Hotfix release
 
@@ -164,6 +259,29 @@ VERSION=0.2.1
 
 After rollback, add a `CHANGELOG.md` note under `Unreleased` that names the
 withdrawn version and points to the fixed follow-up release.
+
+### Supply-chain checks
+
+The release path carries two supply-chain gates that contributors should expect
+to interact with:
+
+- **`cargo deny` runs on every PR and on release.** CI runs
+  `cargo deny check` (advisories, bans, sources, licenses) as a parallel CI job,
+  and the release workflow runs
+  `cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses`
+  before building. A known-vulnerable dependency fails the release; the only
+  escape is an explicit, commented `[advisories.ignore]` entry in `deny.toml`
+  documenting the temporary exception. Keep `vulnerability = "deny"` and
+  `unmaintained = "warn"` so routine unmaintained-transitive warnings do not
+  block PRs.
+- **SBOMs ship with every release.** The release generates both a CycloneDX JSON
+  SBOM (`modde-<version>.cdx.json`) and an SPDX 2.3 JSON SBOM
+  (`modde-<version>.spdx.json`) from the workspace `Cargo.lock`, uploads both to
+  the Codeberg release, lists them in `SHA256SUMS.txt`, and signs/attests them
+  with the same Sigstore step as the binaries. The human-readable
+  `THIRD_PARTY_LICENSES.html` continues to ship alongside them. Consuming and
+  scanning the SBOMs (grype / osv-scanner) is documented in
+  [SECURITY.md](SECURITY.md).
 
 ## License
 

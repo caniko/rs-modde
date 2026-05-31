@@ -38,10 +38,6 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    adidoks = {
-      url = "github:ES-Alexander/adidoks";
-      flake = false;
-    };
   };
 
   outputs = {
@@ -53,7 +49,6 @@
     rust-overlay,
     flake-utils,
     nix-appimage,
-    adidoks,
     ...
   }: let
     mkOutputs = {
@@ -110,29 +105,25 @@
           ])
         );
 
-        # Documentation theme name (read from adidoks theme.toml)
-        themeName =
-          (builtins.fromTOML (builtins.readFile "${adidoks}/theme.toml")).name;
-
-        # Documentation site built with Zola + AdiDoks theme
+        # Documentation site built with mdBook (docs/book.toml + docs/src)
         docs = pkgs.stdenv.mkDerivation {
           pname = "modde-docs";
           version = moddeVersion;
           src = lib.fileset.toSource {
             root = ./.;
-            fileset = lib.fileset.maybeMissing ./docs/site;
+            fileset = lib.fileset.unions [
+              ./docs/book.toml
+              ./docs/src
+            ];
           };
-          nativeBuildInputs = [pkgs.zola];
+          nativeBuildInputs = [pkgs.mdbook];
           phases = ["buildPhase" "installPhase"];
           buildPhase = ''
-            cp -r --no-preserve=mode $src/docs/site site
-            cd site
-            mkdir -p "themes/${themeName}"
-            cp -r ${adidoks}/* "themes/${themeName}"
-            zola build
+            cp -r --no-preserve=mode $src/docs docs
+            mdbook build docs
           '';
           installPhase = ''
-            cp -r public $out
+            cp -r docs/book $out
           '';
         };
 
@@ -196,8 +187,8 @@
             ./README.md
             ./crates
             ./docs/capability-matrix.toml
-            ./docs/mo2-coverage.md
-            ./docs/site/content/docs/games/supported-games.md
+            ./docs/src/reference/parity.md
+            ./docs/src/games/supported-games.md
             ./website/templates/comparison.html
           ];
         };
@@ -1247,6 +1238,7 @@
               _7zz
               unrar
               zola
+              mdbook
             ]
             ++ nativeBuildInputs
             ++ buildInputs;
@@ -1254,14 +1246,6 @@
           extraEnv = lib.optionalAttrs pkgs.stdenv.isLinux {
             LD_LIBRARY_PATH = linuxLdPath;
           };
-
-          extraShellHook = ''
-            # Set up adidoks theme symlink for local docs development
-            if [ -d docs/site ]; then
-              mkdir -p docs/site/themes
-              ln -sfn "${adidoks}" "docs/site/themes/${themeName}"
-            fi
-          '';
         };
 
         apps.deploy-pages = {

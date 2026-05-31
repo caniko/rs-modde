@@ -5,8 +5,7 @@
 *.wabbajack
 *.profraw
 .direnv/
-result
-docs/site/themes/
-docs/site/public/
+result*
+docs/book/
 website/data/
 website/public/

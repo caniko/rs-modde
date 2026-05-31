@@ -1,21 +1,5 @@
 {
   "nodes": {
-    "adidoks": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1692441472,
-        "narHash": "sha256-kvVEPN5nkixr0a82PJmeKHdXAldQ54ALX06juyh2McQ=",
-        "owner": "ES-Alexander",
-        "repo": "adidoks",
-        "rev": "602b99430704215a7928991f5c9c8a540bf74336",
-        "type": "github"
-      },
-      "original": {
-        "owner": "ES-Alexander",
-        "repo": "adidoks",
-        "type": "github"
-      }
-    },
     "advisory-db": {
       "flake": false,
       "locked": {
@@ -185,11 +169,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1776136611,
-        "narHash": "sha256-b2pu3Pb28W0bJzQVP3OJHZC5+dgOOeqjlli2WVakKEU=",
+        "lastModified": 1780099287,
+        "narHash": "sha256-efIPwVGtIWIjWcznhaop6XN6HxnOL8800hF6CBNvlqQ=",
         "owner": "nix-community",
         "repo": "home-manager",
-        "rev": "8a423e444b17dde406097328604a64fc7429e34e",
+        "rev": "7d8127d308c3fb9664f7e643eec944be74ebb37d",
         "type": "github"
       },
       "original": {
@@ -261,7 +245,6 @@
     },
     "root": {
       "inputs": {
-        "adidoks": "adidoks",
         "crane": [
           "rs-harbor",
           "crane"
@@ -294,11 +277,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1779355832,
-        "narHash": "sha256-BHYGnZHRPPHkfxKG7kVzCl0fk+zZ3AkxPrtWtSTM0nQ=",
+        "lastModified": 1780175438,
+        "narHash": "sha256-77uGCG1sT3RemjjA4D7ouaZdZzqKKAQ5+d14Tn/1Wpo=",
         "ref": "refs/heads/main",
-        "rev": "f72691cd07276b7d8e334dc4d0a2e2528bbb77ac",
-        "revCount": 42,
+        "rev": "40778cadb83c5694715207857f65f7805c853730",
+        "revCount": 49,
         "type": "git",
         "url": "https://codeberg.org/caniko/rs-harbor.git"
       },

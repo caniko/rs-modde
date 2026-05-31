@@ -1,0 +1,339 @@
+# Stellar Blade
+
+Stellar Blade (`game_id` **`stellar-blade`**, Steam App ID `3489700`) is one of
+modde's two data-driven Unreal Engine titles, sharing the `Ue4Game` plugin with
+Subnautica 2. Its overall status is **`Partial`**: scanning, conflict
+classification, save tracking, deployment, OptiScaler wiring, and Wine DLL-override
+detection all ship and are user-reachable, but Stellar Blade does not get a bespoke
+installer wizard or a curated load-order model beyond UE4's `~mods` mount order, and
+the title is held back from the UI's "Browse Nexus" picker (see the
+[Nexus Mods guide](../guides/nexus.md)). Treat it as a solid pak-mod manager for
+the game, not a full guided experience.
+
+For the authoritative status row see
+[Supported games](supported-games.md); the capability vocabulary (`Done` /
+`Partial` / `Not shipped`) is defined there and in `docs/capability-matrix.toml`.
+
+## Engine and project layout
+
+| Property | Value |
+| -------- | ----- |
+| Engine family | `Unreal4` (the shared UE4/UE5 pak plugin) |
+| Steam App ID | `3489700` |
+| Steam library folder | `Stellar Blade` |
+| UE project short name | `SB` |
+| Nexus domain | `stellarblade` |
+| Wabbajack name | `StellarBlade` |
+| Save profiles | Enabled |
+| OptiScaler profiles | `community-dxgi` |
+
+Unreal titles share a near-identical on-disk shape: a project folder under the
+install root (here `SB/`) that holds `SB/Content/Paks/` for pak archives and
+`SB/Binaries/Win64/` for the shipping executable and any proxy DLLs. Because the
+whole plugin is parameterised by that project short name, every path below is just
+`<install>/SB/...`.
+
+## How modde detects the install
+
+modde resolves Stellar Blade through its registered launcher IDs. Only the Steam
+path is wired:
+
+- **Steam** — App ID `3489700`, library subfolder `Stellar Blade`. modde walks your
+  Steam library folders (including extra libraries from `libraryfolders.vdf`) to find
+  the install root.
+- **Heroic (GOG/Epic)** — not configured for this title; there is no Heroic GOG or
+  Epic app ID in the registry, so Heroic auto-detection does not apply.
+
+You can always bypass detection by passing `--game-dir <path>` to commands that take
+it (for example `modde scan` and `modde install wabbajack`), or by setting `gameDir`
+in a home-manager profile.
+
+### Proton prefix
+
+On Linux and macOS Stellar Blade runs through Proton/Wine, so both save tracking
+and the UE `Saved/Config` deploy target read from the compatibility prefix that
+Steam creates at (on Windows these are native paths, no prefix involved):
+
+```
+<steam_root>/steamapps/compatdata/3489700/pfx/
+```
+
+modde derives this from the Steam `common` directory's parent, then `compatdata/3489700/pfx`.
+If the prefix does not exist yet, the save directory and the `ue4-saved-config`
+deploy target both resolve to `None` — the expected fix is to **launch the game once**
+so Proton materialises the prefix, then retry.
+
+## Mod directory and deploy strategy
+
+The deploy target is the standard UE pak drop folder:
+
+```
+<install>/SB/Content/Paks/~mods
+```
+
+The leading tilde in `~mods` is load-bearing: UE's pak mounter orders mount points
+lexically, and `~mods` sorts after the shipping paks so your mods override base
+content. modde creates and deploys into this directory; it does not invent a custom
+VFS for UE titles — deployment is a real on-disk layout under `Content/Paks/~mods`.
+
+A mod archive is recognised as a single-file-set install when its extracted root
+contains at least one `.pak`, `.ucas`, or `.utoc` file (`InstallMethod::SingleFileSet`).
+That is the common case for Nexus pak mods, which extract a loose `Name.pak`
+(optionally with `Name.ucas` / `Name.utoc` siblings) you drop straight into `~mods`.
+
+In addition to `~mods`, the plugin exposes one named deploy target for user config:
+
+| Target ID | Label | Kind | Resolves to |
+| --------- | ----- | ---- | ----------- |
+| `ue4-saved-config` | UE4 Saved/Config | `UserConfig` | `<prefix>/drive_c/users/steamuser/AppData/Local/SB/Saved/Config/Windows` |
+
+This second target is how `Engine.ini` / `GameUserSettings.ini` style tweaks land in
+the right place inside the Proton prefix. It resolves to `None` until the prefix exists.
+
+## What scanning finds
+
+`modde scan --game stellar-blade` runs the UE4 scanner, which walks two
+subdirectories of `SB/Content/Paks/`:
+
+| Subdirectory | Source location tag |
+| ------------ | ------------------- |
+| `~mods` | `paks-mods` |
+| `LogicMods` | `logic-mods` |
+
+Within each, files are grouped by **file stem** across the `.pak` / `.ucas` /
+`.utoc` extensions. A `Name.pak` plus its `Name.ucas` and `Name.utoc` siblings collapse
+into a single discovered mod with `mod_id = "pak/Name"` and a fixed scan confidence of
+`0.9`. The scanner reads pak archives by directory and by their grouped stems only — it
+does **not** crack open pak contents, parse asset trees, or read mod-author metadata
+from inside the archives.
+
+For change-tracking, a discovered mod's footprint is its `.pak` file, recorded as
+`sb/content/paks/~mods/<stem>.pak` (lower-cased). The `.ucas`/`.utoc` sidecars collapse
+into that same row, which keeps the mod list one-entry-per-mod even though several files
+back it.
+
+```bash
+# Discover already-installed Stellar Blade paks and import them into a profile
+modde scan --game stellar-blade --import-to default
+```
+
+## Conflict classification
+
+Conflicts use the shared UE collision policy. Stellar Blade declares `pak`, `ucas`, and
+`utoc` as **archive extensions**, so two mods shipping the same-named pak family are a
+real overwrite conflict. Severities are assigned per file extension:
+
+| Severity | Extensions |
+| -------- | ---------- |
+| `Dangerous` | `pak`, `ucas`, `utoc`, `dll`, `lua` |
+| `Config` | `ini`, `cfg`, `json`, `toml`, `xml`, `yaml` |
+| `Cosmetic` | `dds`, `png`, `jpg`, `tga` |
+
+The same extension lists also drive mod *safety* classification (whether a mod is
+considered save-affecting versus purely cosmetic): `pak`, `ucas`, `utoc`, `dll`, and
+`lua` are treated as save-breaking/logic-altering, while `png`, `jpg`, `dds`, `tga`,
+and `ini` are treated as cosmetic. So a texture-only retexture conflicting with another
+texture is flagged `Cosmetic`, while two paks clobbering one another are `Dangerous`.
+
+See [Conflicts & load order](../guides/conflicts.md) for how modde presents and resolves
+these.
+
+## Save tracking
+
+Save tracking is **enabled** for Stellar Blade (`with_save_profiles(true)`), and it is
+wired into modde's per-profile save layer.
+
+**Location.** Saves are read from the Proton prefix:
+
+```
+<steam_root>/steamapps/compatdata/3489700/pfx/drive_c/users/steamuser/AppData/Local/SB/Saved/SaveGames
+```
+
+modde returns this directory only if it already exists on disk.
+
+**What is fingerprinted.** The save tracker matches files by extension **`.sav`**,
+recursively under the save directory, with no prefix rules and no exclusions. Every
+matching file is captured under the default category `manual`, its label taken from the
+file stem (falling back to the relative path). Captured saves are summarised by
+category. Because matching is purely extension-and-recursion based, modde tracks the
+`.sav` files themselves — it does not parse Stellar Blade's save binary format or
+extract in-game playtime, character, or chapter metadata.
+
+See [Save management](../guides/saves.md) for how captures attach to profiles.
+
+## Plugin and load-order handling
+
+Stellar Blade has **no plugin file (`.esp`/`.esm`) load order** — it is not a Bethesda
+title. Ordering is purely the UE pak mount convention: paks in `~mods` mount after base
+game paks, and within `~mods` UE orders by name. If two mods need a deterministic order
+relative to each other, the lever is the **pak file name** (the conventional `zzz_`-style
+prefixes that sort late). modde does not synthesize or rewrite a load-order file for this
+game; there is no curated load order beyond what the file names express.
+
+A separate `LogicMods` folder is also scanned (tagged `logic-mods`) for setups that keep
+Blueprint/logic paks distinct from content paks, but modde treats both folders uniformly
+as grouped pak mods.
+
+## Installer specifics
+
+- **Pak / ucas / utoc** — the native format. Archives whose root contains a pak-family
+  file install as a single file set straight into `~mods`. This is the path most Nexus
+  Stellar Blade mods take.
+- **FOMOD** — modde's [FOMOD installer](../guides/fomod.md) is engine-agnostic, so a mod
+  that ships a `ModuleConfig.xml` can be driven through `modde fomod inspect` /
+  `modde fomod apply` (or a declarative config). FOMOD is not Stellar Blade-specific and
+  is uncommon for this title, but it is available when an author uses it.
+- **REDmod / SMAPI / BSA** — not applicable. Those are Cyberpunk, Stardew, and Bethesda
+  installer paths respectively; Stellar Blade uses none of them.
+
+There is no bespoke Stellar Blade installer wizard — this is part of why the title is
+`Partial`. Most installs are "extract pak, deploy to `~mods`".
+
+## Gaming tools that matter
+
+### OptiScaler — the `community-dxgi` profile
+
+Stellar Blade ships exactly one curated OptiScaler profile, **`community-dxgi`**
+("Community tested dxgi.dll"). It is the recommended way to add modern upscaling/frame
+generation. Its pinned settings, straight from the registry:
+
+| Field | Value |
+| ----- | ----- |
+| Proxy DLL | `dxgi.dll` |
+| Source mode | `github_release`, release tag `official:v0.9.1` |
+| Tested OptiScaler version | `0.9` |
+| FSR4 variant | `latest_fp8` |
+| `emulate_fp8` | `true` (FP8 emulation, for RDNA3 and other cards without native FP8) |
+| OptiPatcher | enabled |
+| `spoof_dlss` | `false` |
+| Companion files | copied |
+
+The profile uses **OptiPatcher to unlock the game's DLSS and DLSS-FG inputs without
+spoofing** a DLSS-capable GPU — so you get the DLSS/DLSS-FG code paths re-routed through
+OptiScaler/FSR rather than faking vendor detection. The `latest_fp8` FSR4 variant with
+`emulate_fp8 = true` is what lets RDNA3-class cards run the FP8 model via emulation.
+
+**Known OptiScaler gotchas for this title** (from the bundled profile notes):
+
+- The game **may crash on first boot** with the proxy in place but work on the next launch
+  — if the first launch dies, just relaunch before assuming a bad install.
+- If DLSSG/frame-gen HUD elements look wrong (interpolation artifacts on the HUD),
+  **set the in-game sharpness slider to 0** as a workaround.
+
+Enable and apply it through the tools system:
+
+```bash
+# Enable OptiScaler for Stellar Blade and select the curated profile
+modde tool enable optiscaler --game stellar-blade
+modde tool configure optiscaler --game stellar-blade optiscaler_profile=community-dxgi
+modde tool apply optiscaler --game stellar-blade
+```
+
+`modde tool apply` writes the `dxgi.dll` proxy and companion files into the game's
+`Binaries/Win64`. See [Tools & overlays](../guides/tools.md) and the OptiScaler source
+selector (official releases versus GOverlay builds) documented there.
+
+### Proton, overlays, and Wine DLL overrides
+
+The other tool IDs apply normally for this Proton game: `proton` (version mode, extra env,
+DLL-override mode), `mangohud`, `vkbasalt`, `gamemode`, and `reshade`. Because Stellar
+Blade runs through Wine/Proton, any native proxy DLLs you stage must be loaded *native
+first*. modde scans `SB/Binaries/Win64` (and mod staging) for the common UE proxy DLL
+names and surfaces them as `WINEDLLOVERRIDES`:
+
+```
+dwmapi, xinput1_3, d3d11, dxgi, version, winmm, dinput8
+```
+
+So a UE4SS install (`dwmapi`), a ReShade/DLSS swapper (`dxgi`/`d3d11`), or a generic ASI
+loader (`version`/`winmm`) is detected and overridden automatically — the OptiScaler
+profile's own `dxgi.dll` is exactly one of these.
+
+## Linux / Proton notes and gotchas
+
+These notes cover the game's runtime on Linux and macOS, where Stellar Blade runs
+through Proton/Wine. On Windows the game runs natively — there is no Wine prefix or
+`WINEDLLOVERRIDES`, and the save directory and config live at their native Windows
+locations. modde itself runs natively on all three platforms.
+
+- **Launch the game once before first deploy.** The save directory and the
+  `ue4-saved-config` target both live inside the Proton prefix and resolve to `None`
+  until Proton has created `compatdata/3489700/pfx`.
+- **OptiScaler first-boot crash.** Expected with this profile; relaunch. (See the
+  OptiScaler section above.)
+- **HUD interpolation under DLSSG.** Set the in-game sharpness slider to 0.
+- **DLL override ordering.** If a proxy DLL mod is staged but not taking effect, confirm
+  the matching `WINEDLLOVERRIDES` entry is present — modde derives it from the proxy name
+  in `Binaries/Win64`, so the file must be the recognised name.
+- **Pak mount order is name-driven.** There is no load-order editor; rename paks (e.g.
+  a late-sorting prefix) when one mod must win over another.
+
+## Worked example
+
+### CLI
+
+```bash
+# 1. Discover the install (Steam App ID 3489700 / "Stellar Blade") and scan it,
+#    importing what is already in ~mods into the default profile.
+modde scan --game stellar-blade --import-to default
+
+# 2. Install a pak mod from a Nexus URL into a profile.
+modde install mod https://www.nexusmods.com/stellarblade/mods/<id> --profile default
+
+# 3. Deploy the active profile into SB/Content/Paks/~mods.
+modde deploy --game stellar-blade --profile default
+
+# 4. Add upscaling/frame-gen via the curated OptiScaler profile.
+modde tool enable optiscaler --game stellar-blade
+modde tool configure optiscaler --game stellar-blade optiscaler_profile=community-dxgi
+modde tool apply optiscaler --game stellar-blade
+
+# 5. (Optional) Register a named external tool/executable for this game so it runs
+#    with overwrite capture and the right Wine DLL overrides.
+modde tool add-executable --game stellar-blade --name my-tool /path/to/tool.exe
+modde exec my-tool --game stellar-blade
+```
+
+### Home-Manager profile
+
+The home-manager module exposes Stellar Blade as a declarative profile. The
+`tools.optiscaler.profile` option is type-checked against the registered profile list,
+so `community-dxgi` is the valid value for this game.
+
+```nix
+{
+  programs.modde = {
+    enable = true;
+    profiles.stellar-blade-main = {
+      game = "stellar-blade";
+
+      # Auto-detected from Steam; set explicitly if your library is non-standard.
+      # gameDir = "/path/to/SteamLibrary/steamapps/common/Stellar Blade";
+
+      installMode = "auto";
+
+      tools.optiscaler = {
+        enable = true;
+        profile = "community-dxgi";
+      };
+    };
+  };
+}
+```
+
+On activation modde enables, configures, and applies the OptiScaler profile for the
+`stellar-blade` game, writing the `dxgi.dll` proxy into `SB/Binaries/Win64`. Remember to
+launch the game once first so the Proton prefix exists.
+
+## See also
+
+- [Supported games](supported-games.md)
+- [Subnautica 2](subnautica2.md) — the other data-driven UE title
+- [Oblivion Remastered](oblivion-remastered.md) — another UE pak-based game
+- [Mod scanning](../guides/scanning.md)
+- [Conflicts & load order](../guides/conflicts.md)
+- [Deployment & VFS](../guides/deployment.md)
+- [Save management](../guides/saves.md)
+- [Tools & overlays](../guides/tools.md)
+- [FOMOD installer](../guides/fomod.md)
+- [MO2 parity & capability audit](../reference/parity.md)

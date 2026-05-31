@@ -1,38 +1,34 @@
 +++
 title = "modde"
-description = "NixOS-native game mod manager — no Windows VM required."
+description = "Cross-platform game mod manager for Linux, macOS, and Windows — Wabbajack modlists and Nexus Collections, installed natively."
 template = "index.html"
 
 [extra]
-tagline = "Mod profiles as code — Wabbajack-native, equally at home on Linux, macOS, and Windows."
-subtitle = "Install Wabbajack modlists, Nexus Collections, and individual mods without giving up reproducibility, Linux support, or a clean game directory."
+tagline = "A cross-platform game mod manager — install Wabbajack modlists and Nexus Collections natively on Linux, macOS, and Windows."
+subtitle = "Install Wabbajack modlists, Nexus Collections, and individual mods with a clean game directory on any OS — plus an optional declarative Nix/home-manager workflow."
 logo = "/logo.svg"
 primary_cta = { label = "Install", href = "#install" }
 secondary_cta = { label = "Docs", href = "https://modde.rs/docs/" }
 
 [[extra.features]]
-title = "NixOS-native"
-description = "Define mod profiles in your home-manager config. Reproducible, declarative, and version-controlled."
+title = "Cross-platform"
+description = "First-class on Linux, macOS, and Windows. The modde CLI and modde-ui desktop app run natively on every platform — install through your native package manager, a direct download, or Cargo."
 
 [[extra.features]]
-title = "Wabbajack on Linux"
-description = "Parse and install .wabbajack modlists natively. No Windows VM required."
+title = "Wabbajack on any OS"
+description = "Parse and install .wabbajack modlists natively on Linux, macOS, and Windows. No Windows VM required."
 
 [[extra.features]]
 title = "Nexus integration"
-description = "Browse, search, and download from Nexus Mods. Pin Nexus Collections by version."
-
-[[extra.features]]
-title = "Conflict detection"
-description = "Graph-based mod conflict analysis. Understand file collisions before you deploy."
+description = "Browse, search, and download from Nexus Mods over REST v1 and GraphQL v2. Pin Nexus Collections by version. MediaFire fallback for off-Nexus mirrors."
 
 [[extra.features]]
 title = "VFS deployment"
-description = "Virtual filesystem keeps your game directory clean. Mods overlay without modifying originals."
+description = "A virtual filesystem keeps your game directory pristine. Mods overlay without touching the originals, and uninstall is just a re-deploy."
 
 [[extra.features]]
-title = "Multi-game"
-description = "Skyrim SE/AE, Fallout 4/76, Starfield, Cyberpunk 2077, and Stellar Blade. Support depth varies by game."
+title = "Conflict detection"
+description = "Graph-based mod conflict analysis. Understand file collisions before you deploy, not after the game breaks."
 
 [[extra.features]]
 title = "Save vaults"
@@ -43,60 +39,70 @@ title = "Profile experiments"
 description = "Try mod changes non-destructively with a stackable experiment system. Rollback or commit when you're done."
 
 [[extra.features]]
-title = "Tools & overlays"
-description = "Manage MangoHud, vkBasalt, ReShade, OptiScaler, GameMode, and Proton settings. The UI now loads real tool state and tracked patch files, but executable-management parity with MO2 is still ahead."
+title = "FOMOD without the wizard"
+description = "Resolve FOMOD installers from a declarative TOML config instead of clicking through a GUI. Same option selections, reproducible and reviewable."
+
+[[extra.features]]
+title = "Executables & tools"
+description = "Define named executables with args, working directory, env, and Wine DLL overrides — then capture each run's writes into a configurable output mod. Wire up MangoHud, vkBasalt, GameMode, ReShade, OptiScaler, and Proton alongside them."
+
+[[extra.features]]
+title = "Multi-game"
+description = "15 titles across seven engine families — Creation Engine, Gamebryo, REDengine, Unreal 4/5, Larian, SMAPI, and Bannerlord. Depth varies by game; user-defined games via a GameSpec TOML."
+
+[[extra.features]]
+title = "Declarative with Nix"
+description = "Optional, for Nix users: modde is also a flake — a reproducible install, and through the home-manager module you can declare your mod profiles as code."
 +++
 
 ## Install {#install}
 
-Direct release archives are not fully published across every target yet. The cards below separate channels that work today from targets that still need release-pipeline output before the landing page can advertise a real download command.
+modde runs natively on Linux, macOS, and Windows. Every release ships two binaries — the `modde` command-line tool and the `modde-ui` desktop app. There's no single blessed method: pick whatever fits how you already manage software. For the full set of commands, verification steps, and per-platform notes, see the [installation guide](https://modde.rs/docs/getting-started/installation.html).
 
 <div class="install-grid">
-  <article class="install-card install-card-live">
-    <h3>Nix flake</h3>
-    <p>Available now on any machine with flakes enabled.</p>
+  <article class="install-card">
+    <h3>Linux</h3>
+    <p>Install from your native package manager:</p>
+    <pre><code>yay -S modde-bin                       # Arch (AUR)
+sudo dnf copr enable caniko/rs-modde   # Fedora / RHEL (COPR)
+sudo dnf install modde modde-ui
+flatpak install flathub com.tartanoglu.modde</code></pre>
+    <p>Debian / Ubuntu users add the apt repo at <code>https://modde.rs/apt/</code>, or grab the self-contained AppImage from the <a href="https://codeberg.org/caniko/rs-modde/releases">releases page</a>. Built for x86_64 and aarch64.</p>
+  </article>
+
+  <article class="install-card">
+    <h3>macOS</h3>
+    <p>Install via the Homebrew tap (Apple Silicon and Intel):</p>
+    <pre><code>brew tap caniko/modde https://codeberg.org/caniko/homebrew-modde
+brew install modde</code></pre>
+    <p>Or download the tarball and clear the Gatekeeper quarantine once after extracting:</p>
+    <pre><code>tar xzf modde-&lt;version&gt;-aarch64-darwin.tar.gz   # or x86_64-darwin
+xattr -dr com.apple.quarantine modde modde-ui</code></pre>
+  </article>
+
+  <article class="install-card">
+    <h3>Windows</h3>
+    <p>Install with your package manager of choice:</p>
+    <pre><code>winget install Caniko.Modde
+scoop bucket add modde https://codeberg.org/caniko/scoop-modde
+scoop install modde
+choco install modde</code></pre>
+    <p>The <code>.exe</code> artifacts are Authenticode-signed. After a direct download, verify before running:</p>
+    <pre><code>Get-AuthenticodeSignature .\modde.exe</code></pre>
+  </article>
+
+  <article class="install-card">
+    <h3>Any platform (Cargo)</h3>
+    <p>Build the <code>modde</code> CLI from source on any OS with a Rust 2024 toolchain:</p>
+    <pre><code>cargo install modde-cli</code></pre>
+    <p>The GUI lives in a separate crate; the package managers above ship both binaries together.</p>
+  </article>
+
+  <article class="install-card">
+    <h3>Nix</h3>
+    <p>If you use Nix, modde is also a flake — a reproducible install on any machine with flakes enabled:</p>
     <pre><code>nix run codeberg:caniko/rs-modde</code></pre>
-  </article>
-
-  <article class="install-card">
-    <h3>Linux x86_64</h3>
-    <p>The release workflow already stages <code>modde-${version}-x86_64-linux.tar.gz</code>, but there is no tagged Codeberg release published yet to download from.</p>
-  </article>
-
-  <article class="install-card">
-    <h3>Linux aarch64</h3>
-    <p>No validated release artifact is defined yet. The upstream producer still needs an <code>aarch64-linux</code> release job before this site can publish a trustworthy one-liner.</p>
-  </article>
-
-  <article class="install-card">
-    <h3>macOS x86_64</h3>
-    <p>No validated Intel macOS archive name is defined in the repo yet. This card should become a real snippet once the release workflow publishes a notarization-free tarball for that target.</p>
-  </article>
-
-  <article class="install-card">
-    <h3>macOS aarch64</h3>
-    <p>The README documents <code>modde-&lt;version&gt;-aarch64-darwin.tar.gz</code> plus the quarantine workaround, but there is no published Codeberg release asset yet.</p>
-    <pre><code>xattr -dr com.apple.quarantine modde modde-ui</code></pre>
-  </article>
-
-  <article class="install-card">
-    <h3>Windows x86_64</h3>
-    <p>The release workflow stages <code>modde-${version}-x86_64-windows.tar.gz</code>, but there is no tagged release to download. SmartScreen guidance is documented and can be linked once the archive exists.</p>
-  </article>
-
-  <article class="install-card">
-    <h3>Fedora COPR</h3>
-    <p>The CI workflow can push SRPMs to <code>caniko/rs-modde</code>, but the project is not discoverable from this environment yet. Do not advertise <code>dnf copr enable</code> until the public project exists.</p>
-  </article>
-
-  <article class="install-card">
-    <h3>Arch AUR</h3>
-    <p>No <code>rs-modde-bin</code> package is published in AUR right now. This slot is reserved for the eventual package name and install command.</p>
-  </article>
-
-  <article class="install-card">
-    <h3>Flatpak</h3>
-    <p>The repo produces a Flatpak manifest, not an installable Flatpak remote yet. Keep this as a placeholder until a published remote or bundle exists.</p>
+    <p>Through the home-manager module you can additionally declare your mod profiles — Wabbajack lists, Nexus Collections, and tool overlays — as code. See the <a href="https://modde.rs/docs/configuration/hm-module.html">home-manager module reference</a>.</p>
   </article>
 </div>
 

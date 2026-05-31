@@ -1,10 +1,34 @@
+# Canonical capability baseline for modde.
+#
+# This file is the single source of truth for game and feature status claims.
+# It is consumed by:
+#   - crates/modde-core/tests/repo_truth_tests.rs (guardrail: README, the docs
+#     site, the website comparison, and the parity reference must agree with it)
+#   - website/data/capability-matrix.toml (mirror; rendered by the `games`
+#     shortcode on the landing site — keep the two files identical)
+#   - docs/site/content/docs/games/supported-games.md (human-readable table)
+#   - docs/site/content/docs/reference/parity.md (MO2 parity audit)
+#
+# Status vocabulary is defined in [status] below. Do not market anything above
+# its real status here.
+
 [status]
 done = "Shipped end to end and user-reachable."
 partial = "Core logic exists, but the UX, integration, or production safety is still incomplete."
 not_shipped = "Must not be marketed as available yet."
 
+# --- Games ------------------------------------------------------------------
+# Each game lists its overall tier plus save-tracking depth. `overall` reflects
+# the weakest link in the end-to-end path (detect -> install -> deploy -> play
+# -> saves), not the best-case feature.
+
 [games."skyrim-se"]
-display_name = "Skyrim SE/AE"
+display_name = "Skyrim Special Edition"
+overall = "Done"
+save_tracking = "Done"
+
+[games."skyrim-ae"]
+display_name = "Skyrim Anniversary Edition"
 overall = "Done"
 save_tracking = "Done"
 
@@ -30,6 +54,11 @@ save_tracking = "Done"
 
 [games."stellar-blade"]
 display_name = "Stellar Blade"
+overall = "Partial"
+save_tracking = "Done"
+
+[games.subnautica2]
+display_name = "Subnautica 2"
 overall = "Partial"
 save_tracking = "Done"
 
@@ -68,6 +97,8 @@ display_name = "The Witcher 3: Wild Hunt"
 overall = "Partial"
 save_tracking = "Done"
 
+# --- Cross-cutting features -------------------------------------------------
+
 [features.instance_switching]
 label = "Instance switching"
 status = "Partial"
@@ -88,13 +119,21 @@ status = "Partial"
 label = "Tool management"
 status = "Partial"
 
+[features.executable_management]
+label = "Executable management"
+status = "Done"
+
+[features.mod_info_dialog]
+label = "Mod information dialog"
+status = "Partial"
+
 [features.bain]
 label = "BAIN"
 status = "Partial"
 
 [features.generic_game_support]
 label = "Generic game support"
-status = "Not shipped"
+status = "Partial"
 
 [features.starfield_save_tracking]
 label = "Starfield save tracking"

@@ -68,15 +68,30 @@ fn capability_matrix_captures_the_expected_baseline() {
         .features
         .get("generic_game_support")
         .expect("Generic game entry should exist");
-    assert_eq!(generic.status, "Not shipped");
+    assert_eq!(generic.status, "Partial");
+
+    let executables = matrix
+        .features
+        .get("executable_management")
+        .expect("Executable management entry should exist");
+    assert_eq!(executables.status, "Done");
+
+    let mod_info = matrix
+        .features
+        .get("mod_info_dialog")
+        .expect("Mod information dialog entry should exist");
+    assert_eq!(mod_info.status, "Partial");
 }
 
 #[test]
 fn public_docs_match_capability_matrix_for_critical_statuses() {
     let matrix = load_capability_matrix();
     let readme = read_repo_file("README.md");
-    let coverage = read_repo_file("docs/mo2-coverage.md");
-    let supported_games = read_repo_file("docs/site/content/docs/games/supported-games.md");
+    // The MO2 parity audit is published as an mdBook page (it used to live at
+    // docs/mo2-coverage.md). The capability table in that page must agree with
+    // the canonical matrix.
+    let coverage = read_repo_file("docs/src/reference/parity.md");
+    let supported_games = read_repo_file("docs/src/games/supported-games.md");
     let comparison = read_repo_file("website/templates/comparison.html");
 
     let starfield = matrix.games.get("starfield").unwrap();
@@ -105,6 +120,8 @@ fn public_docs_match_capability_matrix_for_critical_statuses() {
         "diagnostics",
         "downloads_ui",
         "tool_management",
+        "executable_management",
+        "mod_info_dialog",
         "bain",
         "generic_game_support",
         "starfield_save_tracking",

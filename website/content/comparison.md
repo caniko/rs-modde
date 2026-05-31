@@ -5,5 +5,5 @@ template = "comparison.html"
 path = "comparison"
 
 [extra]
-subtitle = "Truth-first comparison: what is fully shipped today, what is only partial, and which MO2 gaps still matter most."
+subtitle = "Truth-first comparison: what is fully shipped today (executables, conflict detection, Bethesda plugins), what is still partial, and which MO2 gaps remain — no Windows VM in sight."
 +++

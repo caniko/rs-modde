@@ -66,7 +66,22 @@ The attestation payload is also published as
 `modde-<version>-x86_64-linux.tar.gz.intoto.jsonl` for review tooling. Its SLSA
 predicate records the source Git commit, `flake.lock` digest, release workflow
 digest, and the `https://attic.candee.baby/canix` substituter trust root used
-for release builds.
+for release builds. The `builder.id` in the predicate is the release workflow
+URI (`https://git.tartanoglu.com/caniko/rs-modde/.forgejo/workflows/release.yml@refs/tags/<version>`).
+
+If you prefer the dedicated SLSA tooling over `cosign`, verify the same
+provenance with `slsa-verifier`:
+
+```sh
+slsa-verifier verify-artifact \
+  --provenance-path modde-<version>-x86_64-linux.tar.gz.intoto.jsonl \
+  --source-uri codeberg.org/caniko/rs-modde \
+  --source-tag <version> \
+  modde-<version>-x86_64-linux.tar.gz
+```
+
+Both `nix shell nixpkgs#cosign` and `nix shell nixpkgs#slsa-verifier` provide
+the verifier binaries without a separate install.
 
 If Forgejo Actions OIDC is accepted by Sigstore, CI uses keyless Fulcio/Rekor
 signing. If that is unavailable, CI falls back to the `COSIGN_PRIVATE_KEY` and
@@ -76,15 +91,71 @@ updating `keys/minisign.pub`, replacing the Forgejo `MINISIGN_SECRET_KEY` and
 `MINISIGN_PASSWORD` secrets, and publishing a signed release note that names
 both the old and new public keys.
 
+### The signed Git tag
+
+Every release is cut from a GPG-signed annotated tag. The maintainer public
+keys live in `keys/maintainers.gpg`, and the release workflow enforces
+`git verify-tag <version>` against that keyring before any artifact is built —
+an unsigned or unrecognized tag fails the release at the validation step. To
+check a tag yourself from a clean checkout:
+
+```sh
+gpg --import keys/maintainers.gpg
+git verify-tag <version>
+```
+
+### macOS Gatekeeper
+
+modde does **not** notarize its macOS builds and does not have an Apple
+Developer ID signing certificate; macOS artifacts are experimental and there is
+no published Codeberg release asset for them yet. The integrity check for a
+macOS download is the same minisign/cosign verification described above against
+the tarball — not an Apple notarization ticket.
+
+Because the binaries are neither signed by an Apple Developer ID nor notarized,
+Gatekeeper quarantines them on first launch. After verifying the download,
+clear the quarantine attribute once:
+
+```sh
+xattr -d com.apple.quarantine modde
+xattr -d com.apple.quarantine modde-ui
+```
+
+Alternatively, right-click the binary in Finder and choose **Open** the first
+time to approve it through the Gatekeeper dialog. Both approaches are one-time
+per download; subsequent launches run normally. Verify the minisign signature
+first so the bytes you are de-quarantining are the ones the maintainer signed.
+
 ## APT Repository Signing Key
 
 The Debian/Ubuntu APT repository (served at `https://modde.rs/apt/` once the
 channel is live; not yet published) is signed with a dedicated repository GPG
 key, separate from the maintainer tag-signing key and the minisign
-release-manifest key. Once the channel is live, users should install the
-repository key from `https://modde.rs/apt/key.gpg.asc` into
-`/etc/apt/keyrings/modde.gpg` and use a `signed-by=/etc/apt/keyrings/modde.gpg`
-source entry.
+release-manifest key. The repository signing key fingerprint is:
+
+```
+CCFE4A8461DF8778F5227684B6DB8F177A951E1B
+```
+
+That fingerprint is the trust anchor for the APT channel; pin it rather than
+trusting the served key file blindly. The public key is published at
+`dist/apt/key.gpg.asc` (and, once the channel is live, at
+`https://modde.rs/apt/key.gpg.asc`). Install the repository key into a keyring
+and confirm the fingerprint before adding the source entry:
+
+```sh
+install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://modde.rs/apt/key.gpg.asc | gpg --dearmor > /etc/apt/keyrings/modde.gpg
+# Confirm the fingerprint matches before trusting the key:
+gpg --show-keys --with-colons /etc/apt/keyrings/modde.gpg \
+  | awk -F: '/^fpr:/ {print $10; exit}'
+# Expect: CCFE4A8461DF8778F5227684B6DB8F177A951E1B
+echo "deb [signed-by=/etc/apt/keyrings/modde.gpg] https://modde.rs/apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/modde.list
+```
+
+The APT `Release` file must be signed with this same key; a fingerprint
+mismatch surfaces as a `NO_PUBKEY` or `signed-by` error on `apt update`.
 
 APT repository signing-key rotation is independent from release transport. To
 rotate the signing key, generate a new repository-only GPG key, update the
@@ -102,10 +173,10 @@ APT repository publication uses a per-repository ed25519 SSH deploy key on
 `caniko/rs-modde-apt`, not a Codeberg access token. The private key is stored as
 the canix-managed `modde_apt_repo_ssh_key` runner credential and is exposed to
 release CI as `APT_REPO_SSH_KEY`; the matching public key is registered on
-`caniko/rs-modde-apt` with write access. Recreate that key through the Phase 02
-deploy-key procedure in
-`docs/planning/apt-channel-bootstrap/02-ssh-deploy-key-canix-wiring.md` when
-rotating the push credential.
+`caniko/rs-modde-apt` with write access. To rotate the push credential, generate
+a fresh ed25519 key pair, store the private half as the `modde_apt_repo_ssh_key`
+canix runner credential (surfaced to CI as `APT_REPO_SSH_KEY`), and register the
+new public half as a write-access deploy key on `caniko/rs-modde-apt`.
 
 ## Windows Code Signing
 

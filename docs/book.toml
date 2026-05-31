@@ -1,0 +1,19 @@
+[book]
+title = "modde Documentation"
+authors = ["Can Tartanoglu"]
+description = "Documentation for modde — a NixOS-native, Linux-first game mod manager."
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+site-url = "/docs/"
+default-theme = "coal"
+preferred-dark-theme = "coal"
+git-repository-url = "https://codeberg.org/caniko/rs-modde"
+edit-url-template = "https://codeberg.org/caniko/rs-modde/_edit/trunk/docs/{path}"
+
+[output.html.search]
+limit-results = 20
