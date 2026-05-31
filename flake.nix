@@ -26,7 +26,7 @@
     };
 
     simit = {
-      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/tags/0.16.0&rev=38af6d9c47c77ff9da29abdc2bdb956ac47eb041";
+      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/tags/0.16.1&rev=24feb2a282887367e5557494ab57c3431f07ccf5";
       inputs.rs-harbor.follows = "rs-harbor";
       inputs.nixpkgs.follows = "rs-harbor/nixpkgs";
       inputs.rust-overlay.follows = "rs-harbor/rust-overlay";
@@ -1329,7 +1329,7 @@
           runner = "atlas";
           version_attr = "modde";
           substituters = ["https://attic.candee.baby/canix" "https://cache.nixos.org"];
-          trusted_public_keys = ["canix:uqr0nD3I0mfj9BYfZgTZHMaDKfI2yCTtSA5JGTWKUeg=" "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="];
+          trusted_public_keys = ["canix:lPzPzKrmYqW5Rxa5r0uQWvCqD3S5nx0h2eCy7XD5JM8=" "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="];
           supply_chain_command = "nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#cargo-deny -c cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses";
           checksum_globs = ["*.tar.gz" "*.zip" "*.AppImage" "*.deb" "*.src.rpm" "*.cdx.json" "*.spdx.json"];
           sbom_commands = [
