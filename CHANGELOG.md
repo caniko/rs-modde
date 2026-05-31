@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-31
+
 ### Added
 
 - **Homebrew**: Tap available at `brew tap caniko/modde https://codeberg.org/caniko/homebrew-modde.git`.
@@ -57,3 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tools**: Integration with MangoHud, vkBasalt, GameMode, ReShade, and OptiScaler
 - **Diagnostics**: Form 43 detection, missing master detection, shadowed mod detection, load order validation
 - **Nix**: Flake with binary, docs, and website outputs; home-manager module for declarative configuration
+
+[Unreleased]: https://codeberg.org/caniko/rs-modde/compare/0.2.1...HEAD
+[0.2.1]: https://codeberg.org/caniko/rs-modde/compare/0.2.0...0.2.1
