@@ -1,6 +1,6 @@
 [package]
 name = "modde-core"
-version = "0.2.1"
+version.workspace = true
 description = "Core types and logic for the modde mod manager"
 edition.workspace = true
 rust-version.workspace = true

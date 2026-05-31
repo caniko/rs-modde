@@ -1,6 +1,6 @@
 [package]
 name = "modde-cli"
-version = "0.2.1"
+version.workspace = true
 description = "CLI interface for modde"
 edition.workspace = true
 rust-version.workspace = true
