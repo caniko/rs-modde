@@ -61,10 +61,17 @@ jobs:
           if [ -z "$VERSION" ]; then ref="${GITHUB_REF:-${FORGE_REF:-${CODEBERG_REF:-}}}"; VERSION="${ref#refs/tags/}"; fi
           echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$'
           git fetch --force --tags origin "refs/tags/${VERSION}:refs/tags/${VERSION}"
-          git checkout --detach "$VERSION"
-          test "$(nix eval --raw .#modde.version)" = "$VERSION"
-          test -s keys/maintainers.gpg
-          if ! grep -q "^## \[$VERSION\] - [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]" CHANGELOG.md; then
+          tag_worktree="$(mktemp -d)"
+          rmdir "$tag_worktree"
+          cleanup_validation() {
+            if [ -n "${tag_worktree:-}" ]; then git worktree remove --force "$tag_worktree" >/dev/null 2>&1 || rm -rf "$tag_worktree"; fi
+            if [ -n "${GNUPGHOME:-}" ]; then rm -rf "$GNUPGHOME"; fi
+          }
+          trap cleanup_validation EXIT
+          git worktree add --detach "$tag_worktree" "$VERSION"
+          test "$(nix eval --raw "$tag_worktree#modde.version")" = "$VERSION"
+          test -s "$tag_worktree/keys/maintainers.gpg"
+          if ! grep -q "^## \[$VERSION\] - [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]" "$tag_worktree/CHANGELOG.md"; then
             echo "CHANGELOG.md missing section for $VERSION" >&2
             exit 1
           fi
@@ -73,8 +80,8 @@ jobs:
           if printf '%s\n' "$VERSION" | grep -Eq -- '-(rc|beta|alpha)\.[0-9]+$'; then IS_PRERELEASE=true; fi
           { printf 'VERSION=%s\n' "$VERSION"; printf 'IS_PRERELEASE=%s\n' "$IS_PRERELEASE"; } > release-env
 
-          GNUPGHOME="$(mktemp -d)"; export GNUPGHOME; trap 'rm -rf "$GNUPGHOME"' EXIT; chmod 700 "$GNUPGHOME"
-          gpg --batch --import keys/maintainers.gpg
+          GNUPGHOME="$(mktemp -d)"; export GNUPGHOME; chmod 700 "$GNUPGHOME"
+          gpg --batch --import "$tag_worktree/keys/maintainers.gpg"
           git verify-tag "$VERSION"
       - name: Rewrite modde.spec Version
         run: |
@@ -143,6 +150,7 @@ jobs:
           nix build .#modde-windows --out-link windows-result
           mkdir -p release/windows-x86_64
           cp windows-result/bin/modde.exe windows-result/bin/modde-ui.exe release/windows-x86_64/
+          if [ -f windows-result/bin/libmcfgthread-2.dll ]; then cp windows-result/bin/libmcfgthread-2.dll release/windows-x86_64/; fi
           # Windows tar.gz/zip and individual signed .exe assets are produced
           # by the Authenticode signing step, after the .exe files are signed.
           
@@ -221,8 +229,8 @@ jobs:
           else
             echo '::warning::WINDOWS_SIGNING_PFX/PASS unset; publishing unsigned Windows EXEs.'
           fi
-          tar czf "release/modde-${VERSION}-x86_64-windows.tar.gz" -C release/windows-x86_64 modde.exe modde-ui.exe
-          nix shell nixpkgs#zip -c bash -c "cd release/windows-x86_64 && zip -q \"$OLDPWD/release/modde-${VERSION}-x86_64-windows.zip\" modde.exe modde-ui.exe"
+          tar czf "release/modde-${VERSION}-x86_64-windows.tar.gz" -C release/windows-x86_64 .
+          nix shell nixpkgs#zip -c bash -c "cd release/windows-x86_64 && zip -q \"$OLDPWD/release/modde-${VERSION}-x86_64-windows.zip\" ./*"
           cp release/windows-x86_64/modde.exe "release/modde-${VERSION}-x86_64-windows.exe"
           cp release/windows-x86_64/modde-ui.exe "release/modde-ui-${VERSION}-x86_64-windows.exe"
       - name: Generate release checksums
