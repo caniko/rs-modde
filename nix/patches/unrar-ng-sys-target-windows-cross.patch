@@ -1,0 +1,54 @@
+diff --git a/build.rs b/build.rs
+--- a/build.rs
++++ b/build.rs
+@@ -8,17 +8,22 @@
+     // any compiled translation unit, would silently use stale object files.
+     println!("cargo:rerun-if-changed=vendor/unrar");
+ 
+-    if cfg!(windows) {
++    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
++    let target_vendor = std::env::var("CARGO_CFG_TARGET_VENDOR").unwrap_or_default();
++    let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
++    let target_is_windows = target_os == "windows";
++
++    if target_is_windows {
+         println!("cargo:rustc-flags=-lpowrprof");
+         println!("cargo:rustc-link-lib=shell32");
+         println!("cargo:rustc-link-lib=advapi32"); 
+-        if cfg!(target_env = "gnu") {
++        if target_env == "gnu" {
+             println!("cargo:rustc-link-lib=pthread");
+         }
+     } else {
+         println!("cargo:rustc-link-lib=pthread");
+     }
+-    let files: Vec<String> = [
++    let mut files: Vec<String> = [
+         "strlist",
+         "strfn",
+         "pathfn",
+@@ -31,8 +36,6 @@
+         "arcread",
+         "unicode",
+         "system",
+-        #[cfg(windows)]
+-        "isnt",
+         "crypt",
+         "crc",
+         "rawread",
+@@ -67,9 +70,10 @@
+         "dll",
+         "qopen",
+         "largepage",  // New in unrar 7.x for large page memory allocation
+-        #[cfg(windows)]
+-        "motw",       // New in unrar 7.x for Mark of the Web support (Windows only)
+     ].iter().map(|&s| format!("vendor/unrar/{s}.cpp")).collect();
++    if target_is_windows {
++        files.extend(["isnt", "motw"].iter().map(|&s| format!("vendor/unrar/{s}.cpp")));
++    }
+     let mut build = cc::Build::new();
+     build
+         .cpp(true) // Switch to C++ library compilation.
+@@ -123,2 +127,0 @@
+-    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+-    let target_vendor = std::env::var("CARGO_CFG_TARGET_VENDOR").unwrap_or_default();

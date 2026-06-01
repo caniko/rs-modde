@@ -638,6 +638,18 @@ pub fn configure_wine_overrides(
 ///
 /// Walks `staging/mods/<ModName>/` and hardlinks files into `game_dir`,
 /// preserving the internal directory structure (which is game-relative).
+#[cfg(unix)]
+fn is_same_file(src_meta: &std::fs::Metadata, dst_meta: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+
+    src_meta.ino() == dst_meta.ino() && src_meta.dev() == dst_meta.dev()
+}
+
+#[cfg(not(unix))]
+fn is_same_file(_src_meta: &std::fs::Metadata, _dst_meta: &std::fs::Metadata) -> bool {
+    false
+}
+
 pub async fn deploy_mo2_to_game(staging: &Path, game_dir: &Path, force: bool) -> Result<()> {
     let mods_dir = staging.join("mods");
     if !mods_dir.exists() {
@@ -689,8 +701,7 @@ pub async fn deploy_mo2_to_game(staging: &Path, game_dir: &Path, force: bool) ->
                         tokio::fs::metadata(&dest).await,
                     )
                 {
-                    use std::os::unix::fs::MetadataExt;
-                    if src_meta.ino() == dst_meta.ino() && src_meta.dev() == dst_meta.dev() {
+                    if is_same_file(&src_meta, &dst_meta) {
                         skipped += 1;
                         continue;
                     }

@@ -747,6 +747,7 @@ pub enum Message {
 
 // ─── Application Logic ──────────────────────────────────────────
 
+#[cfg(unix)]
 fn external_refresh_stream() -> impl iced::futures::Stream<Item = Message> {
     use iced::futures::SinkExt as _;
     use tokio::io::AsyncReadExt as _;
@@ -807,17 +808,27 @@ fn external_refresh_stream() -> impl iced::futures::Stream<Item = Message> {
     })
 }
 
+#[cfg(not(unix))]
+fn external_refresh_stream() -> impl iced::futures::Stream<Item = Message> {
+    iced::stream::channel(1, |_output| async move {
+        std::future::pending::<()>().await;
+    })
+}
+
 /// Drop guard that unlinks a Unix socket when the listening task ends.
+#[cfg(unix)]
 struct SocketGuard {
     path: std::path::PathBuf,
 }
 
+#[cfg(unix)]
 impl SocketGuard {
     fn new(path: std::path::PathBuf) -> Self {
         Self { path }
     }
 }
 
+#[cfg(unix)]
 impl Drop for SocketGuard {
     fn drop(&mut self) {
         modde_core::ipc::cleanup_socket(&self.path);

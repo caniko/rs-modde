@@ -193,10 +193,24 @@
           ];
         };
 
+        unrarNgSysWindowsCrossPatch = ./nix/patches/unrar-ng-sys-target-windows-cross.patch;
+        cargoVendorDir = craneLib.vendorCargoDeps {
+          inherit src;
+          overrideVendorCargoPackage = p: drv:
+            if p.name == "unrar-ng-sys" && p.version == "0.7.7"
+            then
+              drv.overrideAttrs (old: {
+                patches =
+                  (old.patches or [])
+                  ++ [unrarNgSysWindowsCrossPatch];
+              })
+            else drv;
+        };
+
         commonArgs = {
           pname = "modde";
           version = moddeVersion;
-          inherit src nativeBuildInputs buildInputs;
+          inherit src nativeBuildInputs buildInputs cargoVendorDir;
           strictDeps = true;
           SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
           NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
@@ -224,6 +238,8 @@
           });
 
         windowsTarget = "x86_64-pc-windows-gnu";
+        windowsTargetSuffix =
+          lib.strings.replaceStrings ["-"] ["_"] windowsTarget;
         buildPlatformSuffix =
           lib.strings.toLower pkgs.pkgsBuildHost.stdenv.hostPlatform.rust.cargoEnvVarTarget;
         aarch64LinuxTarget = "aarch64-unknown-linux-gnu";
@@ -305,6 +321,7 @@
           };
         windowsBuildInputs = with pkgs.pkgsCross.mingwW64; [
           openssl
+          windows.mcfgthreads
           windows.pthreads
         ];
         windowsNativeBuildInputs = with pkgs; [
@@ -322,9 +339,18 @@
             buildInputs = windowsBuildInputs;
             nativeBuildInputs = windowsNativeBuildInputs;
             CARGO_BUILD_TARGET = windowsTarget;
+            CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = "-C link-arg=-L${pkgs.pkgsCross.mingwW64.windows.mcfgthreads}/lib -C link-arg=-l:libmcfgthread.dll.a";
             PKG_CONFIG_ALLOW_CROSS = "1";
             "CC_${buildPlatformSuffix}" = "cc";
             "CXX_${buildPlatformSuffix}" = "c++";
+            preBuild = ''
+              mkdir -p .mingw-case-headers
+              ln -sf ${pkgs.pkgsCross.mingwW64.windows.mingw_w64_headers}/include/powrprof.h .mingw-case-headers/PowrProf.h
+              ln -sf ${pkgs.pkgsCross.mingwW64.windows.mingw_w64_headers}/include/sddl.h .mingw-case-headers/Sddl.h
+              ln -sf ${pkgs.pkgsCross.mingwW64.windows.mingw_w64_headers}/include/wbemidl.h .mingw-case-headers/Wbemidl.h
+              export CFLAGS_${windowsTargetSuffix}="-I$PWD/.mingw-case-headers ''${CFLAGS_${windowsTargetSuffix}:-}"
+              export CXXFLAGS_${windowsTargetSuffix}="-I$PWD/.mingw-case-headers ''${CXXFLAGS_${windowsTargetSuffix}:-}"
+            '';
             cargoBuildExtraArgs = "--workspace";
             doCheck = false;
           };
@@ -332,6 +358,9 @@
         modde-windows = craneLib.buildPackage (windowsArgs
           // {
             cargoArtifacts = windowsCargoArtifacts;
+            postInstall = ''
+              cp ${pkgs.pkgsCross.mingwW64.windows.mcfgthreads}/bin/libmcfgthread-2.dll "$out/bin/"
+            '';
           });
         aarch64LinuxCargoArtifacts = craneLibAarch64.buildDepsOnly aarch64LinuxArgs;
         modde-aarch64-linux = craneLibAarch64.buildPackage (aarch64LinuxArgs

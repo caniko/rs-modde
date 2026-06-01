@@ -31,15 +31,16 @@
 //! - CLI op, no GUI: one `read_dir` + zero connects (no socket files).
 //! - CLI op, N GUIs: one `read_dir` + N short Unix-socket round trips.
 
-use std::io::Write as _;
-use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+#[cfg(unix)]
+use std::{io::Write as _, os::unix::net::UnixStream, time::Duration};
 
+#[cfg(unix)]
 const REFRESH_PAYLOAD: &[u8] = b"refresh\n";
 const SOCKET_EXTENSION: &str = "sock";
 /// Connect/write timeout for the CLI side. Kept short so a stale
 /// socket file (GUI crashed without unlinking) can't hang the CLI.
+#[cfg(unix)]
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(50);
 
 /// Directory we drop sockets into. `$XDG_RUNTIME_DIR` when present (the
@@ -52,10 +53,16 @@ pub fn socket_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("/tmp"))
 }
 
+#[cfg(unix)]
 fn euid() -> u32 {
     // SAFETY: `geteuid()` takes no arguments, never fails, and cannot cause
     // undefined behaviour — it just reads the calling process's effective UID.
     unsafe { libc::geteuid() }
+}
+
+#[cfg(not(unix))]
+fn euid() -> u32 {
+    0
 }
 
 /// Per-user prefix used to filter sockets owned by other users on
@@ -88,51 +95,74 @@ pub fn cleanup_socket(path: &Path) {
 /// ENOENT are unlinked: this keeps `$XDG_RUNTIME_DIR` from accumulating
 /// dead socket files when GUIs crash.
 pub fn notify_refresh() -> usize {
-    notify_refresh_in(&socket_dir())
+    #[cfg(not(unix))]
+    {
+        0
+    }
+    #[cfg(unix)]
+    {
+        notify_refresh_in(&socket_dir())
+    }
 }
 
 /// [`notify_refresh`] scoped to an explicit directory. Useful for
 /// tests that don't want to mutate `XDG_RUNTIME_DIR`, and for
 /// instance-isolated CLI invocations that pass a custom data dir.
 pub fn notify_refresh_in(dir: &Path) -> usize {
-    let prefix = socket_prefix();
-    let suffix = format!(".{SOCKET_EXTENSION}");
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return 0;
-    };
-
-    let mut delivered = 0usize;
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let Some(name_str) = name.to_str() else {
-            continue;
-        };
-        if !name_str.starts_with(&prefix) || !name_str.ends_with(&suffix) {
-            continue;
-        }
-        let path = entry.path();
-        if notify_refresh_at(&path) {
-            delivered += 1;
-        } else {
-            // Connect refused or path vanished — almost certainly a
-            // dead GUI's leftovers. GC.
-            let _ = std::fs::remove_file(&path);
-        }
+    #[cfg(not(unix))]
+    {
+        let _ = dir;
+        0
     }
-    delivered
+    #[cfg(unix)]
+    {
+        let prefix = socket_prefix();
+        let suffix = format!(".{SOCKET_EXTENSION}");
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return 0;
+        };
+
+        let mut delivered = 0usize;
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let Some(name_str) = name.to_str() else {
+                continue;
+            };
+            if !name_str.starts_with(&prefix) || !name_str.ends_with(&suffix) {
+                continue;
+            }
+            let path = entry.path();
+            if notify_refresh_at(&path) {
+                delivered += 1;
+            } else {
+                // Connect refused or path vanished — almost certainly a
+                // dead GUI's leftovers. GC.
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+        delivered
+    }
 }
 
 /// [`notify_refresh`] for a single explicit socket path. Exposed for
 /// tests. Returns `true` iff the payload was written successfully.
 pub fn notify_refresh_at(path: &Path) -> bool {
-    let Ok(mut stream) = UnixStream::connect(path) else {
-        return false;
-    };
-    let _ = stream.set_write_timeout(Some(CONNECT_TIMEOUT));
-    stream.write_all(REFRESH_PAYLOAD).is_ok()
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        false
+    }
+    #[cfg(unix)]
+    {
+        let Ok(mut stream) = UnixStream::connect(path) else {
+            return false;
+        };
+        let _ = stream.set_write_timeout(Some(CONNECT_TIMEOUT));
+        stream.write_all(REFRESH_PAYLOAD).is_ok()
+    }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use std::io::Read as _;
