@@ -26,6 +26,11 @@ name: release
       - '[0-9]*'
   workflow_dispatch:
     inputs:
+      version:
+        description: 'Existing release tag to build without moving the tag.'
+        required: false
+        default: ''
+        type: string
       force_publish:
         description: 'Bypass release smoke checks and continue to publish.'
         required: false
@@ -38,25 +43,25 @@ concurrency:
 
 jobs:
   release:
-    runs-on: atlas
+    runs-on: atlas-nix-trusted
     enable-openid-connect: true
+    env:
+      NIX_CONFIG: "experimental-features = nix-command flakes"
+      XDG_CACHE_HOME: "/tmp/.cache"
     steps:
       - uses: https://code.forgejo.org/actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: https://github.com/cachix/install-nix-action@v27
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-            substituters = https://attic.candee.baby/canix https://cache.nixos.org
-            trusted-public-keys = canix:lPzPzKrmYqW5Rxa5r0uQWvCqD3S5nx0h2eCy7XD5JM8= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
 
       - name: Validate tag
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME:-${FORGE_REF_NAME:-${CODEBERG_REF_NAME:-}}}"
+          VERSION="${{ inputs.version }}"
+          if [ -z "$VERSION" ]; then VERSION="${GITHUB_REF_NAME:-${FORGE_REF_NAME:-${CODEBERG_REF_NAME:-}}}"; fi
           if [ -z "$VERSION" ]; then ref="${GITHUB_REF:-${FORGE_REF:-${CODEBERG_REF:-}}}"; VERSION="${ref#refs/tags/}"; fi
           echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$'
+          git fetch --force --tags origin "refs/tags/${VERSION}:refs/tags/${VERSION}"
+          git checkout --detach "$VERSION"
           test "$(nix eval --raw .#modde.version)" = "$VERSION"
           test -s keys/maintainers.gpg
           if ! grep -q "^## \[$VERSION\] - [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]" CHANGELOG.md; then
@@ -70,7 +75,6 @@ jobs:
 
           GNUPGHOME="$(mktemp -d)"; export GNUPGHOME; trap 'rm -rf "$GNUPGHOME"' EXIT; chmod 700 "$GNUPGHOME"
           gpg --batch --import keys/maintainers.gpg
-          git fetch --force --tags origin "refs/tags/${VERSION}:refs/tags/${VERSION}"
           git verify-tag "$VERSION"
       - name: Rewrite modde.spec Version
         run: |

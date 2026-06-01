@@ -1310,7 +1310,7 @@
           target_branch = "trunk";
         };
         release.artifacts = {
-          runner = "atlas";
+          runner = "atlas-nix-trusted";
           version_attr = "modde";
           substituters = ["https://attic.candee.baby/canix" "https://cache.nixos.org"];
           trusted_public_keys = ["canix:lPzPzKrmYqW5Rxa5r0uQWvCqD3S5nx0h2eCy7XD5JM8=" "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="];
