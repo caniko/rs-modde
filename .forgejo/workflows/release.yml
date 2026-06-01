@@ -102,6 +102,7 @@ jobs:
         run: |
           set -euo pipefail
           . ./release-env
+          export VERSION IS_PRERELEASE
           mkdir -p release
           nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#gcc -c bash <<'SBOM'
           set -euo pipefail
@@ -172,6 +173,7 @@ jobs:
         run: |
           set -euo pipefail
           . ./release-env
+          export VERSION IS_PRERELEASE
           mkdir -p release
           nix shell nixpkgs#debootstrap nixpkgs#cargo nixpkgs#rustc -c bash <<'SCRIPT'
           set -euo pipefail
