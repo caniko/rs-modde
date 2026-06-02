@@ -2,7 +2,7 @@
   "schema_version": 1,
   "plan": {
     "id": "5315772e-cb13-443d-8f75-d28c1e68adc9",
-    "name": "Plan: modde-ui — drive the async sqlx DB through iced Tasks (stop blocking the UI thread)",
+    "name": "Plan: modde-ui \u2014 drive the async sqlx DB through iced Tasks (stop blocking the UI thread)",
     "flavor": "codex",
     "worktype": null,
     "created_at": 1780409325,
@@ -130,12 +130,12 @@
       "slug": "shared-db-handle",
       "routing_tier": "high",
       "files": [
-        "crates/modde-core/src/db/mod.rs` — `#[derive(Clone)]` on `ModdeDb`.",
-        "crates/modde-ui/src/app.rs` — `db` field on `Modde`; `load_hidden_files` /",
-        "crates/modde-ui/src/app/model.rs` — `start_tools_load`/`start_executables_load",
-        "crates/modde-ui/src/app/tests.rs` — inject isolated handle into `Modde`.",
-        "crates/modde-ui/src/app/tool_ops.rs`, `crates/modde-ui/src/app/install_ops.rs` —",
-        "crates/modde-ui/src/app/update.rs` — `new()` startup open; pass `self.db.clone()"
+        "crates/modde-core/src/db/mod.rs` \u2014 `#[derive(Clone)]` on `ModdeDb`.",
+        "crates/modde-ui/src/app.rs` \u2014 `db` field on `Modde`; `load_hidden_files` /",
+        "crates/modde-ui/src/app/model.rs` \u2014 `start_tools_load`/`start_executables_load",
+        "crates/modde-ui/src/app/tests.rs` \u2014 inject isolated handle into `Modde`.",
+        "crates/modde-ui/src/app/tool_ops.rs`, `crates/modde-ui/src/app/install_ops.rs` \u2014",
+        "crates/modde-ui/src/app/update.rs` \u2014 `new()` startup open; pass `self.db.clone()"
       ]
     },
     {
@@ -143,11 +143,11 @@
       "slug": "async-profile-game-context",
       "routing_tier": "max",
       "files": [
-        "crates/modde-ui/src/app.rs` — new `Message` variant(s); possibly move",
-        "crates/modde-ui/src/app/model.rs` — loader, snapshot struct, apply method,",
-        "crates/modde-ui/src/app/tests.rs` — drive Tasks instead of calling sync helpers.",
-        "crates/modde-ui/src/app/tool_ops.rs` — possibly reuse `load_tools_state_blocking",
-        "crates/modde-ui/src/app/update.rs` — ~20 arms return Tasks; `new()` initial Task."
+        "crates/modde-ui/src/app.rs` \u2014 new `Message` variant(s); possibly move",
+        "crates/modde-ui/src/app/model.rs` \u2014 loader, snapshot struct, apply method,",
+        "crates/modde-ui/src/app/tests.rs` \u2014 drive Tasks instead of calling sync helpers.",
+        "crates/modde-ui/src/app/tool_ops.rs` \u2014 possibly reuse `load_tools_state_blocking",
+        "crates/modde-ui/src/app/update.rs` \u2014 ~20 arms return Tasks; `new()` initial Task."
       ]
     },
     {
@@ -155,11 +155,11 @@
       "slug": "async-diagnostics-and-tool-writes",
       "routing_tier": "high",
       "files": [
-        "crates/modde-ui/src/app.rs` — `Message::DiagnosticsComputed`,",
-        "crates/modde-ui/src/app/model.rs` — diagnostics loader + apply; remove sync",
-        "crates/modde-ui/src/app/tests.rs` — diagnostics + toggle tests.",
-        "crates/modde-ui/src/app/tool_settings.rs` — async write fns; keep off-thread",
-        "crates/modde-ui/src/app/update.rs` — `RunDiagnostics` + tool-setting write arms."
+        "crates/modde-ui/src/app.rs` \u2014 `Message::DiagnosticsComputed`,",
+        "crates/modde-ui/src/app/model.rs` \u2014 diagnostics loader + apply; remove sync",
+        "crates/modde-ui/src/app/tests.rs` \u2014 diagnostics + toggle tests.",
+        "crates/modde-ui/src/app/tool_settings.rs` \u2014 async write fns; keep off-thread",
+        "crates/modde-ui/src/app/update.rs` \u2014 `RunDiagnostics` + tool-setting write arms."
       ]
     },
     {
@@ -167,9 +167,9 @@
       "slug": "loader-hygiene",
       "routing_tier": "medium",
       "files": [
-        "crates/modde-ui/src/app.rs` — shim doc comment.",
-        "crates/modde-ui/src/app/model.rs`, `crates/modde-ui/src/app/update.rs` —",
-        "crates/modde-ui/src/app/tests.rs` — regression guard test; dead-code-driven",
+        "crates/modde-ui/src/app.rs` \u2014 shim doc comment.",
+        "crates/modde-ui/src/app/model.rs`, `crates/modde-ui/src/app/update.rs` \u2014",
+        "crates/modde-ui/src/app/tests.rs` \u2014 regression guard test; dead-code-driven",
         "crates/modde-ui/src/app/tool_ops.rs`, `crates/modde-ui/src/app/install_ops.rs`,"
       ]
     }
@@ -183,5 +183,15 @@
     "risk": "high",
     "scope": "cross-org"
   },
-  "verify": null
+  "verify": {
+    "outcome": "partial",
+    "surprises": "missed-signal: hidden-prerequisite: README whole-set criterion 'no block_on on any synchronous update/view/new path' was stricter than the union of the 4 phase scopes; profile-CRUD + experiment write handlers (~23 render-path block_on across CreateProfile/DeleteProfile/ForkProfile/ReorderMod/LockMod/UnlockMod/TryProfile/RollbackExperiment/CommitExperiment) were never assigned to a phase, so even a faithful execution leaves render-path blocking on profile mutations. All 4 phases passed their own acceptance criteria (builds clean default+no-default, clippy -D warnings clean, 177 tests pass, view.rs zero block_on, regression guard present).",
+    "verified_at": 1780418150,
+    "phase_outcomes": {
+      "shared-db-handle": "passed",
+      "async-profile-game-context": "passed",
+      "async-diagnostics-and-tool-writes": "passed",
+      "loader-hygiene": "passed"
+    }
+  }
 }
