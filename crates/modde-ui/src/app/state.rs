@@ -367,6 +367,12 @@ pub struct ToolLoadSnapshot {
 }
 
 #[derive(Debug, Clone)]
+pub struct ToolSettingWriteResult {
+    pub status_message: String,
+    pub tool_option_catalog: Option<ToolOptionCatalog>,
+}
+
+#[derive(Debug, Clone)]
 pub(super) struct ToolLoadRequest {
     pub(super) game_id: String,
     pub(super) display_name: String,
@@ -398,6 +404,13 @@ pub struct ProfileContextSnapshot {
     /// Only set by the profile-switch handler (preserves the old synchronous
     /// `SwitchProfile` behavior).
     pub rerun_diagnostics: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct DiagnosticsComputed {
+    pub report: crate::views::diagnostics::DiagnosticsReport,
+    pub data_tab_conflicts: Vec<(String, Vec<String>)>,
+    pub missing_store_mod_count: usize,
 }
 
 /// What happened when the loader tried to (re)load the active profile.

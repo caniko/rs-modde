@@ -72,13 +72,19 @@ pub fn view(state: &DiagnosticsState) -> Element<'_, Message> {
     .align_y(Alignment::Center);
 
     let content: Element<Message> = match state {
-        DiagnosticsState::Idle | DiagnosticsState::Running => {
+        DiagnosticsState::Idle => {
             container(text("Diagnostics run automatically when this view opens.").size(14))
                 .padding(20)
                 .width(Length::Fill)
                 .center_x(Length::Fill)
                 .into()
         }
+
+        DiagnosticsState::Running => container(text("Running diagnostics...").size(14))
+            .padding(20)
+            .width(Length::Fill)
+            .center_x(Length::Fill)
+            .into(),
 
         DiagnosticsState::Error(message) => {
             container(text(message).size(14).color(color!(0xFF4444)))

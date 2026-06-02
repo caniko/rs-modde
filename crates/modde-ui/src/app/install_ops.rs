@@ -65,7 +65,9 @@ pub(super) async fn run_browse_install(
 
     // Prefer an existing profile for the game; fall back to creating a
     // Manual profile named after the game domain if none exist.
-    let profile_name = crate::app::block_on(pm.list())
+    let profile_name = pm
+        .list()
+        .await
         .ok()
         .and_then(|profiles| {
             profiles
@@ -74,7 +76,7 @@ pub(super) async fn run_browse_install(
                 .map(|p| p.name)
         })
         .unwrap_or_else(|| game_domain.clone());
-    let mut profile = match crate::app::block_on(pm.load(&profile_name, None)) {
+    let mut profile = match pm.load(&profile_name, None).await {
         Ok(p) => p,
         Err(_) => modde_core::profile::Profile {
             id: None,
@@ -105,19 +107,24 @@ pub(super) async fn run_browse_install(
             ..Default::default()
         });
     }
-    crate::app::block_on(pm.create_or_update(&profile)).map_err(|e| e.to_string())?;
+    pm.create_or_update(&profile)
+        .await
+        .map_err(|e| e.to_string())?;
 
     if let InstallOutcome::Installed(plan) = &outcome {
-        let profile_id = crate::app::block_on(pm.load(&profile_name, None))
+        let profile_id = pm
+            .load(&profile_name, None)
+            .await
             .map_err(|e| e.to_string())?
             .id
             .ok_or_else(|| "saved profile has no id".to_string())?;
-        crate::app::block_on(db.record_install(
+        db.record_install(
             profile_id,
             &modde_core::ModId::from(mod_id_str.as_str()),
             plan,
             InstallStatus::Installed,
-        ))
+        )
+        .await
         .map_err(|e| e.to_string())?;
     }
 

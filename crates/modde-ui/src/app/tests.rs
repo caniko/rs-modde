@@ -81,6 +81,7 @@ fn test_app() -> Modde {
         update_available: None,
         context_generation: 0,
         data_tab_generation: 0,
+        diagnostics_generation: 0,
     }
 }
 
@@ -425,6 +426,65 @@ fn test_initial_state() {
 }
 
 #[test]
+fn render_path_sources_do_not_call_block_on() {
+    let sources = [
+        (
+            "app/view.rs",
+            include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/app/view.rs")),
+        ),
+        (
+            "app/model.rs",
+            include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/app/model.rs")),
+        ),
+        (
+            "app/update.rs",
+            include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/app/update.rs")),
+        ),
+    ];
+    let allowed_model_markers = [
+        "reload_profile_blocking",
+        "finish_pending_switch_blocking",
+        "load_profile_context_blocking",
+        "load_diagnostics_blocking",
+    ];
+
+    for (path, source) in sources {
+        let mut current_allowed_model_helper = false;
+        for (index, line) in source.lines().enumerate() {
+            let trimmed = line.trim_start();
+            if path == "app/model.rs" && trimmed.starts_with("pub(super) fn ") {
+                current_allowed_model_helper = allowed_model_markers
+                    .iter()
+                    .any(|marker| trimmed.contains(marker));
+            } else if path == "app/model.rs" && trimmed.starts_with("fn ") {
+                current_allowed_model_helper = allowed_model_markers
+                    .iter()
+                    .any(|marker| trimmed.contains(marker));
+            } else if path == "app/model.rs" && trimmed.starts_with("pub(super) async fn ") {
+                current_allowed_model_helper = false;
+            }
+            if !line.contains("crate::app::block_on") {
+                continue;
+            }
+            if path == "app/model.rs" && current_allowed_model_helper {
+                continue;
+            }
+            if path == "app/update.rs"
+                && (line.contains("modde_core::db::ModdeDb::open()")
+                    || line.contains("ProfileManager::with_db(db.clone()).list()")
+                    || line.contains("pm.load(&profile_name, Some(&game_id))"))
+            {
+                continue;
+            }
+            panic!(
+                "{path}:{} calls crate::app::block_on on a render-path source line: {line}",
+                index + 1
+            );
+        }
+    }
+}
+
+#[test]
 fn test_title() {
     let app = test_app();
     assert_eq!(app.title(), "modde");
@@ -533,6 +593,79 @@ fn stale_tools_loaded_result_is_ignored() {
     assert_eq!(app.tool_state.entries[0].tool_id, "old");
     assert!(app.tool_state.load_error.is_none());
     assert_eq!(app.status_message, "Ready");
+}
+
+#[test]
+fn tool_toggle_write_persists_and_reload_reflects_committed_value() {
+    let _guard = db_lock();
+    reset_isolated_db();
+    let mut app = test_app();
+    app.selected_game = Some("skyrim-se".to_string());
+
+    let task = app.update(Message::ToggleTool {
+        tool_id: "mangohud".to_string(),
+        enabled: true,
+    });
+
+    assert_eq!(task.units(), 1);
+    assert_eq!(app.tool_state.active_tool_id.as_deref(), Some("mangohud"));
+    assert_eq!(app.status_message, "Enabling MangoHud...");
+
+    let result = crate::app::block_on(super::tool_settings::toggle_tool_for_game(
+        app.db.clone(),
+        "skyrim-se".to_string(),
+        "mangohud".to_string(),
+        true,
+        app.current_tool_game_context(),
+    ));
+    let reload_task = app.update(Message::ToolSettingWritten {
+        tool_id: "mangohud".to_string(),
+        result,
+    });
+
+    assert_eq!(reload_task.units(), 1);
+    assert_eq!(app.tool_state.load_generation, 1);
+    let db = crate::app::block_on(modde_core::db::ModdeDb::open()).expect("db opens");
+    let row = crate::app::block_on(db.load_tool_config(&GameId::from("skyrim-se"), "mangohud"))
+        .expect("load tool config")
+        .expect("tool config exists");
+    assert!(row.enabled);
+
+    let request = app.tool_load_request().expect("tool load request");
+    let snapshot = crate::app::block_on(super::tool_ops::load_tools_state(app.db.clone(), request))
+        .expect("load tools");
+    let generation = app.tool_state.load_generation;
+    let _ = app.update(Message::ToolsLoaded {
+        generation,
+        result: Ok(snapshot),
+    });
+    let mangohud = app
+        .tool_state
+        .entries
+        .iter()
+        .find(|entry| entry.tool_id == "mangohud")
+        .expect("mangohud entry");
+    assert!(mangohud.enabled);
+}
+
+#[test]
+fn stale_tool_toggle_reload_is_ignored() {
+    let mut app = test_app();
+    let mut committed = test_tool_ui_entry("mangohud");
+    committed.enabled = true;
+    app.tool_state.entries = vec![committed];
+    app.tool_state.loading = true;
+    app.tool_state.load_generation = 2;
+
+    let mut stale = test_tool_ui_entry("mangohud");
+    stale.enabled = false;
+    let _ = app.update(Message::ToolsLoaded {
+        generation: 1,
+        result: Ok(test_tool_load_snapshot(vec![stale])),
+    });
+
+    assert!(app.tool_state.loading);
+    assert!(app.tool_state.entries[0].enabled);
 }
 
 #[test]
@@ -750,6 +883,32 @@ fn test_switch_view_diagnostics_requires_profile() {
         app.diagnostics_state,
         crate::views::diagnostics::DiagnosticsState::Error(_)
     ));
+}
+
+#[test]
+fn diagnostics_task_completion_sets_complete_state() {
+    let mut app = test_app();
+    app.loaded_profile = Some(profile_for_game("diagnostics-profile", "skyrim-se", vec![]));
+
+    let task = app.update(Message::RunDiagnostics);
+
+    assert_eq!(task.units(), 1);
+    assert_eq!(app.diagnostics_generation, 1);
+    assert!(matches!(
+        app.diagnostics_state,
+        crate::views::diagnostics::DiagnosticsState::Running
+    ));
+
+    let profile = app.loaded_profile.clone().expect("profile loaded");
+    let result = crate::app::block_on(super::model::load_diagnostics(app.db.clone(), profile));
+    let generation = app.diagnostics_generation;
+    let _ = app.update(Message::DiagnosticsComputed { generation, result });
+
+    assert!(matches!(
+        app.diagnostics_state,
+        crate::views::diagnostics::DiagnosticsState::Complete(_)
+    ));
+    assert!(app.status_message.starts_with("Diagnostics complete:"));
 }
 
 #[test]
@@ -972,11 +1131,75 @@ fn test_submit_new_profile_creates_profile_and_closes_dialog() {
     app.new_profile_name = "  ui-profile-create  ".to_string();
 
     let _ = app.update(Message::SubmitNewProfileDialog);
+    complete_create_profile_write(&mut app, "ui-profile-create", "skyrim-se");
 
     assert!(!app.new_profile_dialog_open);
     assert!(app.new_profile_name.is_empty());
     assert_eq!(app.active_profile.as_deref(), Some("ui-profile-create"));
     assert_eq!(app.status_message, "Profile created");
+}
+
+#[test]
+fn stale_profile_write_done_is_ignored() {
+    let mut app = test_app();
+    app.context_generation = 2;
+    app.active_profile = Some("current".to_string());
+
+    let _ = app.update(Message::ProfileWriteDone {
+        generation: 1,
+        kind: ProfileWriteKind::Create {
+            name: "stale".to_string(),
+            game_id: "skyrim-se".to_string(),
+        },
+        result: Ok(ProfileWriteOutcome {
+            status_message: Some("Profile created".to_string()),
+            reload: true,
+        }),
+    });
+
+    assert_eq!(app.active_profile.as_deref(), Some("current"));
+    assert_eq!(app.status_message, "Ready");
+}
+
+#[test]
+fn experiment_try_then_commit_write_completion_updates_state() {
+    let _guard = db_lock();
+    reset_isolated_db();
+    let pm = crate::app::block_on(ProfileManager::open()).expect("open isolated DB");
+    crate::app::block_on(pm.create(&profile_for_game(
+        "experiment-profile",
+        "test-game",
+        Vec::new(),
+    )))
+    .expect("seed experiment profile");
+    crate::app::block_on(pm.activate("experiment-profile", &GameId::from("test-game"), None))
+        .expect("activate experiment profile");
+    let loaded =
+        crate::app::block_on(pm.load("experiment-profile", Some(&GameId::from("test-game"))))
+            .expect("load experiment profile");
+    drop(pm);
+
+    let mut app = test_app();
+    app.selected_game = Some("test-game".to_string());
+    app.active_profile = Some("experiment-profile".to_string());
+    app.loaded_profile = Some(loaded);
+
+    let task = app.update(Message::TryProfile);
+    assert_eq!(task.units(), 1);
+    complete_experiment_write(
+        &mut app,
+        ExperimentWriteKind::Try,
+        Some("experiment-profile"),
+        "test-game",
+    );
+    assert_eq!(app.experiment_depth, 1);
+    assert_eq!(app.status_message, "Experiment started (depth 1)");
+
+    let task = app.update(Message::CommitExperiment);
+    assert_eq!(task.units(), 1);
+    complete_experiment_write(&mut app, ExperimentWriteKind::Commit, None, "test-game");
+    assert_eq!(app.experiment_depth, 0);
+    assert_eq!(app.status_message, "Experiment committed");
 }
 
 #[test]
@@ -1614,6 +1837,41 @@ fn optiscaler_release(
     }
 }
 
+fn complete_optiscaler_release_selection(app: &mut Modde) {
+    let game_id = app.current_game_id().expect("game selected").to_string();
+    let result = crate::app::block_on(
+        super::tool_settings::save_optiscaler_release_selection_for_game(
+            app.db.clone(),
+            game_id,
+            app.tool_state.optiscaler_releases.clone(),
+            app.tool_state.tool_option_catalog.clone(),
+            app.current_tool_game_context(),
+        ),
+    );
+    let _ = app.update(Message::ToolSettingWritten {
+        tool_id: "optiscaler".to_string(),
+        result,
+    });
+}
+
+fn complete_optiscaler_setting_write(app: &mut Modde, key: &str, value: serde_json::Value) {
+    let game_id = app.current_game_id().expect("game selected").to_string();
+    let result = crate::app::block_on(super::tool_settings::save_tool_setting_for_game(
+        app.db.clone(),
+        game_id,
+        "optiscaler".to_string(),
+        key.to_string(),
+        value,
+        app.current_tool_game_context(),
+        app.tool_state.optiscaler_releases.clone(),
+        app.tool_state.tool_option_catalog.clone(),
+    ));
+    let _ = app.update(Message::ToolSettingWritten {
+        tool_id: "optiscaler".to_string(),
+        result,
+    });
+}
+
 #[test]
 fn optiscaler_release_loaded_resets_stale_asset() {
     let _guard = db_lock();
@@ -1645,6 +1903,7 @@ fn optiscaler_release_loaded_resets_stale_asset() {
         }],
     }];
     let _ = app.update(Message::OptiScalerReleasesLoaded(Ok(releases)));
+    complete_optiscaler_release_selection(&mut app);
 
     let row = crate::app::block_on(db.load_tool_config(&GameId::from("skyrim-se"), "optiscaler"))
         .expect("load tool config")
@@ -1694,6 +1953,11 @@ fn optiscaler_release_tag_update_resets_asset() {
         key: "release_tag".to_string(),
         value: serde_json::json!("official:v0.9.1"),
     });
+    complete_optiscaler_setting_write(
+        &mut app,
+        "release_tag",
+        serde_json::json!("official:v0.9.1"),
+    );
 
     let db = crate::app::block_on(modde_core::db::ModdeDb::open()).expect("db opens");
     let row = crate::app::block_on(db.load_tool_config(&GameId::from("skyrim-se"), "optiscaler"))
@@ -1733,6 +1997,7 @@ fn optiscaler_official_source_filters_out_goverlay_releases() {
             Some("2026-03-24T00:18:25Z"),
         ),
     ])));
+    complete_optiscaler_release_selection(&mut app);
 
     assert_eq!(
         app.tool_state
@@ -1766,6 +2031,11 @@ fn optiscaler_goverlay_source_filters_by_channel_and_resets_selection() {
         key: "source_mode".to_string(),
         value: serde_json::json!("goverlay_builds"),
     });
+    complete_optiscaler_setting_write(
+        &mut app,
+        "source_mode",
+        serde_json::json!("goverlay_builds"),
+    );
 
     let db = crate::app::block_on(modde_core::db::ModdeDb::open()).expect("db opens");
     let row = crate::app::block_on(db.load_tool_config(&GameId::from("skyrim-se"), "optiscaler"))
@@ -1788,6 +2058,7 @@ fn optiscaler_goverlay_source_filters_by_channel_and_resets_selection() {
         key: "goverlay_channel".to_string(),
         value: serde_json::json!("master"),
     });
+    complete_optiscaler_setting_write(&mut app, "goverlay_channel", serde_json::json!("master"));
     let row = crate::app::block_on(db.load_tool_config(&GameId::from("skyrim-se"), "optiscaler"))
         .expect("load tool config")
         .expect("tool config exists");
@@ -1838,6 +2109,16 @@ fn proton_versions_loaded_resets_stale_selected_version() {
         "latest".to_string(),
         "GE-Proton10-34".to_string(),
     ])));
+    let result = crate::app::block_on(super::tool_settings::save_proton_selected_version_for_game(
+        app.db.clone(),
+        "skyrim-se".to_string(),
+        vec!["latest".to_string(), "GE-Proton10-34".to_string()],
+        app.tool_state.tool_option_catalog.clone(),
+    ));
+    let _ = app.update(Message::ToolSettingWritten {
+        tool_id: "proton".to_string(),
+        result,
+    });
 
     let row = crate::app::block_on(db.load_tool_config(&GameId::from("skyrim-se"), "proton"))
         .expect("load tool config")
@@ -2010,6 +2291,98 @@ fn reload_seeded(name: &str) -> modde_core::profile::Profile {
 /// Shorthand: return the `mod_id`s of a profile in current order.
 fn mod_ids(profile: &modde_core::profile::Profile) -> Vec<&str> {
     profile.mods.iter().map(|m| m.mod_id.as_str()).collect()
+}
+
+fn complete_create_profile_write(app: &mut Modde, name: &str, game_id: &str) {
+    let generation = app.context_generation;
+    let profile = modde_core::Profile {
+        id: None,
+        name: name.to_string(),
+        game_id: modde_core::GameId::from(game_id),
+        source: modde_core::ProfileSource::Manual,
+        mods: Vec::new(),
+        overrides: PathBuf::from("overrides"),
+        load_order_rules: SmallVec::new(),
+        load_order_lock: None,
+    };
+    let result = crate::app::block_on(super::profile_ops::create_profile(app.db.clone(), profile));
+    let _ = app.update(Message::ProfileWriteDone {
+        generation,
+        kind: ProfileWriteKind::Create {
+            name: name.to_string(),
+            game_id: game_id.to_string(),
+        },
+        result,
+    });
+}
+
+fn complete_reorder_write(
+    app: &mut Modde,
+    profile_name: &str,
+    mod_id: &str,
+    direction: ReorderDirection,
+) {
+    let generation = app.context_generation;
+    let result = crate::app::block_on(super::profile_ops::reorder_mod(
+        app.db.clone(),
+        profile_name.to_string(),
+        mod_id.to_string(),
+        direction,
+    ));
+    let _ = app.update(Message::ProfileWriteDone {
+        generation,
+        kind: ProfileWriteKind::Reorder {
+            mod_id: mod_id.to_string(),
+            direction,
+        },
+        result,
+    });
+}
+
+fn complete_lock_write(app: &mut Modde, profile_name: &str, mod_id: &str, locked: bool) {
+    let generation = app.context_generation;
+    let result = crate::app::block_on(super::profile_ops::set_mod_lock(
+        app.db.clone(),
+        profile_name.to_string(),
+        mod_id.to_string(),
+        locked,
+    ));
+    let kind = if locked {
+        ProfileWriteKind::Lock {
+            mod_id: mod_id.to_string(),
+        }
+    } else {
+        ProfileWriteKind::Unlock {
+            mod_id: mod_id.to_string(),
+        }
+    };
+    let _ = app.update(Message::ProfileWriteDone {
+        generation,
+        kind,
+        result,
+    });
+}
+
+fn complete_experiment_write(
+    app: &mut Modde,
+    kind: ExperimentWriteKind,
+    profile_name: Option<&str>,
+    game_id: &str,
+) {
+    let generation = app.context_generation;
+    let result = crate::app::block_on(super::profile_ops::run_experiment_write(
+        app.db.clone(),
+        kind.clone(),
+        profile_name.map(str::to_string),
+        GameId::from(game_id),
+        None,
+        app.experiment_depth,
+    ));
+    let _ = app.update(Message::ExperimentWriteDone {
+        generation,
+        kind,
+        result,
+    });
 }
 
 #[test]
@@ -2393,6 +2766,12 @@ fn reorder_refused_when_profile_wabbajack_locked() {
         mod_id: "a".to_string(),
         direction: ReorderDirection::Down,
     });
+    complete_reorder_write(
+        &mut app,
+        "reorder_refuse_wabbajack",
+        "a",
+        ReorderDirection::Down,
+    );
     let persisted = reload_seeded("reorder_refuse_wabbajack");
     assert_eq!(
         mod_ids(&persisted),
@@ -2423,6 +2802,12 @@ fn reorder_refused_when_target_mod_pinned() {
         mod_id: "b".to_string(),
         direction: ReorderDirection::Up,
     });
+    complete_reorder_write(
+        &mut app,
+        "reorder_refuse_target_pinned",
+        "b",
+        ReorderDirection::Up,
+    );
     let persisted = reload_seeded("reorder_refuse_target_pinned");
     assert_eq!(mod_ids(&persisted), vec!["a", "b", "c"]);
     assert!(
@@ -2450,6 +2835,12 @@ fn reorder_refused_when_swap_partner_pinned() {
         mod_id: "b".to_string(),
         direction: ReorderDirection::Down,
     });
+    complete_reorder_write(
+        &mut app,
+        "reorder_refuse_partner_pinned",
+        "b",
+        ReorderDirection::Down,
+    );
     let persisted = reload_seeded("reorder_refuse_partner_pinned");
     assert_eq!(mod_ids(&persisted), vec!["a", "b", "c"]);
     assert!(
@@ -2477,6 +2868,7 @@ fn reorder_allowed_when_unlocked_moves_up() {
         mod_id: "b".to_string(),
         direction: ReorderDirection::Up,
     });
+    complete_reorder_write(&mut app, "reorder_allow_up", "b", ReorderDirection::Up);
     let persisted = reload_seeded("reorder_allow_up");
     assert_eq!(mod_ids(&persisted), vec!["b", "a", "c"]);
     assert!(
@@ -2504,6 +2896,7 @@ fn reorder_allowed_when_unlocked_moves_down() {
         mod_id: "a".to_string(),
         direction: ReorderDirection::Down,
     });
+    complete_reorder_write(&mut app, "reorder_allow_down", "a", ReorderDirection::Down);
     let persisted = reload_seeded("reorder_allow_down");
     assert_eq!(mod_ids(&persisted), vec!["b", "a", "c"]);
     assert!(
@@ -2531,6 +2924,7 @@ fn reorder_noop_at_top_edge() {
         mod_id: "a".to_string(),
         direction: ReorderDirection::Up,
     });
+    complete_reorder_write(&mut app, "reorder_noop_edge", "a", ReorderDirection::Up);
     let persisted = reload_seeded("reorder_noop_edge");
     assert_eq!(
         mod_ids(&persisted),
@@ -2564,6 +2958,7 @@ fn lock_mod_sets_per_mod_lock() {
     let _ = app.update(Message::LockMod {
         mod_id: "b".to_string(),
     });
+    complete_lock_write(&mut app, "lock_mod_sets_pin", "b", true);
     let persisted = reload_seeded("lock_mod_sets_pin");
     assert!(
         matches!(
@@ -2594,6 +2989,7 @@ fn unlock_mod_clears_per_mod_lock() {
     let _ = app.update(Message::UnlockMod {
         mod_id: "b".to_string(),
     });
+    complete_lock_write(&mut app, "unlock_mod_clears_pin", "b", false);
     let persisted = reload_seeded("unlock_mod_clears_pin");
     assert!(
         persisted.mods[1].lock.is_none(),

@@ -18,25 +18,27 @@ use modde_core::settings::AppSettings;
 mod fomod_wizard_state;
 mod install_ops;
 mod model;
+mod profile_ops;
 mod state;
 mod tool_ops;
 mod tool_settings;
 mod update;
 mod view;
 
-/// Drive an async database future to completion from iced's synchronous
-/// `update`/`view` paths.
+/// Drive an async database future to completion from a synchronous blocking
+/// worker.
 ///
-/// modde's storage layer is async (`sqlx`), but iced's `update(&mut self, …)`
-/// handler cannot `.await`. This bridges the two: the future is driven on a
-/// dedicated multi-threaded runtime, executed on a freshly spawned scoped
-/// thread so `block_on` never runs inside iced's own ambient runtime (which
-/// would panic with "Cannot start a runtime from within a runtime"). The scope
-/// lets the future borrow local data; the runtime is shared across calls.
+/// modde's storage layer is async (`sqlx`), but some CPU/filesystem-heavy
+/// loaders intentionally run in `tokio::task::spawn_blocking` and need to call
+/// async DB APIs from that synchronous body. This shim provides that bridge
+/// without starting a nested Tokio runtime on iced's ambient executor. It also
+/// remains acceptable for the one-time startup DB open before the first render.
 ///
-/// Prefer `.await` in code that is already async (e.g. `Task::perform`
-/// closures); use this only on the synchronous `update`/`view`/`new` paths and
-/// inside `spawn_blocking` closures.
+/// Do not call this on the iced render/update/view path. If the work is pure DB
+/// with owned inputs, make the loader `async` and `.await` the shared
+/// `ModdeDb` handle inside `Task::perform`; if it also does CPU/filesystem work,
+/// keep the whole synchronous body inside `spawn_blocking` and use this shim
+/// there.
 pub(crate) fn block_on<F>(future: F) -> F::Output
 where
     F: std::future::Future,
@@ -65,10 +67,10 @@ pub use self::fomod_wizard_state::FOMODWizardState;
 pub(crate) use self::state::format_lock_reason;
 pub use self::state::{
     AddCustomGameDraft, AddCustomGameDraftField, AddCustomGameState, DataTabConflicts,
-    ExecutableDraft, ExecutableDraftField, ExecutableUiEntry, ProfileContextSnapshot,
-    ProfileLoadOutcome, ReorderDirection, SidebarGroup, ToolApplyResult, ToolHistoryUiEntry,
-    ToolLoadSnapshot, ToolReleaseSupport, ToolRevertResult, ToolState, ToolUiEntry, View,
-    WabbajackInstallerState, WabbajackTab,
+    DiagnosticsComputed, ExecutableDraft, ExecutableDraftField, ExecutableUiEntry,
+    ProfileContextSnapshot, ProfileLoadOutcome, ReorderDirection, SidebarGroup, ToolApplyResult,
+    ToolHistoryUiEntry, ToolLoadSnapshot, ToolReleaseSupport, ToolRevertResult,
+    ToolSettingWriteResult, ToolState, ToolUiEntry, View, WabbajackInstallerState, WabbajackTab,
 };
 pub use self::tool_ops::parse_executable_environment;
 #[cfg(test)]
@@ -113,6 +115,58 @@ pub enum NexusAuthStatus {
     Checking,
     Valid { username: String, is_premium: bool },
     Invalid(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum ProfileWriteKind {
+    Create {
+        name: String,
+        game_id: String,
+    },
+    Delete {
+        name: String,
+    },
+    Fork {
+        new_name: String,
+    },
+    AddMod {
+        mod_id: String,
+    },
+    RemoveMod,
+    ToggleMod {
+        mod_id: String,
+        enabled: bool,
+    },
+    Reorder {
+        mod_id: String,
+        direction: ReorderDirection,
+    },
+    Lock {
+        mod_id: String,
+    },
+    Unlock {
+        mod_id: String,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct ProfileWriteOutcome {
+    pub status_message: Option<String>,
+    pub reload: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum ExperimentWriteKind {
+    Try,
+    Rollback,
+    Commit,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExperimentWriteOutcome {
+    pub previous_profile: Option<String>,
+    pub status_message: String,
+    pub reload: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -215,6 +269,10 @@ pub struct Modde {
     /// (`Message::DataTabConflictsLoaded`). Independent of `context_generation`
     /// so opening the Data tab never cancels an in-flight profile reload.
     pub data_tab_generation: u64,
+    /// Generation guard for async diagnostics runs. Bumped by diagnostics
+    /// kickoffs and by profile-context reloads so stale reports for a previous
+    /// active profile never overwrite the current profile's diagnostics state.
+    pub diagnostics_generation: u64,
 }
 
 fn load_hidden_files(
@@ -438,6 +496,11 @@ pub enum Message {
         source: String,
         new_name: String,
     },
+    ProfileWriteDone {
+        generation: u64,
+        kind: ProfileWriteKind,
+        result: Result<ProfileWriteOutcome, String>,
+    },
 
     // Profile dialog
     OpenNewProfileDialog,
@@ -652,6 +715,11 @@ pub enum Message {
     TryProfile,
     RollbackExperiment,
     CommitExperiment,
+    ExperimentWriteDone {
+        generation: u64,
+        kind: ExperimentWriteKind,
+        result: Result<ExperimentWriteOutcome, String>,
+    },
 
     // Saves
     LoadSaveHistory,
@@ -667,6 +735,10 @@ pub enum Message {
 
     // Diagnostics
     RunDiagnostics,
+    DiagnosticsComputed {
+        generation: u64,
+        result: Result<DiagnosticsComputed, String>,
+    },
 
     // Tools
     LoadTools,
@@ -690,6 +762,10 @@ pub enum Message {
     ToggleTool {
         tool_id: String,
         enabled: bool,
+    },
+    ToolSettingWritten {
+        tool_id: String,
+        result: Result<ToolSettingWriteResult, String>,
     },
     ToggleToolAdvancedSettings,
     ApplyTool(String),

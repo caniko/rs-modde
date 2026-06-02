@@ -11,9 +11,9 @@ use super::state::{
 };
 use super::tool_ops::{load_executables_for_game, load_tools_state, load_tools_state_blocking};
 use super::{
-    Message, Modde, SettingsState, ToolLoadSnapshot, View, WabbajackInstallerState,
-    build_conflict_rows, build_default_download_meta, detected_game_ids, format_diagnostic_entry,
-    load_active_plugins, load_hidden_files, settings_game_install_paths,
+    DiagnosticsComputed, Message, Modde, SettingsState, ToolLoadSnapshot, View,
+    WabbajackInstallerState, build_conflict_rows, build_default_download_meta, detected_game_ids,
+    format_diagnostic_entry, load_active_plugins, load_hidden_files, settings_game_install_paths,
 };
 
 impl Modde {
@@ -162,6 +162,7 @@ impl Modde {
     fn dispatch_profile_context(&mut self, request: ProfileContextRequest) -> Task<Message> {
         self.context_generation = self.context_generation.wrapping_add(1);
         let generation = self.context_generation;
+        self.diagnostics_generation = self.diagnostics_generation.wrapping_add(1);
         // A composite reload recomputes the data-tab conflicts authoritatively,
         // so any in-flight standalone data-tab refresh is now stale — invalidate
         // it so its older result can't clobber the new game's conflicts.
@@ -412,67 +413,37 @@ impl Modde {
         })
     }
 
-    pub(super) fn run_diagnostics_now(&mut self) {
+    pub(super) fn start_diagnostics_load(&mut self) -> Task<Message> {
         let Some(profile) = self.loaded_profile.clone() else {
             self.status_message = "Select a profile before running diagnostics".to_string();
             self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Error(
                 "Select a profile before running diagnostics.".to_string(),
             );
-            return;
+            return Task::none();
         };
+        self.diagnostics_generation = self.diagnostics_generation.wrapping_add(1);
+        let generation = self.diagnostics_generation;
+        self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Running;
+        self.status_message = "Running diagnostics...".to_string();
+        Task::perform(load_diagnostics(self.db.clone(), profile), move |result| {
+            Message::DiagnosticsComputed { generation, result }
+        })
+    }
 
-        let pm = ProfileManager::with_db(self.db.clone());
-
-        let hidden = load_hidden_files(&pm, &profile);
-        let active_plugins = load_active_plugins(&pm, &profile);
-        let integrity = Self::verify_staging_integrity(&ProfileManager::staging_dir(&profile.name));
-        let engine = match profile.game_id.as_str() {
-            "skyrim-se" | "skyrim-ae" | "fallout4" | "fallout76" => {
-                modde_games::bethesda::diagnostics::bethesda_diagnostics()
-            }
-            _ => modde_core::diagnostics::base_diagnostics(),
+    pub(super) fn apply_diagnostics_computed(&mut self, computed: DiagnosticsComputed) {
+        let diagnostic_count = computed.report.entries.len();
+        let broken_count = computed.report.integrity.broken_symlinks.len();
+        self.data_tab_state.missing_store_mod_count = computed.missing_store_mod_count;
+        self.data_tab_conflicts = computed.data_tab_conflicts;
+        self.diagnostics_state =
+            crate::views::diagnostics::DiagnosticsState::Complete(computed.report);
+        self.status_message = if diagnostic_count == 0 && broken_count == 0 {
+            "Diagnostics complete: no issues found".to_string()
+        } else {
+            format!(
+                "Diagnostics complete: {diagnostic_count} issue(s), {broken_count} broken symlink(s)"
+            )
         };
-        let classifier = modde_games::resolve_collision_classifier(profile.game_id.as_str());
-
-        match modde_core::diagnostics::run_profile_diagnostics(
-            profile.game_id.as_str(),
-            &profile,
-            &active_plugins,
-            &modde_core::paths::store_dir(),
-            &ProfileManager::staging_dir(&profile.name),
-            &hidden,
-            classifier.as_deref(),
-            &engine,
-        ) {
-            Ok((diagnostics, analysis)) => {
-                self.data_tab_state.missing_store_mod_count = analysis.missing_store_mods.len();
-                self.data_tab_conflicts = build_conflict_rows(&analysis, &hidden);
-                let entries: Vec<_> = diagnostics.iter().map(format_diagnostic_entry).collect();
-                let diagnostic_count = entries.len();
-                let broken_count = integrity.broken_symlinks.len();
-                self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Complete(
-                    crate::views::diagnostics::DiagnosticsReport {
-                        profile_name: profile.name.clone(),
-                        game_id: profile.game_id.to_string(),
-                        entries,
-                        integrity,
-                    },
-                );
-                self.status_message = if diagnostic_count == 0 && broken_count == 0 {
-                    "Diagnostics complete: no issues found".to_string()
-                } else {
-                    format!(
-                        "Diagnostics complete: {diagnostic_count} issue(s), {broken_count} broken symlink(s)"
-                    )
-                };
-            }
-            Err(err) => {
-                self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Error(
-                    format!("Diagnostics failed: {err}"),
-                );
-                self.status_message = format!("Diagnostics failed: {err}");
-            }
-        }
     }
 
     pub(super) fn verify_staging_integrity(
@@ -974,4 +945,52 @@ pub(super) async fn load_data_tab_conflicts(
     })
     .await
     .map_err(|err| err.to_string())?
+}
+
+pub(super) async fn load_diagnostics(
+    db: modde_core::db::ModdeDb,
+    profile: modde_core::Profile,
+) -> Result<DiagnosticsComputed, String> {
+    tokio::task::spawn_blocking(move || load_diagnostics_blocking(db, profile))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn load_diagnostics_blocking(
+    db: modde_core::db::ModdeDb,
+    profile: modde_core::Profile,
+) -> Result<DiagnosticsComputed, String> {
+    let pm = ProfileManager::with_db(db);
+    let hidden = load_hidden_files(&pm, &profile);
+    let active_plugins = load_active_plugins(&pm, &profile);
+    let integrity = Modde::verify_staging_integrity(&ProfileManager::staging_dir(&profile.name));
+    let engine = match profile.game_id.as_str() {
+        "skyrim-se" | "skyrim-ae" | "fallout4" | "fallout76" => {
+            modde_games::bethesda::diagnostics::bethesda_diagnostics()
+        }
+        _ => modde_core::diagnostics::base_diagnostics(),
+    };
+    let classifier = modde_games::resolve_collision_classifier(profile.game_id.as_str());
+    let (diagnostics, analysis) = modde_core::diagnostics::run_profile_diagnostics(
+        profile.game_id.as_str(),
+        &profile,
+        &active_plugins,
+        &modde_core::paths::store_dir(),
+        &ProfileManager::staging_dir(&profile.name),
+        &hidden,
+        classifier.as_deref(),
+        &engine,
+    )
+    .map_err(|err| err.to_string())?;
+    let entries = diagnostics.iter().map(format_diagnostic_entry).collect();
+    Ok(DiagnosticsComputed {
+        report: crate::views::diagnostics::DiagnosticsReport {
+            profile_name: profile.name.clone(),
+            game_id: profile.game_id.to_string(),
+            entries,
+            integrity,
+        },
+        data_tab_conflicts: build_conflict_rows(&analysis, &hidden),
+        missing_store_mod_count: analysis.missing_store_mods.len(),
+    })
 }

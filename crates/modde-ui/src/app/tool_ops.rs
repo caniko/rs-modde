@@ -73,7 +73,9 @@ pub(super) async fn install_selected_proton_version(
 ) -> Result<String, String> {
     let tool = modde_games::tools::resolve_tool("proton")
         .ok_or_else(|| "Proton tool is not registered".to_string())?;
-    let row = crate::app::block_on(db.load_tool_config(&GameId::from(game_id.as_str()), "proton"))
+    let row = db
+        .load_tool_config(&GameId::from(game_id.as_str()), "proton")
+        .await
         .map_err(|err| err.to_string())?;
     let config = row.map_or_else(
         || tool.default_config(),
@@ -103,13 +105,10 @@ pub(super) async fn load_executables_for_game(
     db: modde_core::db::ModdeDb,
     game_id: String,
 ) -> Result<Vec<ExecutableUiEntry>, String> {
-    tokio::task::spawn_blocking(move || {
-        crate::app::block_on(db.load_executable_configs(&GameId::from(game_id.as_str())))
-            .map_err(|err| err.to_string())
-            .map(|rows| rows.into_iter().map(ExecutableUiEntry::from_row).collect())
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    db.load_executable_configs(&GameId::from(game_id.as_str()))
+        .await
+        .map_err(|err| err.to_string())
+        .map(|rows| rows.into_iter().map(ExecutableUiEntry::from_row).collect())
 }
 
 pub(super) fn load_tools_state_blocking(
@@ -511,37 +510,16 @@ pub(super) async fn deactivate_optiscaler_for_game(
     })
 }
 
-pub(super) async fn restore_tool_settings_for_game(
-    db: modde_core::db::ModdeDb,
-    game_id: String,
-    tool_id: String,
-    node_id: String,
-) -> Result<String, String> {
-    let typed_game_id = GameId::from(game_id.as_str());
-    crate::app::block_on(db.restore_tool_setting_node(&typed_game_id, &tool_id, &node_id))
-        .map_err(|err| err.to_string())?;
-    crate::app::block_on(modde_games::launcher::generate_tool_configs(
-        &typed_game_id,
-        &db,
-    ))
-    .map_err(|err| err.to_string())?;
-    let display_name = modde_games::tools::resolve_tool(&tool_id)
-        .map_or_else(|| tool_id.clone(), |tool| tool.display_name().to_string());
-    Ok(format!("Restored {display_name} settings version"))
-}
-
 pub(super) async fn save_executable_for_game(
     db: modde_core::db::ModdeDb,
     row: modde_core::db::ExecutableConfigRow,
 ) -> Result<String, String> {
-    tokio::task::spawn_blocking(move || {
-        let name = row.name.clone();
-        let game_id = row.game_id.clone();
-        crate::app::block_on(db.save_executable_config(&row)).map_err(|err| err.to_string())?;
-        Ok(format!("Saved executable '{name}' for {game_id}"))
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    let name = row.name.clone();
+    let game_id = row.game_id.clone();
+    db.save_executable_config(&row)
+        .await
+        .map_err(|err| err.to_string())?;
+    Ok(format!("Saved executable '{name}' for {game_id}"))
 }
 
 pub(super) async fn remove_executable_for_game(
@@ -549,19 +527,17 @@ pub(super) async fn remove_executable_for_game(
     game_id: String,
     name: String,
 ) -> Result<String, String> {
-    tokio::task::spawn_blocking(move || {
-        if crate::app::block_on(db.delete_executable_config(&GameId::from(game_id.as_str()), &name))
-            .map_err(|err| err.to_string())?
-        {
-            Ok(format!("Removed executable '{name}'"))
-        } else {
-            Err(format!(
-                "No executable named '{name}' is configured for {game_id}"
-            ))
-        }
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    if db
+        .delete_executable_config(&GameId::from(game_id.as_str()), &name)
+        .await
+        .map_err(|err| err.to_string())?
+    {
+        Ok(format!("Removed executable '{name}'"))
+    } else {
+        Err(format!(
+            "No executable named '{name}' is configured for {game_id}"
+        ))
+    }
 }
 
 pub(super) async fn run_saved_executable_for_game(
