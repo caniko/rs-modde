@@ -15,6 +15,9 @@ test -s keys/minisign.pub || die "missing keys/minisign.pub; required upstream p
 test -s "$RELEASE_DIR/SHA256SUMS.txt" || die "missing ${RELEASE_DIR}/SHA256SUMS.txt"
 test -s "$RELEASE_DIR/SHA256SUMS.txt.minisig" || die "missing ${RELEASE_DIR}/SHA256SUMS.txt.minisig"
 
+# Equivalent to `nix run .#verify-release` (rs-harbor.lib.mkMinisignVerify),
+# kept inline here because the smoke is parameterized by $RELEASE_DIR whereas
+# the app pins release/. Both verify SHA256SUMS.txt against keys/minisign.pub.
 minisign -V \
   -m "$RELEASE_DIR/SHA256SUMS.txt" \
   -x "$RELEASE_DIR/SHA256SUMS.txt.minisig" \

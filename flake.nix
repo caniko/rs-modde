@@ -1325,6 +1325,23 @@
             };
           in "${script}/bin/release-smoke";
         };
+
+        # Release artifact signing/verification via the rs-harbor binding.
+        # `minisign -S/-V` over release/SHA256SUMS.txt against keys/minisign.pub —
+        # the same operation scripts/smoke/smoke-signatures.sh and the
+        # simit-generated release.yml perform, exposed as reusable apps.
+        #   MINISIGN_SECRET_KEY=… MINISIGN_PASSWORD=… nix run .#sign-release
+        #   nix run .#verify-release
+        apps.sign-release = rs-harbor.lib.mkMinisignSign {
+          inherit pkgs;
+          files = ["release/SHA256SUMS.txt"];
+        };
+
+        apps.verify-release = rs-harbor.lib.mkMinisignVerify {
+          inherit pkgs;
+          files = ["release/SHA256SUMS.txt"];
+          publicKeyFile = "keys/minisign.pub";
+        };
       });
   in
     {
