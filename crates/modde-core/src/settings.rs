@@ -24,6 +24,71 @@ pub struct AppSettings {
     pub selected_game: Option<String>,
     #[serde(default)]
     pub update_check: UpdateCheckSettings,
+    /// Storage backend selection. Defaults to `SQLite`; omitted from old
+    /// `settings.toml` files, which therefore keep using `SQLite` unchanged.
+    #[serde(default)]
+    pub database: DatabaseSettings,
+}
+
+/// Which database backend modde stores its state in, plus the `PostgreSQL`
+/// connection parameters (used only when `backend = "postgres"`).
+///
+/// Every field is `#[serde(default)]`, so existing config files round-trip and
+/// default to `SQLite`. Environment variables override these at startup
+/// (`MODDE_DATABASE_BACKEND`, `MODDE_DATABASE_URL`, `MODDE_DB_PASSWORD_FILE`) so
+/// the Home Manager module can configure the backend declaratively without
+/// rewriting `settings.toml`. The `PostgreSQL` password is never stored here — it
+/// is read at runtime from `password_file`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DatabaseSettings {
+    #[serde(default)]
+    pub backend: DbBackend,
+    /// Full connection URL (e.g. `postgres://user@host/db`). Takes precedence
+    /// over the discrete `host`/`port`/`dbname`/`user` fields when set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub port: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dbname: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
+    /// Path to a file containing the `PostgreSQL` password (sops-nix compatible).
+    /// Read at runtime; never written back to `settings.toml`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password_file: Option<PathBuf>,
+}
+
+/// Selectable storage backend.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DbBackend {
+    #[default]
+    Sqlite,
+    Postgres,
+}
+
+impl DbBackend {
+    /// Parse a backend name (used for the `MODDE_DATABASE_BACKEND` env var and
+    /// the CLI `--backend` flag). Case-insensitive.
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "sqlite" => Some(Self::Sqlite),
+            "postgres" | "postgresql" | "pg" => Some(Self::Postgres),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Sqlite => "sqlite",
+            Self::Postgres => "postgres",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,7 +114,9 @@ pub struct GamePath {
 }
 
 impl AppSettings {
-    fn config_path() -> PathBuf {
+    /// Path to the `settings.toml` file backing [`AppSettings`].
+    #[must_use]
+    pub fn config_path() -> PathBuf {
         crate::paths::modde_config_dir().join("settings.toml")
     }
 

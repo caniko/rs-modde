@@ -9,9 +9,11 @@ use modde_core::profile::ProfileManager;
 use super::load_profile_or_default;
 
 pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Result<()> {
-    let pm = ProfileManager::open().context("failed to open profile database")?;
+    let pm = ProfileManager::open()
+        .await
+        .context("failed to open profile database")?;
 
-    let profile = load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref())?;
+    let profile = load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref()).await?;
 
     let name = &profile.name;
     info!(profile = %name, game = %profile.game_id, "verifying installed files");

@@ -10,7 +10,7 @@ use crate::StockAction;
 use modde_games::resolve_game_plugin;
 
 pub async fn handle(action: StockAction) -> Result<()> {
-    let db = ModdeDb::open().context("failed to open database")?;
+    let db = ModdeDb::open().await.context("failed to open database")?;
     let mgr = StockGameManager::with_db(StockGameManager::default_dir(), db);
 
     match action {

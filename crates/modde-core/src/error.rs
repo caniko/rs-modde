@@ -20,7 +20,7 @@ pub enum CoreError {
     TomlDe(#[from] toml::de::Error),
 
     #[error("database error: {0}")]
-    Database(#[from] rusqlite::Error),
+    Database(#[from] sqlx::Error),
 
     #[error("invalid Nexus id: {0}")]
     NexusId(#[from] crate::nexus_id::NexusIdError),

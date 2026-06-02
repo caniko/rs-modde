@@ -62,14 +62,16 @@ fn find_mod_or_bail(profile: &Profile, mod_id: &str) -> Result<usize> {
     .into())
 }
 
-pub fn handle(action: ProfileAction) -> Result<()> {
-    let pm = ProfileManager::open().context("failed to open profile database")?;
+pub async fn handle(action: ProfileAction) -> Result<()> {
+    let pm = ProfileManager::open()
+        .await
+        .context("failed to open profile database")?;
 
     match action {
         ProfileAction::List { game } => {
             let profiles = match game {
-                Some(ref g) => pm.list_for_game(&GameId::from(g.as_str()))?,
-                None => pm.list()?,
+                Some(ref g) => pm.list_for_game(&GameId::from(g.as_str())).await?,
+                None => pm.list().await?,
             };
             if profiles.is_empty() {
                 println!("No profiles found.");
@@ -84,13 +86,16 @@ pub fn handle(action: ProfileAction) -> Result<()> {
         }
         ProfileAction::Switch { name, game } => {
             let save_dir = resolve_save_dir(&game);
-            let fp = compute_fingerprint(&pm, &name, &game);
-            match pm.activate_with_fingerprint(
-                &name,
-                &GameId::from(game.as_str()),
-                save_dir.as_deref(),
-                fp.as_ref(),
-            )? {
+            let fp = compute_fingerprint(&pm, &name, &game).await;
+            match pm
+                .activate_with_fingerprint(
+                    &name,
+                    &GameId::from(game.as_str()),
+                    save_dir.as_deref(),
+                    fp.as_ref(),
+                )
+                .await?
+            {
                 ActivateResult::Activated => {
                     info!(profile = %name, "switched to profile");
                     if save_dir.is_some() {
@@ -121,24 +126,27 @@ pub fn handle(action: ProfileAction) -> Result<()> {
                 load_order_rules: smallvec::SmallVec::new(),
                 load_order_lock: None,
             };
-            pm.create(&profile)?;
+            pm.create(&profile).await?;
             println!("Created profile: {name} (game: {game})");
         }
         ProfileAction::Delete { name, game } => {
-            pm.delete(&name, game.as_deref().map(GameId::from).as_ref())?;
+            pm.delete(&name, game.as_deref().map(GameId::from).as_ref())
+                .await?;
             println!("Deleted profile: {name}");
         }
         ProfileAction::Try { name, game } => {
             let save_dir = resolve_save_dir(&game);
-            let fp = compute_fingerprint(&pm, &name, &game);
+            let fp = compute_fingerprint(&pm, &name, &game).await;
             pm.try_profile_with_fingerprint(
                 &name,
                 &GameId::from(game.as_str()),
                 save_dir.as_deref(),
                 fp.as_ref(),
-            )?;
+            )
+            .await?;
             let depth = pm
-                .active(&GameId::from(game.as_str()))?
+                .active(&GameId::from(game.as_str()))
+                .await?
                 .map_or(0, |a| a.experiment_depth);
             println!("Experimenting with profile: {name} (stack depth: {depth})");
             println!(
@@ -149,31 +157,36 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             let save_dir = resolve_save_dir(&game);
 
             // Compute fingerprint for the current (about-to-be-rolled-back) profile
-            let fp = pm.active(&GameId::from(game.as_str()))?.and_then(|info| {
-                if !supports_save_profiles(&game).ok()? {
-                    return None;
-                }
-                let game_plugin = modde_games::resolve_game_plugin(&game)?;
-                let staging_dir = ProfileManager::staging_dir(&info.profile.name);
-                Some(SaveFingerprint::compute(&info.profile.mods, |mod_id| {
-                    let mod_path = staging_dir.join(mod_id);
-                    game_plugin.classify_mod(&mod_path).affects_saves()
-                }))
-            });
+            let fp = pm
+                .active(&GameId::from(game.as_str()))
+                .await?
+                .and_then(|info| {
+                    if !supports_save_profiles(&game).ok()? {
+                        return None;
+                    }
+                    let game_plugin = modde_games::resolve_game_plugin(&game)?;
+                    let staging_dir = ProfileManager::staging_dir(&info.profile.name);
+                    Some(SaveFingerprint::compute(&info.profile.mods, |mod_id| {
+                        let mod_path = staging_dir.join(mod_id);
+                        game_plugin.classify_mod(&mod_path).affects_saves()
+                    }))
+                });
 
-            let restored = pm.rollback_with_fingerprint(
-                &GameId::from(game.as_str()),
-                save_dir.as_deref(),
-                fp.as_ref(),
-            )?;
+            let restored = pm
+                .rollback_with_fingerprint(
+                    &GameId::from(game.as_str()),
+                    save_dir.as_deref(),
+                    fp.as_ref(),
+                )
+                .await?;
             println!("Rolled back to profile: {restored}");
         }
         ProfileAction::Commit { game } => {
-            pm.commit(&GameId::from(game.as_str()))?;
+            pm.commit(&GameId::from(game.as_str())).await?;
             println!("Experiment accepted. Rollback stack cleared for game: {game}");
         }
         ProfileAction::Active { game } => {
-            match pm.active(&GameId::from(game.as_str()))? {
+            match pm.active(&GameId::from(game.as_str())).await? {
                 Some(info) => {
                     println!(
                         "Active profile: {} (game: {})",
@@ -190,6 +203,7 @@ pub fn handle(action: ProfileAction) -> Result<()> {
                     // Show fingerprint info
                     if let Some(fp) =
                         compute_fingerprint(&pm, &info.profile.name, info.profile.game_id.as_str())
+                            .await
                     {
                         if fp.is_empty() {
                             println!("  Save fingerprint: none (no save-breaking mods)");
@@ -213,12 +227,14 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             game,
             unlock,
         } => {
-            let id = pm.fork_with_options(
-                &source,
-                &name,
-                &GameId::from(game.as_str()),
-                modde_core::profile::ForkOptions { unlock },
-            )?;
+            let id = pm
+                .fork_with_options(
+                    &source,
+                    &name,
+                    &GameId::from(game.as_str()),
+                    modde_core::profile::ForkOptions { unlock },
+                )
+                .await?;
             if unlock {
                 println!(
                     "Forked profile '{source}' -> '{name}' (id: {id}, mods + saves cloned, locks stripped)"
@@ -228,7 +244,9 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             }
         }
         ProfileAction::Lock { name, game, note } => {
-            let mut profile = pm.load(&name, game.as_deref().map(GameId::from).as_ref())?;
+            let mut profile = pm
+                .load(&name, game.as_deref().map(GameId::from).as_ref())
+                .await?;
             if let Some(existing) = profile.load_order_lock.as_ref() {
                 anyhow::bail!(
                     "profile '{name}' is already locked by {} — unlock first to re-lock",
@@ -238,18 +256,20 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             profile.load_order_lock = Some(LoadOrderLock::now(LockReason::Manual {
                 note: note.clone(),
             }));
-            pm.update(&profile)?;
+            pm.update(&profile).await?;
             match note {
                 Some(n) => println!("Locked profile '{name}' (manual: {n})"),
                 None => println!("Locked profile '{name}' (manual)"),
             }
         }
         ProfileAction::Unlock { name, game } => {
-            let mut profile = pm.load(&name, game.as_deref().map(GameId::from).as_ref())?;
+            let mut profile = pm
+                .load(&name, game.as_deref().map(GameId::from).as_ref())
+                .await?;
             match profile.load_order_lock.take() {
                 None => println!("Profile '{name}' was not locked."),
                 Some(prior) => {
-                    pm.update(&profile)?;
+                    pm.update(&profile).await?;
                     println!(
                         "Unlocked profile '{name}' (was {}, locked at {})",
                         format_lock_reason(&prior.reason),
@@ -259,7 +279,9 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             }
         }
         ProfileAction::LockInfo { name, game } => {
-            let profile = pm.load(&name, game.as_deref().map(GameId::from).as_ref())?;
+            let profile = pm
+                .load(&name, game.as_deref().map(GameId::from).as_ref())
+                .await?;
             match profile.load_order_lock.as_ref() {
                 None => println!("Profile '{name}' is not locked."),
                 Some(lock) => {
@@ -310,7 +332,9 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             // A per-mod pin is independent of the profile-level lock. If the
             // profile is already Wabbajack-locked, lock-mod still succeeds —
             // the pin takes effect after a later `unlock` or `fork --unlock`.
-            let mut profile = pm.load(&name, game.as_deref().map(GameId::from).as_ref())?;
+            let mut profile = pm
+                .load(&name, game.as_deref().map(GameId::from).as_ref())
+                .await?;
             let idx = find_mod_or_bail(&profile, &mod_id)?;
             if let Some(existing) = profile.mods[idx].lock.as_ref() {
                 anyhow::bail!(
@@ -319,19 +343,21 @@ pub fn handle(action: ProfileAction) -> Result<()> {
                 );
             }
             profile.mods[idx].lock = Some(LockReason::Manual { note: note.clone() });
-            pm.update(&profile)?;
+            pm.update(&profile).await?;
             match note {
                 Some(n) => println!("Pinned '{mod_id}' in profile '{name}' (manual: {n})"),
                 None => println!("Pinned '{mod_id}' in profile '{name}'"),
             }
         }
         ProfileAction::UnlockMod { name, mod_id, game } => {
-            let mut profile = pm.load(&name, game.as_deref().map(GameId::from).as_ref())?;
+            let mut profile = pm
+                .load(&name, game.as_deref().map(GameId::from).as_ref())
+                .await?;
             let idx = find_mod_or_bail(&profile, &mod_id)?;
             match profile.mods[idx].lock.take() {
                 None => println!("'{mod_id}' was not pinned"),
                 Some(prior) => {
-                    pm.update(&profile)?;
+                    pm.update(&profile).await?;
                     println!("Unpinned '{mod_id}' (was {})", format_lock_reason(&prior));
                 }
             }
@@ -342,7 +368,7 @@ pub fn handle(action: ProfileAction) -> Result<()> {
             manifest,
             apply,
         } => {
-            dedup(&pm, &name, game.as_deref(), manifest.as_deref(), apply)?;
+            dedup(&pm, &name, game.as_deref(), manifest.as_deref(), apply).await?;
         }
     }
 
@@ -352,14 +378,14 @@ pub fn handle(action: ProfileAction) -> Result<()> {
 /// Handle `modde profile dedup`. Splits into layer-1 (heuristic, no
 /// manifest) and layer-2 (authoritative, manifest-backed) paths, both
 /// with optional `--apply`.
-fn dedup(
+async fn dedup(
     pm: &ProfileManager,
     name: &str,
     game: Option<&str>,
     manifest_path: Option<&std::path::Path>,
     apply: bool,
 ) -> Result<()> {
-    let mut profile = pm.load(name, game.map(GameId::from).as_ref())?;
+    let mut profile = pm.load(name, game.map(GameId::from).as_ref()).await?;
 
     // ── Layer 1: pure-DB heuristic ────────────────────────────────
     //
@@ -488,7 +514,9 @@ fn dedup(
         .retain(|m| !leaked_set.contains(m.mod_id.as_str()));
     let deleted = before - profile.mods.len();
 
-    pm.update(&profile).context("failed to save profile")?;
+    pm.update(&profile)
+        .await
+        .context("failed to save profile")?;
 
     info!(%name, deleted, "pruned leaked filesystem-scanner duplicates");
     println!(

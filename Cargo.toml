@@ -123,8 +123,14 @@ notify = { version = "8", default-features = false, features = [
   "macos_kqueue",
 ] }
 
-# Database
-rusqlite = { version = "0.39", features = ["bundled"] }
+# Database — async, multi-backend (SQLite default + optional Postgres).
+# `sqlite` pulls bundled libsqlite3-sys (no system SQLite needed; cross-build clean).
+# The `postgres` backend is enabled via the modde-core `postgres` feature.
+sqlx = { version = "0.8", default-features = false, features = [
+  "runtime-tokio",
+  "tls-rustls",
+  "sqlite",
+] }
 
 # Git
 git2 = "0.20"

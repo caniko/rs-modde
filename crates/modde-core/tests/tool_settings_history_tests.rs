@@ -1,9 +1,9 @@
 use modde_core::db::ModdeDb;
 use modde_core::resolver::GameId;
 
-#[test]
-fn tool_config_save_creates_history_nodes_and_edges() {
-    let db = ModdeDb::open_memory().expect("db");
+#[tokio::test]
+async fn tool_config_save_creates_history_nodes_and_edges() {
+    let db = ModdeDb::open_memory().await.expect("db");
 
     db.save_tool_config_with_reason(
         &GameId::from("skyrim-se"),
@@ -12,6 +12,7 @@ fn tool_config_save_creates_history_nodes_and_edges() {
         r#"{"fps":true}"#,
         "enable",
     )
+    .await
     .expect("first save");
     db.save_tool_config_with_reason(
         &GameId::from("skyrim-se"),
@@ -20,10 +21,12 @@ fn tool_config_save_creates_history_nodes_and_edges() {
         r#"{"fps":false}"#,
         "set:fps",
     )
+    .await
     .expect("second save");
 
     let history = db
         .list_tool_setting_history(&GameId::from("skyrim-se"), "mangohud", 10)
+        .await
         .expect("history");
     assert_eq!(history.len(), 2);
     assert!(history[0].is_current);
@@ -32,15 +35,16 @@ fn tool_config_save_creates_history_nodes_and_edges() {
 
     let edges = db
         .list_tool_setting_edges(&GameId::from("skyrim-se"), "mangohud")
+        .await
         .expect("edges");
     assert_eq!(edges.len(), 1);
     assert_eq!(edges[0].parent_node_id, history[1].node_id);
     assert_eq!(edges[0].child_node_id, history[0].node_id);
 }
 
-#[test]
-fn restoring_old_tool_settings_creates_branch_node() {
-    let db = ModdeDb::open_memory().expect("db");
+#[tokio::test]
+async fn restoring_old_tool_settings_creates_branch_node() {
+    let db = ModdeDb::open_memory().await.expect("db");
 
     db.save_tool_config_with_reason(
         &GameId::from("stellar-blade"),
@@ -49,6 +53,7 @@ fn restoring_old_tool_settings_creates_branch_node() {
         r#"{"proxy":"dxgi"}"#,
         "a",
     )
+    .await
     .expect("first save");
     db.save_tool_config_with_reason(
         &GameId::from("stellar-blade"),
@@ -57,9 +62,11 @@ fn restoring_old_tool_settings_creates_branch_node() {
         r#"{"proxy":"winmm"}"#,
         "b",
     )
+    .await
     .expect("second save");
     let old_node = db
         .list_tool_setting_history(&GameId::from("stellar-blade"), "optiscaler", 10)
+        .await
         .expect("history")
         .into_iter()
         .find(|node| node.reason == "a")
@@ -70,16 +77,19 @@ fn restoring_old_tool_settings_creates_branch_node() {
         "optiscaler",
         &old_node.node_id,
     )
+    .await
     .expect("restore");
 
     let current = db
         .load_tool_config(&GameId::from("stellar-blade"), "optiscaler")
+        .await
         .expect("load")
         .expect("row");
     assert_eq!(current.settings_json, r#"{"proxy":"dxgi"}"#);
 
     let history = db
         .list_tool_setting_history(&GameId::from("stellar-blade"), "optiscaler", 10)
+        .await
         .expect("history");
     assert_eq!(history.len(), 3);
     assert!(history[0].is_current);
@@ -87,6 +97,7 @@ fn restoring_old_tool_settings_creates_branch_node() {
 
     let edges = db
         .list_tool_setting_edges(&GameId::from("stellar-blade"), "optiscaler")
+        .await
         .expect("edges");
     assert_eq!(edges.len(), 2);
     assert!(
@@ -97,19 +108,21 @@ fn restoring_old_tool_settings_creates_branch_node() {
     );
 }
 
-#[test]
-fn schema_v10_migration_is_idempotent() {
+#[tokio::test]
+async fn schema_v10_migration_is_idempotent() {
     let temp = tempfile::tempdir().expect("tempdir");
     let path = temp.path().join("modde.sqlite");
     {
-        let db = ModdeDb::open_at(&path).expect("first open");
+        let db = ModdeDb::open_at(&path).await.expect("first open");
         db.save_tool_config(&GameId::from("skyrim-se"), "vkbasalt", false, "{}")
+            .await
             .expect("save");
     }
     {
-        let db = ModdeDb::open_at(&path).expect("second open");
+        let db = ModdeDb::open_at(&path).await.expect("second open");
         let history = db
             .list_tool_setting_history(&GameId::from("skyrim-se"), "vkbasalt", 10)
+            .await
             .expect("history");
         assert_eq!(history.len(), 1);
         assert!(history[0].is_current);

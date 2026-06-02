@@ -3,8 +3,10 @@ use anyhow::{Context, Result};
 use modde_core::paths;
 use modde_core::profile::ProfileManager;
 
-pub fn handle() -> Result<()> {
-    let pm = ProfileManager::open().context("failed to open profile database")?;
+pub async fn handle() -> Result<()> {
+    let pm = ProfileManager::open()
+        .await
+        .context("failed to open profile database")?;
 
     let profiles_dir = paths::modde_data_dir().join("profiles");
     if !profiles_dir.exists() {
@@ -15,7 +17,7 @@ pub fn handle() -> Result<()> {
         return Ok(());
     }
 
-    let count = pm.import_toml(&profiles_dir)?;
+    let count = pm.import_toml(&profiles_dir).await?;
     if count == 0 {
         println!("No TOML profiles found to import.");
     } else {

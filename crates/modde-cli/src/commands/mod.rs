@@ -1,5 +1,6 @@
 pub mod backup;
 pub mod collisions;
+pub mod config;
 pub mod deploy;
 pub mod detect;
 pub mod diagnostics;
@@ -83,7 +84,7 @@ pub fn require_save_dir(game_id: &str) -> Result<PathBuf> {
 }
 
 /// Compute a save fingerprint for a profile by classifying its mods via the game plugin.
-pub fn compute_fingerprint(
+pub async fn compute_fingerprint(
     pm: &ProfileManager,
     name: &str,
     game_id: &str,
@@ -91,7 +92,7 @@ pub fn compute_fingerprint(
     if !supports_save_profiles(game_id).ok()? {
         return None;
     }
-    let profile = pm.load(name, Some(&GameId::from(game_id))).ok()?;
+    let profile = pm.load(name, Some(&GameId::from(game_id))).await.ok()?;
     let game_plugin = modde_games::resolve_game_plugin(game_id)?;
     let staging_dir = ProfileManager::staging_dir(&profile.name);
 
@@ -103,32 +104,31 @@ pub fn compute_fingerprint(
 
 /// Load a profile by name (optional) and game (optional), falling back to
 /// the first available profile when no name is given.
-pub fn load_profile_or_default(
+pub async fn load_profile_or_default(
     pm: &ProfileManager,
     name: Option<&str>,
     game_id: Option<&str>,
 ) -> Result<Profile> {
     if let Some(name) = name {
-        Ok(pm.load(name, game_id.map(GameId::from).as_ref())?)
+        Ok(pm.load(name, game_id.map(GameId::from).as_ref()).await?)
     } else {
-        let profiles = pm.list()?;
+        let profiles = pm.list().await?;
         let first = profiles.first().ok_or_else(|| {
             anyhow::anyhow!(
                 "no profiles found. Create one with: modde profile create <name> --game <id>"
             )
         })?;
-        Ok(pm.load(&first.name, Some(&first.game_id))?)
+        Ok(pm.load(&first.name, Some(&first.game_id)).await?)
     }
 }
 
 /// Load the real plugin order for a profile, preferring the DB and falling back
 /// to the game's native `plugins.txt` when the DB has not been populated yet.
-pub fn load_plugin_order(pm: &ProfileManager, profile: &Profile) -> Result<Vec<PluginEntry>> {
-    let mut plugins = profile
-        .id
-        .map(|profile_id| pm.db().get_plugin_order(profile_id))
-        .transpose()?
-        .unwrap_or_default();
+pub async fn load_plugin_order(pm: &ProfileManager, profile: &Profile) -> Result<Vec<PluginEntry>> {
+    let mut plugins = match profile.id {
+        Some(profile_id) => pm.db().get_plugin_order(profile_id).await?,
+        None => Vec::new(),
+    };
 
     if plugins.is_empty() {
         plugins =
@@ -136,7 +136,7 @@ pub fn load_plugin_order(pm: &ProfileManager, profile: &Profile) -> Result<Vec<P
         if !plugins.is_empty()
             && let Some(profile_id) = profile.id
         {
-            pm.db().set_plugin_order(profile_id, &plugins)?;
+            pm.db().set_plugin_order(profile_id, &plugins).await?;
         }
     }
 
@@ -145,13 +145,13 @@ pub fn load_plugin_order(pm: &ProfileManager, profile: &Profile) -> Result<Vec<P
 
 /// Persist plugin order to both the DB and the game's native `plugins.txt`
 /// when the current game supports a writable plugin list.
-pub fn persist_plugin_order(
+pub async fn persist_plugin_order(
     pm: &ProfileManager,
     profile: &Profile,
     plugins: &[PluginEntry],
 ) -> Result<()> {
     if let Some(profile_id) = profile.id {
-        pm.db().set_plugin_order(profile_id, plugins)?;
+        pm.db().set_plugin_order(profile_id, plugins).await?;
     }
 
     if modde_games::resolve_game_plugin(profile.game_id.as_str())

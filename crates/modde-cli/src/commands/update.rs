@@ -42,8 +42,10 @@ pub async fn handle_check(
     game_id: Option<String>,
     period: String,
 ) -> Result<()> {
-    let pm = ProfileManager::open().context("failed to open profile database")?;
-    let profile = load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref())?;
+    let pm = ProfileManager::open()
+        .await
+        .context("failed to open profile database")?;
+    let profile = load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref()).await?;
 
     info!(profile = %profile.name, game = %profile.game_id, "checking for mod updates");
 
@@ -121,12 +123,15 @@ pub struct ApplySafety {
 /// This is the auto-update half of `modde update check`: pair them in a
 /// cron / scheduled task and the manager will keep itself current.
 pub async fn handle_apply(options: ApplyOptions) -> Result<()> {
-    let pm = ProfileManager::open().context("failed to open profile database")?;
+    let pm = ProfileManager::open()
+        .await
+        .context("failed to open profile database")?;
     let mut profile = load_profile_or_default(
         &pm,
         options.profile_name.as_deref(),
         options.game_id.as_deref(),
-    )?;
+    )
+    .await?;
 
     info!(
         profile = %profile.name,
@@ -217,7 +222,7 @@ pub async fn handle_apply(options: ApplyOptions) -> Result<()> {
     // MAIN file in one API round-trip per mod.
     let mut applied = 0usize;
     let mut failed = 0usize;
-    let mut db = ModdeDb::open().context("failed to open mod db")?;
+    let db = ModdeDb::open().await.context("failed to open mod db")?;
     let profile_id = profile
         .id
         .ok_or_else(|| anyhow::anyhow!("profile has no database id"))?;
@@ -376,13 +381,14 @@ pub async fn handle_apply(options: ApplyOptions) -> Result<()> {
                 plan,
                 InstallStatus::Installed,
             )
+            .await
             .context("failed to persist install plan")?;
         }
 
         applied += 1;
     }
 
-    pm.create_or_update(&profile)?;
+    pm.create_or_update(&profile).await?;
 
     println!(
         "\nApplied {applied} update(s); {failed} failure(s); {} unchanged.",

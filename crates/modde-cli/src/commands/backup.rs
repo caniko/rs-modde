@@ -5,7 +5,7 @@ use modde_core::resolver::{GameId, ModId};
 
 use crate::BackupAction;
 
-pub fn handle(action: BackupAction) -> Result<()> {
+pub async fn handle(action: BackupAction) -> Result<()> {
     let mgr = BackupManager::new().context("failed to initialise backup manager")?;
 
     match action {
@@ -48,9 +48,9 @@ pub fn handle(action: BackupAction) -> Result<()> {
             }
         }
         BackupAction::Plugins { profile, game } => {
-            let pm = modde_core::profile::ProfileManager::open()?;
-            let prof = super::load_profile_or_default(&pm, Some(&profile), Some(&game))?;
-            let plugins = super::load_plugin_order(&pm, &prof)?;
+            let pm = modde_core::profile::ProfileManager::open().await?;
+            let prof = super::load_profile_or_default(&pm, Some(&profile), Some(&game)).await?;
+            let plugins = super::load_plugin_order(&pm, &prof).await?;
             if plugins.is_empty() {
                 anyhow::bail!("no real plugin order found in the database or plugins.txt");
             }
@@ -67,9 +67,10 @@ pub fn handle(action: BackupAction) -> Result<()> {
                 .restore_plugin_order(&profile, &GameId::from(game.as_str()))
                 .context("failed to restore plugin order")?;
 
-            let pm = modde_core::profile::ProfileManager::open()?;
-            let prof = super::load_profile_or_default(&pm, Some(&profile), Some(&game))?;
+            let pm = modde_core::profile::ProfileManager::open().await?;
+            let prof = super::load_profile_or_default(&pm, Some(&profile), Some(&game)).await?;
             super::persist_plugin_order(&pm, &prof, &plugins)
+                .await
                 .context("failed to apply restored plugin order")?;
 
             println!("Restored plugin order ({} plugins):", plugins.len());

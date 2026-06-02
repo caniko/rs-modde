@@ -150,11 +150,11 @@ fn set_game_path_independent_games() {
 // ---------------------------------------------------------------------------
 
 /// Simulates the exact logic in `Modde::new()` for selecting a game from profiles.
-fn simulate_ui_init(
+async fn simulate_ui_init(
     pm: &ProfileManager,
     settings: &mut AppSettings,
 ) -> (Vec<modde_core::ProfileSummary>, Option<String>) {
-    let profiles = pm.list().unwrap_or_default();
+    let profiles = pm.list().await.unwrap_or_default();
     let mut selected_game = settings.selected_game.clone();
 
     // Auto-detect: if no game selected but profiles exist, pick first profile's game
@@ -168,25 +168,27 @@ fn simulate_ui_init(
     (profiles, selected_game)
 }
 
-#[test]
-fn ui_init_no_profiles_no_settings_gives_nothing() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn ui_init_no_profiles_no_settings_gives_nothing() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
     let mut settings = AppSettings::default();
 
-    let (profiles, selected) = simulate_ui_init(&pm, &mut settings);
+    let (profiles, selected) = simulate_ui_init(&pm, &mut settings).await;
 
     assert!(profiles.is_empty());
     assert!(selected.is_none());
     assert!(settings.selected_game.is_none());
 }
 
-#[test]
-fn ui_init_profile_exists_auto_selects_game() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
-    pm.create(&make_profile("3077", "cyberpunk2077")).unwrap();
+#[tokio::test]
+async fn ui_init_profile_exists_auto_selects_game() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
+    pm.create(&make_profile("3077", "cyberpunk2077"))
+        .await
+        .unwrap();
 
     let mut settings = AppSettings::default();
-    let (profiles, selected) = simulate_ui_init(&pm, &mut settings);
+    let (profiles, selected) = simulate_ui_init(&pm, &mut settings).await;
 
     assert_eq!(profiles.len(), 1);
     assert_eq!(profiles[0].name, "3077");
@@ -194,33 +196,39 @@ fn ui_init_profile_exists_auto_selects_game() {
     assert_eq!(settings.selected_game, Some("cyberpunk2077".to_string()));
 }
 
-#[test]
-fn ui_init_settings_already_has_game_does_not_override() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
-    pm.create(&make_profile("3077", "cyberpunk2077")).unwrap();
-    pm.create(&make_profile("skyrim", "skyrim-se")).unwrap();
+#[tokio::test]
+async fn ui_init_settings_already_has_game_does_not_override() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
+    pm.create(&make_profile("3077", "cyberpunk2077"))
+        .await
+        .unwrap();
+    pm.create(&make_profile("skyrim", "skyrim-se"))
+        .await
+        .unwrap();
 
     let mut settings = AppSettings {
         selected_game: Some("skyrim-se".into()),
         ..AppSettings::default()
     };
 
-    let (profiles, selected) = simulate_ui_init(&pm, &mut settings);
+    let (profiles, selected) = simulate_ui_init(&pm, &mut settings).await;
 
     assert_eq!(profiles.len(), 2);
     // Should keep the existing selection, not override with first profile's game
     assert_eq!(selected, Some("skyrim-se".to_string()));
 }
 
-#[test]
-fn ui_init_multiple_profiles_picks_first() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn ui_init_multiple_profiles_picks_first() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
     // DB returns profiles ordered by game_id, name
-    pm.create(&make_profile("beta", "skyrim-se")).unwrap();
-    pm.create(&make_profile("alpha", "cyberpunk2077")).unwrap();
+    pm.create(&make_profile("beta", "skyrim-se")).await.unwrap();
+    pm.create(&make_profile("alpha", "cyberpunk2077"))
+        .await
+        .unwrap();
 
     let mut settings = AppSettings::default();
-    let (profiles, selected) = simulate_ui_init(&pm, &mut settings);
+    let (profiles, selected) = simulate_ui_init(&pm, &mut settings).await;
 
     assert_eq!(profiles.len(), 2);
     // First profile in the list determines the game
@@ -267,14 +275,16 @@ fn cli_install_persists_game_path_and_selected_game() {
     );
 }
 
-#[test]
-fn cli_install_then_ui_sees_profile_and_settings() {
+#[tokio::test]
+async fn cli_install_then_ui_sees_profile_and_settings() {
     let tmp = tempfile::tempdir().unwrap();
     let settings_path = tmp.path().join("settings.toml");
 
     // 1. CLI creates profile
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
-    pm.create(&make_profile("3077", "cyberpunk2077")).unwrap();
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
+    pm.create(&make_profile("3077", "cyberpunk2077"))
+        .await
+        .unwrap();
 
     // 2. CLI persists settings
     simulate_cli_install_settings(
@@ -285,7 +295,7 @@ fn cli_install_then_ui_sees_profile_and_settings() {
 
     // 3. UI loads everything
     let mut settings = AppSettings::load_from(&settings_path);
-    let (profiles, selected) = simulate_ui_init(&pm, &mut settings);
+    let (profiles, selected) = simulate_ui_init(&pm, &mut settings).await;
 
     assert_eq!(profiles.len(), 1);
     assert_eq!(profiles[0].name, "3077");

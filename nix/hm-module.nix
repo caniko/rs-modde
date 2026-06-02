@@ -585,6 +585,45 @@ flake: {
       modde deploy ${deployArgs} || echo "modde: deploy failed for '${name}'"
       ${toolActivation name profile}
     '';
+  db = cfg.database;
+  postgresSelected = db.backend == "postgres";
+  hasUrl = db.url != null;
+  hasDiscrete = db.host != null && db.name != null && db.user != null;
+  databaseAssertions = [
+    {
+      assertion = !postgresSelected || hasUrl || hasDiscrete;
+      message = "programs.modde.database: backend = \"postgres\" requires either `url`, or all of `host`, `name`, and `user`.";
+    }
+    {
+      assertion = !postgresSelected || !(hasUrl && hasDiscrete);
+      message = "programs.modde.database: set `url` OR the discrete `host`/`port`/`name`/`user` fields, not both.";
+    }
+    {
+      assertion =
+        postgresSelected
+        || (db.url == null && db.host == null && db.port == null && db.name == null && db.user == null && db.passwordFile == null);
+      message = "programs.modde.database: connection fields (url/host/port/name/user/passwordFile) are only valid when backend = \"postgres\".";
+    }
+  ];
+  # Activation snippet that exports the MODDE_DATABASE_* environment the binary
+  # reads at startup. The password stays in a file (never the Nix store).
+  databaseEnv = lib.optionalString postgresSelected (
+    ''
+      export MODDE_DATABASE_BACKEND="postgres"
+    ''
+    + lib.optionalString hasUrl ''export MODDE_DATABASE_URL=${lib.escapeShellArg db.url}''
+    + "\n"
+    + lib.optionalString (db.host != null) ''export MODDE_DATABASE_HOST=${lib.escapeShellArg db.host}''
+    + "\n"
+    + lib.optionalString (db.port != null) ''export MODDE_DATABASE_PORT=${lib.escapeShellArg (toString db.port)}''
+    + "\n"
+    + lib.optionalString (db.name != null) ''export MODDE_DATABASE_NAME=${lib.escapeShellArg db.name}''
+    + "\n"
+    + lib.optionalString (db.user != null) ''export MODDE_DATABASE_USER=${lib.escapeShellArg db.user}''
+    + "\n"
+    + lib.optionalString (db.passwordFile != null) ''export MODDE_DB_PASSWORD_FILE=${lib.escapeShellArg (toString db.passwordFile)}''
+    + "\n"
+  );
 in {
   options.programs.modde = {
     enable = lib.mkEnableOption "modde game mod manager";
@@ -608,10 +647,67 @@ in {
         description = "Path to file containing the Nexus API key (sops-nix compatible).";
       };
     };
+
+    database = {
+      backend = lib.mkOption {
+        type = lib.types.enum ["sqlite" "postgres"];
+        default = "sqlite";
+        description = ''
+          Storage backend for modde's profile/mod/tool/save state. "sqlite"
+          (the default) uses a local file; "postgres" connects to a PostgreSQL
+          server configured via the options below.
+        '';
+      };
+
+      url = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "postgres://modde@localhost/modde";
+        description = ''
+          Full PostgreSQL connection URL. Takes precedence over the discrete
+          host/port/name/user options. Do NOT embed the password here — use
+          passwordFile instead so the secret never lands in the Nix store.
+        '';
+      };
+
+      host = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "PostgreSQL host (used when url is not set).";
+      };
+
+      port = lib.mkOption {
+        type = lib.types.nullOr lib.types.port;
+        default = null;
+        description = "PostgreSQL port (used when url is not set).";
+      };
+
+      name = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "PostgreSQL database name (used when url is not set).";
+      };
+
+      user = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "PostgreSQL user (used when url is not set).";
+      };
+
+      passwordFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = ''
+          Path to a file containing the PostgreSQL password (sops-nix
+          compatible). Read at modde runtime; never written to settings.toml or
+          the Nix store.
+        '';
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable {
-    assertions = profileAssertions;
+    assertions = profileAssertions ++ databaseAssertions;
 
     home.packages = [cfg.package];
 
@@ -620,6 +716,7 @@ in {
       ${lib.optionalString (cfg.nexus.apiKeyFile != null) ''
         export NEXUS_API_KEY_FILE="${cfg.nexus.apiKeyFile}"
       ''}
+      ${databaseEnv}
       ${lib.concatStringsSep "\n" (lib.mapAttrsToList profileActivation cfg.profiles)}
     '';
   };

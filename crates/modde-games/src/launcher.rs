@@ -604,11 +604,11 @@ pub fn register_heroic_wrapper(
 ///
 /// Reads tool configs from the database and calls each tool's `env_vars()`.
 /// Returns a flat list of `(KEY, VALUE)` pairs.
-pub fn collect_tool_env_vars(
+pub async fn collect_tool_env_vars(
     game_id: &GameId,
     db: &modde_core::db::ModdeDb,
 ) -> Result<Vec<(String, String)>> {
-    let rows = db.load_tool_configs(game_id)?;
+    let rows = db.load_tool_configs(game_id).await?;
     let mut all_vars = Vec::new();
 
     for row in &rows {
@@ -635,11 +635,11 @@ pub fn collect_tool_env_vars(
 }
 
 /// Collect all Wine DLL overrides from enabled tools for a game.
-pub fn collect_tool_dll_overrides(
+pub async fn collect_tool_dll_overrides(
     game_id: &GameId,
     db: &modde_core::db::ModdeDb,
 ) -> Result<Vec<String>> {
-    let rows = db.load_tool_configs(game_id)?;
+    let rows = db.load_tool_configs(game_id).await?;
     let mut overrides = Vec::new();
 
     for row in &rows {
@@ -664,11 +664,11 @@ pub fn collect_tool_dll_overrides(
 }
 
 /// Collect wrapper commands from enabled tools.
-pub fn collect_tool_wrappers(
+pub async fn collect_tool_wrappers(
     game_id: &GameId,
     db: &modde_core::db::ModdeDb,
 ) -> Result<Vec<crate::tools::WrapperEntry>> {
-    let rows = db.load_tool_configs(game_id)?;
+    let rows = db.load_tool_configs(game_id).await?;
     let mut wrappers = Vec::new();
 
     for row in &rows {
@@ -697,8 +697,8 @@ pub fn collect_tool_wrappers(
 /// Generate per-game config files for all enabled tools.
 ///
 /// Writes configs to `~/.local/share/modde/tools/{game_id}/`.
-pub fn generate_tool_configs(game_id: &GameId, db: &modde_core::db::ModdeDb) -> Result<()> {
-    let rows = db.load_tool_configs(game_id)?;
+pub async fn generate_tool_configs(game_id: &GameId, db: &modde_core::db::ModdeDb) -> Result<()> {
+    let rows = db.load_tool_configs(game_id).await?;
 
     for row in &rows {
         if !row.enabled {

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 /// the `update()` arm can hand it to `Task::perform` without borrowing
 /// `self`.
 pub(super) async fn run_browse_install(
+    db: modde_core::db::ModdeDb,
     game_domain: String,
     mod_id: modde_core::NexusModId,
 ) -> Result<String, String> {
@@ -60,12 +61,11 @@ pub(super) async fn run_browse_install(
     use modde_sources::nexus::install::InstallOutcome;
 
     let mod_id_str = format!("{game_domain}_{mod_id}_{file_id}");
-    let pm = modde_core::profile::ProfileManager::open().map_err(|e| e.to_string())?;
+    let pm = modde_core::profile::ProfileManager::with_db(db.clone());
 
     // Prefer an existing profile for the game; fall back to creating a
     // Manual profile named after the game domain if none exist.
-    let profile_name = pm
-        .list()
+    let profile_name = crate::app::block_on(pm.list())
         .ok()
         .and_then(|profiles| {
             profiles
@@ -74,7 +74,7 @@ pub(super) async fn run_browse_install(
                 .map(|p| p.name)
         })
         .unwrap_or_else(|| game_domain.clone());
-    let mut profile = match pm.load(&profile_name, None) {
+    let mut profile = match crate::app::block_on(pm.load(&profile_name, None)) {
         Ok(p) => p,
         Err(_) => modde_core::profile::Profile {
             id: None,
@@ -105,21 +105,19 @@ pub(super) async fn run_browse_install(
             ..Default::default()
         });
     }
-    pm.create_or_update(&profile).map_err(|e| e.to_string())?;
+    crate::app::block_on(pm.create_or_update(&profile)).map_err(|e| e.to_string())?;
 
     if let InstallOutcome::Installed(plan) = &outcome {
-        let mut db = modde_core::ModdeDb::open().map_err(|e| e.to_string())?;
-        let profile_id = pm
-            .load(&profile_name, None)
+        let profile_id = crate::app::block_on(pm.load(&profile_name, None))
             .map_err(|e| e.to_string())?
             .id
             .ok_or_else(|| "saved profile has no id".to_string())?;
-        db.record_install(
+        crate::app::block_on(db.record_install(
             profile_id,
             &modde_core::ModId::from(mod_id_str.as_str()),
             plan,
             InstallStatus::Installed,
-        )
+        ))
         .map_err(|e| e.to_string())?;
     }
 
@@ -169,6 +167,7 @@ pub(super) async fn download_wabbajack_source(source: String) -> Result<PathBuf,
 }
 
 pub(super) async fn run_wabbajack_install_for_ui(
+    db: modde_core::db::ModdeDb,
     path: PathBuf,
     profile_name: Option<String>,
     game_dir: Option<PathBuf>,
@@ -186,6 +185,7 @@ pub(super) async fn run_wabbajack_install_for_ui(
             });
             let summary = modde_sources::wabbajack::runner::install_wabbajack(
                 modde_sources::wabbajack::runner::WabbajackInstallOptions {
+                    db: Some(db),
                     path,
                     profile_name,
                     game_dir,

@@ -31,12 +31,12 @@ fn build_http_client() -> Result<reqwest::Client> {
 }
 
 /// Persist a profile and update the selected game in shared settings.
-fn save_profile_and_settings(
+async fn save_profile_and_settings(
     pm: &ProfileManager,
     profile: &Profile,
     game_dir: Option<&Path>,
 ) -> Result<()> {
-    pm.create_or_update(profile)?;
+    pm.create_or_update(profile).await?;
     let mut settings = modde_core::settings::AppSettings::load();
     if let Some(gd) = game_dir {
         settings.set_game_path(&profile.game_id, gd.to_path_buf());
@@ -345,6 +345,7 @@ pub async fn handle(source: InstallSource) -> Result<()> {
                 }
             }
             handle_wabbajack(modde_sources::wabbajack::runner::WabbajackInstallOptions {
+                db: None,
                 path,
                 profile_name: profile,
                 game_dir,
@@ -385,7 +386,9 @@ async fn handle_nexus_collection(
     let api_key = load_api_key().context("failed to load Nexus API key")?;
     let client = build_http_client()?;
 
-    let pm = ProfileManager::open().context("failed to open profile database")?;
+    let pm = ProfileManager::open()
+        .await
+        .context("failed to open profile database")?;
     let profile_name = profile_name.unwrap_or_else(|| slug.clone());
 
     // Two-step fetch: discover game_domain from slug, then fetch the full manifest.
@@ -482,7 +485,7 @@ async fn handle_nexus_collection(
         })),
     };
 
-    save_profile_and_settings(&pm, &profile, None)?;
+    save_profile_and_settings(&pm, &profile, None).await?;
 
     println!(
         "Collection '{slug}' installed to profile '{profile_name}' ({} mods)",
@@ -566,7 +569,7 @@ async fn handle_wabbajack(
 
 /// Detect proxy DLLs in the game directory, configure Wine DLL overrides,
 /// and generate a launch wrapper to restore DLLs that fgmod deletes.
-pub fn configure_wine_overrides(
+pub async fn configure_wine_overrides(
     game_id: &str,
     game_dir: &Path,
     staging: &Path,
@@ -609,9 +612,10 @@ pub fn configure_wine_overrides(
     }
 
     // Collect tool env vars for the launch wrapper
-    let tool_env_vars = match modde_core::db::ModdeDb::open() {
+    let tool_env_vars = match modde_core::db::ModdeDb::open().await {
         Ok(db) => {
             modde_games::launcher::collect_tool_env_vars(&modde_core::GameId::from(game_id), &db)
+                .await
                 .unwrap_or_default()
         }
         Err(_) => Vec::new(),
@@ -700,11 +704,10 @@ pub async fn deploy_mo2_to_game(staging: &Path, game_dir: &Path, force: bool) ->
                         tokio::fs::metadata(&entry_path).await,
                         tokio::fs::metadata(&dest).await,
                     )
+                    && is_same_file(&src_meta, &dst_meta)
                 {
-                    if is_same_file(&src_meta, &dst_meta) {
-                        skipped += 1;
-                        continue;
-                    }
+                    skipped += 1;
+                    continue;
                 }
 
                 let kind = modde_core::link::link_or_copy(&entry_path, &dest).await?;
@@ -907,11 +910,13 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
     //     present, emit a warning because adding a mod drifts the load
     //     order away from the authoritative source — the lock exists
     //     precisely to prevent that kind of drift.
-    let pm = ProfileManager::open().context("failed to open profile database")?;
+    let pm = ProfileManager::open()
+        .await
+        .context("failed to open profile database")?;
     let profile_name = profile_name.unwrap_or_else(|| game_domain.clone());
     let mod_id_str = format!("{game_domain}_{mod_id}_{file_id}");
 
-    let mut profile = match pm.load(&profile_name, None) {
+    let mut profile = match pm.load(&profile_name, None).await {
         Ok(p) => p,
         Err(_) => Profile {
             id: None,
@@ -951,14 +956,17 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
         });
     }
 
-    save_profile_and_settings(&pm, &profile, None)?;
+    save_profile_and_settings(&pm, &profile, None).await?;
 
     // If analyze+execute succeeded, wire the plan into the DB so
     // uninstall can remove the exact file list later.
     if let InstallOutcome::Installed { plan } = &install_outcome {
-        let mut db = ModdeDb::open().context("failed to open mod db for record_install")?;
+        let db = ModdeDb::open()
+            .await
+            .context("failed to open mod db for record_install")?;
         let profile_id = pm
             .load(&profile_name, None)
+            .await
             .context("failed to reload profile to get id")?
             .id
             .ok_or_else(|| anyhow::anyhow!("saved profile has no database id"))?;
@@ -968,6 +976,7 @@ async fn handle_single_mod(url: String, profile_name: Option<String>) -> Result<
             plan,
             InstallStatus::Installed,
         )
+        .await
         .context("failed to persist install plan")?;
     }
 

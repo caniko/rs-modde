@@ -14,13 +14,16 @@ pub async fn handle(
     no_switch: bool,
     no_capture: bool,
 ) -> Result<()> {
-    let pm = ProfileManager::open().context("failed to open profile database")?;
+    let pm = ProfileManager::open()
+        .await
+        .context("failed to open profile database")?;
 
     // 1. Resolve which profile to use
     let target_profile = match profile_name {
         Some(name) => name,
         None => pm
-            .active(&GameId::from(game_id.as_str()))?
+            .active(&GameId::from(game_id.as_str()))
+            .await?
             .map(|info| info.profile.name)
             .ok_or_else(|| {
                 anyhow::anyhow!(
@@ -33,20 +36,24 @@ pub async fn handle(
     // 2. Switch profile (swaps saves automatically)
     if !no_switch {
         let already_active = pm
-            .active(&GameId::from(game_id.as_str()))?
+            .active(&GameId::from(game_id.as_str()))
+            .await?
             .is_some_and(|info| info.profile.name == target_profile);
 
         if already_active {
             info!(profile = %target_profile, "profile already active, skipping switch");
         } else {
             let save_dir = resolve_save_dir(&game_id);
-            let fp = compute_fingerprint(&pm, &target_profile, &game_id);
-            match pm.activate_with_fingerprint(
-                &target_profile,
-                &GameId::from(game_id.as_str()),
-                save_dir.as_deref(),
-                fp.as_ref(),
-            )? {
+            let fp = compute_fingerprint(&pm, &target_profile, &game_id).await;
+            match pm
+                .activate_with_fingerprint(
+                    &target_profile,
+                    &GameId::from(game_id.as_str()),
+                    save_dir.as_deref(),
+                    fp.as_ref(),
+                )
+                .await?
+            {
                 ActivateResult::Activated => {
                     if save_dir.is_some() {
                         println!("Switched to profile: {target_profile} (saves swapped)");
@@ -90,7 +97,7 @@ pub async fn handle(
                 let save_dir = resolve_save_dir(&game_id);
                 if let Some(ref save_dir) = save_dir {
                     let sm = SaveManager::new(pm.db());
-                    let fp = compute_fingerprint(&pm, &target_profile, &game_id);
+                    let fp = compute_fingerprint(&pm, &target_profile, &game_id).await;
                     match sm.capture_with_fingerprint(
                         &GameId::from(game_id.as_str()),
                         &target_profile,

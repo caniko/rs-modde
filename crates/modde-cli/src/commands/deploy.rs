@@ -15,9 +15,11 @@ use modde_core::vfs::SymlinkFarm;
 use super::load_profile_or_default;
 
 pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Result<()> {
-    let pm = ProfileManager::open().context("failed to open profile database")?;
+    let pm = ProfileManager::open()
+        .await
+        .context("failed to open profile database")?;
 
-    let profile = load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref())?;
+    let profile = load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref()).await?;
 
     let name = &profile.name;
     info!(profile = %name, game = %profile.game_id, "deploying profile");
@@ -67,6 +69,7 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
             .context("post-deploy hook failed")?;
 
         super::install::configure_wine_overrides(profile.game_id.as_str(), &install_dir, &staging)
+            .await
             .context("Wine DLL override configuration failed")?;
 
         println!("Deployed Wabbajack profile: {name}");
@@ -162,17 +165,18 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     };
 
     // Load hidden files for this profile
-    let hidden_set: Option<HashSet<(String, String)>> = profile.id.and_then(|pid| {
-        let hidden = pm.db().list_hidden_files(pid).ok()?;
-        if hidden.is_empty() {
-            None
-        } else {
-            let set: HashSet<(String, String)> =
-                hidden.into_iter().map(|h| (h.mod_id, h.rel_path)).collect();
-            info!(count = set.len(), "applying hidden file exclusions");
-            Some(set)
-        }
-    });
+    let hidden_set: Option<HashSet<(String, String)>> = match profile.id {
+        Some(pid) => match pm.db().list_hidden_files(pid).await.ok() {
+            Some(hidden) if !hidden.is_empty() => {
+                let set: HashSet<(String, String)> =
+                    hidden.into_iter().map(|h| (h.mod_id, h.rel_path)).collect();
+                info!(count = set.len(), "applying hidden file exclusions");
+                Some(set)
+            }
+            _ => None,
+        },
+        None => None,
+    };
 
     let farm = SymlinkFarm::build(
         name,
@@ -204,12 +208,13 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     // deploy proxy DLLs (e.g. version.dll for CET, winmm.dll for ASI loaders).
     let staging_dir = paths::staging_dir().join(name);
     super::install::configure_wine_overrides(profile.game_id.as_str(), &install_dir, &staging_dir)
+        .await
         .context("Wine DLL override configuration failed")?;
 
     // Generate per-game tool configs and apply tool environment to launcher
-    if let Ok(db) = modde_core::db::ModdeDb::open() {
+    if let Ok(db) = modde_core::db::ModdeDb::open().await {
         // Generate config files (MangoHud.conf, vkBasalt.conf, etc.)
-        if let Err(e) = modde_games::launcher::generate_tool_configs(&profile.game_id, &db) {
+        if let Err(e) = modde_games::launcher::generate_tool_configs(&profile.game_id, &db).await {
             warn!(error = %e, "failed to generate tool configs");
         }
 
@@ -221,8 +226,10 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
         } = launcher
         {
             let env_vars = modde_games::launcher::collect_tool_env_vars(&profile.game_id, &db)
+                .await
                 .unwrap_or_default();
             let wrappers = modde_games::launcher::collect_tool_wrappers(&profile.game_id, &db)
+                .await
                 .unwrap_or_default();
             match modde_games::launcher::apply_tool_environment_heroic(
                 config_path,

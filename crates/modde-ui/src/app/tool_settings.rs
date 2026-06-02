@@ -376,16 +376,16 @@ pub(super) fn sync_optiscaler_release_options(
 }
 
 pub(super) fn current_tool_config(
+    db: &modde_core::db::ModdeDb,
     game_id: &str,
     tool_id: &str,
 ) -> Result<modde_games::tools::ToolConfig, String> {
     let tool = modde_games::tools::resolve_tool(tool_id)
         .ok_or_else(|| format!("Tool is not registered: {tool_id}"))?;
-    let Some(row) = modde_core::db::ModdeDb::open().ok().and_then(|db| {
-        db.load_tool_config(&GameId::from(game_id), tool_id)
-            .ok()
-            .flatten()
-    }) else {
+    let Some(row) = crate::app::block_on(db.load_tool_config(&GameId::from(game_id), tool_id))
+        .ok()
+        .flatten()
+    else {
         return Ok(tool.default_config());
     };
     let mut config = modde_games::tools::ToolConfig {
@@ -400,27 +400,28 @@ pub(super) fn current_tool_config(
 }
 
 pub(super) fn save_tool_settings(
+    db: &modde_core::db::ModdeDb,
     game_id: &str,
     tool_id: &str,
     config: &modde_games::tools::ToolConfig,
 ) -> Result<(), String> {
-    save_tool_settings_with_reason(game_id, tool_id, config, "ui:update")
+    save_tool_settings_with_reason(db, game_id, tool_id, config, "ui:update")
 }
 
 pub(super) fn save_tool_settings_with_reason(
+    db: &modde_core::db::ModdeDb,
     game_id: &str,
     tool_id: &str,
     config: &modde_games::tools::ToolConfig,
     reason: &str,
 ) -> Result<(), String> {
-    let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
     let settings_json = serde_json::to_string(&config.settings).map_err(|err| err.to_string())?;
-    db.save_tool_config_with_reason(
+    crate::app::block_on(db.save_tool_config_with_reason(
         &GameId::from(game_id),
         tool_id,
         config.enabled,
         &settings_json,
         reason,
-    )
+    ))
     .map_err(|err| err.to_string())
 }

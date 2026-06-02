@@ -57,9 +57,9 @@ async fn test_full_deploy_pipeline() {
     };
 
     // Step 2: Save and reload the profile via DB
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
-    pm.create(&profile).unwrap();
-    let loaded_profile = pm.load("e2e_test", None).unwrap();
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
+    pm.create(&profile).await.unwrap();
+    let loaded_profile = pm.load("e2e_test", None).await.unwrap();
     assert_eq!(loaded_profile.name, "e2e_test");
     assert_eq!(loaded_profile.mods.len(), 4);
 
@@ -287,10 +287,10 @@ async fn test_profile_roundtrip_all_sources() {
         },
     ];
 
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
     for profile in &profiles {
-        pm.create(profile).unwrap();
-        let loaded = pm.load(&profile.name, None).unwrap();
+        pm.create(profile).await.unwrap();
+        let loaded = pm.load(&profile.name, None).await.unwrap();
         assert_eq!(loaded.name, profile.name);
         assert_eq!(loaded.game_id, profile.game_id);
         assert_eq!(loaded.mods.len(), profile.mods.len());
@@ -358,12 +358,12 @@ async fn test_conflict_map_populated_during_build() {
 
 // ── Smoke test: profile manager lifecycle ───────────────────────────
 
-#[test]
-fn test_profile_manager_full_lifecycle() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_manager_full_lifecycle() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     // Initially empty
-    assert!(mgr.list().unwrap().is_empty());
+    assert!(mgr.list().await.unwrap().is_empty());
 
     // Create profiles
     let p1 = Profile {
@@ -387,30 +387,42 @@ fn test_profile_manager_full_lifecycle() {
         load_order_lock: None,
     };
 
-    mgr.create(&p1).unwrap();
-    mgr.create(&p2).unwrap();
+    mgr.create(&p1).await.unwrap();
+    mgr.create(&p2).await.unwrap();
 
     // List should have both
-    let mut names: Vec<String> = mgr.list().unwrap().into_iter().map(|s| s.name).collect();
+    let mut names: Vec<String> = mgr
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|s| s.name)
+        .collect();
     names.sort();
     assert_eq!(names, vec!["alpha", "beta"]);
 
     // Load and verify
-    let loaded = mgr.load("alpha", None).unwrap();
+    let loaded = mgr.load("alpha", None).await.unwrap();
     assert_eq!(loaded.game_id, "skyrim-se");
     assert_eq!(loaded.mods.len(), 1);
 
     // Duplicate create should fail
-    assert!(mgr.create(&p1).is_err());
+    assert!(mgr.create(&p1).await.is_err());
 
     // Delete
-    mgr.delete("alpha", None).unwrap();
-    let names: Vec<String> = mgr.list().unwrap().into_iter().map(|s| s.name).collect();
+    mgr.delete("alpha", None).await.unwrap();
+    let names: Vec<String> = mgr
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|s| s.name)
+        .collect();
     assert_eq!(names, vec!["beta"]);
 
     // Load deleted should fail
-    assert!(mgr.load("alpha", None).is_err());
+    assert!(mgr.load("alpha", None).await.is_err());
 
     // Delete nonexistent should fail
-    assert!(mgr.delete("alpha", None).is_err());
+    assert!(mgr.delete("alpha", None).await.is_err());
 }

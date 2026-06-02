@@ -800,12 +800,12 @@ impl<'a> SaveManager<'a> {
 
     /// Check if a game save directory has saves but no profile is active.
     /// Returns the number of unadopted saves, or None if no saves found.
-    pub fn detect_unadopted(
+    pub async fn detect_unadopted(
         &self,
         game_id: &GameId,
         game_save_dir: &Path,
     ) -> Result<Option<usize>> {
-        if self.db.get_active_profile(game_id)?.is_some() {
+        if self.db.get_active_profile(game_id).await?.is_some() {
             return Ok(None);
         }
 
@@ -835,22 +835,22 @@ impl<'a> SaveManager<'a> {
     // ── DB-level save tracking ───────────────────────────────────
 
     /// Assign a save file or directory to a profile.
-    pub fn assign(&self, profile_id: i64, path: &Path, label: Option<&str>) -> Result<()> {
-        self.db.assign_save(profile_id, path, label)
+    pub async fn assign(&self, profile_id: i64, path: &Path, label: Option<&str>) -> Result<()> {
+        self.db.assign_save(profile_id, path, label).await
     }
 
     /// Remove a save assignment.
-    pub fn unassign(&self, path: &Path) -> Result<()> {
-        self.db.unassign_save(path)
+    pub async fn unassign(&self, path: &Path) -> Result<()> {
+        self.db.unassign_save(path).await
     }
 
     /// List all saves assigned to a profile.
-    pub fn list(&self, profile_id: i64) -> Result<Vec<SaveEntry>> {
-        self.db.list_saves(profile_id)
+    pub async fn list(&self, profile_id: i64) -> Result<Vec<SaveEntry>> {
+        self.db.list_saves(profile_id).await
     }
 
     /// Scan a save directory and return paths not yet assigned to any profile.
-    pub fn list_unassigned(&self, game_save_dir: &Path) -> Result<Vec<PathBuf>> {
+    pub async fn list_unassigned(&self, game_save_dir: &Path) -> Result<Vec<PathBuf>> {
         if !game_save_dir.exists() {
             return Ok(Vec::new());
         }
@@ -859,7 +859,7 @@ impl<'a> SaveManager<'a> {
 
         for entry in std::fs::read_dir(game_save_dir)?.flatten() {
             let path = entry.path();
-            if !self.db.is_save_assigned(&path)? {
+            if !self.db.is_save_assigned(&path).await? {
                 unassigned.push(path);
             }
         }

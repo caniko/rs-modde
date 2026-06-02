@@ -46,12 +46,15 @@ pub async fn handle_run(
 }
 
 async fn run_external_tool(options: ExternalToolRun) -> Result<()> {
-    let pm = ProfileManager::open().context("failed to open profile database")?;
+    let pm = ProfileManager::open()
+        .await
+        .context("failed to open profile database")?;
     let profile = load_profile_or_default(
         &pm,
         options.profile_name.as_deref(),
         options.game_id.as_deref(),
-    )?;
+    )
+    .await?;
 
     let game_plugin = modde_games::resolve_game_plugin(profile.game_id.as_str())
         .ok_or_else(|| anyhow::anyhow!("unsupported game: '{}'", profile.game_id))?;
@@ -157,7 +160,7 @@ async fn run_external_tool(options: ExternalToolRun) -> Result<()> {
 }
 
 /// Save a named executable launch target.
-pub fn handle_add_executable(
+pub async fn handle_add_executable(
     name: &str,
     executable: PathBuf,
     game_id: &str,
@@ -181,7 +184,7 @@ pub fn handle_add_executable(
     }
 
     let env_map = parse_environment(environment)?;
-    let db = ModdeDb::open().context("failed to open database")?;
+    let db = ModdeDb::open().await.context("failed to open database")?;
     let row = ExecutableConfigRow {
         game_id: game_id.to_string(),
         name: name.to_string(),
@@ -193,7 +196,7 @@ pub fn handle_add_executable(
         output_mod: output_mod.to_string(),
         enabled: true,
     };
-    db.save_executable_config(&row)?;
+    db.save_executable_config(&row).await?;
 
     println!("Saved executable '{}' for {game_id}", row.name);
     println!("  Path: {}", row.executable_path.display());
@@ -202,9 +205,9 @@ pub fn handle_add_executable(
 }
 
 /// List saved executable launch targets for a game.
-pub fn handle_list_executables(game_id: &str) -> Result<()> {
-    let db = ModdeDb::open().context("failed to open database")?;
-    let rows = db.load_executable_configs(&GameId::from(game_id))?;
+pub async fn handle_list_executables(game_id: &str) -> Result<()> {
+    let db = ModdeDb::open().await.context("failed to open database")?;
+    let rows = db.load_executable_configs(&GameId::from(game_id)).await?;
 
     println!("Executables for {game_id}:");
     if rows.is_empty() {
@@ -232,9 +235,12 @@ pub fn handle_list_executables(game_id: &str) -> Result<()> {
 }
 
 /// Remove a saved executable launch target.
-pub fn handle_remove_executable(name: &str, game_id: &str) -> Result<()> {
-    let db = ModdeDb::open().context("failed to open database")?;
-    if db.delete_executable_config(&GameId::from(game_id), name)? {
+pub async fn handle_remove_executable(name: &str, game_id: &str) -> Result<()> {
+    let db = ModdeDb::open().await.context("failed to open database")?;
+    if db
+        .delete_executable_config(&GameId::from(game_id), name)
+        .await?
+    {
         println!("Removed executable '{name}' for {game_id}");
     } else {
         anyhow::bail!("no executable named '{name}' is configured for {game_id}");
@@ -249,9 +255,10 @@ pub async fn handle_run_executable(
     profile_name: Option<String>,
     extra_args: Vec<String>,
 ) -> Result<()> {
-    let db = ModdeDb::open().context("failed to open database")?;
+    let db = ModdeDb::open().await.context("failed to open database")?;
     let row = db
-        .load_executable_config(&GameId::from(game_id), name)?
+        .load_executable_config(&GameId::from(game_id), name)
+        .await?
         .ok_or_else(|| {
             anyhow::anyhow!("no executable named '{name}' is configured for {game_id}")
         })?;
@@ -293,7 +300,7 @@ fn parse_environment(settings: &[String]) -> Result<HashMap<String, String>> {
 }
 
 /// List known tools for a game.
-pub fn handle_list(game_id: &str) -> Result<()> {
+pub async fn handle_list(game_id: &str) -> Result<()> {
     let game_plugin = modde_games::resolve_game_plugin(game_id)
         .ok_or_else(|| anyhow::anyhow!("unsupported game: '{game_id}'"))?;
 
@@ -342,9 +349,9 @@ pub fn handle_list(game_id: &str) -> Result<()> {
 // ── Gaming tool/overlay management ──────────────────────────────────────
 
 /// Show status of all gaming tools for a game.
-pub fn handle_status(game_id: &str) -> Result<()> {
-    let db = ModdeDb::open().context("failed to open database")?;
-    let stored = db.load_tool_configs(&GameId::from(game_id))?;
+pub async fn handle_status(game_id: &str) -> Result<()> {
+    let db = ModdeDb::open().await.context("failed to open database")?;
+    let stored = db.load_tool_configs(&GameId::from(game_id)).await?;
     let game_plugin = modde_games::resolve_game_plugin(game_id);
     let install_dir = game_plugin.and_then(modde_games::GamePlugin::detect_install);
 
@@ -375,6 +382,7 @@ pub fn handle_status(game_id: &str) -> Result<()> {
         // Check if files are applied
         let applied_count = db
             .load_applied_files(&GameId::from(game_id), tool.tool_id())
+            .await
             .map_or(0, |f| f.len());
 
         let status_str = if applied_count > 0 {
@@ -444,7 +452,7 @@ pub fn handle_status(game_id: &str) -> Result<()> {
 }
 
 /// Enable a tool for a game.
-pub fn handle_enable(tool_id: &str, game_id: &str) -> Result<()> {
+pub async fn handle_enable(tool_id: &str, game_id: &str) -> Result<()> {
     let tool = modde_games::tools::resolve_tool(tool_id).ok_or_else(|| {
         anyhow::anyhow!(
             "unknown tool: '{tool_id}'\nAvailable: {}",
@@ -456,13 +464,14 @@ pub fn handle_enable(tool_id: &str, game_id: &str) -> Result<()> {
         )
     })?;
 
-    let db = ModdeDb::open().context("failed to open database")?;
+    let db = ModdeDb::open().await.context("failed to open database")?;
 
     // Load existing or use defaults
     let context = modde_games::resolve_game_plugin(game_id).map(|plugin| {
         modde_games::tools::ToolGameContext::from_parts(game_id, plugin.display_name(), None, None)
     });
-    let mut config = if let Some(row) = db.load_tool_config(&GameId::from(game_id), tool_id)? {
+    let mut config = if let Some(row) = db.load_tool_config(&GameId::from(game_id), tool_id).await?
+    {
         modde_games::tools::ToolConfig {
             tool_id: row.tool_id,
             enabled: true,
@@ -477,7 +486,8 @@ pub fn handle_enable(tool_id: &str, game_id: &str) -> Result<()> {
     config.enabled = true;
 
     let settings_json = serde_json::to_string(&config.settings)?;
-    db.save_tool_config(&GameId::from(game_id), tool_id, true, &settings_json)?;
+    db.save_tool_config(&GameId::from(game_id), tool_id, true, &settings_json)
+        .await?;
 
     println!("Enabled {} for {game_id}", tool.display_name());
 
@@ -495,18 +505,20 @@ pub fn handle_enable(tool_id: &str, game_id: &str) -> Result<()> {
 }
 
 /// Disable a tool for a game.
-pub fn handle_disable(tool_id: &str, game_id: &str) -> Result<()> {
+pub async fn handle_disable(tool_id: &str, game_id: &str) -> Result<()> {
     let tool = modde_games::tools::resolve_tool(tool_id)
         .ok_or_else(|| anyhow::anyhow!("unknown tool: '{tool_id}'"))?;
 
-    let db = ModdeDb::open().context("failed to open database")?;
+    let db = ModdeDb::open().await.context("failed to open database")?;
 
     // Load existing config to preserve settings
     let settings_json = db
-        .load_tool_config(&GameId::from(game_id), tool_id)?
+        .load_tool_config(&GameId::from(game_id), tool_id)
+        .await?
         .map_or_else(|| "{}".into(), |r| r.settings_json);
 
-    db.save_tool_config(&GameId::from(game_id), tool_id, false, &settings_json)?;
+    db.save_tool_config(&GameId::from(game_id), tool_id, false, &settings_json)
+        .await?;
 
     println!("Disabled {} for {game_id}", tool.display_name());
 
@@ -514,17 +526,17 @@ pub fn handle_disable(tool_id: &str, game_id: &str) -> Result<()> {
 }
 
 /// Configure a tool's settings.
-pub fn handle_configure(tool_id: &str, game_id: &str, settings: &[String]) -> Result<()> {
+pub async fn handle_configure(tool_id: &str, game_id: &str, settings: &[String]) -> Result<()> {
     let tool = modde_games::tools::resolve_tool(tool_id)
         .ok_or_else(|| anyhow::anyhow!("unknown tool: '{tool_id}'"))?;
 
-    let db = ModdeDb::open().context("failed to open database")?;
+    let db = ModdeDb::open().await.context("failed to open database")?;
 
     // Load existing or defaults
     let context = modde_games::resolve_game_plugin(game_id).map(|plugin| {
         modde_games::tools::ToolGameContext::from_parts(game_id, plugin.display_name(), None, None)
     });
-    let mut config = match db.load_tool_config(&GameId::from(game_id), tool_id)? {
+    let mut config = match db.load_tool_config(&GameId::from(game_id), tool_id).await? {
         Some(row) => modde_games::tools::ToolConfig {
             tool_id: row.tool_id,
             enabled: row.enabled,
@@ -563,7 +575,8 @@ pub fn handle_configure(tool_id: &str, game_id: &str, settings: &[String]) -> Re
         tool_id,
         config.enabled,
         &settings_json,
-    )?;
+    )
+    .await?;
 
     // Regenerate config file
     config.set("_game_id", serde_json::json!(game_id));
@@ -581,7 +594,7 @@ pub fn handle_configure(tool_id: &str, game_id: &str, settings: &[String]) -> Re
 }
 
 /// Apply tool patches to the game directory.
-pub fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
+pub async fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
     let tool = modde_games::tools::resolve_tool(tool_id)
         .ok_or_else(|| anyhow::anyhow!("unknown tool: '{tool_id}'"))?;
 
@@ -595,7 +608,7 @@ pub fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
         )
     })?;
 
-    let db = ModdeDb::open().context("failed to open database")?;
+    let db = ModdeDb::open().await.context("failed to open database")?;
 
     let context = modde_games::tools::ToolGameContext::from_parts(
         game_id,
@@ -603,7 +616,7 @@ pub fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
         Some(install_dir.clone()),
         None,
     );
-    let mut config = match db.load_tool_config(&GameId::from(game_id), tool_id)? {
+    let mut config = match db.load_tool_config(&GameId::from(game_id), tool_id).await? {
         Some(row) => modde_games::tools::ToolConfig {
             tool_id: row.tool_id,
             enabled: row.enabled,
@@ -629,7 +642,8 @@ pub fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
         .map(|p| p.to_string_lossy().to_string())
         .collect();
 
-    db.save_applied_files(&GameId::from(game_id), tool_id, &rel_paths)?;
+    db.save_applied_files(&GameId::from(game_id), tool_id, &rel_paths)
+        .await?;
     if tool_id == "optiscaler" {
         let mut updated_config = config.clone();
         updated_config.set(
@@ -637,7 +651,8 @@ pub fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
             modde_games::tools::optiscaler::managed_manifest_json(&install_dir, &applied),
         );
         let settings_json = serde_json::to_string(&updated_config.settings)?;
-        db.save_tool_config(&GameId::from(game_id), tool_id, true, &settings_json)?;
+        db.save_tool_config(&GameId::from(game_id), tool_id, true, &settings_json)
+            .await?;
     }
 
     println!(
@@ -654,7 +669,7 @@ pub fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
 }
 
 /// Revert tool patches from the game directory.
-pub fn handle_revert(tool_id: &str, game_id: &str) -> Result<()> {
+pub async fn handle_revert(tool_id: &str, game_id: &str) -> Result<()> {
     let tool = modde_games::tools::resolve_tool(tool_id)
         .ok_or_else(|| anyhow::anyhow!("unknown tool: '{tool_id}'"))?;
 
@@ -668,9 +683,11 @@ pub fn handle_revert(tool_id: &str, game_id: &str) -> Result<()> {
         )
     })?;
 
-    let db = ModdeDb::open().context("failed to open database")?;
+    let db = ModdeDb::open().await.context("failed to open database")?;
 
-    let files = db.load_applied_files(&GameId::from(game_id), tool_id)?;
+    let files = db
+        .load_applied_files(&GameId::from(game_id), tool_id)
+        .await?;
     if files.is_empty() {
         println!("No applied files to revert for {}", tool.display_name());
         return Ok(());
@@ -681,7 +698,8 @@ pub fn handle_revert(tool_id: &str, game_id: &str) -> Result<()> {
     };
 
     tool.revert(&install_dir, &applied)?;
-    db.clear_applied_files(&GameId::from(game_id), tool_id)?;
+    db.clear_applied_files(&GameId::from(game_id), tool_id)
+        .await?;
 
     println!(
         "Reverted {} ({} files) from {}",
@@ -709,8 +727,8 @@ pub async fn handle_releases(tool_id: &str, game_id: &str) -> Result<()> {
         anyhow::bail!("{} does not support release selection", tool.display_name());
     }
 
-    let db = ModdeDb::open().context("failed to open database")?;
-    let current = load_tool_config_or_default(&db, game_id, tool_id, tool)?;
+    let db = ModdeDb::open().await.context("failed to open database")?;
+    let current = load_tool_config_or_default(&db, game_id, tool_id, tool).await?;
     let current_tag = current.get_str("release_tag").unwrap_or("latest");
     let current_asset = current.get_str("release_asset").unwrap_or("");
     let releases = tool.list_releases().await?;
@@ -754,8 +772,8 @@ pub async fn handle_install_release(
         anyhow::bail!("{} does not support release selection", tool.display_name());
     }
 
-    let db = ModdeDb::open().context("failed to open database")?;
-    let config = load_tool_config_or_default(&db, game_id, tool_id, tool)?;
+    let db = ModdeDb::open().await.context("failed to open database")?;
+    let config = load_tool_config_or_default(&db, game_id, tool_id, tool).await?;
     let config = tool.install_release(game_id, config, tag, asset).await?;
     let settings_json = serde_json::to_string(&config.settings)?;
     db.save_tool_config(
@@ -763,7 +781,8 @@ pub async fn handle_install_release(
         tool_id,
         config.enabled,
         &settings_json,
-    )?;
+    )
+    .await?;
 
     println!(
         "Installed {} {} ({}) for {}",
@@ -789,8 +808,8 @@ pub async fn handle_install_release_from_path(
         anyhow::bail!("{} does not support release selection", tool.display_name());
     }
 
-    let db = ModdeDb::open().context("failed to open database")?;
-    let config = load_tool_config_or_default(&db, game_id, tool_id, tool)?;
+    let db = ModdeDb::open().await.context("failed to open database")?;
+    let config = load_tool_config_or_default(&db, game_id, tool_id, tool).await?;
     let config = tool
         .install_release_from_path(game_id, config, tag, asset, path)
         .await?;
@@ -800,7 +819,8 @@ pub async fn handle_install_release_from_path(
         tool_id,
         config.enabled,
         &settings_json,
-    )?;
+    )
+    .await?;
 
     println!(
         "Installed {} {} ({}) for {}",
@@ -812,7 +832,7 @@ pub async fn handle_install_release_from_path(
     Ok(())
 }
 
-fn load_tool_config_or_default(
+async fn load_tool_config_or_default(
     db: &ModdeDb,
     game_id: &str,
     tool_id: &str,
@@ -822,7 +842,7 @@ fn load_tool_config_or_default(
         modde_games::tools::ToolGameContext::from_parts(game_id, plugin.display_name(), None, None)
     });
     Ok(
-        match db.load_tool_config(&GameId::from(game_id), tool_id)? {
+        match db.load_tool_config(&GameId::from(game_id), tool_id).await? {
             Some(row) => modde_games::tools::ToolConfig {
                 tool_id: row.tool_id,
                 enabled: row.enabled,

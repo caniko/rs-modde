@@ -2,14 +2,15 @@ use anyhow::Result;
 use modde_core::filter::{CsvColumn, export_csv};
 use modde_core::profile::ProfileManager;
 
-pub fn handle(
+pub async fn handle(
     profile_name: Option<String>,
     game_id: Option<String>,
     columns: Option<String>,
     output: Option<String>,
 ) -> Result<()> {
-    let pm = ProfileManager::open()?;
-    let profile = super::load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref())?;
+    let pm = ProfileManager::open().await?;
+    let profile =
+        super::load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref()).await?;
 
     let cols: Vec<CsvColumn> = match columns {
         Some(col_str) => col_str

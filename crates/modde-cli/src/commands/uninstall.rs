@@ -18,8 +18,10 @@ use modde_core::resolver::ModId;
 /// Remove `mod_id` from `profile_name`. If `profile_name` is `None`,
 /// the unambiguous default profile is used.
 pub async fn handle(mod_id: String, profile_name: Option<String>) -> Result<()> {
-    let pm = ProfileManager::open().context("failed to open profile database")?;
-    let mut profile = super::load_profile_or_default(&pm, profile_name.as_deref(), None)?;
+    let pm = ProfileManager::open()
+        .await
+        .context("failed to open profile database")?;
+    let mut profile = super::load_profile_or_default(&pm, profile_name.as_deref(), None).await?;
     let profile_id = profile
         .id
         .ok_or_else(|| anyhow::anyhow!("loaded profile has no database id"))?;
@@ -38,9 +40,10 @@ pub async fn handle(mod_id: String, profile_name: Option<String>) -> Result<()> 
 
     // Pull the file manifest before we touch anything, then drop the
     // rows + the profile_mods entry in one transaction.
-    let mut db = ModdeDb::open().context("failed to open mod db")?;
+    let db = ModdeDb::open().await.context("failed to open mod db")?;
     let staged_files = db
         .remove_installed_mod(profile_id, &ModId::from(mod_id.as_str()))
+        .await
         .context("failed to clear installed_mod_files rows")?;
 
     // Wipe the mod's store directory. The store dir name convention
@@ -65,6 +68,7 @@ pub async fn handle(mod_id: String, profile_name: Option<String>) -> Result<()> 
     // list so we need to drop it there too.
     profile.mods.retain(|m| m.mod_id != mod_id);
     pm.update(&profile)
+        .await
         .context("failed to persist profile after remove")?;
 
     info!(%mod_id, files = staged_files.len(), "mod removed");

@@ -15,9 +15,9 @@ use modde_core::resolver::{LoadOrderRule, ModId, resolve};
 
 // ── Profile lifecycle ──────────────────────────────────────────────
 
-#[test]
-fn test_profile_create_load_modify_save_load() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_create_load_modify_save_load() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     // Create
     let profile = Profile {
@@ -49,10 +49,10 @@ fn test_profile_create_load_modify_save_load() {
         load_order_lock: None,
     };
 
-    mgr.create(&profile).unwrap();
+    mgr.create(&profile).await.unwrap();
 
     // Load and verify
-    let loaded = mgr.load("test_profile", None).unwrap();
+    let loaded = mgr.load("test_profile", None).await.unwrap();
     assert_eq!(loaded.game_id, "skyrim-se");
     assert_eq!(loaded.mods.len(), 2);
     assert_eq!(loaded.load_order_rules.len(), 1);
@@ -69,19 +69,19 @@ fn test_profile_create_load_modify_save_load() {
     });
 
     // Save modified profile (delete + recreate)
-    mgr.delete("test_profile", None).unwrap();
-    mgr.create(&modified).unwrap();
+    mgr.delete("test_profile", None).await.unwrap();
+    mgr.create(&modified).await.unwrap();
 
     // Load and verify modifications
-    let reloaded = mgr.load("test_profile", None).unwrap();
+    let reloaded = mgr.load("test_profile", None).await.unwrap();
     assert_eq!(reloaded.mods.len(), 3);
     assert!(!reloaded.mods[0].enabled);
     assert_eq!(reloaded.mods[2].mod_id, "enb_helper");
 }
 
-#[test]
-fn test_profile_list_multiple() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_list_multiple() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let game_ids = ["skyrim-se", "fallout4", "cyberpunk2077"];
     for (i, game_id) in game_ids.iter().enumerate() {
@@ -95,26 +95,26 @@ fn test_profile_list_multiple() {
             load_order_rules: smallvec![],
             load_order_lock: None,
         };
-        mgr.create(&profile).unwrap();
+        mgr.create(&profile).await.unwrap();
     }
 
-    let list = mgr.list().unwrap();
+    let list = mgr.list().await.unwrap();
     assert_eq!(list.len(), 3);
 }
 
-#[test]
-fn test_profile_load_nonexistent_returns_error() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_load_nonexistent_returns_error() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
-    let result = mgr.load("does_not_exist", None);
+    let result = mgr.load("does_not_exist", None).await;
     assert!(result.is_err());
     let err = format!("{}", result.unwrap_err());
     assert!(err.contains("not found"));
 }
 
-#[test]
-fn test_profile_create_duplicate_returns_error() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_create_duplicate_returns_error() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = Profile {
         id: None,
@@ -127,18 +127,18 @@ fn test_profile_create_duplicate_returns_error() {
         load_order_lock: None,
     };
 
-    mgr.create(&profile).unwrap();
-    let result = mgr.create(&profile);
+    mgr.create(&profile).await.unwrap();
+    let result = mgr.create(&profile).await;
     assert!(result.is_err());
     let err = format!("{}", result.unwrap_err());
     assert!(err.contains("already exists") || err.contains("UNIQUE constraint"));
 }
 
-#[test]
-fn test_profile_delete_nonexistent_returns_error() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_delete_nonexistent_returns_error() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
-    let result = mgr.delete("ghost", None);
+    let result = mgr.delete("ghost", None).await;
     assert!(result.is_err());
     let err = format!("{}", result.unwrap_err());
     assert!(err.contains("not found"));
@@ -277,7 +277,7 @@ async fn test_deploy_pipeline_end_to_end() {
     let tmp = tempfile::TempDir::new().unwrap();
 
     // Create profile
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
     let profile = Profile {
         id: None,
         name: "e2e_test".to_string(),
@@ -306,7 +306,7 @@ async fn test_deploy_pipeline_end_to_end() {
         }],
         load_order_lock: None,
     };
-    mgr.create(&profile).unwrap();
+    mgr.create(&profile).await.unwrap();
 
     // Resolve
     let resolved = resolve(&profile).unwrap();
@@ -446,9 +446,9 @@ fn test_core_error_display_messages() {
 
 // ── Profile with Wabbajack source ──────────────────────────────────
 
-#[test]
-fn test_profile_wabbajack_source_roundtrip() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_wabbajack_source_roundtrip() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = Profile {
         id: None,
@@ -481,8 +481,8 @@ fn test_profile_wabbajack_source_roundtrip() {
         load_order_lock: None,
     };
 
-    mgr.create(&profile).unwrap();
-    let loaded = mgr.load("wj_list", None).unwrap();
+    mgr.create(&profile).await.unwrap();
+    let loaded = mgr.load("wj_list", None).await.unwrap();
 
     match &loaded.source {
         ProfileSource::Wabbajack { manifest_hash } => {
@@ -501,9 +501,9 @@ fn test_profile_wabbajack_source_roundtrip() {
 
 // ── Profile with NexusCollection source ────────────────────────────
 
-#[test]
-fn test_profile_nexus_collection_source_roundtrip() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_nexus_collection_source_roundtrip() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = Profile {
         id: None,
@@ -527,8 +527,8 @@ fn test_profile_nexus_collection_source_roundtrip() {
         load_order_lock: None,
     };
 
-    mgr.create(&profile).unwrap();
-    let loaded = mgr.load("nexus_col", None).unwrap();
+    mgr.create(&profile).await.unwrap();
+    let loaded = mgr.load("nexus_col", None).await.unwrap();
     assert_eq!(loaded.mods.len(), 20);
 
     match &loaded.source {
@@ -564,9 +564,9 @@ fn make_profile_with_mods(mods: Vec<EnabledMod>) -> Profile {
     }
 }
 
-#[test]
-fn test_profile_lock_mod_happy_path() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_lock_mod_happy_path() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
     let profile = make_profile_with_mods(vec![
         EnabledMod {
             mod_id: "skyui".to_string(),
@@ -579,10 +579,10 @@ fn test_profile_lock_mod_happy_path() {
             ..Default::default()
         },
     ]);
-    mgr.create(&profile).unwrap();
+    mgr.create(&profile).await.unwrap();
 
     // Mirror the ProfileAction::LockMod handler.
-    let mut p = mgr.load("pin_test", None).unwrap();
+    let mut p = mgr.load("pin_test", None).await.unwrap();
     assert!(
         p.load_order_lock.is_none(),
         "precondition: profile must not be locked"
@@ -595,9 +595,9 @@ fn test_profile_lock_mod_happy_path() {
     m.lock = Some(LockReason::Manual {
         note: Some("pinned".to_string()),
     });
-    mgr.update(&p).unwrap();
+    mgr.update(&p).await.unwrap();
 
-    let reloaded = mgr.load("pin_test", None).unwrap();
+    let reloaded = mgr.load("pin_test", None).await.unwrap();
     let skyui = reloaded.mods.iter().find(|m| m.mod_id == "skyui").unwrap();
     match &skyui.lock {
         Some(LockReason::Manual { note }) => {
@@ -609,17 +609,17 @@ fn test_profile_lock_mod_happy_path() {
     assert!(ussep.lock.is_none(), "unrelated mod must remain unlocked");
 }
 
-#[test]
-fn test_profile_lock_mod_rejects_missing_mod() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_lock_mod_rejects_missing_mod() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
     let profile = make_profile_with_mods(vec![EnabledMod {
         mod_id: "skyui".to_string(),
         enabled: true,
         ..Default::default()
     }]);
-    mgr.create(&profile).unwrap();
+    mgr.create(&profile).await.unwrap();
 
-    let p = mgr.load("pin_test", None).unwrap();
+    let p = mgr.load("pin_test", None).await.unwrap();
     // This is the predicate the handler bails on:
     //   `profile.mods.iter_mut().find(|m| m.mod_id == mod_id)` → None
     assert!(
@@ -628,9 +628,9 @@ fn test_profile_lock_mod_rejects_missing_mod() {
     );
 }
 
-#[test]
-fn test_profile_lock_mod_rejects_when_profile_locked() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_lock_mod_rejects_when_profile_locked() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
     let mut profile = make_profile_with_mods(vec![EnabledMod {
         mod_id: "skyui".to_string(),
         enabled: true,
@@ -639,9 +639,9 @@ fn test_profile_lock_mod_rejects_when_profile_locked() {
     profile.load_order_lock = Some(LoadOrderLock::now(LockReason::Wabbajack {
         manifest_hash: "deadbeef".to_string(),
     }));
-    mgr.create(&profile).unwrap();
+    mgr.create(&profile).await.unwrap();
 
-    let p = mgr.load("pin_test", None).unwrap();
+    let p = mgr.load("pin_test", None).await.unwrap();
     // This is the predicate the handler bails on.
     let lock = p
         .load_order_lock
@@ -655,9 +655,9 @@ fn test_profile_lock_mod_rejects_when_profile_locked() {
     }
 }
 
-#[test]
-fn test_profile_unlock_mod_happy_path() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_unlock_mod_happy_path() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
     let profile = make_profile_with_mods(vec![EnabledMod {
         mod_id: "skyui".to_string(),
         enabled: true,
@@ -666,10 +666,10 @@ fn test_profile_unlock_mod_happy_path() {
         }),
         ..Default::default()
     }]);
-    mgr.create(&profile).unwrap();
+    mgr.create(&profile).await.unwrap();
 
     // Mirror the ProfileAction::UnlockMod handler.
-    let mut p = mgr.load("pin_test", None).unwrap();
+    let mut p = mgr.load("pin_test", None).await.unwrap();
     let m = p
         .mods
         .iter_mut()
@@ -677,29 +677,29 @@ fn test_profile_unlock_mod_happy_path() {
         .expect("mod must exist");
     let prior = m.lock.take();
     assert!(prior.is_some(), "precondition: mod must be pinned");
-    mgr.update(&p).unwrap();
+    mgr.update(&p).await.unwrap();
 
-    let reloaded = mgr.load("pin_test", None).unwrap();
+    let reloaded = mgr.load("pin_test", None).await.unwrap();
     assert!(
         reloaded.mods[0].lock.is_none(),
         "lock must be cleared after update"
     );
 }
 
-#[test]
-fn test_profile_unlock_mod_idempotent_on_unlocked_mod() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_unlock_mod_idempotent_on_unlocked_mod() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
     let profile = make_profile_with_mods(vec![EnabledMod {
         mod_id: "skyui".to_string(),
         enabled: true,
         version: Some("5.2".to_string()),
         ..Default::default()
     }]);
-    mgr.create(&profile).unwrap();
+    mgr.create(&profile).await.unwrap();
 
     // Mirror the no-op branch of ProfileAction::UnlockMod: the handler
     // skips `pm.update` when `m.lock.take()` returns None.
-    let mut p = mgr.load("pin_test", None).unwrap();
+    let mut p = mgr.load("pin_test", None).await.unwrap();
     let m = p
         .mods
         .iter_mut()
@@ -709,17 +709,17 @@ fn test_profile_unlock_mod_idempotent_on_unlocked_mod() {
     assert!(prior.is_none(), "precondition: mod must start unlocked");
     // Intentionally skip `mgr.update(&p)` — that's the handler's no-op branch.
 
-    let reloaded = mgr.load("pin_test", None).unwrap();
+    let reloaded = mgr.load("pin_test", None).await.unwrap();
     assert!(reloaded.mods[0].lock.is_none());
     // Ensure unrelated state wasn't clobbered.
     assert_eq!(reloaded.mods[0].version.as_deref(), Some("5.2"));
 }
 
-#[test]
-fn test_profile_lock_info_lists_pins_without_profile_lock() {
+#[tokio::test]
+async fn test_profile_lock_info_lists_pins_without_profile_lock() {
     // Regression guard: the `LockInfo` handler's "Per-mod pins"
     // section must run even when `profile.load_order_lock` is None.
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
     let profile = make_profile_with_mods(vec![
         EnabledMod {
             mod_id: "skyui".to_string(),
@@ -733,9 +733,9 @@ fn test_profile_lock_info_lists_pins_without_profile_lock() {
             ..Default::default()
         },
     ]);
-    mgr.create(&profile).unwrap();
+    mgr.create(&profile).await.unwrap();
 
-    let p = mgr.load("pin_test", None).unwrap();
+    let p = mgr.load("pin_test", None).await.unwrap();
     assert!(p.load_order_lock.is_none());
     // Mirror the filter predicate in the LockInfo handler.
     let pinned: Vec<&str> = p

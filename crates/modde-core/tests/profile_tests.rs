@@ -74,9 +74,9 @@ fn legacy_enabled_mod_metadata_deserializes_to_typed_fields() {
 // Profile serialization tests
 // ===========================================================================
 
-#[test]
-fn test_profile_save_and_load_roundtrip() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_save_and_load_roundtrip() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = make_manual_profile(
         "my-profile",
@@ -88,40 +88,41 @@ fn test_profile_save_and_load_roundtrip() {
         ],
     );
 
-    pm.create(&profile).unwrap();
-    let loaded = pm.load("my-profile", None).unwrap();
+    pm.create(&profile).await.unwrap();
+    let loaded = pm.load("my-profile", None).await.unwrap();
 
     assert_profiles_eq(&profile, &loaded);
 }
 
-#[test]
-fn test_profile_create_and_load_by_name() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_create_and_load_by_name() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = make_manual_profile("nested", "fallout4", vec![]);
-    pm.create(&profile).unwrap();
+    pm.create(&profile).await.unwrap();
 
-    let loaded = pm.load("nested", None).unwrap();
+    let loaded = pm.load("nested", None).await.unwrap();
     assert_eq!(loaded.name, "nested");
 }
 
-#[test]
-fn test_profile_load_nonexistent() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_load_nonexistent() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
-    let err = pm.load("does-not-exist", None).unwrap_err();
+    let err = pm.load("does-not-exist", None).await.unwrap_err();
     assert!(
         matches!(err, CoreError::ProfileNotFound(_)),
         "expected ProfileNotFound error, got: {err:?}"
     );
 }
 
-#[test]
-fn test_profile_load_nonexistent_by_game() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_load_nonexistent_by_game() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let err = pm
         .load("does-not-exist", Some(&GameId::from("skyrim-se")))
+        .await
         .unwrap_err();
     assert!(
         matches!(err, CoreError::ProfileNotFound(_)),
@@ -129,9 +130,9 @@ fn test_profile_load_nonexistent_by_game() {
     );
 }
 
-#[test]
-fn test_profile_with_nexus_collection_source() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_with_nexus_collection_source() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = Profile {
         id: None,
@@ -147,8 +148,8 @@ fn test_profile_with_nexus_collection_source() {
         load_order_lock: None,
     };
 
-    pm.create(&profile).unwrap();
-    let loaded = pm.load("nexus-collection", None).unwrap();
+    pm.create(&profile).await.unwrap();
+    let loaded = pm.load("nexus-collection", None).await.unwrap();
 
     assert_profiles_eq(&profile, &loaded);
 
@@ -162,9 +163,9 @@ fn test_profile_with_nexus_collection_source() {
     }
 }
 
-#[test]
-fn test_profile_with_wabbajack_source() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_with_wabbajack_source() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = Profile {
         id: None,
@@ -179,8 +180,8 @@ fn test_profile_with_wabbajack_source() {
         load_order_lock: None,
     };
 
-    pm.create(&profile).unwrap();
-    let loaded = pm.load("wj-list", None).unwrap();
+    pm.create(&profile).await.unwrap();
+    let loaded = pm.load("wj-list", None).await.unwrap();
 
     assert_profiles_eq(&profile, &loaded);
 
@@ -192,9 +193,9 @@ fn test_profile_with_wabbajack_source() {
     }
 }
 
-#[test]
-fn test_profile_with_load_order_rules() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_with_load_order_rules() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let rules = smallvec![
         LoadOrderRule::LoadAfter {
@@ -227,16 +228,16 @@ fn test_profile_with_load_order_rules() {
         load_order_lock: None,
     };
 
-    pm.create(&profile).unwrap();
-    let loaded = pm.load("with-rules", None).unwrap();
+    pm.create(&profile).await.unwrap();
+    let loaded = pm.load("with-rules", None).await.unwrap();
 
     assert_profiles_eq(&profile, &loaded);
     assert_eq!(loaded.load_order_rules.len(), 3);
 }
 
-#[test]
-fn test_profile_with_many_mods() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_with_many_mods() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let mods: Vec<EnabledMod> = (0..500)
         .map(|i| EnabledMod {
@@ -254,16 +255,16 @@ fn test_profile_with_many_mods() {
 
     let profile = make_manual_profile("big-list", "fallout4", mods);
 
-    pm.create(&profile).unwrap();
-    let loaded = pm.load("big-list", None).unwrap();
+    pm.create(&profile).await.unwrap();
+    let loaded = pm.load("big-list", None).await.unwrap();
 
     assert_profiles_eq(&profile, &loaded);
     assert_eq!(loaded.mods.len(), 500);
 }
 
-#[test]
-fn test_profile_mod_with_version() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_mod_with_version() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = make_manual_profile(
         "versioned",
@@ -286,22 +287,22 @@ fn test_profile_mod_with_version() {
         ],
     );
 
-    pm.create(&profile).unwrap();
-    let loaded = pm.load("versioned", None).unwrap();
+    pm.create(&profile).await.unwrap();
+    let loaded = pm.load("versioned", None).await.unwrap();
 
     assert_profiles_eq(&profile, &loaded);
     assert_eq!(loaded.mods[0].version.as_deref(), Some("2.2.6"));
     assert_eq!(loaded.mods[1].version, None);
 }
 
-#[test]
-fn test_profile_empty_mods_list() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_empty_mods_list() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = make_manual_profile("empty", "skyrim-se", vec![]);
 
-    pm.create(&profile).unwrap();
-    let loaded = pm.load("empty", None).unwrap();
+    pm.create(&profile).await.unwrap();
+    let loaded = pm.load("empty", None).await.unwrap();
 
     assert_profiles_eq(&profile, &loaded);
     assert!(loaded.mods.is_empty());
@@ -311,17 +312,17 @@ fn test_profile_empty_mods_list() {
 // ProfileManager tests
 // ===========================================================================
 
-#[test]
-fn test_pm_list_empty_db() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_pm_list_empty_db() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
-    let profiles = pm.list().unwrap();
+    let profiles = pm.list().await.unwrap();
     assert!(profiles.is_empty());
 }
 
-#[test]
-fn test_pm_create_and_load() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_pm_create_and_load() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = make_manual_profile(
         "test-profile",
@@ -329,8 +330,8 @@ fn test_pm_create_and_load() {
         vec![simple_mod("skse", true), simple_mod("ussep", true)],
     );
 
-    pm.create(&profile).unwrap();
-    let loaded = pm.load("test-profile", None).unwrap();
+    pm.create(&profile).await.unwrap();
+    let loaded = pm.load("test-profile", None).await.unwrap();
 
     assert_eq!(loaded.name, "test-profile");
     assert_eq!(loaded.game_id, "skyrim-se");
@@ -339,14 +340,14 @@ fn test_pm_create_and_load() {
     assert_eq!(loaded.mods[1].mod_id, "ussep");
 }
 
-#[test]
-fn test_pm_create_duplicate() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_pm_create_duplicate() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = make_manual_profile("dup", "skyrim-se", vec![]);
-    pm.create(&profile).unwrap();
+    pm.create(&profile).await.unwrap();
 
-    let err = pm.create(&profile).unwrap_err();
+    let err = pm.create(&profile).await.unwrap_err();
     // SQLite backend returns a constraint violation for duplicate profiles
     assert!(
         matches!(err, CoreError::ProfileAlreadyExists(ref name) if name == "dup")
@@ -355,50 +356,56 @@ fn test_pm_create_duplicate() {
     );
 }
 
-#[test]
-fn test_pm_delete_existing() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_pm_delete_existing() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = make_manual_profile("to-delete", "skyrim-se", vec![]);
-    pm.create(&profile).unwrap();
+    pm.create(&profile).await.unwrap();
 
     // Confirm it exists
-    assert_eq!(pm.list().unwrap().len(), 1);
+    assert_eq!(pm.list().await.unwrap().len(), 1);
 
-    pm.delete("to-delete", None).unwrap();
+    pm.delete("to-delete", None).await.unwrap();
 
     // Confirm it is gone
-    assert!(pm.list().unwrap().is_empty());
+    assert!(pm.list().await.unwrap().is_empty());
 
-    let err = pm.load("to-delete", None).unwrap_err();
+    let err = pm.load("to-delete", None).await.unwrap_err();
     assert!(
         matches!(err, CoreError::ProfileNotFound(_)),
         "expected ProfileNotFound after delete, got: {err:?}"
     );
 }
 
-#[test]
-fn test_pm_delete_nonexistent() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_pm_delete_nonexistent() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
-    let err = pm.delete("ghost", None).unwrap_err();
+    let err = pm.delete("ghost", None).await.unwrap_err();
     assert!(
         matches!(err, CoreError::ProfileNotFound(ref name) if name == "ghost"),
         "expected ProfileNotFound, got: {err:?}"
     );
 }
 
-#[test]
-fn test_pm_list_multiple() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_pm_list_multiple() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let names = ["alpha", "beta", "gamma", "delta"];
     for name in &names {
         let profile = make_manual_profile(name, "skyrim-se", vec![]);
-        pm.create(&profile).unwrap();
+        pm.create(&profile).await.unwrap();
     }
 
-    let mut listed: Vec<String> = pm.list().unwrap().into_iter().map(|s| s.name).collect();
+    let mut listed: Vec<String> = pm
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|s| s.name)
+        .collect();
     listed.sort();
     let mut expected = names.map(String::from).to_vec();
     expected.sort();
@@ -406,15 +413,15 @@ fn test_pm_list_multiple() {
     assert_eq!(listed, expected);
 }
 
-#[test]
-fn test_pm_list_only_created_profiles() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_pm_list_only_created_profiles() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     // Create a single profile
     let profile = make_manual_profile("real-profile", "skyrim-se", vec![]);
-    pm.create(&profile).unwrap();
+    pm.create(&profile).await.unwrap();
 
-    let listed = pm.list().unwrap();
+    let listed = pm.list().await.unwrap();
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].name, "real-profile");
 }

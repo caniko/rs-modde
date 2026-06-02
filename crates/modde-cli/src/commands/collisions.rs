@@ -16,8 +16,10 @@ pub async fn handle(
     show_all: bool,
     suggest_hides: bool,
 ) -> Result<()> {
-    let pm = ProfileManager::open().context("failed to open profile database")?;
-    let profile = load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref())?;
+    let pm = ProfileManager::open()
+        .await
+        .context("failed to open profile database")?;
+    let profile = load_profile_or_default(&pm, profile_name.as_deref(), game_id.as_deref()).await?;
 
     let classifier = modde_games::resolve_collision_classifier(profile.game_id.as_str())
         .ok_or_else(|| anyhow::anyhow!("no collision classifier for game '{}'", profile.game_id))?;
@@ -31,13 +33,13 @@ pub async fn handle(
             .context("failed to build conflict map")?;
 
     // Load hidden files.
-    let hidden: HashSet<(String, String)> = profile
-        .id
-        .and_then(|pid| {
-            let h = pm.db().list_hidden_files(pid).ok()?;
-            Some(h.into_iter().map(|f| (f.mod_id, f.rel_path)).collect())
-        })
-        .unwrap_or_default();
+    let hidden: HashSet<(String, String)> = match profile.id {
+        Some(pid) => match pm.db().list_hidden_files(pid).await.ok() {
+            Some(h) => h.into_iter().map(|f| (f.mod_id, f.rel_path)).collect(),
+            None => HashSet::new(),
+        },
+        None => HashSet::new(),
+    };
 
     let report = collision::analyze_collisions(
         &full_conflict_map.conflict_map,

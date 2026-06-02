@@ -376,6 +376,74 @@ pub(super) struct ToolLoadRequest {
     pub(super) previous_active_tool_id: Option<String>,
 }
 
+/// Owned, off-thread-computed result of (re)loading the profile + data-tab +
+/// tool context for a game/profile pair.
+///
+/// Built by [`super::model::load_profile_context`] on a blocking task and
+/// applied synchronously by `Modde::apply_profile_context`, so the iced event
+/// loop never blocks on the multi-query profile reload that
+/// `reload_profile`/`switch_game_context` used to perform inline.
+#[derive(Debug, Clone)]
+pub struct ProfileContextSnapshot {
+    pub profiles: Vec<modde_core::profile::ProfileSummary>,
+    pub active_profile: Option<String>,
+    pub profile_outcome: ProfileLoadOutcome,
+    pub data_tab_conflicts: Vec<(String, Vec<String>)>,
+    pub missing_store_mod_count: usize,
+    /// Folded tool snapshot. `Some` when a game is in scope (apply it via
+    /// `apply_tool_snapshot`); `None` when no game is selected (clear the tool
+    /// state, mirroring the old `refresh_tools_state` empty branch).
+    pub tools: Option<ToolLoadSnapshot>,
+    /// Re-run diagnostics after applying, when the Diagnostics view is active.
+    /// Only set by the profile-switch handler (preserves the old synchronous
+    /// `SwitchProfile` behavior).
+    pub rerun_diagnostics: bool,
+}
+
+/// What happened when the loader tried to (re)load the active profile.
+#[derive(Debug, Clone)]
+pub enum ProfileLoadOutcome {
+    /// No active profile — clear `loaded_profile` and `mod_id_filter_keys`.
+    Cleared,
+    /// Profile loaded fresh from the DB.
+    Loaded {
+        profile: Box<modde_core::Profile>,
+        experiment_depth: usize,
+        current_fingerprint: Option<modde_core::save::SaveFingerprint>,
+        mod_id_filter_keys: Vec<String>,
+    },
+    /// `pm.load` failed — leave the previously-loaded profile (and its derived
+    /// fields) untouched, mirroring the old `reload_profile` behavior on a load
+    /// error.
+    KeepPrevious,
+}
+
+/// Inputs for [`super::model::load_profile_context`], built on the iced thread
+/// from `&Modde` and moved into the blocking loader.
+pub(super) struct ProfileContextRequest {
+    pub(super) selected_game: Option<String>,
+    pub(super) active_profile: Option<String>,
+    /// `true` for game switches: recompute the active profile from the DB
+    /// (active pointer, then first listed profile) instead of trusting
+    /// `active_profile`.
+    pub(super) recompute_active: bool,
+    /// The currently-loaded profile, used to recompute data-tab conflicts when
+    /// the load fails ([`ProfileLoadOutcome::KeepPrevious`]).
+    pub(super) fallback_profile: Option<modde_core::Profile>,
+    /// `Some` to fold a tool reload into the same off-thread job; `None` clears
+    /// the tool state on apply.
+    pub(super) tool_request: Option<ToolLoadRequest>,
+    pub(super) rerun_diagnostics: bool,
+}
+
+/// Off-thread-computed data-tab conflict result — the lightweight refresh that
+/// `Message::DataTabConflictsLoaded` applies when the Data tab is opened.
+#[derive(Debug, Clone)]
+pub struct DataTabConflicts {
+    pub conflicts: Vec<(String, Vec<String>)>,
+    pub missing_store_mod_count: usize,
+}
+
 #[derive(Debug, Clone, Default)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct WabbajackInstallerState {

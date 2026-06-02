@@ -9,6 +9,7 @@ Usage: modde [OPTIONS] <COMMAND>
 
 Commands:
   profile      Manage profiles
+  config       Inspect and set modde configuration (including the database backend)
   play         Switch profile, deploy mods, and launch the game
   deploy       Deploy mods for the active or specified profile
   rollback     Rollback to the previous deployment

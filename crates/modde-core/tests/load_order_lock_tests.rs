@@ -176,26 +176,27 @@ load_order_rules = []
 // 2. Database round-trip for both profile-level and per-mod locks
 // ---------------------------------------------------------------------------
 
-#[test]
-fn db_roundtrip_preserves_profile_level_lock() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn db_roundtrip_preserves_profile_level_lock() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let mut profile = make_profile("wj-locked", "skyrim-se", vec![mod_entry("skse")]);
     profile.load_order_lock = Some(LoadOrderLock::now(LockReason::Wabbajack {
         manifest_hash: "deadbeef".to_string(),
     }));
 
-    pm.create(&profile).expect("create profile");
+    pm.create(&profile).await.expect("create profile");
     let loaded = pm
         .load("wj-locked", Some(&GameId::from("skyrim-se")))
+        .await
         .expect("load profile");
 
     assert_eq!(profile.load_order_lock, loaded.load_order_lock);
 }
 
-#[test]
-fn db_roundtrip_preserves_per_mod_lock() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn db_roundtrip_preserves_per_mod_lock() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let mut pinned = mod_entry("SkyUI");
     pinned.lock = Some(LockReason::Manual {
@@ -204,10 +205,11 @@ fn db_roundtrip_preserves_per_mod_lock() {
     let unpinned = mod_entry("USSEP");
 
     let profile = make_profile("mixed-pins", "skyrim-se", vec![pinned.clone(), unpinned]);
-    pm.create(&profile).expect("create profile");
+    pm.create(&profile).await.expect("create profile");
 
     let loaded = pm
         .load("mixed-pins", Some(&GameId::from("skyrim-se")))
+        .await
         .expect("load profile");
     assert_eq!(loaded.mods.len(), 2);
     assert_eq!(loaded.mods[0].lock, pinned.lock);
@@ -217,12 +219,12 @@ fn db_roundtrip_preserves_per_mod_lock() {
     );
 }
 
-#[test]
-fn db_update_preserves_lock_after_delete_reinsert() {
+#[tokio::test]
+async fn db_update_preserves_lock_after_delete_reinsert() {
     // `update_profile` does a DELETE + INSERT for profile_mods — a known
     // shape that can silently drop columns if the INSERT statement is out
     // of sync with the struct. This test guards against regressions.
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let mut pinned = mod_entry("SkyUI");
     pinned.lock = Some(LockReason::Manual { note: None });
@@ -232,30 +234,32 @@ fn db_update_preserves_lock_after_delete_reinsert() {
         version: "1.0".to_string(),
     }));
 
-    pm.create(&profile).expect("create");
+    pm.create(&profile).await.expect("create");
     // Mutate an unrelated field and call update.
     profile.overrides = PathBuf::from("/tmp/new-overrides");
-    pm.update(&profile).expect("update");
+    pm.update(&profile).await.expect("update");
 
     let loaded = pm
         .load("pin-me", Some(&GameId::from("skyrim-se")))
+        .await
         .expect("reload");
     assert_eq!(loaded.load_order_lock, profile.load_order_lock);
     assert_eq!(loaded.mods[0].lock, profile.mods[0].lock);
 }
 
-#[test]
-fn db_roundtrip_none_lock_stays_none() {
+#[tokio::test]
+async fn db_roundtrip_none_lock_stays_none() {
     // Sanity: a profile with no lock and no per-mod pins must still load
     // back with None in both places — guards against sloppy Option
     // handling in decode_lock / decode_lock_reason.
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = make_profile("plain", "skyrim-se", vec![mod_entry("skse")]);
-    pm.create(&profile).expect("create");
+    pm.create(&profile).await.expect("create");
 
     let loaded = pm
         .load("plain", Some(&GameId::from("skyrim-se")))
+        .await
         .expect("load");
     assert!(loaded.load_order_lock.is_none());
     assert!(loaded.mods[0].lock.is_none());
@@ -265,18 +269,19 @@ fn db_roundtrip_none_lock_stays_none() {
 // 3. Schema V7 migration is idempotent
 // ---------------------------------------------------------------------------
 
-#[test]
-fn schema_v7_migration_is_idempotent() {
+#[tokio::test]
+async fn schema_v7_migration_is_idempotent() {
     // Opening twice must not crash or double-add columns. `ModdeDb::open`
     // calls `migrate()` unconditionally, so round-tripping a connection is
     // the simplest way to exercise the idempotent guard.
-    let db = ModdeDb::open_memory().expect("first open");
+    let db = ModdeDb::open_memory().await.expect("first open");
     // Create + load a profile to confirm the schema is usable.
     let pm = ProfileManager::with_db(db);
     let profile = make_profile("post-migration", "skyrim-se", vec![mod_entry("test")]);
-    pm.create(&profile).expect("create after migration");
+    pm.create(&profile).await.expect("create after migration");
     let loaded = pm
         .load("post-migration", Some(&GameId::from("skyrim-se")))
+        .await
         .unwrap();
     assert_eq!(loaded.mods.len(), 1);
 }
@@ -285,8 +290,8 @@ fn schema_v7_migration_is_idempotent() {
 // 4. Fork clones both profile-level and per-mod locks
 // ---------------------------------------------------------------------------
 
-#[test]
-fn fork_clones_both_profile_level_and_per_mod_locks() {
+#[tokio::test]
+async fn fork_clones_both_profile_level_and_per_mod_locks() {
     // Merged into a single test because `ProfileManager::fork` writes to
     // the shared save vault git repo (`<data>/saves/<game_id>/.git`) and
     // parallel tests forking the same game_id race on git lockfiles. One
@@ -296,7 +301,7 @@ fn fork_clones_both_profile_level_and_per_mod_locks() {
     // Use a game_id unique to this test so the vault path doesn't collide
     // with other tests that may touch Skyrim saves.
     let game = GameId::from("skyrim-se-lock-fork-test");
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let mut pinned = mod_entry("SkyUI");
     pinned.lock = Some(LockReason::Manual {
@@ -310,11 +315,11 @@ fn fork_clones_both_profile_level_and_per_mod_locks() {
     profile.load_order_lock = Some(LoadOrderLock::now(LockReason::Wabbajack {
         manifest_hash: "src-hash".to_string(),
     }));
-    pm.create(&profile).expect("create source");
+    pm.create(&profile).await.expect("create source");
 
-    let _new_id = pm.fork("lock-src", "lock-fork", &game).expect("fork");
+    let _new_id = pm.fork("lock-src", "lock-fork", &game).await.expect("fork");
 
-    let forked = pm.load("lock-fork", Some(&game)).expect("load fork");
+    let forked = pm.load("lock-fork", Some(&game)).await.expect("load fork");
 
     // Profile-level lock rides along (faithful-copy principle).
     assert_eq!(
@@ -332,8 +337,8 @@ fn fork_clones_both_profile_level_and_per_mod_locks() {
     );
 }
 
-#[test]
-fn fork_with_options_unlock_strips_both_lock_levels() {
+#[tokio::test]
+async fn fork_with_options_unlock_strips_both_lock_levels() {
     // `modde profile fork --unlock` (and `ForkOptions { unlock: true }`
     // via the library API) must strip BOTH the profile-level
     // `load_order_lock` AND every per-mod pin from the new profile,
@@ -344,7 +349,7 @@ fn fork_with_options_unlock_strips_both_lock_levels() {
 
     // Unique game_id to avoid save-vault collisions with other fork tests.
     let game = GameId::from("skyrim-se-fork-unlock-test");
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let mut pinned_a = mod_entry("SkyUI");
     pinned_a.lock = Some(LockReason::Manual {
@@ -363,13 +368,17 @@ fn fork_with_options_unlock_strips_both_lock_levels() {
     source.load_order_lock = Some(LoadOrderLock::now(LockReason::Wabbajack {
         manifest_hash: "src".to_string(),
     }));
-    pm.create(&source).expect("create source");
+    pm.create(&source).await.expect("create source");
 
     let _ = pm
         .fork_with_options("wj-src", "wj-diverged", &game, ForkOptions { unlock: true })
+        .await
         .expect("fork --unlock");
 
-    let forked = pm.load("wj-diverged", Some(&game)).expect("load fork");
+    let forked = pm
+        .load("wj-diverged", Some(&game))
+        .await
+        .expect("load fork");
 
     // Profile-level lock stripped.
     assert!(
@@ -394,7 +403,7 @@ fn fork_with_options_unlock_strips_both_lock_levels() {
 
     // Source is untouched — critical invariant so users can "try a
     // diverged fork" without losing the locked original.
-    let source_reloaded = pm.load("wj-src", Some(&game)).expect("reload source");
+    let source_reloaded = pm.load("wj-src", Some(&game)).await.expect("reload source");
     assert!(
         source_reloaded.load_order_lock.is_some(),
         "fork --unlock must NOT touch the source profile's lock"
@@ -405,8 +414,8 @@ fn fork_with_options_unlock_strips_both_lock_levels() {
     );
 }
 
-#[test]
-fn fork_with_options_default_matches_legacy_fork() {
+#[tokio::test]
+async fn fork_with_options_default_matches_legacy_fork() {
     // `ForkOptions::default()` (all false) must produce the same
     // result as the legacy `fork()` path — otherwise the wrapper is
     // breaking behavior for every existing caller.
@@ -414,7 +423,7 @@ fn fork_with_options_default_matches_legacy_fork() {
     isolated_data_dir();
 
     let game = GameId::from("skyrim-se-fork-default-test");
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let mut pinned = mod_entry("SkyUI");
     pinned.lock = Some(LockReason::Manual { note: None });
@@ -422,13 +431,17 @@ fn fork_with_options_default_matches_legacy_fork() {
     source.load_order_lock = Some(LoadOrderLock::now(LockReason::Wabbajack {
         manifest_hash: "abc".to_string(),
     }));
-    pm.create(&source).expect("create source");
+    pm.create(&source).await.expect("create source");
 
     let _ = pm
         .fork_with_options("src-default", "fork-default", &game, ForkOptions::default())
+        .await
         .expect("fork default");
 
-    let forked = pm.load("fork-default", Some(&game)).expect("load fork");
+    let forked = pm
+        .load("fork-default", Some(&game))
+        .await
+        .expect("load fork");
     assert_eq!(forked.load_order_lock, source.load_order_lock);
     assert_eq!(forked.mods[0].lock, pinned.lock);
 }
@@ -437,8 +450,8 @@ fn fork_with_options_default_matches_legacy_fork() {
 // 5. TOML import preserve-before-overwrite
 // ---------------------------------------------------------------------------
 
-#[test]
-fn toml_import_stamps_tomlimport_when_no_existing_lock() {
+#[tokio::test]
+async fn toml_import_stamps_tomlimport_when_no_existing_lock() {
     let tmp = tempfile::tempdir().expect("mktemp");
     let profile_dir = tmp.path().join("fresh-import");
     std::fs::create_dir_all(&profile_dir).unwrap();
@@ -456,12 +469,13 @@ Manual = {}
 "#;
     std::fs::write(profile_dir.join("profile.toml"), toml).unwrap();
 
-    let db = ModdeDb::open_memory().unwrap();
-    let imported = db.import_toml_profiles(tmp.path()).expect("import");
+    let db = ModdeDb::open_memory().await.unwrap();
+    let imported = db.import_toml_profiles(tmp.path()).await.expect("import");
     assert_eq!(imported, 1);
 
     let profile = db
         .load_profile("fresh-import", &GameId::from("skyrim-se"))
+        .await
         .expect("load imported");
     match profile.load_order_lock.as_ref().map(|l| &l.reason) {
         Some(LockReason::TomlImport { source_path }) => {
@@ -474,8 +488,8 @@ Manual = {}
     }
 }
 
-#[test]
-fn toml_import_preserves_existing_wabbajack_lock() {
+#[tokio::test]
+async fn toml_import_preserves_existing_wabbajack_lock() {
     // A TOML file that was exported from a Wabbajack-installed profile
     // already carries a `Wabbajack` lock. Importing it must preserve that
     // lock rather than overwriting with `TomlImport` — provenance wins.
@@ -491,12 +505,13 @@ fn toml_import_preserves_existing_wabbajack_lock() {
     let toml = toml::to_string(&source).expect("serialize source");
     std::fs::write(profile_dir.join("profile.toml"), toml).unwrap();
 
-    let db = ModdeDb::open_memory().unwrap();
-    let imported = db.import_toml_profiles(tmp.path()).expect("import");
+    let db = ModdeDb::open_memory().await.unwrap();
+    let imported = db.import_toml_profiles(tmp.path()).await.expect("import");
     assert_eq!(imported, 1);
 
     let loaded = db
         .load_profile("from-wj", &GameId::from("skyrim-se"))
+        .await
         .expect("load");
     match loaded.load_order_lock.as_ref().map(|l| &l.reason) {
         Some(LockReason::Wabbajack { manifest_hash }) => {

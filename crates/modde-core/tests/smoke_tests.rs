@@ -50,9 +50,9 @@ fn make_profile(
 
 // ── Profile serialize/deserialize ────────────────────────────────────
 
-#[test]
-fn smoke_profile_roundtrip() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn smoke_profile_roundtrip() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = Profile {
         id: None,
@@ -70,8 +70,8 @@ fn smoke_profile_roundtrip() {
         load_order_lock: None,
     };
 
-    pm.create(&profile).unwrap();
-    let loaded = pm.load("smoke", None).unwrap();
+    pm.create(&profile).await.unwrap();
+    let loaded = pm.load("smoke", None).await.unwrap();
 
     assert_eq!(loaded.name, "smoke");
     assert_eq!(loaded.game_id, "skyrim-se");
@@ -82,9 +82,9 @@ fn smoke_profile_roundtrip() {
     assert_eq!(loaded.load_order_rules.len(), 1);
 }
 
-#[test]
-fn smoke_profile_nexus_collection_source_roundtrip() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn smoke_profile_nexus_collection_source_roundtrip() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = Profile {
         id: None,
@@ -100,8 +100,8 @@ fn smoke_profile_nexus_collection_source_roundtrip() {
         load_order_lock: None,
     };
 
-    pm.create(&profile).unwrap();
-    let loaded = pm.load("nexus_col", None).unwrap();
+    pm.create(&profile).await.unwrap();
+    let loaded = pm.load("nexus_col", None).await.unwrap();
     assert_eq!(loaded.name, "nexus_col");
     match &loaded.source {
         ProfileSource::NexusCollection { slug, version } => {
@@ -114,25 +114,31 @@ fn smoke_profile_nexus_collection_source_roundtrip() {
 
 // ── ProfileManager ───────────────────────────────────────────────────
 
-#[test]
-fn smoke_profile_manager_list_empty() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
-    let list = mgr.list().unwrap();
+#[tokio::test]
+async fn smoke_profile_manager_list_empty() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
+    let list = mgr.list().await.unwrap();
     assert!(list.is_empty());
 }
 
-#[test]
-fn smoke_profile_manager_create_and_load() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn smoke_profile_manager_create_and_load() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = make_profile("test_profile", vec!["mod_a"], smallvec![]);
-    mgr.create(&profile).unwrap();
+    mgr.create(&profile).await.unwrap();
 
-    let loaded = mgr.load("test_profile", None).unwrap();
+    let loaded = mgr.load("test_profile", None).await.unwrap();
     assert_eq!(loaded.name, "test_profile");
     assert_eq!(loaded.mods.len(), 1);
 
-    let list: Vec<String> = mgr.list().unwrap().into_iter().map(|s| s.name).collect();
+    let list: Vec<String> = mgr
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|s| s.name)
+        .collect();
     assert_eq!(list, vec!["test_profile"]);
 }
 

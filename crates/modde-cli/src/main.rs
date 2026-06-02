@@ -46,6 +46,11 @@ enum Commands {
         #[command(subcommand)]
         action: ProfileAction,
     },
+    /// Inspect and set modde configuration (including the database backend)
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
     /// Switch profile, deploy mods, and launch the game
     Play {
         /// Profile to activate (uses active profile if omitted)
@@ -286,6 +291,33 @@ enum DevAction {
     ExportToolSchema {
         #[arg(long, default_value = "nix/tool-schema.nix")]
         out: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum ConfigAction {
+    /// Show the resolved configuration (database backend and its source)
+    Show,
+    /// Set the database backend and `PostgreSQL` connection parameters
+    SetDatabase {
+        /// Backend to use: `sqlite` (default) or `postgres`
+        #[arg(long)]
+        backend: String,
+        /// Full `PostgreSQL` connection URL (overrides the discrete fields)
+        #[arg(long)]
+        url: Option<String>,
+        #[arg(long)]
+        host: Option<String>,
+        #[arg(long)]
+        port: Option<u16>,
+        /// `PostgreSQL` database name
+        #[arg(long = "name")]
+        dbname: Option<String>,
+        #[arg(long)]
+        user: Option<String>,
+        /// Path to a file containing the `PostgreSQL` password
+        #[arg(long)]
+        password_file: Option<PathBuf>,
     },
 }
 
@@ -1317,12 +1349,43 @@ fn start_heap_profiler(path: Option<&std::path::Path>) -> Result<Option<()>> {
 }
 
 fn run_command(cli: Cli) -> Result<()> {
-    // Sync commands that don't need the tokio runtime
+    // Commands that touch the (async) database are dispatched through a tokio
+    // runtime via `block_on`. Purely-synchronous commands (no DB, no network)
+    // still run directly without a runtime. Only the single matched arm runs,
+    // so at most one runtime is created per invocation.
+    macro_rules! db_sync {
+        ($fut:expr) => {
+            return tokio::runtime::Runtime::new()?.block_on($fut)
+        };
+    }
+
     match cli.command {
         Commands::Dev {
             action: DevAction::ExportToolSchema { out },
         } => return commands::nix_schema::handle_export(&out),
-        Commands::Profile { action } => return commands::profile::handle(action),
+        Commands::Config { action } => {
+            return match action {
+                ConfigAction::Show => commands::config::handle_show(),
+                ConfigAction::SetDatabase {
+                    backend,
+                    url,
+                    host,
+                    port,
+                    dbname,
+                    user,
+                    password_file,
+                } => commands::config::handle_set_database(
+                    &backend,
+                    url,
+                    host,
+                    port,
+                    dbname,
+                    user,
+                    password_file,
+                ),
+            };
+        }
+        Commands::Profile { action } => db_sync!(commands::profile::handle(action)),
         Commands::Scan {
             game,
             game_dir,
@@ -1332,7 +1395,7 @@ fn run_command(cli: Cli) -> Result<()> {
             dry_run,
             prune_duplicates,
         } => {
-            return commands::scan::handle(
+            db_sync!(commands::scan::handle(
                 game,
                 game_dir,
                 manifest,
@@ -1340,10 +1403,10 @@ fn run_command(cli: Cli) -> Result<()> {
                 threshold,
                 dry_run,
                 prune_duplicates,
-            );
+            ));
         }
         Commands::Diagnostics { game, profile } => {
-            return commands::diagnostics::handle(&game, profile);
+            db_sync!(commands::diagnostics::handle(&game, profile));
         }
         Commands::Export {
             profile,
@@ -1351,10 +1414,10 @@ fn run_command(cli: Cli) -> Result<()> {
             columns,
             output,
         } => {
-            return commands::export::handle(profile, game, columns, output);
+            db_sync!(commands::export::handle(profile, game, columns, output));
         }
         Commands::Backup { action } => {
-            return commands::backup::handle(action);
+            db_sync!(commands::backup::handle(action));
         }
         Commands::Detect => return commands::detect::handle(),
         Commands::Game {
@@ -1392,7 +1455,7 @@ fn run_command(cli: Cli) -> Result<()> {
                 InstanceAction::Switch { name } => commands::instance::handle_switch(&name),
             };
         }
-        Commands::Import => return commands::import::handle(),
+        Commands::Import => db_sync!(commands::import::handle()),
         Commands::Fomod { action } => return commands::fomod::handle(action),
         Commands::Loot { action } => {
             return match action {
@@ -1403,22 +1466,22 @@ fn run_command(cli: Cli) -> Result<()> {
         Commands::Tool {
             action: ToolAction::List { game },
         } => {
-            return commands::tool::handle_list(&game);
+            db_sync!(commands::tool::handle_list(&game));
         }
         Commands::Tool {
             action: ToolAction::Status { game },
         } => {
-            return commands::tool::handle_status(&game);
+            db_sync!(commands::tool::handle_status(&game));
         }
         Commands::Tool {
             action: ToolAction::Enable { tool_id, game },
         } => {
-            return commands::tool::handle_enable(&tool_id, &game);
+            db_sync!(commands::tool::handle_enable(&tool_id, &game));
         }
         Commands::Tool {
             action: ToolAction::Disable { tool_id, game },
         } => {
-            return commands::tool::handle_disable(&tool_id, &game);
+            db_sync!(commands::tool::handle_disable(&tool_id, &game));
         }
         Commands::Tool {
             action:
@@ -1428,17 +1491,17 @@ fn run_command(cli: Cli) -> Result<()> {
                     settings,
                 },
         } => {
-            return commands::tool::handle_configure(&tool_id, &game, &settings);
+            db_sync!(commands::tool::handle_configure(&tool_id, &game, &settings));
         }
         Commands::Tool {
             action: ToolAction::Apply { tool_id, game },
         } => {
-            return commands::tool::handle_apply(&tool_id, &game);
+            db_sync!(commands::tool::handle_apply(&tool_id, &game));
         }
         Commands::Tool {
             action: ToolAction::Revert { tool_id, game },
         } => {
-            return commands::tool::handle_revert(&tool_id, &game);
+            db_sync!(commands::tool::handle_revert(&tool_id, &game));
         }
         Commands::Nxm {
             action: NxmAction::Install,
@@ -1459,7 +1522,7 @@ fn run_command(cli: Cli) -> Result<()> {
                     args,
                 },
         } => {
-            return commands::tool::handle_add_executable(
+            db_sync!(commands::tool::handle_add_executable(
                 &name,
                 executable,
                 &game,
@@ -1468,17 +1531,17 @@ fn run_command(cli: Cli) -> Result<()> {
                 wine_dll_overrides,
                 &environment,
                 &args,
-            );
+            ));
         }
         Commands::Exec {
             action: ExecAction::List { game },
         } => {
-            return commands::tool::handle_list_executables(&game);
+            db_sync!(commands::tool::handle_list_executables(&game));
         }
         Commands::Exec {
             action: ExecAction::Remove { name, game },
         } => {
-            return commands::tool::handle_remove_executable(&name, &game);
+            db_sync!(commands::tool::handle_remove_executable(&name, &game));
         }
         Commands::Skill { action } => {
             return commands::skill::handle(action);
@@ -1608,13 +1671,14 @@ fn run_command(cli: Cli) -> Result<()> {
                         wine_dll_overrides,
                         &environment,
                         &args,
-                    )?;
+                    )
+                    .await?;
                 }
                 ToolAction::ListExecutables { game } => {
-                    commands::tool::handle_list_executables(&game)?;
+                    commands::tool::handle_list_executables(&game).await?;
                 }
                 ToolAction::RemoveExecutable { name, game } => {
-                    commands::tool::handle_remove_executable(&name, &game)?;
+                    commands::tool::handle_remove_executable(&name, &game).await?;
                 }
                 ToolAction::RunExecutable {
                     name,
@@ -1682,6 +1746,7 @@ fn run_command(cli: Cli) -> Result<()> {
             Commands::Wabbajack { action } => commands::wabbajack::handle(action).await?,
             // Already handled above
             Commands::Profile { .. }
+            | Commands::Config { .. }
             | Commands::Dev { .. }
             | Commands::Scan { .. }
             | Commands::Detect
@@ -1710,8 +1775,10 @@ fn run_command(cli: Cli) -> Result<()> {
 /// return `false` to avoid spamming GUIs with no-op refreshes.
 fn command_mutates_state(cmd: &Commands) -> bool {
     match cmd {
-        // Pure read paths.
+        // Pure read paths. (`config set-database` writes settings.toml, not
+        // profile/store/DB state, and the GUI reads settings independently.)
         Commands::Dev { .. }
+        | Commands::Config { .. }
         | Commands::Detect
         | Commands::Diagnostics { .. }
         | Commands::Export { .. }
@@ -1805,6 +1872,7 @@ fn command_runs_lazy_product_update_check(cmd: &Commands) -> bool {
     !matches!(
         cmd,
         Commands::Gui
+            | Commands::Config { .. }
             | Commands::Dev { .. }
             | Commands::Update {
                 action: UpdateAction::Check { .. }

@@ -87,7 +87,8 @@ impl StockGameManager {
                 &snapshot_dir,
                 &tree_hash.tree_hash,
                 tree_hash.file_count,
-            )?;
+            )
+            .await?;
         }
 
         info!(game_id = %game_id, path = %snapshot_dir.display(), hash = %tree_hash.tree_hash, "stock snapshot created");

@@ -390,9 +390,9 @@ async fn test_vfs_materialize_500_files() {
 
 // ── Concurrent profile operations ──────────────────────────────────
 
-#[test]
-fn test_profile_manager_create_many_profiles() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_manager_create_many_profiles() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     for i in 0..50 {
         let profile = Profile {
@@ -405,16 +405,16 @@ fn test_profile_manager_create_many_profiles() {
             load_order_rules: smallvec![],
             load_order_lock: None,
         };
-        mgr.create(&profile).unwrap();
+        mgr.create(&profile).await.unwrap();
     }
 
-    let list = mgr.list().unwrap();
+    let list = mgr.list().await.unwrap();
     assert_eq!(list.len(), 50);
 }
 
-#[test]
-fn test_profile_manager_delete_then_recreate() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_manager_delete_then_recreate() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let profile = Profile {
         id: None,
@@ -427,11 +427,11 @@ fn test_profile_manager_delete_then_recreate() {
         load_order_lock: None,
     };
 
-    mgr.create(&profile).unwrap();
-    assert_eq!(mgr.list().unwrap().len(), 1);
+    mgr.create(&profile).await.unwrap();
+    assert_eq!(mgr.list().await.unwrap().len(), 1);
 
-    mgr.delete("ephemeral", None).unwrap();
-    assert_eq!(mgr.list().unwrap().len(), 0);
+    mgr.delete("ephemeral", None).await.unwrap();
+    assert_eq!(mgr.list().await.unwrap().len(), 0);
 
     // Recreate with different content
     let profile2 = Profile {
@@ -447,8 +447,8 @@ fn test_profile_manager_delete_then_recreate() {
         load_order_lock: None,
     };
 
-    mgr.create(&profile2).unwrap();
-    let loaded = mgr.load("ephemeral", None).unwrap();
+    mgr.create(&profile2).await.unwrap();
+    let loaded = mgr.load("ephemeral", None).await.unwrap();
     assert_eq!(loaded.game_id, "skyrim-se");
     assert_eq!(loaded.mods.len(), 1);
 }
@@ -633,9 +633,9 @@ fn test_resolve_all_disabled() {
 
 // ── Profile serialization edge cases ───────────────────────────────
 
-#[test]
-fn test_profile_with_unicode_mod_names() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_with_unicode_mod_names() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
     let profile = Profile {
         id: None,
         name: "unicode_test".to_string(),
@@ -669,16 +669,16 @@ fn test_profile_with_unicode_mod_names() {
         load_order_lock: None,
     };
 
-    pm.create(&profile).unwrap();
-    let loaded = pm.load("unicode_test", None).unwrap();
+    pm.create(&profile).await.unwrap();
+    let loaded = pm.load("unicode_test", None).await.unwrap();
     assert_eq!(loaded.mods.len(), 3);
     assert_eq!(loaded.mods[0].mod_id, "日本語モッド");
     assert_eq!(loaded.mods[1].mod_id, "Ñoño_Ñuñez");
 }
 
-#[test]
-fn test_profile_with_fomod_config_roundtrip() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_with_fomod_config_roundtrip() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
     let fomod_json = r#"{"steps":[{"name":"Textures","groups":[{"name":"Quality","plugins":[{"name":"4K","files":["textures/4k/"]}]}]}]}"#;
 
     let profile = Profile {
@@ -698,14 +698,14 @@ fn test_profile_with_fomod_config_roundtrip() {
         load_order_lock: None,
     };
 
-    pm.create(&profile).unwrap();
-    let loaded = pm.load("fomod_test", None).unwrap();
+    pm.create(&profile).await.unwrap();
+    let loaded = pm.load("fomod_test", None).await.unwrap();
     assert_eq!(loaded.mods[0].fomod_config.as_deref(), Some(fomod_json));
 }
 
-#[test]
-fn test_profile_all_source_types_roundtrip() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn test_profile_all_source_types_roundtrip() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let sources = vec![
         ProfileSource::Manual,
@@ -730,8 +730,8 @@ fn test_profile_all_source_types_roundtrip() {
             load_order_lock: None,
         };
 
-        pm.create(&profile).unwrap();
-        let loaded = pm.load(&format!("source_test_{i}"), None).unwrap();
+        pm.create(&profile).await.unwrap();
+        let loaded = pm.load(&format!("source_test_{i}"), None).await.unwrap();
 
         match (&profile.source, &loaded.source) {
             (ProfileSource::Manual, ProfileSource::Manual) => {}

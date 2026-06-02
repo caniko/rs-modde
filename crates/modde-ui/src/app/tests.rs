@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 fn test_app() -> Modde {
     Modde {
+        db: test_db(),
         active_view: View::ModList,
         active_profile: None,
         profiles: Vec::new(),
@@ -78,6 +79,8 @@ fn test_app() -> Modde {
         compact_mod_list: false,
         collapsed_sidebar_groups: HashSet::from([SidebarGroup::General]),
         update_available: None,
+        context_generation: 0,
+        data_tab_generation: 0,
     }
 }
 
@@ -1402,13 +1405,13 @@ fn optiscaler_apply_preserves_stellar_blade_selected_release() {
     config.set("proxy_dll", serde_json::json!("dxgi.dll"));
     config.set("copy_companion_files", serde_json::json!(true));
     config.set("enable_optipatcher", serde_json::json!(false));
-    let db = modde_core::db::ModdeDb::open().expect("db opens");
-    db.save_tool_config(
+    let db = crate::app::block_on(modde_core::db::ModdeDb::open()).expect("db opens");
+    crate::app::block_on(db.save_tool_config(
         &GameId::from("stellar-blade"),
         "optiscaler",
         false,
         &serde_json::to_string(&config.settings).expect("settings json"),
-    )
+    ))
     .expect("save selected OptiScaler release");
 
     let context = modde_games::tools::ToolGameContext::from_parts(
@@ -1420,6 +1423,7 @@ fn optiscaler_apply_preserves_stellar_blade_selected_release() {
     let result = tokio::runtime::Runtime::new()
         .expect("tokio runtime")
         .block_on(apply_tool_for_game(
+            db.clone(),
             "stellar-blade".to_string(),
             game_dir.path().to_path_buf(),
             "optiscaler".to_string(),
@@ -1428,10 +1432,10 @@ fn optiscaler_apply_preserves_stellar_blade_selected_release() {
         .expect("apply OptiScaler");
 
     assert_eq!(result.applied_file_count, 2);
-    let row = db
-        .load_tool_config(&GameId::from("stellar-blade"), "optiscaler")
-        .expect("load tool config")
-        .expect("tool config exists");
+    let row =
+        crate::app::block_on(db.load_tool_config(&GameId::from("stellar-blade"), "optiscaler"))
+            .expect("load tool config")
+            .expect("tool config exists");
     let saved: serde_json::Value = serde_json::from_str(&row.settings_json).expect("settings json");
     assert_eq!(saved["optiscaler_profile"], "community-dxgi");
     assert_eq!(saved["source_mode"], "github_release");
@@ -1526,23 +1530,47 @@ fn test_reset_fomod() {
 // plan.
 
 use modde_core::profile::{LoadOrderLock, LockReason, ProfileManager, ProfileSource};
+use std::cell::Cell;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 static ISOLATED_DATA_DIR: OnceLock<tempfile::TempDir> = OnceLock::new();
+thread_local! {
+    static DB_LOCK_HELD: Cell<bool> = const { Cell::new(false) };
+}
+
+fn test_db() -> modde_core::db::ModdeDb {
+    if DB_LOCK_HELD.with(Cell::get) {
+        crate::app::block_on(modde_core::db::ModdeDb::open()).expect("db opens")
+    } else {
+        crate::app::block_on(modde_core::db::ModdeDb::open_memory()).expect("memory db opens")
+    }
+}
 
 /// Process-wide test mutex. All lock-refusal tests share one
 /// file-backed `SQLite` DB (via the `ISOLATED_DATA_DIR` `OnceLock`).
 /// These tests still serialize DB access because the UI handlers call
-/// `ProfileManager::open()` internally, so they need a predictable
+/// into the app-owned DB handle internally, so they need a predictable
 /// process-wide data directory while each fixture is seeded and asserted.
 static DB_LOCK: Mutex<()> = Mutex::new(());
 
+struct DbLockGuard {
+    _guard: MutexGuard<'static, ()>,
+}
+
+impl Drop for DbLockGuard {
+    fn drop(&mut self) {
+        DB_LOCK_HELD.with(|held| held.set(false));
+    }
+}
+
 /// Acquire the serial lock. Discards poisoning (a prior panicking
 /// test shouldn't block the rest of the suite).
-fn db_lock() -> MutexGuard<'static, ()> {
-    DB_LOCK
+fn db_lock() -> DbLockGuard {
+    let guard = DB_LOCK
         .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    DB_LOCK_HELD.with(|held| held.set(true));
+    DbLockGuard { _guard: guard }
 }
 
 /// Redirect `modde_core::paths::modde_data_dir` to a per-process
@@ -1559,17 +1587,14 @@ fn isolated_data_dir() {
 fn reset_isolated_db() {
     isolated_data_dir();
     let db_path = modde_core::paths::db_path();
-    if db_path.exists() {
-        std::fs::remove_file(&db_path).expect("remove isolated test DB");
-    }
-    let wal_path = db_path.with_extension("db-wal");
-    if wal_path.exists() {
-        std::fs::remove_file(&wal_path).expect("remove isolated test WAL");
-    }
-    let shm_path = db_path.with_extension("db-shm");
-    if shm_path.exists() {
-        std::fs::remove_file(&shm_path).expect("remove isolated test SHM");
-    }
+    // Best-effort removal: the async sqlx pool from a previous test may still be
+    // closing its WAL-mode connections on the shared runtime, so the -wal/-shm
+    // sidecar files can be checkpointed away (or briefly recreated) concurrently
+    // with this reset. Their absence is exactly the clean state we want, so we
+    // ignore NotFound (and any benign race) rather than asserting removal.
+    let _ = std::fs::remove_file(&db_path);
+    let _ = std::fs::remove_file(db_path.with_extension("db-wal"));
+    let _ = std::fs::remove_file(db_path.with_extension("db-shm"));
 }
 
 fn optiscaler_release(
@@ -1596,17 +1621,17 @@ fn optiscaler_release_loaded_resets_stale_asset() {
     let mut app = test_app();
     app.selected_game = Some("skyrim-se".to_string());
 
-    let db = modde_core::db::ModdeDb::open().expect("db opens");
+    let db = crate::app::block_on(modde_core::db::ModdeDb::open()).expect("db opens");
     let settings = serde_json::json!({
         "release_tag": "official:v0.9.1",
         "release_asset": "stale.zip"
     });
-    db.save_tool_config(
+    crate::app::block_on(db.save_tool_config(
         &GameId::from("skyrim-se"),
         "optiscaler",
         false,
         &settings.to_string(),
-    )
+    ))
     .expect("save stale settings");
 
     let releases = vec![modde_games::tools::ToolReleaseSummary {
@@ -1621,8 +1646,7 @@ fn optiscaler_release_loaded_resets_stale_asset() {
     }];
     let _ = app.update(Message::OptiScalerReleasesLoaded(Ok(releases)));
 
-    let row = db
-        .load_tool_config(&GameId::from("skyrim-se"), "optiscaler")
+    let row = crate::app::block_on(db.load_tool_config(&GameId::from("skyrim-se"), "optiscaler"))
         .expect("load tool config")
         .expect("tool config exists");
     let saved: serde_json::Value = serde_json::from_str(&row.settings_json).expect("settings json");
@@ -1671,9 +1695,8 @@ fn optiscaler_release_tag_update_resets_asset() {
         value: serde_json::json!("official:v0.9.1"),
     });
 
-    let db = modde_core::db::ModdeDb::open().expect("db opens");
-    let row = db
-        .load_tool_config(&GameId::from("skyrim-se"), "optiscaler")
+    let db = crate::app::block_on(modde_core::db::ModdeDb::open()).expect("db opens");
+    let row = crate::app::block_on(db.load_tool_config(&GameId::from("skyrim-se"), "optiscaler"))
         .expect("load tool config")
         .expect("tool config exists");
     let saved: serde_json::Value = serde_json::from_str(&row.settings_json).expect("settings json");
@@ -1688,18 +1711,18 @@ fn optiscaler_official_source_filters_out_goverlay_releases() {
     let mut app = test_app();
     app.selected_game = Some("skyrim-se".to_string());
 
-    let db = modde_core::db::ModdeDb::open().expect("db opens");
+    let db = crate::app::block_on(modde_core::db::ModdeDb::open()).expect("db opens");
     let settings = serde_json::json!({
         "source_mode": "github_release",
         "release_tag": "official:v0.9.1",
         "release_asset": "Optiscaler_0.9.1.7z"
     });
-    db.save_tool_config(
+    crate::app::block_on(db.save_tool_config(
         &GameId::from("skyrim-se"),
         "optiscaler",
         false,
         &settings.to_string(),
-    )
+    ))
     .expect("save settings");
 
     let _ = app.update(Message::OptiScalerReleasesLoaded(Ok(vec![
@@ -1744,9 +1767,8 @@ fn optiscaler_goverlay_source_filters_by_channel_and_resets_selection() {
         value: serde_json::json!("goverlay_builds"),
     });
 
-    let db = modde_core::db::ModdeDb::open().expect("db opens");
-    let row = db
-        .load_tool_config(&GameId::from("skyrim-se"), "optiscaler")
+    let db = crate::app::block_on(modde_core::db::ModdeDb::open()).expect("db opens");
+    let row = crate::app::block_on(db.load_tool_config(&GameId::from("skyrim-se"), "optiscaler"))
         .expect("load tool config")
         .expect("tool config exists");
     let saved: serde_json::Value = serde_json::from_str(&row.settings_json).expect("settings json");
@@ -1766,8 +1788,7 @@ fn optiscaler_goverlay_source_filters_by_channel_and_resets_selection() {
         key: "goverlay_channel".to_string(),
         value: serde_json::json!("master"),
     });
-    let row = db
-        .load_tool_config(&GameId::from("skyrim-se"), "optiscaler")
+    let row = crate::app::block_on(db.load_tool_config(&GameId::from("skyrim-se"), "optiscaler"))
         .expect("load tool config")
         .expect("tool config exists");
     let saved: serde_json::Value = serde_json::from_str(&row.settings_json).expect("settings json");
@@ -1803,14 +1824,14 @@ fn proton_versions_loaded_resets_stale_selected_version() {
     let mut app = test_app();
     app.selected_game = Some("skyrim-se".to_string());
 
-    let db = modde_core::db::ModdeDb::open().expect("db opens");
+    let db = crate::app::block_on(modde_core::db::ModdeDb::open()).expect("db opens");
     let settings = serde_json::json!({ "selected_version": "GE-Proton9-stale" });
-    db.save_tool_config(
+    crate::app::block_on(db.save_tool_config(
         &GameId::from("skyrim-se"),
         "proton",
         false,
         &settings.to_string(),
-    )
+    ))
     .expect("save stale settings");
 
     let _ = app.update(Message::ProtonVersionsLoaded(Ok(vec![
@@ -1818,8 +1839,7 @@ fn proton_versions_loaded_resets_stale_selected_version() {
         "GE-Proton10-34".to_string(),
     ])));
 
-    let row = db
-        .load_tool_config(&GameId::from("skyrim-se"), "proton")
+    let row = crate::app::block_on(db.load_tool_config(&GameId::from("skyrim-se"), "proton"))
         .expect("load tool config")
         .expect("tool config exists");
     let saved: serde_json::Value = serde_json::from_str(&row.settings_json).expect("settings json");
@@ -1938,7 +1958,7 @@ fn seed_profile(
     lock: Option<LoadOrderLock>,
 ) {
     reset_isolated_db();
-    let pm = ProfileManager::open().expect("open isolated DB");
+    let pm = crate::app::block_on(ProfileManager::open()).expect("open isolated DB");
     let profile = modde_core::profile::Profile {
         id: None,
         name: name.to_string(),
@@ -1949,7 +1969,7 @@ fn seed_profile(
         load_order_rules: SmallVec::new(),
         load_order_lock: lock,
     };
-    pm.create(&profile).expect("seed profile");
+    crate::app::block_on(pm.create(&profile)).expect("seed profile");
 }
 
 fn profile_for_game(
@@ -1975,15 +1995,15 @@ fn profile_for_game(
 fn loaded_test_app(name: &str) -> Modde {
     let mut app = test_app();
     app.active_profile = Some(name.to_string());
-    app.reload_profile();
+    app.reload_profile_blocking();
     app
 }
 
 /// Read the profile back from the isolated DB. Assertions should use
 /// this (not `app.loaded_profile`) to verify *persisted* state.
 fn reload_seeded(name: &str) -> modde_core::profile::Profile {
-    let pm = ProfileManager::open().expect("open isolated DB");
-    pm.load(name, Some(&GameId::from("test-game")))
+    let pm = crate::app::block_on(ProfileManager::open()).expect("open isolated DB");
+    crate::app::block_on(pm.load(name, Some(&GameId::from("test-game"))))
         .expect("load seeded profile")
 }
 
@@ -1997,31 +2017,30 @@ fn select_game_filters_profiles_to_game_and_loads_active_profile() {
     let _guard = db_lock();
     reset_isolated_db();
     let game_dir = tempfile::tempdir().expect("game dir");
-    let pm = ProfileManager::open().expect("open isolated DB");
-    let _skyrim_id = pm
-        .create(&profile_for_game(
-            "skyrim-profile",
-            "skyrim-se",
-            vec![seed_mod("skyrim-mod", None)],
-        ))
-        .expect("seed skyrim profile");
-    let inactive_id = pm
-        .create(&profile_for_game(
-            "cp-inactive",
-            "cyberpunk2077",
-            vec![seed_mod("inactive-mod", None)],
-        ))
-        .expect("seed inactive cyberpunk profile");
-    let active_id = pm
-        .create(&profile_for_game(
-            "cp-active",
-            "cyberpunk2077",
-            vec![seed_mod("active-mod", None)],
-        ))
-        .expect("seed active cyberpunk profile");
-    pm.db()
-        .set_active_profile(&GameId::from("cyberpunk2077"), active_id)
-        .expect("set active cyberpunk profile");
+    let pm = crate::app::block_on(ProfileManager::open()).expect("open isolated DB");
+    let _skyrim_id = crate::app::block_on(pm.create(&profile_for_game(
+        "skyrim-profile",
+        "skyrim-se",
+        vec![seed_mod("skyrim-mod", None)],
+    )))
+    .expect("seed skyrim profile");
+    let inactive_id = crate::app::block_on(pm.create(&profile_for_game(
+        "cp-inactive",
+        "cyberpunk2077",
+        vec![seed_mod("inactive-mod", None)],
+    )))
+    .expect("seed inactive cyberpunk profile");
+    let active_id = crate::app::block_on(pm.create(&profile_for_game(
+        "cp-active",
+        "cyberpunk2077",
+        vec![seed_mod("active-mod", None)],
+    )))
+    .expect("seed active cyberpunk profile");
+    crate::app::block_on(
+        pm.db()
+            .set_active_profile(&GameId::from("cyberpunk2077"), active_id),
+    )
+    .expect("set active cyberpunk profile");
     drop(pm);
 
     let mut app = test_app();
@@ -2030,6 +2049,7 @@ fn select_game_filters_profiles_to_game_and_loads_active_profile() {
         game_dir.path().to_path_buf(),
     );
     let _ = app.update(Message::SelectGame("cyberpunk2077".to_string()));
+    app.finish_pending_switch_blocking();
 
     let profile_names: Vec<_> = app.profiles.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(profile_names, vec!["cp-active", "cp-inactive"]);
@@ -2046,18 +2066,18 @@ fn select_game_falls_back_to_first_profile_for_game() {
     let _guard = db_lock();
     reset_isolated_db();
     let game_dir = tempfile::tempdir().expect("game dir");
-    let pm = ProfileManager::open().expect("open isolated DB");
-    pm.create(&profile_for_game(
+    let pm = crate::app::block_on(ProfileManager::open()).expect("open isolated DB");
+    crate::app::block_on(pm.create(&profile_for_game(
         "zeta",
         "cyberpunk2077",
         vec![seed_mod("zeta-mod", None)],
-    ))
+    )))
     .expect("seed zeta profile");
-    pm.create(&profile_for_game(
+    crate::app::block_on(pm.create(&profile_for_game(
         "alpha",
         "cyberpunk2077",
         vec![seed_mod("alpha-mod", None)],
-    ))
+    )))
     .expect("seed alpha profile");
     drop(pm);
 
@@ -2067,6 +2087,7 @@ fn select_game_falls_back_to_first_profile_for_game() {
         game_dir.path().to_path_buf(),
     );
     let _ = app.update(Message::SelectGame("cyberpunk2077".to_string()));
+    app.finish_pending_switch_blocking();
 
     assert_eq!(app.active_profile.as_deref(), Some("alpha"));
     assert_eq!(
@@ -2089,6 +2110,7 @@ fn select_game_with_no_profiles_clears_profile_context() {
     );
 
     let _ = app.update(Message::SelectGame("cyberpunk2077".to_string()));
+    app.finish_pending_switch_blocking();
 
     assert!(app.profiles.is_empty());
     assert!(app.active_profile.is_none());
@@ -2096,16 +2118,101 @@ fn select_game_with_no_profiles_clears_profile_context() {
 }
 
 #[test]
+fn profile_context_loaded_discards_stale_generation() {
+    let _guard = db_lock();
+    let mut app = test_app();
+
+    // Simulate two kickoffs having advanced the generation to 2; the in-flight
+    // load tagged generation 1 is now stale and must be dropped, while the
+    // generation-2 load applies. This is the linchpin against a slow load for
+    // game A clobbering state after the user switched to game B.
+    app.context_generation = 2;
+
+    let stale = ProfileContextSnapshot {
+        profiles: Vec::new(),
+        active_profile: Some("STALE".to_string()),
+        profile_outcome: ProfileLoadOutcome::Cleared,
+        data_tab_conflicts: Vec::new(),
+        missing_store_mod_count: 0,
+        tools: None,
+        rerun_diagnostics: false,
+    };
+    let _ = app.update(Message::ProfileContextLoaded {
+        generation: 1,
+        result: Ok(stale),
+    });
+    assert!(
+        app.active_profile.is_none(),
+        "stale generation-1 load must not clobber state"
+    );
+
+    let fresh = ProfileContextSnapshot {
+        profiles: Vec::new(),
+        active_profile: Some("FRESH".to_string()),
+        profile_outcome: ProfileLoadOutcome::Cleared,
+        data_tab_conflicts: Vec::new(),
+        missing_store_mod_count: 0,
+        tools: None,
+        rerun_diagnostics: false,
+    };
+    let _ = app.update(Message::ProfileContextLoaded {
+        generation: 2,
+        result: Ok(fresh),
+    });
+    assert_eq!(
+        app.active_profile.as_deref(),
+        Some("FRESH"),
+        "current generation-2 load must apply"
+    );
+}
+
+#[test]
+fn profile_context_dispatch_invalidates_pending_data_tab_load() {
+    let _guard = db_lock();
+    let mut app = test_app();
+
+    // Pretend a standalone Data-tab refresh is in flight at generation 5, and
+    // its (old game's) conflicts are currently shown.
+    app.data_tab_generation = 5;
+    app.data_tab_conflicts = vec![("keep.esp".to_string(), vec!["keep".to_string()])];
+
+    // Kicking off a profile-context reload must invalidate that pending Data-tab
+    // load (the composite reload recomputes conflicts authoritatively). The
+    // returned Task is discarded — we only assert the synchronous generation bump.
+    let _ = app.reload_profile();
+    assert_eq!(
+        app.data_tab_generation, 6,
+        "a profile-context dispatch must invalidate the pending data-tab load"
+    );
+
+    // The now-stale Data-tab result (generation 5) must be dropped, so the
+    // current conflicts are retained rather than clobbered by the old game's.
+    let _ = app.update(Message::DataTabConflictsLoaded {
+        generation: 5,
+        result: Ok(DataTabConflicts {
+            conflicts: vec![("stale.esp".to_string(), vec!["stale".to_string()])],
+            missing_store_mod_count: 7,
+        }),
+    });
+    assert_eq!(
+        app.data_tab_conflicts,
+        vec![("keep.esp".to_string(), vec!["keep".to_string()])],
+        "stale data-tab conflicts must not clobber state after a context dispatch"
+    );
+    assert_eq!(app.data_tab_state.missing_store_mod_count, 0);
+}
+
+#[test]
 fn select_game_clears_stale_selection_state() {
     let _guard = db_lock();
     reset_isolated_db();
     let game_dir = tempfile::tempdir().expect("game dir");
-    let pm = ProfileManager::open().expect("open isolated DB");
-    pm.create(&profile_for_game(
+    let pm = crate::app::block_on(ProfileManager::open()).expect("open isolated DB");
+    crate::app::block_on(pm.create(&profile_for_game(
         "cp-profile",
         "cyberpunk2077",
         vec![seed_mod("active-mod", None)],
-    ))
+    )))
     .expect("seed cyberpunk profile");
     drop(pm);
 
@@ -2159,12 +2266,12 @@ fn game_path_dialog_selection_stores_path_and_switches_context() {
     let _guard = db_lock();
     reset_isolated_db();
     let game_dir = tempfile::tempdir().expect("game dir");
-    let pm = ProfileManager::open().expect("open isolated DB");
-    pm.create(&profile_for_game(
+    let pm = crate::app::block_on(ProfileManager::open()).expect("open isolated DB");
+    crate::app::block_on(pm.create(&profile_for_game(
         "custom-profile",
         "custom-game",
         vec![seed_mod("custom-mod", None)],
-    ))
+    )))
     .expect("seed custom profile");
     drop(pm);
 
@@ -2177,6 +2284,7 @@ fn game_path_dialog_selection_stores_path_and_switches_context() {
         game_id: "custom-game".to_string(),
         path: game_dir.path().to_path_buf(),
     });
+    app.finish_pending_switch_blocking();
 
     assert!(!app.game_path_dialog_open);
     assert_eq!(app.selected_game.as_deref(), Some("custom-game"));

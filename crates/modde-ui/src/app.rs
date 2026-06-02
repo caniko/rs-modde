@@ -24,13 +24,51 @@ mod tool_settings;
 mod update;
 mod view;
 
+/// Drive an async database future to completion from iced's synchronous
+/// `update`/`view` paths.
+///
+/// modde's storage layer is async (`sqlx`), but iced's `update(&mut self, …)`
+/// handler cannot `.await`. This bridges the two: the future is driven on a
+/// dedicated multi-threaded runtime, executed on a freshly spawned scoped
+/// thread so `block_on` never runs inside iced's own ambient runtime (which
+/// would panic with "Cannot start a runtime from within a runtime"). The scope
+/// lets the future borrow local data; the runtime is shared across calls.
+///
+/// Prefer `.await` in code that is already async (e.g. `Task::perform`
+/// closures); use this only on the synchronous `update`/`view`/`new` paths and
+/// inside `spawn_blocking` closures.
+pub(crate) fn block_on<F>(future: F) -> F::Output
+where
+    F: std::future::Future,
+{
+    use std::sync::OnceLock;
+    static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    let rt = RT.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .expect("failed to build modde-ui database runtime")
+    });
+    // Enter the shared runtime so sqlx (which needs the tokio reactor/timer)
+    // has a handle, then drive the future to completion on *this* thread with
+    // a current-thread executor. Driving on the current thread sidesteps the
+    // "Cannot start a runtime from within a runtime" panic that `Runtime::block_on`
+    // would hit on iced's ambient thread, and avoids requiring the future to be
+    // `Send` (sqlx connection futures are not `Send` under a higher-ranked
+    // bound), so it works for futures that borrow `&db`/`&self`.
+    let _guard = rt.enter();
+    futures::executor::block_on(future)
+}
+
 pub use self::fomod_wizard_state::FOMODWizardState;
 pub(crate) use self::state::format_lock_reason;
 pub use self::state::{
-    AddCustomGameDraft, AddCustomGameDraftField, AddCustomGameState, ExecutableDraft,
-    ExecutableDraftField, ExecutableUiEntry, ReorderDirection, SidebarGroup, ToolApplyResult,
-    ToolHistoryUiEntry, ToolLoadSnapshot, ToolReleaseSupport, ToolRevertResult, ToolState,
-    ToolUiEntry, View, WabbajackInstallerState, WabbajackTab,
+    AddCustomGameDraft, AddCustomGameDraftField, AddCustomGameState, DataTabConflicts,
+    ExecutableDraft, ExecutableDraftField, ExecutableUiEntry, ProfileContextSnapshot,
+    ProfileLoadOutcome, ReorderDirection, SidebarGroup, ToolApplyResult, ToolHistoryUiEntry,
+    ToolLoadSnapshot, ToolReleaseSupport, ToolRevertResult, ToolState, ToolUiEntry, View,
+    WabbajackInstallerState, WabbajackTab,
 };
 pub use self::tool_ops::parse_executable_environment;
 #[cfg(test)]
@@ -92,6 +130,7 @@ pub struct ButtonHoverToastState {
 /// Top-level application state.
 #[allow(clippy::struct_excessive_bools)]
 pub struct Modde {
+    pub(crate) db: modde_core::db::ModdeDb,
     pub active_view: View,
     pub active_profile: Option<String>,
     pub profiles: Vec<modde_core::profile::ProfileSummary>,
@@ -167,6 +206,15 @@ pub struct Modde {
     /// Sidebar groups the user has collapsed for this session.
     pub collapsed_sidebar_groups: HashSet<SidebarGroup>,
     pub update_available: Option<modde_core::update_check::UpdateInfo>,
+    /// Generation guard for the async profile/game-context load. Bumped on
+    /// every `Message::ProfileContextLoaded`-producing kickoff; a resolved load
+    /// whose captured generation no longer matches is discarded, so a slow load
+    /// for game A can never clobber state after the user switched to game B.
+    pub context_generation: u64,
+    /// Generation guard for the lightweight async data-tab conflict refresh
+    /// (`Message::DataTabConflictsLoaded`). Independent of `context_generation`
+    /// so opening the Data tab never cancels an in-flight profile reload.
+    pub data_tab_generation: u64,
 }
 
 fn load_hidden_files(
@@ -175,7 +223,7 @@ fn load_hidden_files(
 ) -> HashSet<(String, String)> {
     profile
         .id
-        .and_then(|profile_id| pm.db().list_hidden_files(profile_id).ok())
+        .and_then(|profile_id| crate::app::block_on(pm.db().list_hidden_files(profile_id)).ok())
         .map(|rows| {
             rows.into_iter()
                 .map(|row| (row.mod_id, row.rel_path))
@@ -187,14 +235,14 @@ fn load_hidden_files(
 fn load_active_plugins(pm: &ProfileManager, profile: &modde_core::Profile) -> Vec<String> {
     let mut plugins = profile
         .id
-        .and_then(|profile_id| pm.db().get_plugin_order(profile_id).ok())
+        .and_then(|profile_id| crate::app::block_on(pm.db().get_plugin_order(profile_id)).ok())
         .unwrap_or_default();
 
     if plugins.is_empty() {
         plugins =
             modde_games::read_native_plugin_order(profile.game_id.as_str()).unwrap_or_default();
         if let Some(profile_id) = profile.id {
-            let _ = pm.db().set_plugin_order(profile_id, &plugins);
+            let _ = crate::app::block_on(pm.db().set_plugin_order(profile_id, &plugins));
         }
     }
 
@@ -362,6 +410,20 @@ pub enum Message {
     /// External process (typically the CLI) notified the GUI that the
     /// profile DB has changed. Triggers a profile reload.
     ExternalRefresh,
+
+    /// Async result of `load_profile_context` — the off-thread profile +
+    /// data-tab + tool reload. `generation` guards against stale loads
+    /// clobbering newer state (see `Modde::context_generation`).
+    ProfileContextLoaded {
+        generation: u64,
+        result: Result<ProfileContextSnapshot, String>,
+    },
+    /// Async result of the lightweight data-tab conflict refresh fired when the
+    /// Data tab is opened (see `Modde::data_tab_generation`).
+    DataTabConflictsLoaded {
+        generation: u64,
+        result: Result<DataTabConflicts, String>,
+    },
 
     // Navigation
     SwitchView(View),

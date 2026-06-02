@@ -9,7 +9,7 @@ use super::{require_save_dir, supports_save_profiles};
 use crate::SaveAction;
 
 /// Resolve profile name: use explicit value or fall back to active profile for the game.
-fn resolve_profile_name(
+async fn resolve_profile_name(
     pm: &ProfileManager,
     explicit: Option<String>,
     game: &str,
@@ -18,7 +18,8 @@ fn resolve_profile_name(
         Some(p) => Ok(p),
         None => pm
             .db()
-            .get_active_profile(&GameId::from(game))?
+            .get_active_profile(&GameId::from(game))
+            .await?
             .map(|(_, name)| name)
             .ok_or_else(|| {
                 anyhow::anyhow!("no active profile for game '{game}'; use --profile to specify")
@@ -76,7 +77,9 @@ fn warn_fingerprint_mismatch(check: &FingerprintCheck) {
 }
 
 pub async fn handle(action: SaveAction) -> Result<()> {
-    let pm = ProfileManager::open().context("failed to open profile database")?;
+    let pm = ProfileManager::open()
+        .await
+        .context("failed to open profile database")?;
 
     match action {
         SaveAction::Assign {
@@ -85,28 +88,32 @@ pub async fn handle(action: SaveAction) -> Result<()> {
             game,
             label,
         } => {
-            let p = pm.load(&profile, game.as_deref().map(GameId::from).as_ref())?;
+            let p = pm
+                .load(&profile, game.as_deref().map(GameId::from).as_ref())
+                .await?;
             require_save_profiles_supported(p.game_id.as_str())?;
             let profile_id =
                 p.id.ok_or_else(|| anyhow::anyhow!("profile has no database ID"))?;
 
             let sm = SaveManager::new(pm.db());
-            sm.assign(profile_id, &path, label.as_deref())?;
+            sm.assign(profile_id, &path, label.as_deref()).await?;
             println!("Assigned save '{}' to profile '{profile}'", path.display());
         }
         SaveAction::Unassign { path } => {
             let sm = SaveManager::new(pm.db());
-            sm.unassign(&path)?;
+            sm.unassign(&path).await?;
             println!("Unassigned save '{}'", path.display());
         }
         SaveAction::List { profile, game } => {
-            let p = pm.load(&profile, game.as_deref().map(GameId::from).as_ref())?;
+            let p = pm
+                .load(&profile, game.as_deref().map(GameId::from).as_ref())
+                .await?;
             require_save_profiles_supported(p.game_id.as_str())?;
             let profile_id =
                 p.id.ok_or_else(|| anyhow::anyhow!("profile has no database ID"))?;
 
             let sm = SaveManager::new(pm.db());
-            let saves = sm.list(profile_id)?;
+            let saves = sm.list(profile_id).await?;
             if saves.is_empty() {
                 println!("No saves assigned to profile '{profile}'.");
             } else {
@@ -125,7 +132,7 @@ pub async fn handle(action: SaveAction) -> Result<()> {
         SaveAction::Scan { game } => {
             let save_dir = require_save_dir(&game)?;
             let sm = SaveManager::new(pm.db());
-            let unassigned = sm.list_unassigned(&save_dir)?;
+            let unassigned = sm.list_unassigned(&save_dir).await?;
             if unassigned.is_empty() {
                 println!("No unassigned saves found for game '{game}'.");
             } else {
@@ -140,12 +147,12 @@ pub async fn handle(action: SaveAction) -> Result<()> {
             let sm = SaveManager::new(pm.db());
             let game_id = GameId::from(game.as_str());
             let count = sm.adopt(&game_id, &profile, &save_dir)?;
-            if pm.active(&game_id)?.is_none() {
-                let adopted_profile = pm.load(&profile, Some(&game_id))?;
+            if pm.active(&game_id).await?.is_none() {
+                let adopted_profile = pm.load(&profile, Some(&game_id)).await?;
                 let profile_id = adopted_profile
                     .id
                     .ok_or_else(|| anyhow::anyhow!("profile has no database ID"))?;
-                pm.db().set_active_profile(&game_id, profile_id)?;
+                pm.db().set_active_profile(&game_id, profile_id).await?;
             }
             if count > 0 {
                 println!(
@@ -165,7 +172,7 @@ pub async fn handle(action: SaveAction) -> Result<()> {
 
             // Compute fingerprint from the profile's mods
             let game_id = GameId::from(game.as_str());
-            let p = pm.load(&profile, Some(&game_id))?;
+            let p = pm.load(&profile, Some(&game_id)).await?;
             let fp = compute_fingerprint(&p);
 
             let count = sm.capture_with_fingerprint(&game_id, &profile, &save_dir, Some(&fp))?;
@@ -223,7 +230,7 @@ pub async fn handle(action: SaveAction) -> Result<()> {
             let game_id = GameId::from(game.as_str());
 
             // Check fingerprint compatibility before restoring
-            let p = pm.load(&profile, Some(&game_id))?;
+            let p = pm.load(&profile, Some(&game_id)).await?;
             let current_fp = compute_fingerprint(&p);
 
             let check =
@@ -236,11 +243,11 @@ pub async fn handle(action: SaveAction) -> Result<()> {
         SaveAction::AutoCapture { game, profile } => {
             let save_dir = require_save_dir(&game)?;
             let sm = SaveManager::new(pm.db());
-            let profile_name = resolve_profile_name(&pm, profile, &game)?;
+            let profile_name = resolve_profile_name(&pm, profile, &game).await?;
 
             // Compute fingerprint for the active profile
             let game_id = GameId::from(game.as_str());
-            let p = pm.load(&profile_name, Some(&game_id))?;
+            let p = pm.load(&profile_name, Some(&game_id)).await?;
             let fp = compute_fingerprint(&p);
 
             let count =
@@ -263,11 +270,11 @@ pub async fn handle(action: SaveAction) -> Result<()> {
         } => {
             let save_dir = require_save_dir(&game)?;
             let sm = SaveManager::new(pm.db());
-            let profile_name = resolve_profile_name(&pm, profile, &game)?;
+            let profile_name = resolve_profile_name(&pm, profile, &game).await?;
 
             // Compute fingerprint once at start (profile mods don't change during watch)
             let game_id = GameId::from(game.as_str());
-            let p = pm.load(&profile_name, Some(&game_id))?;
+            let p = pm.load(&profile_name, Some(&game_id)).await?;
             let fp = compute_fingerprint(&p);
 
             let tracker = modde_games::resolve_save_tracker(&game);

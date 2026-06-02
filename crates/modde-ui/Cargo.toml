@@ -72,6 +72,7 @@ modde-sources = { workspace = true }
 modde-games = { workspace = true }
 iced = { version = "0.14", features = ["tokio", "image", "svg", "advanced"] }
 tokio = { workspace = true }
+futures = { workspace = true }
 anyhow = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true, features = ["blocking"] }

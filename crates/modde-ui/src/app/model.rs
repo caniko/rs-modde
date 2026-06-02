@@ -5,18 +5,15 @@ use iced::{Element, Length, Task};
 use modde_core::profile::ProfileManager;
 use modde_core::resolver::GameId;
 
-use super::state::ToolLoadRequest;
-use super::tool_ops::{load_executables_for_game, load_tools_state};
-use super::tool_settings::{
-    apply_derived_tool_settings, build_tool_derived_facts, current_tool_config,
-    format_tool_availability, normalize_tool_settings_for_specs, patch_tool_setting_options,
-    set_tool_options, sync_optiscaler_release_options, tool_apply_is_pending, tool_options,
+use super::state::{
+    DataTabConflicts, ProfileContextRequest, ProfileContextSnapshot, ProfileLoadOutcome,
+    ToolLoadRequest,
 };
+use super::tool_ops::{load_executables_for_game, load_tools_state, load_tools_state_blocking};
 use super::{
-    Message, Modde, SettingsState, ToolHistoryUiEntry, ToolLoadSnapshot, ToolReleaseSupport,
-    ToolUiEntry, View, WabbajackInstallerState, build_conflict_rows, build_default_download_meta,
-    detected_game_ids, format_diagnostic_entry, load_active_plugins, load_hidden_files,
-    settings_game_install_paths,
+    Message, Modde, SettingsState, ToolLoadSnapshot, View, WabbajackInstallerState,
+    build_conflict_rows, build_default_download_meta, detected_game_ids, format_diagnostic_entry,
+    load_active_plugins, load_hidden_files, settings_game_install_paths,
 };
 
 impl Modde {
@@ -120,83 +117,163 @@ impl Modde {
             .flatten()
     }
 
-    pub(super) fn reload_profile(&mut self) {
-        if let Some(ref name) = self.active_profile {
-            if let Ok(pm) = ProfileManager::open() {
-                let selected_game_id = self.selected_game.as_deref().map(GameId::from);
-                if let Some(game_id) = selected_game_id.as_ref() {
-                    self.profiles = pm.list_for_game(game_id).unwrap_or_default();
-                } else {
-                    self.profiles = pm.list().unwrap_or_default();
-                }
-                if let Ok(profile) = pm.load(name, selected_game_id.as_ref()) {
-                    if let Ok(info) = pm.active(&profile.game_id) {
-                        self.experiment_depth = info.map_or(0, |i| i.experiment_depth);
-                    }
+    /// Reload the active profile, its data-tab conflicts, and the tool state
+    /// off the render thread, returning the `Task` that resolves to
+    /// `Message::ProfileContextLoaded`. Replaces the old synchronous
+    /// `reload_profile` (which drove the whole multi-query reload via
+    /// `block_on` on the iced thread).
+    pub(super) fn reload_profile(&mut self) -> Task<Message> {
+        let request = self.reload_request(false);
+        self.dispatch_profile_context(request)
+    }
 
-                    // Compute save fingerprint
-                    self.current_fingerprint = {
-                        let game_id = profile.game_id.as_str();
-                        let staging_dir = ProfileManager::staging_dir(&profile.name);
-                        modde_games::resolve_game_plugin(game_id)
-                            .filter(|plugin| plugin.supports_save_profiles())
-                            .map(|plugin| {
-                                modde_core::save::SaveFingerprint::compute(
-                                    &profile.mods,
-                                    |mod_id| {
-                                        let mod_path = staging_dir.join(mod_id);
-                                        plugin.classify_mod(&mod_path).affects_saves()
-                                    },
-                                )
-                            })
-                    };
+    /// Like [`Self::reload_profile`], but re-runs diagnostics after the load
+    /// resolves when the Diagnostics view is active. Used only by the
+    /// profile-switch handler to preserve its previous synchronous behavior.
+    pub(super) fn reload_profile_refresh_diagnostics(&mut self) -> Task<Message> {
+        let request = self.reload_request(true);
+        self.dispatch_profile_context(request)
+    }
 
-                    self.mod_id_filter_keys = modde_core::filter::mod_id_filter_keys(&profile.mods);
-                    self.loaded_profile = Some(profile);
-                }
+    /// Reload, recomputing the active profile from the DB (active pointer, then
+    /// first listed profile). Used after deleting the active profile in a
+    /// no-game context, where the previous active profile is gone.
+    pub(super) fn reload_profile_recompute_active(&mut self) -> Task<Message> {
+        let mut request = self.reload_request(false);
+        request.recompute_active = true;
+        self.dispatch_profile_context(request)
+    }
+
+    /// Build the request for an in-place reload (no scoped-state clear, keeps
+    /// the current `selected_game`/`active_profile`).
+    fn reload_request(&self, rerun_diagnostics: bool) -> ProfileContextRequest {
+        ProfileContextRequest {
+            selected_game: self.selected_game.clone(),
+            active_profile: self.active_profile.clone(),
+            recompute_active: false,
+            fallback_profile: self.loaded_profile.clone(),
+            tool_request: self.tool_load_request(),
+            rerun_diagnostics,
+        }
+    }
+
+    /// Bump the context generation, mark the tool state as loading (when a tool
+    /// reload is folded in), and spawn the off-thread loader.
+    fn dispatch_profile_context(&mut self, request: ProfileContextRequest) -> Task<Message> {
+        self.context_generation = self.context_generation.wrapping_add(1);
+        let generation = self.context_generation;
+        // A composite reload recomputes the data-tab conflicts authoritatively,
+        // so any in-flight standalone data-tab refresh is now stale — invalidate
+        // it so its older result can't clobber the new game's conflicts.
+        self.data_tab_generation = self.data_tab_generation.wrapping_add(1);
+        if request.tool_request.is_some() {
+            self.tool_state.loading = true;
+            self.tool_state.load_error = None;
+        }
+        let db = self.db.clone();
+        Task::perform(load_profile_context(db, request), move |result| {
+            Message::ProfileContextLoaded { generation, result }
+        })
+    }
+
+    /// Apply a resolved [`ProfileContextSnapshot`] into `self` — the synchronous
+    /// tail of the old `reload_profile`/`switch_game_context`/
+    /// `refresh_data_tab_conflicts`/`refresh_tools_state` helpers.
+    pub(super) fn apply_profile_context(&mut self, snapshot: ProfileContextSnapshot) {
+        self.profiles = snapshot.profiles;
+        self.active_profile = snapshot.active_profile;
+        match snapshot.profile_outcome {
+            ProfileLoadOutcome::Loaded {
+                profile,
+                experiment_depth,
+                current_fingerprint,
+                mod_id_filter_keys,
+            } => {
+                self.experiment_depth = experiment_depth;
+                self.current_fingerprint = current_fingerprint;
+                self.mod_id_filter_keys = mod_id_filter_keys;
+                self.loaded_profile = Some(*profile);
             }
-        } else {
-            self.loaded_profile = None;
-            self.mod_id_filter_keys.clear();
+            ProfileLoadOutcome::Cleared => {
+                self.loaded_profile = None;
+                self.mod_id_filter_keys.clear();
+            }
+            ProfileLoadOutcome::KeepPrevious => {}
         }
-
+        self.data_tab_conflicts = snapshot.data_tab_conflicts;
+        self.data_tab_state.missing_store_mod_count = snapshot.missing_store_mod_count;
         self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Idle;
-        self.refresh_data_tab_conflicts();
-        self.refresh_tools_state();
-    }
-
-    pub(super) fn switch_game_context(&mut self, game_id: &str) {
-        self.clear_game_scoped_state();
-
-        let Ok(pm) = ProfileManager::open() else {
-            self.profiles.clear();
-            self.active_profile = None;
-            self.loaded_profile = None;
-            self.mod_id_filter_keys.clear();
-            self.status_message = "Failed to open profile database".to_string();
-            return;
-        };
-
-        let typed_game_id = GameId::from(game_id);
-        self.profiles = pm.list_for_game(&typed_game_id).unwrap_or_default();
-        self.active_profile = pm
-            .active(&typed_game_id)
-            .ok()
-            .flatten()
-            .map(|info| info.profile.name)
-            .or_else(|| self.profiles.first().map(|p| p.name.clone()));
-
-        if self.active_profile.is_some() {
-            self.reload_profile();
+        if let Some(tools) = snapshot.tools {
+            self.apply_tool_snapshot(tools);
         } else {
-            self.loaded_profile = None;
-            self.mod_id_filter_keys.clear();
-            self.refresh_data_tab_conflicts();
-            self.refresh_tools_state();
+            // No game in scope — clear the tool state (mirrors the old
+            // `refresh_tools_state` empty-game branch).
+            self.tool_state.entries.clear();
+            self.tool_state.active_tool_id = None;
+            self.tool_state.game_label = None;
+            self.tool_state.game_dir_configured = false;
+            self.tool_state.loading = false;
+            self.tool_state.load_error = None;
         }
     }
 
-    pub(super) fn accept_game_selection(&mut self, game_id: String, previous_game: Option<String>) {
+    /// Synchronously drive [`load_profile_context`] + [`Self::apply_profile_context`]
+    /// for tests, which pump `update` but discard returned `Task`s.
+    #[cfg(test)]
+    pub(super) fn reload_profile_blocking(&mut self) {
+        let request = self.reload_request(false);
+        let snapshot = crate::app::block_on(load_profile_context(self.db.clone(), request))
+            .expect("load profile context");
+        self.apply_profile_context(snapshot);
+    }
+
+    /// Synchronously complete the game-context switch that a `SelectGame` /
+    /// `GamePathDialogPathSelected` handler just kicked off (the returned
+    /// `Task` is discarded by the test harness). Mirrors the request
+    /// `switch_game_context` builds, using the already-set `selected_game`.
+    #[cfg(test)]
+    pub(super) fn finish_pending_switch_blocking(&mut self) {
+        let game_id = self
+            .selected_game
+            .clone()
+            .expect("selected_game set by the switch kickoff");
+        let request = ProfileContextRequest {
+            selected_game: Some(game_id.clone()),
+            active_profile: None,
+            recompute_active: true,
+            fallback_profile: None,
+            tool_request: Some(self.tool_load_request_for(&game_id)),
+            rerun_diagnostics: false,
+        };
+        let snapshot = crate::app::block_on(load_profile_context(self.db.clone(), request))
+            .expect("load profile context");
+        self.apply_profile_context(snapshot);
+    }
+
+    /// Switch the game context: clear game-scoped state and the previously
+    /// loaded profile (so the view repaints to a "loading" state immediately
+    /// rather than showing the old game's data), then reload the new game's
+    /// profile/conflicts/tools off-thread. Returns the resolving `Task`.
+    pub(super) fn switch_game_context(&mut self, game_id: &str) -> Task<Message> {
+        self.clear_game_scoped_state();
+        self.loaded_profile = None;
+        self.mod_id_filter_keys.clear();
+        let request = ProfileContextRequest {
+            selected_game: Some(game_id.to_string()),
+            active_profile: None,
+            recompute_active: true,
+            fallback_profile: None,
+            tool_request: Some(self.tool_load_request_for(game_id)),
+            rerun_diagnostics: false,
+        };
+        self.dispatch_profile_context(request)
+    }
+
+    pub(super) fn accept_game_selection(
+        &mut self,
+        game_id: String,
+        previous_game: Option<String>,
+    ) -> Task<Message> {
         self.selected_game = Some(game_id.clone());
         self.settings.selected_game = Some(game_id.clone());
         let typed_game_id = GameId::from(game_id.as_str());
@@ -222,7 +299,7 @@ impl Modde {
                 self.game_path_dialog_error = None;
                 self.status_message = format!("Set the game directory for {game_id}");
                 self.save_settings();
-                return;
+                return Task::none();
             }
         }
 
@@ -230,10 +307,11 @@ impl Modde {
         self.pending_game_path_game_id = None;
         self.previous_game_before_path_dialog = None;
         self.game_path_dialog_error = None;
-        self.switch_game_context(&game_id);
+        let task = self.switch_game_context(&game_id);
         self.sync_browse_game_to_current(true);
         self.save_settings();
         self.status_message = format!("Active game set to {game_id}");
+        task
     }
 
     pub(super) fn save_settings(&self) {
@@ -316,38 +394,22 @@ impl Modde {
         ))
     }
 
-    pub(super) fn refresh_data_tab_conflicts(&mut self) {
-        let Some(profile) = self.loaded_profile.as_ref() else {
+    /// Refresh the Data tab's conflict rows off the render thread. Returns the
+    /// `Task` resolving to `Message::DataTabConflictsLoaded`. The heavy
+    /// `analyze_profile_state` pass and hidden-files DB read run on a blocking
+    /// task rather than inline via `block_on`.
+    pub(super) fn refresh_data_tab_conflicts(&mut self) -> Task<Message> {
+        let Some(profile) = self.loaded_profile.clone() else {
             self.data_tab_conflicts.clear();
             self.data_tab_state.missing_store_mod_count = 0;
-            return;
+            return Task::none();
         };
-
-        let Ok(pm) = ProfileManager::open() else {
-            self.data_tab_conflicts.clear();
-            self.data_tab_state.missing_store_mod_count = 0;
-            return;
-        };
-
-        let hidden = load_hidden_files(&pm, profile);
-        let classifier = modde_games::resolve_collision_classifier(profile.game_id.as_str());
-
-        match modde_core::diagnostics::analyze_profile_state(
-            profile,
-            &modde_core::paths::store_dir(),
-            &hidden,
-            classifier.as_deref(),
-        ) {
-            Ok(analysis) => {
-                self.data_tab_state.missing_store_mod_count = analysis.missing_store_mods.len();
-                self.data_tab_conflicts = build_conflict_rows(&analysis, &hidden);
-            }
-            Err(err) => {
-                self.data_tab_conflicts.clear();
-                self.data_tab_state.missing_store_mod_count = 0;
-                self.status_message = format!("Failed to load data tab: {err}");
-            }
-        }
+        self.data_tab_generation = self.data_tab_generation.wrapping_add(1);
+        let generation = self.data_tab_generation;
+        let db = self.db.clone();
+        Task::perform(load_data_tab_conflicts(db, profile), move |result| {
+            Message::DataTabConflictsLoaded { generation, result }
+        })
     }
 
     pub(super) fn run_diagnostics_now(&mut self) {
@@ -359,13 +421,7 @@ impl Modde {
             return;
         };
 
-        let Ok(pm) = ProfileManager::open() else {
-            self.status_message = "Failed to open profile database".to_string();
-            self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Error(
-                "Failed to open profile database.".to_string(),
-            );
-            return;
-        };
+        let pm = ProfileManager::with_db(self.db.clone());
 
         let hidden = load_hidden_files(&pm, &profile);
         let active_plugins = load_active_plugins(&pm, &profile);
@@ -466,7 +522,8 @@ impl Modde {
         let generation = self.tool_state.load_generation;
         self.tool_state.loading = true;
         self.tool_state.load_error = None;
-        Task::perform(load_tools_state(request), move |result| {
+        let db = self.db.clone();
+        Task::perform(load_tools_state(db, request), move |result| {
             Message::ToolsLoaded { generation, result }
         })
     }
@@ -490,6 +547,26 @@ impl Modde {
             tool_option_catalog: self.tool_state.tool_option_catalog.clone(),
             previous_active_tool_id: self.tool_state.active_tool_id.clone(),
         })
+    }
+
+    /// Build a tool-load request for an explicit game id, rather than relying on
+    /// `current_game_id()`. Used by `switch_game_context`, where `loaded_profile`
+    /// has just been cleared so `current_game_id()` could not be trusted.
+    pub(super) fn tool_load_request_for(&self, game_id: &str) -> ToolLoadRequest {
+        let display_name = self
+            .available_games
+            .iter()
+            .find(|(id, _)| id == game_id)
+            .map(|(_, name)| name.clone())
+            .unwrap_or_else(|| game_id.to_string());
+        ToolLoadRequest {
+            game_id: game_id.to_string(),
+            display_name,
+            configured_game_dir: self.settings.game_path(&GameId::from(game_id)).cloned(),
+            optiscaler_releases: self.tool_state.optiscaler_releases.clone(),
+            tool_option_catalog: self.tool_state.tool_option_catalog.clone(),
+            previous_active_tool_id: self.tool_state.active_tool_id.clone(),
+        }
     }
 
     pub(super) fn apply_tool_snapshot(&mut self, snapshot: ToolLoadSnapshot) {
@@ -523,7 +600,8 @@ impl Modde {
         let generation = self.tool_state.executables_load_generation;
         self.tool_state.executables_loading = true;
         self.tool_state.executables_load_error = None;
-        Task::perform(load_executables_for_game(game_id), move |result| {
+        let db = self.db.clone();
+        Task::perform(load_executables_for_game(db, game_id), move |result| {
             Message::ExecutablesLoaded { generation, result }
         })
     }
@@ -535,264 +613,6 @@ impl Modde {
             self.start_tools_load()
         } else {
             Task::none()
-        }
-    }
-
-    pub(super) fn refresh_tools_state(&mut self) {
-        let Some(game_id) = self.current_game_id().map(str::to_string) else {
-            self.tool_state.entries.clear();
-            self.tool_state.active_tool_id = None;
-            self.tool_state.game_label = None;
-            self.tool_state.game_dir_configured = false;
-            return;
-        };
-
-        let Ok(db) = modde_core::db::ModdeDb::open() else {
-            self.tool_state.entries.clear();
-            self.tool_state.active_tool_id = None;
-            return;
-        };
-
-        self.tool_state.game_label = self
-            .available_games
-            .iter()
-            .find(|(id, _)| id == &game_id)
-            .map(|(_, name)| name.clone())
-            .or_else(|| Some(game_id.clone()));
-        self.tool_state.game_dir_configured = self.current_game_dir().is_some();
-        if tool_options(
-            &self.tool_state.tool_option_catalog,
-            "proton",
-            "selected_version",
-        )
-        .is_none()
-        {
-            set_tool_options(
-                &mut self.tool_state.tool_option_catalog,
-                "proton",
-                "selected_version",
-                modde_games::tools::proton::proton_version_options(),
-            );
-        }
-        if !self.tool_state.optiscaler_releases.is_empty()
-            && let Ok(config) = current_tool_config(&game_id, "optiscaler")
-        {
-            let mut config = config;
-            sync_optiscaler_release_options(
-                &mut self.tool_state.tool_option_catalog,
-                &self.tool_state.optiscaler_releases,
-                &mut config,
-            );
-        }
-        let context = self.current_tool_game_context();
-
-        let typed_game_id = GameId::from(game_id.as_str());
-        self.tool_state.entries = modde_games::tools::all_tools()
-            .iter()
-            .map(|tool| {
-                let row = db
-                    .load_tool_config(&typed_game_id, tool.tool_id())
-                    .ok()
-                    .flatten();
-                let availability = tool.detect_available();
-                let applied_files = db
-                    .load_applied_files(&typed_game_id, tool.tool_id())
-                    .unwrap_or_default();
-                let status_message = match &availability {
-                    modde_games::tools::ToolAvailability::Available {
-                        version: Some(version),
-                    } => Some(format!("Detected {version}")),
-                    modde_games::tools::ToolAvailability::NotInstalled { install_hint } => {
-                        Some(install_hint.clone())
-                    }
-                    modde_games::tools::ToolAvailability::Available { version: None } => None,
-                };
-                let availability_text = format_tool_availability(&availability);
-                let mut config = row.as_ref().map_or_else(
-                    || tool.default_config_for(context.as_ref()),
-                    |row| modde_games::tools::ToolConfig {
-                        tool_id: row.tool_id.clone(),
-                        enabled: row.enabled,
-                        settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
-                    },
-                );
-                let mut setting_specs = tool.settings_schema_for(context.as_ref(), &config);
-                let normalized_settings =
-                    normalize_tool_settings_for_specs(&config.settings, &setting_specs);
-                if normalized_settings != config.settings {
-                    config.settings = normalized_settings;
-                    if let Ok(settings_json) = serde_json::to_string(&config.settings) {
-                        let _ = db.save_tool_config(
-                            &typed_game_id,
-                            tool.tool_id(),
-                            config.enabled,
-                            &settings_json,
-                        );
-                    }
-                    setting_specs = tool.settings_schema_for(context.as_ref(), &config);
-                }
-                config.set("_game_id", serde_json::json!(game_id));
-                apply_derived_tool_settings(&mut config, context.as_ref());
-                let mut apply_pending = tool_apply_is_pending(&config, &applied_files);
-                let mut apply_missing_inputs = Vec::new();
-                let generated_config_path = tool
-                    .generate_config_for(context.as_ref(), &config)
-                    .map(|generated| generated.path.display().to_string());
-                let env_preview = tool
-                    .env_vars_for(context.as_ref(), &config)
-                    .into_iter()
-                    .collect();
-                let dll_overrides = tool
-                    .wine_dll_overrides_for(context.as_ref(), &config)
-                    .into_iter()
-                    .collect();
-                let wrapper_preview = tool
-                    .wrapper_command(&config)
-                    .map(|wrapper| {
-                        if wrapper.args.is_empty() {
-                            vec![wrapper.exe]
-                        } else {
-                            vec![format!("{} {}", wrapper.exe, wrapper.args)]
-                        }
-                    })
-                    .unwrap_or_default();
-                patch_tool_setting_options(
-                    tool.tool_id(),
-                    &mut setting_specs,
-                    &self.tool_state.tool_option_catalog,
-                );
-                let mut derived_facts = build_tool_derived_facts(context.as_ref());
-                if matches!(tool.tool_id(), "reshade" | "optiscaler")
-                    && let Some(game_dir) = self.current_game_dir()
-                {
-                    match tool.preview_apply_for(&game_dir, context.as_ref(), &config) {
-                        Ok(preview) => {
-                            let has_changes = preview.has_changes();
-                            apply_missing_inputs = preview.missing_inputs.clone();
-                            apply_pending =
-                                apply_missing_inputs.is_empty() && has_changes;
-                            let summary = if !apply_missing_inputs.is_empty() {
-                                format!("missing input: {}", apply_missing_inputs.join("; "))
-                            } else if has_changes {
-                                format!(
-                                    "{} changed / {} unchanged",
-                                    preview.changed_files.len(),
-                                    preview.unchanged_files.len()
-                                )
-                            } else {
-                                format!("no changes ({} file(s))", preview.planned_files.len())
-                            };
-                            derived_facts.push(("Apply preview".to_string(), summary));
-                        }
-                        Err(err) => {
-                            derived_facts
-                                .push(("Apply preview".to_string(), format!("failed: {err}")));
-                        }
-                    }
-                }
-                let (optiscaler_state, optiscaler_latest_backup, optiscaler_detected_files) =
-                    if tool.tool_id() == "optiscaler" {
-                        let managed =
-                            modde_games::tools::optiscaler::managed_paths_from_config(&config);
-                        if let Some(game_dir) = self.current_game_dir() {
-                            if let Ok(state) =
-                                modde_games::tools::optiscaler::scan_optiscaler_install(
-                                    &game_id, &game_dir, &managed,
-                                )
-                            {
-                                if !matches!(
-                                    state.status,
-                                    modde_games::tools::optiscaler::OptiScalerInstallStatus::Managed
-                                        | modde_games::tools::optiscaler::OptiScalerInstallStatus::PartiallyManaged
-                                ) {
-                                    apply_pending = true;
-                                }
-                                derived_facts
-                                    .push(("OptiScaler state".to_string(), state.summary()));
-                                if let Some(path) = &state.config_path {
-                                    derived_facts.push((
-                                        "OptiScaler config".to_string(),
-                                        format!(
-                                            "{} ({} setting(s))",
-                                            path.display(),
-                                            state.ini_settings.len()
-                                        ),
-                                    ));
-                                }
-                                if let Some(path) = &state.latest_backup {
-                                    derived_facts.push((
-                                        "OptiScaler backup".to_string(),
-                                        path.display().to_string(),
-                                    ));
-                                }
-                                (
-                                    Some(state.summary()),
-                                    state.latest_backup.map(|path| path.display().to_string()),
-                                    state.recognized_files.len(),
-                                )
-                            } else {
-                                (None, None, 0)
-                            }
-                        } else {
-                            (None, None, 0)
-                        }
-                    } else {
-                        (None, None, 0)
-                    };
-                let setting_history = db
-                    .list_tool_setting_history(&typed_game_id, tool.tool_id(), 8)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(ToolHistoryUiEntry::from_node)
-                    .collect();
-
-                ToolUiEntry {
-                    tool_id: tool.tool_id().to_string(),
-                    display_name: tool.display_name().to_string(),
-                    description: tool.description().to_string(),
-                    category: tool.category().to_string(),
-                    available: availability.is_available(),
-                    availability_text,
-                    enabled: config.enabled,
-                    settings: config.settings.clone(),
-                    setting_specs,
-                    generated_config_path,
-                    applied_files,
-                    has_file_patching: matches!(tool.tool_id(), "reshade" | "optiscaler"),
-                    release_support: ToolReleaseSupport::from_supports_releases(
-                        tool.supports_releases(),
-                    ),
-                    status_message,
-                    env_preview,
-                    dll_overrides,
-                    wrapper_preview,
-                    derived_facts,
-                    optiscaler_state,
-                    optiscaler_latest_backup,
-                    optiscaler_detected_files,
-                    apply_pending,
-                    apply_missing_inputs,
-                    setting_history,
-                }
-            })
-            .collect();
-
-        let active_still_valid = self
-            .tool_state
-            .active_tool_id
-            .as_deref()
-            .is_some_and(|active| {
-                self.tool_state
-                    .entries
-                    .iter()
-                    .any(|entry| entry.tool_id == active)
-            });
-        if !active_still_valid {
-            self.tool_state.active_tool_id = self
-                .tool_state
-                .entries
-                .first()
-                .map(|entry| entry.tool_id.clone());
         }
     }
 
@@ -999,4 +819,159 @@ impl Modde {
             }
         }
     }
+}
+
+/// Off-thread loader for the profile + data-tab + tool context. Mirrors
+/// [`super::tool_ops::load_tools_state`]: an async wrapper around a synchronous
+/// body so every `sqlx` `block_on` runs on a blocking task, never on the iced
+/// executor. Folds the three reads that must stay mutually consistent
+/// (profile, data-tab conflicts, tools) into one job.
+pub(super) async fn load_profile_context(
+    db: modde_core::db::ModdeDb,
+    request: ProfileContextRequest,
+) -> Result<ProfileContextSnapshot, String> {
+    tokio::task::spawn_blocking(move || load_profile_context_blocking(db, request))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn load_profile_context_blocking(
+    db: modde_core::db::ModdeDb,
+    request: ProfileContextRequest,
+) -> Result<ProfileContextSnapshot, String> {
+    let pm = ProfileManager::with_db(db.clone());
+    let selected_game_id = request.selected_game.as_deref().map(GameId::from);
+
+    // Profile list (scoped to the game when one is selected, else all).
+    let profiles = match selected_game_id.as_ref() {
+        Some(game_id) => crate::app::block_on(pm.list_for_game(game_id)).unwrap_or_default(),
+        None => crate::app::block_on(pm.list()).unwrap_or_default(),
+    };
+
+    // Active profile: recompute from the DB for game switches; otherwise trust
+    // the caller-provided name.
+    let active_profile = if request.recompute_active {
+        selected_game_id
+            .as_ref()
+            .and_then(|game_id| crate::app::block_on(pm.active(game_id)).ok().flatten())
+            .map(|info| info.profile.name)
+            .or_else(|| profiles.first().map(|profile| profile.name.clone()))
+    } else {
+        request.active_profile.clone()
+    };
+
+    // Load the active profile.
+    let profile_outcome = match active_profile.as_deref() {
+        Some(name) => match crate::app::block_on(pm.load(name, selected_game_id.as_ref())) {
+            Ok(profile) => {
+                let experiment_depth = crate::app::block_on(pm.active(&profile.game_id))
+                    .ok()
+                    .flatten()
+                    .map_or(0, |info| info.experiment_depth);
+                let current_fingerprint = compute_save_fingerprint(&profile);
+                let mod_id_filter_keys = modde_core::filter::mod_id_filter_keys(&profile.mods);
+                ProfileLoadOutcome::Loaded {
+                    profile: Box::new(profile),
+                    experiment_depth,
+                    current_fingerprint,
+                    mod_id_filter_keys,
+                }
+            }
+            // Load failed — keep the previously-loaded profile (and its derived
+            // fields) untouched, as the old synchronous helper did.
+            Err(_) => ProfileLoadOutcome::KeepPrevious,
+        },
+        None => ProfileLoadOutcome::Cleared,
+    };
+
+    // Data-tab conflicts come from whichever profile will be displayed: the
+    // freshly loaded one, the kept previous one, or none.
+    let effective_profile = match &profile_outcome {
+        ProfileLoadOutcome::Loaded { profile, .. } => Some(profile.as_ref()),
+        ProfileLoadOutcome::KeepPrevious => request.fallback_profile.as_ref(),
+        ProfileLoadOutcome::Cleared => None,
+    };
+    // On a data-tab analysis failure the conflicts are cleared (matching the
+    // old behavior). The error is NOT surfaced via `status_message` here: every
+    // composite-load caller set its own status after the old synchronous
+    // `reload_profile`, so the data-tab error was never visible on this path.
+    // The standalone `load_data_tab_conflicts` (Data-tab open) still surfaces it.
+    let (data_tab_conflicts, missing_store_mod_count) = match effective_profile {
+        Some(profile) => compute_data_tab_conflicts(&pm, profile).unwrap_or_default(),
+        None => (Vec::new(), 0),
+    };
+
+    // Fold in the tool reload when a game is in scope.
+    let tools = match request.tool_request {
+        Some(tool_request) => Some(load_tools_state_blocking(db, tool_request)?),
+        None => None,
+    };
+
+    Ok(ProfileContextSnapshot {
+        profiles,
+        active_profile,
+        profile_outcome,
+        data_tab_conflicts,
+        missing_store_mod_count,
+        tools,
+        rerun_diagnostics: request.rerun_diagnostics,
+    })
+}
+
+/// Compute the save fingerprint for a profile (lifted verbatim from the old
+/// `reload_profile`). `None` when the game doesn't support save profiles.
+fn compute_save_fingerprint(
+    profile: &modde_core::Profile,
+) -> Option<modde_core::save::SaveFingerprint> {
+    let game_id = profile.game_id.as_str();
+    let staging_dir = ProfileManager::staging_dir(&profile.name);
+    modde_games::resolve_game_plugin(game_id)
+        .filter(|plugin| plugin.supports_save_profiles())
+        .map(|plugin| {
+            modde_core::save::SaveFingerprint::compute(&profile.mods, |mod_id| {
+                let mod_path = staging_dir.join(mod_id);
+                plugin.classify_mod(&mod_path).affects_saves()
+            })
+        })
+}
+
+/// Compute data-tab conflict rows + missing-store count for a profile. Shared
+/// by [`load_profile_context`] and [`load_data_tab_conflicts`].
+fn compute_data_tab_conflicts(
+    pm: &ProfileManager,
+    profile: &modde_core::Profile,
+) -> Result<(Vec<(String, Vec<String>)>, usize), String> {
+    let hidden = load_hidden_files(pm, profile);
+    let classifier = modde_games::resolve_collision_classifier(profile.game_id.as_str());
+    match modde_core::diagnostics::analyze_profile_state(
+        profile,
+        &modde_core::paths::store_dir(),
+        &hidden,
+        classifier.as_deref(),
+    ) {
+        Ok(analysis) => Ok((
+            build_conflict_rows(&analysis, &hidden),
+            analysis.missing_store_mods.len(),
+        )),
+        Err(err) => Err(format!("Failed to load data tab: {err}")),
+    }
+}
+
+/// Off-thread lightweight data-tab conflict refresh (fired when the Data tab is
+/// opened).
+pub(super) async fn load_data_tab_conflicts(
+    db: modde_core::db::ModdeDb,
+    profile: modde_core::Profile,
+) -> Result<DataTabConflicts, String> {
+    tokio::task::spawn_blocking(move || {
+        let pm = ProfileManager::with_db(db);
+        compute_data_tab_conflicts(&pm, &profile).map(|(conflicts, missing_store_mod_count)| {
+            DataTabConflicts {
+                conflicts,
+                missing_store_mod_count,
+            }
+        })
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }

@@ -37,12 +37,13 @@ pub(super) async fn load_proton_versions() -> Result<Vec<String>, String> {
 }
 
 pub(super) async fn install_selected_tool_release(
+    db: modde_core::db::ModdeDb,
     game_id: String,
     tool_id: String,
 ) -> Result<String, String> {
     let tool = modde_games::tools::resolve_tool(&tool_id)
         .ok_or_else(|| format!("Tool is not registered: {tool_id}"))?;
-    let config = current_tool_config(&game_id, &tool_id)?;
+    let config = current_tool_config(&db, &game_id, &tool_id)?;
     let selected_tag = config
         .get_str("release_tag")
         .unwrap_or("latest")
@@ -58,7 +59,7 @@ pub(super) async fn install_selected_tool_release(
         .install_release(&game_id, config, &selected_tag, &selected_asset)
         .await
         .map_err(|err| err.to_string())?;
-    save_tool_settings(&game_id, &tool_id, &config)?;
+    save_tool_settings(&db, &game_id, &tool_id, &config)?;
     Ok(format!(
         "Installed {} {}",
         tool.display_name(),
@@ -66,12 +67,13 @@ pub(super) async fn install_selected_tool_release(
     ))
 }
 
-pub(super) async fn install_selected_proton_version(game_id: String) -> Result<String, String> {
-    let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
+pub(super) async fn install_selected_proton_version(
+    db: modde_core::db::ModdeDb,
+    game_id: String,
+) -> Result<String, String> {
     let tool = modde_games::tools::resolve_tool("proton")
         .ok_or_else(|| "Proton tool is not registered".to_string())?;
-    let row = db
-        .load_tool_config(&GameId::from(game_id.as_str()), "proton")
+    let row = crate::app::block_on(db.load_tool_config(&GameId::from(game_id.as_str()), "proton"))
         .map_err(|err| err.to_string())?;
     let config = row.map_or_else(
         || tool.default_config(),
@@ -88,18 +90,21 @@ pub(super) async fn install_selected_proton_version(game_id: String) -> Result<S
     Ok(format!("Installed GEProton {version} for {target}"))
 }
 
-pub(super) async fn load_tools_state(request: ToolLoadRequest) -> Result<ToolLoadSnapshot, String> {
-    tokio::task::spawn_blocking(move || load_tools_state_blocking(request))
+pub(super) async fn load_tools_state(
+    db: modde_core::db::ModdeDb,
+    request: ToolLoadRequest,
+) -> Result<ToolLoadSnapshot, String> {
+    tokio::task::spawn_blocking(move || load_tools_state_blocking(db, request))
         .await
         .map_err(|err| err.to_string())?
 }
 
 pub(super) async fn load_executables_for_game(
+    db: modde_core::db::ModdeDb,
     game_id: String,
 ) -> Result<Vec<ExecutableUiEntry>, String> {
     tokio::task::spawn_blocking(move || {
-        let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
-        db.load_executable_configs(&GameId::from(game_id.as_str()))
+        crate::app::block_on(db.load_executable_configs(&GameId::from(game_id.as_str())))
             .map_err(|err| err.to_string())
             .map(|rows| rows.into_iter().map(ExecutableUiEntry::from_row).collect())
     })
@@ -108,9 +113,9 @@ pub(super) async fn load_executables_for_game(
 }
 
 pub(super) fn load_tools_state_blocking(
+    db: modde_core::db::ModdeDb,
     request: ToolLoadRequest,
 ) -> Result<ToolLoadSnapshot, String> {
-    let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
     let detected =
         modde_games::detection::find_detected_game(&GameId::from(request.game_id.as_str()));
     let game_dir = request.configured_game_dir.clone().or_else(|| {
@@ -139,7 +144,7 @@ pub(super) fn load_tools_state_blocking(
         );
     }
     if !request.optiscaler_releases.is_empty()
-        && let Ok(mut config) = current_tool_config(&request.game_id, "optiscaler")
+        && let Ok(mut config) = current_tool_config(&db, &request.game_id, "optiscaler")
     {
         sync_optiscaler_release_options(
             &mut option_catalog,
@@ -165,12 +170,12 @@ pub(super) fn load_tools_state_blocking(
         .previous_active_tool_id
         .filter(|active| entries.iter().any(|entry| entry.tool_id == *active))
         .or_else(|| entries.first().map(|entry| entry.tool_id.clone()));
-    let executables = db
-        .load_executable_configs(&GameId::from(request.game_id.as_str()))
-        .map_err(|err| err.to_string())?
-        .into_iter()
-        .map(ExecutableUiEntry::from_row)
-        .collect();
+    let executables =
+        crate::app::block_on(db.load_executable_configs(&GameId::from(request.game_id.as_str())))
+            .map_err(|err| err.to_string())?
+            .into_iter()
+            .map(ExecutableUiEntry::from_row)
+            .collect();
 
     Ok(ToolLoadSnapshot {
         entries,
@@ -192,13 +197,11 @@ pub(super) fn build_tool_ui_entry(
     option_catalog: &ToolOptionCatalog,
 ) -> ToolUiEntry {
     let typed_game_id = GameId::from(game_id);
-    let row = db
-        .load_tool_config(&typed_game_id, tool.tool_id())
+    let row = crate::app::block_on(db.load_tool_config(&typed_game_id, tool.tool_id()))
         .ok()
         .flatten();
     let availability = tool.detect_available();
-    let applied_files = db
-        .load_applied_files(&typed_game_id, tool.tool_id())
+    let applied_files = crate::app::block_on(db.load_applied_files(&typed_game_id, tool.tool_id()))
         .unwrap_or_default();
     let status_message = match &availability {
         modde_games::tools::ToolAvailability::Available {
@@ -225,12 +228,12 @@ pub(super) fn build_tool_ui_entry(
     if release_config_normalized || normalized_settings != config.settings {
         config.settings = normalized_settings;
         if let Ok(settings_json) = serde_json::to_string(&config.settings) {
-            let _ = db.save_tool_config(
+            let _ = crate::app::block_on(db.save_tool_config(
                 &typed_game_id,
                 tool.tool_id(),
                 config.enabled,
                 &settings_json,
-            );
+            ));
         }
         setting_specs = tool.settings_schema_for(context, &config);
     }
@@ -327,12 +330,12 @@ pub(super) fn build_tool_ui_entry(
         } else {
             (None, None, 0)
         };
-    let setting_history = db
-        .list_tool_setting_history(&typed_game_id, tool.tool_id(), 8)
-        .unwrap_or_default()
-        .into_iter()
-        .map(ToolHistoryUiEntry::from_node)
-        .collect();
+    let setting_history =
+        crate::app::block_on(db.list_tool_setting_history(&typed_game_id, tool.tool_id(), 8))
+            .unwrap_or_default()
+            .into_iter()
+            .map(ToolHistoryUiEntry::from_node)
+            .collect();
 
     ToolUiEntry {
         tool_id: tool.tool_id().to_string(),
@@ -363,17 +366,16 @@ pub(super) fn build_tool_ui_entry(
 }
 
 pub(super) async fn apply_tool_for_game(
+    db: modde_core::db::ModdeDb,
     game_id: String,
     game_dir: PathBuf,
     tool_id: String,
     context: Option<modde_games::tools::ToolGameContext>,
 ) -> Result<ToolApplyResult, String> {
-    let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
     let typed_game_id = GameId::from(game_id.as_str());
     let tool = modde_games::tools::resolve_tool(&tool_id)
         .ok_or_else(|| format!("Unknown tool: {tool_id}"))?;
-    let row = db
-        .load_tool_config(&typed_game_id, &tool_id)
+    let row = crate::app::block_on(db.load_tool_config(&typed_game_id, &tool_id))
         .map_err(|err| err.to_string())?;
     let mut config = row.map_or_else(
         || tool.default_config_for(context.as_ref()),
@@ -414,14 +416,23 @@ pub(super) async fn apply_tool_for_game(
     let apply_signature = tool_apply_signature(&config.settings);
     config.set("_last_applied_settings", apply_signature);
     let settings_json = serde_json::to_string(&config.settings).map_err(|err| err.to_string())?;
-    db.save_tool_config_with_reason(&typed_game_id, &tool_id, true, &settings_json, "ui:apply")
+    crate::app::block_on(db.save_tool_config_with_reason(
+        &typed_game_id,
+        &tool_id,
+        true,
+        &settings_json,
+        "ui:apply",
+    ))
+    .map_err(|err| err.to_string())?;
+    crate::app::block_on(db.clear_applied_files(&typed_game_id, &tool_id))
         .map_err(|err| err.to_string())?;
-    db.clear_applied_files(&typed_game_id, &tool_id)
+    crate::app::block_on(db.save_applied_files(&typed_game_id, &tool_id, &paths))
         .map_err(|err| err.to_string())?;
-    db.save_applied_files(&typed_game_id, &tool_id, &paths)
-        .map_err(|err| err.to_string())?;
-    modde_games::launcher::generate_tool_configs(&typed_game_id, &db)
-        .map_err(|err| err.to_string())?;
+    crate::app::block_on(modde_games::launcher::generate_tool_configs(
+        &typed_game_id,
+        &db,
+    ))
+    .map_err(|err| err.to_string())?;
 
     Ok(ToolApplyResult {
         display_name: tool.display_name().to_string(),
@@ -431,41 +442,42 @@ pub(super) async fn apply_tool_for_game(
 }
 
 pub(super) async fn revert_tool_for_game(
+    db: modde_core::db::ModdeDb,
     game_id: String,
     game_dir: PathBuf,
     tool_id: String,
 ) -> Result<ToolRevertResult, String> {
-    let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
     let typed_game_id = GameId::from(game_id.as_str());
     let tool = modde_games::tools::resolve_tool(&tool_id)
         .ok_or_else(|| format!("Unknown tool: {tool_id}"))?;
-    let applied_paths = db
-        .load_applied_files(&typed_game_id, &tool_id)
+    let applied_paths = crate::app::block_on(db.load_applied_files(&typed_game_id, &tool_id))
         .map_err(|err| err.to_string())?;
     let applied = modde_games::tools::AppliedFiles {
         files: applied_paths.iter().map(PathBuf::from).collect(),
     };
     tool.revert(&game_dir, &applied)
         .map_err(|err| err.to_string())?;
-    db.clear_applied_files(&typed_game_id, &tool_id)
+    crate::app::block_on(db.clear_applied_files(&typed_game_id, &tool_id))
         .map_err(|err| err.to_string())?;
-    modde_games::launcher::generate_tool_configs(&typed_game_id, &db)
-        .map_err(|err| err.to_string())?;
+    crate::app::block_on(modde_games::launcher::generate_tool_configs(
+        &typed_game_id,
+        &db,
+    ))
+    .map_err(|err| err.to_string())?;
     Ok(ToolRevertResult {
         display_name: tool.display_name().to_string(),
     })
 }
 
 pub(super) async fn deactivate_optiscaler_for_game(
+    db: modde_core::db::ModdeDb,
     game_id: String,
     game_dir: PathBuf,
 ) -> Result<ToolRevertResult, String> {
-    let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
     let typed_game_id = GameId::from(game_id.as_str());
     let tool = modde_games::tools::resolve_tool("optiscaler")
         .ok_or_else(|| "OptiScaler tool is not registered".to_string())?;
-    let applied_paths = db
-        .load_applied_files(&typed_game_id, "optiscaler")
+    let applied_paths = crate::app::block_on(db.load_applied_files(&typed_game_id, "optiscaler"))
         .map_err(|err| err.to_string())?;
     if !applied_paths.is_empty() {
         let applied = modde_games::tools::AppliedFiles {
@@ -473,24 +485,26 @@ pub(super) async fn deactivate_optiscaler_for_game(
         };
         tool.revert(&game_dir, &applied)
             .map_err(|err| err.to_string())?;
-        db.clear_applied_files(&typed_game_id, "optiscaler")
+        crate::app::block_on(db.clear_applied_files(&typed_game_id, "optiscaler"))
             .map_err(|err| err.to_string())?;
     }
 
-    let settings_json = db
-        .load_tool_config(&typed_game_id, "optiscaler")
+    let settings_json = crate::app::block_on(db.load_tool_config(&typed_game_id, "optiscaler"))
         .map_err(|err| err.to_string())?
         .map_or_else(|| "{}".to_string(), |row| row.settings_json);
-    db.save_tool_config_with_reason(
+    crate::app::block_on(db.save_tool_config_with_reason(
         &typed_game_id,
         "optiscaler",
         false,
         &settings_json,
         "ui:deactivate",
-    )
+    ))
     .map_err(|err| err.to_string())?;
-    modde_games::launcher::generate_tool_configs(&typed_game_id, &db)
-        .map_err(|err| err.to_string())?;
+    crate::app::block_on(modde_games::launcher::generate_tool_configs(
+        &typed_game_id,
+        &db,
+    ))
+    .map_err(|err| err.to_string())?;
 
     Ok(ToolRevertResult {
         display_name: tool.display_name().to_string(),
@@ -498,30 +512,32 @@ pub(super) async fn deactivate_optiscaler_for_game(
 }
 
 pub(super) async fn restore_tool_settings_for_game(
+    db: modde_core::db::ModdeDb,
     game_id: String,
     tool_id: String,
     node_id: String,
 ) -> Result<String, String> {
-    let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
     let typed_game_id = GameId::from(game_id.as_str());
-    db.restore_tool_setting_node(&typed_game_id, &tool_id, &node_id)
+    crate::app::block_on(db.restore_tool_setting_node(&typed_game_id, &tool_id, &node_id))
         .map_err(|err| err.to_string())?;
-    modde_games::launcher::generate_tool_configs(&typed_game_id, &db)
-        .map_err(|err| err.to_string())?;
+    crate::app::block_on(modde_games::launcher::generate_tool_configs(
+        &typed_game_id,
+        &db,
+    ))
+    .map_err(|err| err.to_string())?;
     let display_name = modde_games::tools::resolve_tool(&tool_id)
         .map_or_else(|| tool_id.clone(), |tool| tool.display_name().to_string());
     Ok(format!("Restored {display_name} settings version"))
 }
 
 pub(super) async fn save_executable_for_game(
+    db: modde_core::db::ModdeDb,
     row: modde_core::db::ExecutableConfigRow,
 ) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
-        let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
         let name = row.name.clone();
         let game_id = row.game_id.clone();
-        db.save_executable_config(&row)
-            .map_err(|err| err.to_string())?;
+        crate::app::block_on(db.save_executable_config(&row)).map_err(|err| err.to_string())?;
         Ok(format!("Saved executable '{name}' for {game_id}"))
     })
     .await
@@ -529,13 +545,12 @@ pub(super) async fn save_executable_for_game(
 }
 
 pub(super) async fn remove_executable_for_game(
+    db: modde_core::db::ModdeDb,
     game_id: String,
     name: String,
 ) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
-        let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
-        if db
-            .delete_executable_config(&GameId::from(game_id.as_str()), &name)
+        if crate::app::block_on(db.delete_executable_config(&GameId::from(game_id.as_str()), &name))
             .map_err(|err| err.to_string())?
         {
             Ok(format!("Removed executable '{name}'"))
@@ -550,38 +565,41 @@ pub(super) async fn remove_executable_for_game(
 }
 
 pub(super) async fn run_saved_executable_for_game(
+    db: modde_core::db::ModdeDb,
     game_id: String,
     name: String,
     profile_name: Option<String>,
 ) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
-        let db = modde_core::db::ModdeDb::open().map_err(|err| err.to_string())?;
-        let row = db
-            .load_executable_config(&GameId::from(game_id.as_str()), &name)
-            .map_err(|err| err.to_string())?
-            .ok_or_else(|| format!("No executable named '{name}' is configured for {game_id}"))?;
-        run_executable_row(row, profile_name)
+        let row =
+            crate::app::block_on(db.load_executable_config(&GameId::from(game_id.as_str()), &name))
+                .map_err(|err| err.to_string())?
+                .ok_or_else(|| {
+                    format!("No executable named '{name}' is configured for {game_id}")
+                })?;
+        run_executable_row(db, row, profile_name)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
 pub(super) fn run_executable_row(
+    db: modde_core::db::ModdeDb,
     row: modde_core::db::ExecutableConfigRow,
     profile_name: Option<String>,
 ) -> Result<String, String> {
-    let pm = ProfileManager::open().map_err(|err| err.to_string())?;
+    let pm = ProfileManager::with_db(db);
     let row_game_id = GameId::from(row.game_id.as_str());
     let profile = if let Some(profile_name) = profile_name {
-        pm.load(&profile_name, Some(&row_game_id))
+        crate::app::block_on(pm.load(&profile_name, Some(&row_game_id)))
             .map_err(|err| err.to_string())?
     } else {
-        let summaries = pm.list().map_err(|err| err.to_string())?;
+        let summaries = crate::app::block_on(pm.list()).map_err(|err| err.to_string())?;
         let first = summaries
             .iter()
             .find(|profile| profile.game_id.as_str() == row.game_id)
             .ok_or_else(|| format!("No profile found for {}", row.game_id))?;
-        pm.load(&first.name, Some(&row_game_id))
+        crate::app::block_on(pm.load(&first.name, Some(&row_game_id)))
             .map_err(|err| err.to_string())?
     };
     let game_plugin = modde_games::resolve_game_plugin(profile.game_id.as_str())

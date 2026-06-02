@@ -72,11 +72,8 @@ macro_rules! define_id_newtype {
             }
         }
 
-        impl rusqlite::types::ToSql for $Name {
-            fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
-                self.0.to_sql()
-            }
-        }
+        // Binding to SQL goes through `crate::db::Val` (see `From<&$Name> for Val`),
+        // so no driver-specific `ToSql` impl is needed here.
     };
 }
 

@@ -28,6 +28,11 @@ rustdoc-args = ["--cfg", "docsrs"]
 [lints]
 workspace = true
 
+[features]
+default = ["postgres"]
+# Enable the PostgreSQL backend in addition to the always-present SQLite backend.
+postgres = ["sqlx/postgres"]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -44,7 +49,7 @@ flate2 = { workspace = true }
 lz4_flex = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-rusqlite = { workspace = true }
+sqlx = { workspace = true }
 git2 = { workspace = true }
 dirs = { workspace = true }
 zip = { workspace = true }

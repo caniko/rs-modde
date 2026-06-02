@@ -43,9 +43,11 @@ impl Modde {
         };
         let selected_game = settings.selected_game.clone();
 
-        let all_profiles = ProfileManager::open()
-            .and_then(|pm| pm.list())
-            .unwrap_or_default();
+        // TODO(phase-02): surface startup database failures as a Task error state.
+        let db = crate::app::block_on(modde_core::db::ModdeDb::open())
+            .expect("failed to open modde database at startup");
+        let all_profiles =
+            crate::app::block_on(ProfileManager::with_db(db.clone()).list()).unwrap_or_default();
 
         let available_games: SmallVec<[(String, String); 8]> = modde_games::supported_games()
             .iter()
@@ -54,6 +56,7 @@ impl Modde {
         let detected_games = detected_game_ids(&settings, available_games.as_slice());
 
         let mut app = Self {
+            db,
             active_view: View::ModList,
             active_profile: None,
             profiles: Vec::new(),
@@ -120,6 +123,8 @@ impl Modde {
             compact_mod_list: false,
             collapsed_sidebar_groups: HashSet::from([SidebarGroup::General]),
             update_available: None,
+            context_generation: 0,
+            data_tab_generation: 0,
         };
         app.refresh_nexus_api_key_state();
 
@@ -131,9 +136,17 @@ impl Modde {
             app.settings.selected_game = Some(first.game_id.to_string());
         }
 
-        if let Some(game_id) = app.selected_game.clone() {
-            app.accept_game_selection(game_id, None);
-        }
+        // Kick off the first profile/game-context load asynchronously. The
+        // heavy multi-query reload (profile + conflicts + tools) resolves off
+        // the render thread via `Message::ProfileContextLoaded`, so the first
+        // paint is immediate. The one-time `list()` above is only used for the
+        // auto-detect above and is not stored in `app.profiles` (which fills in
+        // from the async load).
+        let initial_context_task = if let Some(game_id) = app.selected_game.clone() {
+            app.accept_game_selection(game_id, None)
+        } else {
+            Task::none()
+        };
 
         (
             app,
@@ -147,6 +160,7 @@ impl Modde {
                     },
                     Message::UpdateCheckLoaded,
                 ),
+                initial_context_task,
             ]),
         )
     }
@@ -162,8 +176,46 @@ impl Modde {
             // the shared sqlite DB so the user sees the change without
             // restarting or switching profiles.
             Message::ExternalRefresh => {
-                self.reload_profile();
+                let task = self.reload_profile();
                 self.status_message = "Refreshed from external change".to_string();
+                return task;
+            }
+            Message::ProfileContextLoaded { generation, result } => {
+                // Drop stale loads: a newer kickoff bumped the generation, so
+                // this result is for a game/profile the user has moved on from.
+                if generation != self.context_generation {
+                    return Task::none();
+                }
+                match result {
+                    Ok(snapshot) => {
+                        let rerun_diagnostics = snapshot.rerun_diagnostics;
+                        self.apply_profile_context(snapshot);
+                        if rerun_diagnostics && matches!(self.active_view, View::Diagnostics) {
+                            return self.update(Message::RunDiagnostics);
+                        }
+                    }
+                    Err(err) => {
+                        self.tool_state.loading = false;
+                        self.status_message = format!("Failed to load profile: {err}");
+                    }
+                }
+            }
+            Message::DataTabConflictsLoaded { generation, result } => {
+                if generation != self.data_tab_generation {
+                    return Task::none();
+                }
+                match result {
+                    Ok(conflicts) => {
+                        self.data_tab_conflicts = conflicts.conflicts;
+                        self.data_tab_state.missing_store_mod_count =
+                            conflicts.missing_store_mod_count;
+                    }
+                    Err(err) => {
+                        self.data_tab_conflicts.clear();
+                        self.data_tab_state.missing_store_mod_count = 0;
+                        self.status_message = err;
+                    }
+                }
             }
             Message::UpdateCheckLoaded(result) => match result {
                 Ok(update) => {
@@ -203,7 +255,7 @@ impl Modde {
                 }
                 View::DataTab => {
                     self.active_view = View::DataTab;
-                    self.refresh_data_tab_conflicts();
+                    return self.refresh_data_tab_conflicts();
                 }
                 View::Tools => {
                     self.active_view = View::Tools;
@@ -241,13 +293,14 @@ impl Modde {
             }
             Message::SwitchProfile(name) => {
                 self.active_profile = Some(name);
-                self.reload_profile();
+                // The reload re-runs diagnostics once it resolves if the
+                // Diagnostics view is active (it needs the freshly loaded
+                // profile), preserving the old synchronous behavior.
+                let task = self.reload_profile_refresh_diagnostics();
                 self.sync_browse_game_to_current(true);
                 self.selected_save_details = None;
                 self.status_message = "Profile switched".to_string();
-                if matches!(self.active_view, View::Diagnostics) {
-                    return self.update(Message::RunDiagnostics);
-                }
+                return task;
             }
             Message::CreateProfile { name, game_id } => {
                 let name = name.trim().to_string();
@@ -255,74 +308,71 @@ impl Modde {
                     self.status_message = "Profile name is required".to_string();
                     return Task::none();
                 }
-                match ProfileManager::open() {
-                    Ok(pm) => {
-                        let profile = modde_core::Profile {
-                            id: None,
-                            name: name.clone(),
-                            game_id: modde_core::GameId::from(game_id.clone()),
-                            source: modde_core::ProfileSource::Manual,
-                            mods: Vec::new(),
-                            overrides: PathBuf::from("overrides"),
-                            load_order_rules: smallvec::SmallVec::new(),
-                            load_order_lock: None,
-                        };
-                        match pm.create(&profile) {
-                            Ok(_) => {
-                                self.profiles = pm
-                                    .list_for_game(&GameId::from(game_id.as_str()))
-                                    .unwrap_or_default();
-                                self.active_profile = Some(name);
-                                self.selected_game = Some(game_id.clone());
-                                self.settings.selected_game = Some(game_id);
-                                self.save_settings();
-                                self.reload_profile();
-                                self.new_profile_name.clear();
-                                self.new_profile_dialog_open = false;
-                                self.status_message = "Profile created".to_string();
-                            }
-                            Err(e) => {
-                                self.status_message = format!("Failed to create profile: {e}");
-                            }
-                        }
+                let pm = ProfileManager::with_db(self.db.clone());
+                let profile = modde_core::Profile {
+                    id: None,
+                    name: name.clone(),
+                    game_id: modde_core::GameId::from(game_id.clone()),
+                    source: modde_core::ProfileSource::Manual,
+                    mods: Vec::new(),
+                    overrides: PathBuf::from("overrides"),
+                    load_order_rules: smallvec::SmallVec::new(),
+                    load_order_lock: None,
+                };
+                match crate::app::block_on(pm.create(&profile)) {
+                    Ok(_) => {
+                        self.active_profile = Some(name);
+                        self.selected_game = Some(game_id.clone());
+                        self.settings.selected_game = Some(game_id);
+                        self.save_settings();
+                        // `reload_profile` re-lists the profiles for the game, so
+                        // the synchronous `list_for_game` is no longer needed.
+                        let task = self.reload_profile();
+                        self.new_profile_name.clear();
+                        self.new_profile_dialog_open = false;
+                        self.status_message = "Profile created".to_string();
+                        return task;
                     }
                     Err(e) => {
-                        self.status_message = format!("Failed to open profile manager: {e}");
+                        self.status_message = format!("Failed to create profile: {e}");
                     }
                 }
             }
-            Message::DeleteProfile(name) => match ProfileManager::open() {
-                Ok(pm) => match pm.delete(&name, None) {
+            Message::DeleteProfile(name) => {
+                let pm = ProfileManager::with_db(self.db.clone());
+                match crate::app::block_on(pm.delete(&name, None)) {
                     Ok(()) => {
-                        if let Some(game_id) = self.selected_game.clone() {
-                            self.switch_game_context(&game_id);
+                        let task = if let Some(game_id) = self.selected_game.clone() {
+                            // Recomputes profiles + active profile for the game,
+                            // which also handles the deleted-active case.
+                            self.switch_game_context(&game_id)
+                        } else if self.active_profile.as_deref() == Some(&name) {
+                            // No game in scope and the active profile was deleted —
+                            // fall back to the first remaining profile.
+                            self.reload_profile_recompute_active()
                         } else {
-                            self.profiles = pm.list().unwrap_or_default();
-                        }
-                        if self.active_profile.as_deref() == Some(&name) {
-                            self.active_profile = self.profiles.first().map(|p| p.name.clone());
-                            self.reload_profile();
-                        }
+                            // No game in scope; a non-active profile was deleted —
+                            // just refresh the list and keep the active profile.
+                            self.reload_profile()
+                        };
                         self.status_message = format!("Profile '{name}' deleted");
+                        return task;
                     }
                     Err(e) => self.status_message = format!("Failed to delete profile: {e}"),
-                },
-                Err(e) => self.status_message = format!("Error: {e}"),
-            },
+                }
+            }
             Message::ForkProfile { source, new_name } => {
                 if let Some(ref profile) = self.loaded_profile {
                     let game_id = profile.game_id.clone();
-                    match ProfileManager::open() {
-                        Ok(pm) => match pm.fork(&source, &new_name, &game_id) {
-                            Ok(_) => {
-                                self.profiles = pm.list().unwrap_or_default();
-                                self.active_profile = Some(new_name.clone());
-                                self.reload_profile();
-                                self.status_message = format!("Profile forked as '{new_name}'");
-                            }
-                            Err(e) => self.status_message = format!("Fork failed: {e}"),
-                        },
-                        Err(e) => self.status_message = format!("Error: {e}"),
+                    let pm = ProfileManager::with_db(self.db.clone());
+                    match crate::app::block_on(pm.fork(&source, &new_name, &game_id)) {
+                        Ok(_) => {
+                            self.active_profile = Some(new_name.clone());
+                            let task = self.reload_profile();
+                            self.status_message = format!("Profile forked as '{new_name}'");
+                            return task;
+                        }
+                        Err(e) => self.status_message = format!("Fork failed: {e}"),
                     }
                 }
             }
@@ -352,7 +402,7 @@ impl Modde {
             // ── Game selection ────────────────────────────────────
             Message::SelectGame(game_id) => {
                 let previous_game = self.selected_game.clone();
-                self.accept_game_selection(game_id, previous_game);
+                return self.accept_game_selection(game_id, previous_game);
             }
             Message::GamePathDialogBrowse => {
                 let Some(game_id) = self.pending_game_path_game_id.clone() else {
@@ -391,9 +441,10 @@ impl Modde {
                 self.pending_game_path_game_id = None;
                 self.previous_game_before_path_dialog = None;
                 self.game_path_dialog_error = None;
-                self.switch_game_context(&game_id);
+                let task = self.switch_game_context(&game_id);
                 self.save_settings();
                 self.status_message = format!("Active game set to {game_id}");
+                return task;
             }
             Message::CancelGamePathDialog => {
                 let previous = self.previous_game_before_path_dialog.clone();
@@ -403,9 +454,10 @@ impl Modde {
                 self.game_path_dialog_error = None;
                 self.selected_game = previous.clone();
                 self.settings.selected_game = previous.clone();
-                if let Some(game_id) = previous {
-                    self.switch_game_context(&game_id);
+                let task = if let Some(game_id) = previous {
+                    let task = self.switch_game_context(&game_id);
                     self.status_message = format!("Active game remains {game_id}");
+                    task
                 } else {
                     self.clear_game_scoped_state();
                     self.profiles.clear();
@@ -413,8 +465,10 @@ impl Modde {
                     self.loaded_profile = None;
                     self.mod_id_filter_keys.clear();
                     self.status_message = "Game selection cancelled".to_string();
-                }
+                    Task::none()
+                };
                 self.save_settings();
+                return task;
             }
             Message::OpenAddCustomGame => {
                 self.add_custom_game_dialog_open = true;
@@ -499,9 +553,11 @@ impl Modde {
                         self.refresh_available_games();
                         self.add_custom_game_dialog_open = false;
                         self.add_custom_game = AddCustomGameState::default();
-                        self.accept_game_selection(spec.id.clone(), self.selected_game.clone());
+                        let previous_game = self.selected_game.clone();
+                        let task = self.accept_game_selection(spec.id.clone(), previous_game);
                         self.status_message =
                             format!("Registered custom game '{}'", spec.display_name);
+                        return task;
                     }
                     Err(error) => {
                         self.add_custom_game.error = Some(error.to_string());
@@ -532,13 +588,16 @@ impl Modde {
                         self.selected_game = None;
                     }
                     self.refresh_available_games();
-                    if self.selected_game.is_none()
+                    let task = if self.selected_game.is_none()
                         && let Some((game_id, _)) = self.available_games.first().cloned()
                     {
-                        self.accept_game_selection(game_id, None);
-                    }
+                        self.accept_game_selection(game_id, None)
+                    } else {
+                        Task::none()
+                    };
                     self.save_settings();
                     self.status_message = format!("Removed custom game '{id}'");
+                    return task;
                 }
                 Err(error) => {
                     self.status_message = format!("Custom game not removed: {error}");
@@ -565,21 +624,21 @@ impl Modde {
 
             // ── Mod list ─────────────────────────────────────────
             Message::ToggleMod { mod_id, enabled } => {
-                if let Some(ref profile_name) = self.active_profile
-                    && let Ok(pm) = ProfileManager::open()
-                    && let Ok(mut profile) = pm.load(profile_name, None)
-                {
+                if let Some(ref profile_name) = self.active_profile {
+                    let pm = ProfileManager::with_db(self.db.clone());
+                    let Ok(mut profile) = crate::app::block_on(pm.load(profile_name, None)) else {
+                        return Task::none();
+                    };
                     if let Some(m) = profile.mods.iter_mut().find(|m| m.mod_id == mod_id) {
                         m.enabled = enabled;
                     }
-                    let _ = pm
-                        .create(&profile)
-                        .or_else(|_| pm.update(&profile).map(|()| 0));
+                    let _ = crate::app::block_on(pm.create(&profile))
+                        .or_else(|_| crate::app::block_on(pm.update(&profile)).map(|()| 0));
                     self.status_message = format!(
                         "Mod {mod_id} {}",
                         if enabled { "enabled" } else { "disabled" }
                     );
-                    self.reload_profile();
+                    return self.reload_profile();
                 }
             }
             Message::FilterChanged(filter) => self.mod_filter = filter,
@@ -627,37 +686,37 @@ impl Modde {
                         |s| s.to_string_lossy().to_string(),
                     );
 
-                    if let Ok(pm) = ProfileManager::open()
-                        && let Ok(mut profile) = pm.load(profile_name, None)
-                    {
+                    let pm = ProfileManager::with_db(self.db.clone());
+                    if let Ok(mut profile) = crate::app::block_on(pm.load(profile_name, None)) {
                         profile.mods.push(modde_core::EnabledMod {
                             mod_id: mod_name.clone(),
                             enabled: true,
                             ..Default::default()
                         });
-                        let _ = pm
-                            .create(&profile)
-                            .or_else(|_| pm.update(&profile).map(|()| 0));
+                        let _ = crate::app::block_on(pm.create(&profile))
+                            .or_else(|_| crate::app::block_on(pm.update(&profile)).map(|()| 0));
                         self.status_message = format!("Added mod: {mod_name}");
-                        self.reload_profile();
+                        return self.reload_profile();
                     }
                 } else {
                     self.status_message = "No active profile — create one first".to_string();
                 }
             }
             Message::RemoveMod(index) => {
-                if let Some(ref profile_name) = self.active_profile
-                    && let Ok(pm) = ProfileManager::open()
-                    && let Ok(mut profile) = pm.load(profile_name, None)
-                    && index < profile.mods.len()
-                {
+                if let Some(ref profile_name) = self.active_profile {
+                    let pm = ProfileManager::with_db(self.db.clone());
+                    let Ok(mut profile) = crate::app::block_on(pm.load(profile_name, None)) else {
+                        return Task::none();
+                    };
+                    if index >= profile.mods.len() {
+                        return Task::none();
+                    }
                     let removed = profile.mods.remove(index);
-                    let _ = pm
-                        .create(&profile)
-                        .or_else(|_| pm.update(&profile).map(|()| 0));
+                    let _ = crate::app::block_on(pm.create(&profile))
+                        .or_else(|_| crate::app::block_on(pm.update(&profile)).map(|()| 0));
                     self.selected_mod_index = None;
                     self.status_message = format!("Removed mod: {}", removed.mod_id);
-                    self.reload_profile();
+                    return self.reload_profile();
                 }
             }
             Message::SelectMod(index) => {
@@ -1106,13 +1165,14 @@ impl Modde {
                 if let Some(ref profile) = self.loaded_profile {
                     let profile_name = profile.name.clone();
                     let game_id = profile.game_id.clone();
+                    let db = self.db.clone();
                     return Task::perform(
                         async move {
                             tokio::task::spawn_blocking(move || -> Result<String, String> {
-                                let pm = ProfileManager::open().map_err(|e| e.to_string())?;
-                                let profile = pm
-                                    .load(&profile_name, Some(&game_id))
-                                    .map_err(|e| e.to_string())?;
+                                let pm = ProfileManager::with_db(db);
+                                let profile =
+                                    crate::app::block_on(pm.load(&profile_name, Some(&game_id)))
+                                        .map_err(|e| e.to_string())?;
                                 let resolved = modde_core::resolver::resolve(&profile)
                                     .map_err(|e| e.to_string())?;
                                 let game_plugin =
@@ -1152,11 +1212,8 @@ impl Modde {
                 let Some(ref profile_name) = self.active_profile else {
                     return Task::none();
                 };
-                let Ok(pm) = ProfileManager::open() else {
-                    self.status_message = "Failed to open profile database".to_string();
-                    return Task::none();
-                };
-                let Ok(mut profile) = pm.load(profile_name, None) else {
+                let pm = ProfileManager::with_db(self.db.clone());
+                let Ok(mut profile) = crate::app::block_on(pm.load(profile_name, None)) else {
                     return Task::none();
                 };
 
@@ -1166,9 +1223,8 @@ impl Modde {
                 use modde_core::profile::{ReorderError, try_reorder};
                 match try_reorder(&mut profile, &mod_id, direction) {
                     Ok(()) => {
-                        let _ = pm
-                            .create(&profile)
-                            .or_else(|_| pm.update(&profile).map(|()| 0));
+                        let _ = crate::app::block_on(pm.create(&profile))
+                            .or_else(|_| crate::app::block_on(pm.update(&profile)).map(|()| 0));
                         self.status_message = format!(
                             "Moved '{mod_id}' {}",
                             match direction {
@@ -1176,7 +1232,7 @@ impl Modde {
                                 ReorderDirection::Down => "down",
                             }
                         );
-                        self.reload_profile();
+                        return self.reload_profile();
                     }
                     Err(ReorderError::ProfileLocked { reason }) => {
                         self.status_message = format!(
@@ -1211,17 +1267,15 @@ impl Modde {
                 let Some(ref profile_name) = self.active_profile else {
                     return Task::none();
                 };
-                let Ok(pm) = ProfileManager::open() else {
-                    return Task::none();
-                };
-                let Ok(mut profile) = pm.load(profile_name, None) else {
+                let pm = ProfileManager::with_db(self.db.clone());
+                let Ok(mut profile) = crate::app::block_on(pm.load(profile_name, None)) else {
                     return Task::none();
                 };
                 if let Some(m) = profile.mods.iter_mut().find(|m| m.mod_id == mod_id) {
                     m.lock = Some(modde_core::LockReason::Manual { note: None });
-                    if pm.update(&profile).is_ok() {
+                    if crate::app::block_on(pm.update(&profile)).is_ok() {
                         self.status_message = format!("Pinned '{mod_id}'");
-                        self.reload_profile();
+                        return self.reload_profile();
                     }
                 }
             }
@@ -1229,17 +1283,15 @@ impl Modde {
                 let Some(ref profile_name) = self.active_profile else {
                     return Task::none();
                 };
-                let Ok(pm) = ProfileManager::open() else {
-                    return Task::none();
-                };
-                let Ok(mut profile) = pm.load(profile_name, None) else {
+                let pm = ProfileManager::with_db(self.db.clone());
+                let Ok(mut profile) = crate::app::block_on(pm.load(profile_name, None)) else {
                     return Task::none();
                 };
                 if let Some(m) = profile.mods.iter_mut().find(|m| m.mod_id == mod_id) {
                     m.lock = None;
-                    if pm.update(&profile).is_ok() {
+                    if crate::app::block_on(pm.update(&profile)).is_ok() {
                         self.status_message = format!("Unpinned '{mod_id}'");
-                        self.reload_profile();
+                        return self.reload_profile();
                     }
                 }
             }
@@ -1341,8 +1393,9 @@ impl Modde {
                     };
                     task.meta.status = "installing".to_string();
                 }
+                let db = self.db.clone();
                 return Task::perform(
-                    async move { run_browse_install(game_domain, mod_id).await },
+                    async move { run_browse_install(db, game_domain, mod_id).await },
                     move |result| Message::BrowseInstallResult {
                         download_key: download_key.clone(),
                         result,
@@ -1365,7 +1418,7 @@ impl Modde {
                         };
                         task.meta.status = "complete".to_string();
                     }
-                    self.reload_profile();
+                    return self.reload_profile();
                 }
                 Err(e) => {
                     self.browse_nexus.install_status = Some(format!("Install failed: {e}"));
@@ -1704,8 +1757,9 @@ impl Modde {
                         self.status_message = "No wabbajack file selected".to_string();
                         return Task::none();
                     };
+                let db = self.db.clone();
                 return Task::perform(
-                    async move { run_wabbajack_install_for_ui(path, profile_name, game_dir).await },
+                    async move { run_wabbajack_install_for_ui(db, path, profile_name, game_dir).await },
                     Message::WabbajackInstallComplete,
                 );
             }
@@ -1717,7 +1771,7 @@ impl Modde {
                             state.status = summary.clone();
                             state.log_lines.extend(lines);
                             self.status_message = summary;
-                            self.reload_profile();
+                            return self.reload_profile();
                         }
                         Err(e) => {
                             state.status = format!("Install failed: {e}");
@@ -2134,55 +2188,45 @@ impl Modde {
                 {
                     let game_id = profile.game_id.clone();
                     let name = profile_name.clone();
-                    match ProfileManager::open() {
-                        Ok(pm) => {
-                            let save_dir = Self::resolve_save_dir(game_id.as_str());
-                            match pm.try_profile(&name, &game_id, save_dir.as_deref()) {
-                                Ok(()) => {
-                                    self.experiment_depth += 1;
-                                    self.status_message = format!(
-                                        "Experiment started (depth {})",
-                                        self.experiment_depth
-                                    );
-                                }
-                                Err(e) => self.status_message = format!("Try failed: {e}"),
-                            }
+                    let pm = ProfileManager::with_db(self.db.clone());
+                    let save_dir = Self::resolve_save_dir(game_id.as_str());
+                    match crate::app::block_on(pm.try_profile(&name, &game_id, save_dir.as_deref()))
+                    {
+                        Ok(()) => {
+                            self.experiment_depth += 1;
+                            self.status_message =
+                                format!("Experiment started (depth {})", self.experiment_depth);
                         }
-                        Err(e) => self.status_message = format!("Error: {e}"),
+                        Err(e) => self.status_message = format!("Try failed: {e}"),
                     }
                 }
             }
             Message::RollbackExperiment => {
                 if let Some(ref profile) = self.loaded_profile {
                     let game_id = profile.game_id.clone();
-                    match ProfileManager::open() {
-                        Ok(pm) => {
-                            let save_dir = Self::resolve_save_dir(game_id.as_str());
-                            match pm.rollback(&game_id, save_dir.as_deref()) {
-                                Ok(prev_name) => {
-                                    self.active_profile = Some(prev_name.clone());
-                                    self.reload_profile();
-                                    self.status_message = format!("Rolled back to '{prev_name}'");
-                                }
-                                Err(e) => self.status_message = format!("Rollback failed: {e}"),
-                            }
+                    let pm = ProfileManager::with_db(self.db.clone());
+                    let save_dir = Self::resolve_save_dir(game_id.as_str());
+                    match crate::app::block_on(pm.rollback(&game_id, save_dir.as_deref())) {
+                        Ok(prev_name) => {
+                            self.active_profile = Some(prev_name.clone());
+                            let task = self.reload_profile();
+                            self.status_message = format!("Rolled back to '{prev_name}'");
+                            return task;
                         }
-                        Err(e) => self.status_message = format!("Error: {e}"),
+                        Err(e) => self.status_message = format!("Rollback failed: {e}"),
                     }
                 }
             }
             Message::CommitExperiment => {
                 if let Some(ref profile) = self.loaded_profile {
                     let game_id = profile.game_id.clone();
-                    match ProfileManager::open() {
-                        Ok(pm) => match pm.commit(&game_id) {
-                            Ok(()) => {
-                                self.experiment_depth = 0;
-                                self.status_message = "Experiment committed".to_string();
-                            }
-                            Err(e) => self.status_message = format!("Commit failed: {e}"),
-                        },
-                        Err(e) => self.status_message = format!("Error: {e}"),
+                    let pm = ProfileManager::with_db(self.db.clone());
+                    match crate::app::block_on(pm.commit(&game_id)) {
+                        Ok(()) => {
+                            self.experiment_depth = 0;
+                            self.status_message = "Experiment committed".to_string();
+                        }
+                        Err(e) => self.status_message = format!("Commit failed: {e}"),
                     }
                 }
             }
@@ -2348,7 +2392,8 @@ impl Modde {
                                 "Select a game before loading OptiScaler releases".to_string();
                             return Task::none();
                         };
-                        let Ok(mut config) = current_tool_config(&game_id, "optiscaler") else {
+                        let Ok(mut config) = current_tool_config(&self.db, &game_id, "optiscaler")
+                        else {
                             self.status_message =
                                 "Failed to load OptiScaler configuration".to_string();
                             return Task::none();
@@ -2361,7 +2406,7 @@ impl Modde {
                         if let Some((tag, asset)) = selected {
                             config.set("release_tag", serde_json::json!(tag));
                             config.set("release_asset", serde_json::json!(asset));
-                            let _ = save_tool_settings(&game_id, "optiscaler", &config);
+                            let _ = save_tool_settings(&self.db, &game_id, "optiscaler", &config);
                         }
                         self.tool_state.optiscaler_releases = releases;
                         self.tool_state.active_tool_id = Some("optiscaler".to_string());
@@ -2383,7 +2428,11 @@ impl Modde {
                 };
                 self.status_message = "Installing OptiScaler release...".to_string();
                 return Task::perform(
-                    install_selected_tool_release(game_id, "optiscaler".to_string()),
+                    install_selected_tool_release(
+                        self.db.clone(),
+                        game_id,
+                        "optiscaler".to_string(),
+                    ),
                     Message::OptiScalerReleaseInstalled,
                 );
             }
@@ -2428,11 +2477,11 @@ impl Modde {
                             "_catalog_loaded",
                             vec!["true".to_string()],
                         );
-                        if let Ok(mut config) = current_tool_config(&game_id, "proton") {
+                        if let Ok(mut config) = current_tool_config(&self.db, &game_id, "proton") {
                             let selected = config.get_str("selected_version").unwrap_or("latest");
                             if !versions.iter().any(|version| version == selected) {
                                 config.set("selected_version", serde_json::json!("latest"));
-                                let _ = save_tool_settings(&game_id, "proton", &config);
+                                let _ = save_tool_settings(&self.db, &game_id, "proton", &config);
                             }
                         }
                         self.tool_state.active_tool_id = Some("proton".to_string());
@@ -2452,7 +2501,7 @@ impl Modde {
                 };
                 self.status_message = "Installing Proton with protonup-rs...".to_string();
                 return Task::perform(
-                    install_selected_proton_version(game_id),
+                    install_selected_proton_version(self.db.clone(), game_id),
                     Message::ProtonVersionInstalled,
                 );
             }
@@ -2507,116 +2556,104 @@ impl Modde {
                     return Task::none();
                 };
                 let context = self.current_tool_game_context();
-                match modde_core::db::ModdeDb::open() {
-                    Ok(db) => {
-                        let typed_game_id = GameId::from(game_id.as_str());
-                        let mut config = db
-                            .load_tool_config(&typed_game_id, &tool_id)
-                            .ok()
-                            .flatten()
-                            .map_or_else(
-                                || tool.default_config_for(context.as_ref()),
-                                |row| modde_games::tools::ToolConfig {
-                                    tool_id: row.tool_id,
-                                    enabled: row.enabled,
-                                    settings: serde_json::from_str(&row.settings_json)
-                                        .unwrap_or_default(),
-                                },
-                            );
-                        if tool_id == "optiscaler" {
-                            let _ =
-                                modde_games::tools::optiscaler::normalize_optiscaler_release_config(
-                                    &mut config,
-                                );
-                        }
-                        let setting_specs = tool.settings_schema_for(context.as_ref(), &config);
-                        let normalized =
-                            if let Some(spec) = setting_specs.iter().find(|spec| spec.key == key) {
-                                normalize_tool_setting_value(
-                                    &config.settings,
-                                    &key,
-                                    normalize_tool_setting_for_kind(value, &spec.kind),
-                                )
-                            } else {
-                                normalize_tool_setting_value(&config.settings, &key, value)
-                            };
-                        set_nested_tool_setting(&mut config.settings, &key, normalized);
-                        if tool_id == "optiscaler"
-                            && key == "optiscaler_profile"
-                            && let Some(profile_id) =
-                                config.get_str("optiscaler_profile").map(str::to_string)
+                let db = self.db.clone();
+                let typed_game_id = GameId::from(game_id.as_str());
+                let mut config =
+                    crate::app::block_on(db.load_tool_config(&typed_game_id, &tool_id))
+                        .ok()
+                        .flatten()
+                        .map_or_else(
+                            || tool.default_config_for(context.as_ref()),
+                            |row| modde_games::tools::ToolConfig {
+                                tool_id: row.tool_id,
+                                enabled: row.enabled,
+                                settings: serde_json::from_str(&row.settings_json)
+                                    .unwrap_or_default(),
+                            },
+                        );
+                if tool_id == "optiscaler" {
+                    let _ = modde_games::tools::optiscaler::normalize_optiscaler_release_config(
+                        &mut config,
+                    );
+                }
+                let setting_specs = tool.settings_schema_for(context.as_ref(), &config);
+                let normalized =
+                    if let Some(spec) = setting_specs.iter().find(|spec| spec.key == key) {
+                        normalize_tool_setting_value(
+                            &config.settings,
+                            &key,
+                            normalize_tool_setting_for_kind(value, &spec.kind),
+                        )
+                    } else {
+                        normalize_tool_setting_value(&config.settings, &key, value)
+                    };
+                set_nested_tool_setting(&mut config.settings, &key, normalized);
+                if tool_id == "optiscaler"
+                    && key == "optiscaler_profile"
+                    && let Some(profile_id) =
+                        config.get_str("optiscaler_profile").map(str::to_string)
+                {
+                    modde_games::tools::optiscaler::apply_profile_by_id(
+                        &mut config,
+                        &game_id,
+                        &profile_id,
+                    );
+                }
+                if tool_id == "optiscaler"
+                    && key == "release_tag"
+                    && let Some(tag) = config.get_str("release_tag").map(str::to_string)
+                {
+                    if let Some(channel) =
+                        modde_games::tools::optiscaler::optiscaler_goverlay_channel_for_tag(&tag)
+                    {
+                        config.set("source_mode", serde_json::json!("goverlay_builds"));
+                        config.set("goverlay_channel", serde_json::json!(channel));
+                    } else {
+                        config.set("source_mode", serde_json::json!("github_release"));
+                    }
+                }
+                if tool_id == "optiscaler"
+                    && matches!(
+                        key.as_str(),
+                        "source_mode" | "goverlay_channel" | "release_tag"
+                    )
+                {
+                    if key == "source_mode" || key == "goverlay_channel" {
+                        if config.get_str("source_mode") == Some("goverlay_builds")
+                            && config.get_str("goverlay_channel").is_none()
                         {
-                            modde_games::tools::optiscaler::apply_profile_by_id(
-                                &mut config,
-                                &game_id,
-                                &profile_id,
+                            config.set("goverlay_channel", serde_json::json!("edge"));
+                        }
+                        config.set("release_tag", serde_json::json!(""));
+                        config.set("release_asset", serde_json::json!(""));
+                    }
+                    sync_optiscaler_release_options(
+                        &mut self.tool_state.tool_option_catalog,
+                        &self.tool_state.optiscaler_releases,
+                        &mut config,
+                    );
+                }
+                let settings_json =
+                    serde_json::to_string(&config.settings).unwrap_or_else(|_| "{}".to_string());
+                match crate::app::block_on(db.save_tool_config_with_reason(
+                    &typed_game_id,
+                    &tool_id,
+                    config.enabled,
+                    &settings_json,
+                    &format!("ui:set:{key}"),
+                )) {
+                    Ok(()) => {
+                        if config.enabled {
+                            let _ = crate::app::block_on(
+                                modde_games::launcher::generate_tool_configs(&typed_game_id, &db),
                             );
                         }
-                        if tool_id == "optiscaler"
-                            && key == "release_tag"
-                            && let Some(tag) = config.get_str("release_tag").map(str::to_string)
-                        {
-                            if let Some(channel) =
-                                modde_games::tools::optiscaler::optiscaler_goverlay_channel_for_tag(
-                                    &tag,
-                                )
-                            {
-                                config.set("source_mode", serde_json::json!("goverlay_builds"));
-                                config.set("goverlay_channel", serde_json::json!(channel));
-                            } else {
-                                config.set("source_mode", serde_json::json!("github_release"));
-                            }
-                        }
-                        if tool_id == "optiscaler"
-                            && matches!(
-                                key.as_str(),
-                                "source_mode" | "goverlay_channel" | "release_tag"
-                            )
-                        {
-                            if key == "source_mode" || key == "goverlay_channel" {
-                                if config.get_str("source_mode") == Some("goverlay_builds")
-                                    && config.get_str("goverlay_channel").is_none()
-                                {
-                                    config.set("goverlay_channel", serde_json::json!("edge"));
-                                }
-                                config.set("release_tag", serde_json::json!(""));
-                                config.set("release_asset", serde_json::json!(""));
-                            }
-                            sync_optiscaler_release_options(
-                                &mut self.tool_state.tool_option_catalog,
-                                &self.tool_state.optiscaler_releases,
-                                &mut config,
-                            );
-                        }
-                        let settings_json = serde_json::to_string(&config.settings)
-                            .unwrap_or_else(|_| "{}".to_string());
-                        match db.save_tool_config_with_reason(
-                            &typed_game_id,
-                            &tool_id,
-                            config.enabled,
-                            &settings_json,
-                            &format!("ui:set:{key}"),
-                        ) {
-                            Ok(()) => {
-                                if config.enabled {
-                                    let _ = modde_games::launcher::generate_tool_configs(
-                                        &typed_game_id,
-                                        &db,
-                                    );
-                                }
-                                self.tool_state.active_tool_id = Some(tool_id);
-                                self.status_message =
-                                    format!("Updated {} setting", tool.display_name());
-                                return self.start_tools_load();
-                            }
-                            Err(err) => {
-                                self.status_message =
-                                    format!("Failed to update tool setting: {err}");
-                            }
-                        }
+                        self.tool_state.active_tool_id = Some(tool_id);
+                        self.status_message = format!("Updated {} setting", tool.display_name());
+                        return self.start_tools_load();
                     }
                     Err(err) => {
-                        self.status_message = format!("Failed to open tool database: {err}");
+                        self.status_message = format!("Failed to update tool setting: {err}");
                     }
                 }
             }
@@ -2630,48 +2667,42 @@ impl Modde {
                     return Task::none();
                 };
                 let context = self.current_tool_game_context();
-                match modde_core::db::ModdeDb::open() {
-                    Ok(db) => {
-                        let typed_game_id = GameId::from(game_id.as_str());
-                        let settings_json = db
-                            .load_tool_config(&typed_game_id, &tool_id)
-                            .ok()
-                            .flatten()
-                            .map_or_else(
-                                || {
-                                    serde_json::to_string(
-                                        &tool.default_config_for(context.as_ref()).settings,
-                                    )
-                                    .unwrap_or_else(|_| "{}".to_string())
-                                },
-                                |row| row.settings_json,
-                            );
-                        match db.save_tool_config_with_reason(
+                let db = self.db.clone();
+                let typed_game_id = GameId::from(game_id.as_str());
+                let settings_json =
+                    crate::app::block_on(db.load_tool_config(&typed_game_id, &tool_id))
+                        .ok()
+                        .flatten()
+                        .map_or_else(
+                            || {
+                                serde_json::to_string(
+                                    &tool.default_config_for(context.as_ref()).settings,
+                                )
+                                .unwrap_or_else(|_| "{}".to_string())
+                            },
+                            |row| row.settings_json,
+                        );
+                match crate::app::block_on(db.save_tool_config_with_reason(
+                    &typed_game_id,
+                    &tool_id,
+                    enabled,
+                    &settings_json,
+                    if enabled { "ui:enable" } else { "ui:disable" },
+                )) {
+                    Ok(()) => {
+                        let _ = crate::app::block_on(modde_games::launcher::generate_tool_configs(
                             &typed_game_id,
-                            &tool_id,
-                            enabled,
-                            &settings_json,
-                            if enabled { "ui:enable" } else { "ui:disable" },
-                        ) {
-                            Ok(()) => {
-                                let _ = modde_games::launcher::generate_tool_configs(
-                                    &typed_game_id,
-                                    &db,
-                                );
-                                self.status_message = format!(
-                                    "{} {}",
-                                    tool.display_name(),
-                                    if enabled { "enabled" } else { "disabled" }
-                                );
-                                return self.start_tools_load();
-                            }
-                            Err(err) => {
-                                self.status_message = format!("Failed to update tool state: {err}");
-                            }
-                        }
+                            &db,
+                        ));
+                        self.status_message = format!(
+                            "{} {}",
+                            tool.display_name(),
+                            if enabled { "enabled" } else { "disabled" }
+                        );
+                        return self.start_tools_load();
                     }
                     Err(err) => {
-                        self.status_message = format!("Failed to open tool database: {err}");
+                        self.status_message = format!("Failed to update tool state: {err}");
                     }
                 }
             }
@@ -2695,8 +2726,9 @@ impl Modde {
                 let context = self.current_tool_game_context();
                 self.tool_state.active_operations.insert(id.clone());
                 self.status_message = "Activating OptiScaler...".to_string();
+                let db = self.db.clone();
                 return Task::perform(
-                    apply_tool_for_game(game_id, game_dir, id.clone(), context),
+                    apply_tool_for_game(db, game_id, game_dir, id.clone(), context),
                     move |result| Message::ToolApplied {
                         tool_id: id.clone(),
                         result,
@@ -2720,8 +2752,9 @@ impl Modde {
                 };
                 self.tool_state.active_operations.insert(id.clone());
                 self.status_message = "Deactivating OptiScaler...".to_string();
+                let db = self.db.clone();
                 return Task::perform(
-                    deactivate_optiscaler_for_game(game_id, game_dir),
+                    deactivate_optiscaler_for_game(db, game_id, game_dir),
                     move |result| Message::ToolReverted {
                         tool_id: id.clone(),
                         result,
@@ -2735,8 +2768,9 @@ impl Modde {
                     return Task::none();
                 };
                 self.status_message = "Restoring tool settings...".to_string();
+                let db = self.db.clone();
                 return Task::perform(
-                    restore_tool_settings_for_game(game_id, tool_id.clone(), node_id),
+                    restore_tool_settings_for_game(db, game_id, tool_id.clone(), node_id),
                     move |result| Message::ToolSettingsRestored {
                         tool_id: tool_id.clone(),
                         result,
@@ -2775,8 +2809,9 @@ impl Modde {
                 let context = self.current_tool_game_context();
                 self.tool_state.active_operations.insert(id.clone());
                 self.status_message = format!("Applying {}...", tool.display_name());
+                let db = self.db.clone();
                 return Task::perform(
-                    apply_tool_for_game(game_id, game_dir, id.clone(), context),
+                    apply_tool_for_game(db, game_id, game_dir, id.clone(), context),
                     move |result| Message::ToolApplied {
                         tool_id: id.clone(),
                         result,
@@ -2802,8 +2837,9 @@ impl Modde {
                 };
                 self.tool_state.active_operations.insert(id.clone());
                 self.status_message = format!("Reverting {}...", tool.display_name());
+                let db = self.db.clone();
                 return Task::perform(
-                    revert_tool_for_game(game_id, game_dir, id.clone()),
+                    revert_tool_for_game(db, game_id, game_dir, id.clone()),
                     move |result| Message::ToolReverted {
                         tool_id: id.clone(),
                         result,
@@ -2918,7 +2954,10 @@ impl Modde {
                     }
                 };
                 self.status_message = format!("Saving executable '{}'...", row.name);
-                return Task::perform(save_executable_for_game(row), Message::ExecutableSaved);
+                return Task::perform(
+                    save_executable_for_game(self.db.clone(), row),
+                    Message::ExecutableSaved,
+                );
             }
             Message::ExecutableSaved(result) => match result {
                 Ok(message) => {
@@ -2941,8 +2980,9 @@ impl Modde {
                 self.tool_state
                     .active_executable_operations
                     .insert(name.clone());
+                let db = self.db.clone();
                 return Task::perform(
-                    remove_executable_for_game(game_id, name.clone()),
+                    remove_executable_for_game(db, game_id, name.clone()),
                     move |result| Message::ExecutableRemoved {
                         name: name.clone(),
                         result,
@@ -2976,8 +3016,9 @@ impl Modde {
                     .insert(name.clone());
                 self.status_message = format!("Running executable '{name}'...");
                 let profile = self.active_profile.clone();
+                let db = self.db.clone();
                 return Task::perform(
-                    run_saved_executable_for_game(game_id, name.clone(), profile),
+                    run_saved_executable_for_game(db, game_id, name.clone(), profile),
                     move |result| Message::ExecutableRunComplete {
                         name: name.clone(),
                         result,
@@ -3042,80 +3083,75 @@ impl Modde {
                     self.status_message = "Game install path is not configured".to_string();
                     return Task::none();
                 };
-                match modde_core::db::ModdeDb::open() {
-                    Ok(db) => {
-                        let typed_game_id = GameId::from(game_id.as_str());
-                        let tool = modde_games::tools::resolve_tool("optiscaler")
-                            .expect("optiscaler tool is registered");
-                        let context = self.current_tool_game_context();
-                        let mut config = db
-                            .load_tool_config(&typed_game_id, "optiscaler")
-                            .ok()
-                            .flatten()
-                            .map_or_else(
-                                || tool.default_config_for(context.as_ref()),
-                                |row| modde_games::tools::ToolConfig {
-                                    tool_id: row.tool_id,
-                                    enabled: row.enabled,
-                                    settings: serde_json::from_str(&row.settings_json)
-                                        .unwrap_or_default(),
-                                },
-                            );
-                        modde_games::tools::optiscaler::apply_game_defaults(
-                            &mut config,
-                            context.as_ref(),
+                let db = self.db.clone();
+                let typed_game_id = GameId::from(game_id.as_str());
+                let tool = modde_games::tools::resolve_tool("optiscaler")
+                    .expect("optiscaler tool is registered");
+                let context = self.current_tool_game_context();
+                let mut config =
+                    crate::app::block_on(db.load_tool_config(&typed_game_id, "optiscaler"))
+                        .ok()
+                        .flatten()
+                        .map_or_else(
+                            || tool.default_config_for(context.as_ref()),
+                            |row| modde_games::tools::ToolConfig {
+                                tool_id: row.tool_id,
+                                enabled: row.enabled,
+                                settings: serde_json::from_str(&row.settings_json)
+                                    .unwrap_or_default(),
+                            },
                         );
-                        let managed =
-                            modde_games::tools::optiscaler::managed_paths_from_config(&config);
-                        match modde_games::tools::optiscaler::scan_optiscaler_install(
-                            &game_id, &game_dir, &managed,
-                        ) {
-                            Ok(state) => {
-                                let paths = state
-                                    .recognized_files
-                                    .iter()
-                                    .map(|file| state.executable_dir.join(&file.rel_path))
-                                    .map(|path| {
-                                        path.strip_prefix(&game_dir)
-                                            .unwrap_or(&path)
-                                            .to_string_lossy()
-                                            .replace('\\', "/")
-                                    })
-                                    .collect::<Vec<_>>();
-                                let applied = modde_games::tools::AppliedFiles {
-                                    files: paths.iter().map(PathBuf::from).collect(),
-                                };
-                                config.enabled = true;
-                                config.set(
-                                    "managed_manifest",
-                                    modde_games::tools::optiscaler::managed_manifest_json(
-                                        &game_dir, &applied,
-                                    ),
-                                );
-                                let settings_json = serde_json::to_string(&config.settings)
-                                    .unwrap_or_else(|_| "{}".to_string());
-                                let _ = db.save_tool_config(
-                                    &typed_game_id,
-                                    "optiscaler",
-                                    true,
-                                    &settings_json,
-                                );
-                                let _ = db.clear_applied_files(&typed_game_id, "optiscaler");
-                                let _ = db.save_applied_files(&typed_game_id, "optiscaler", &paths);
-                                self.tool_state.active_tool_id = Some("optiscaler".to_string());
-                                self.status_message =
-                                    format!("Adopted OptiScaler ({} file(s))", paths.len());
-                                self.pending_tools_load_status_message =
-                                    Some(self.status_message.clone());
-                                return self.start_tools_load();
-                            }
-                            Err(err) => {
-                                self.status_message = format!("Failed to scan OptiScaler: {err}");
-                            }
-                        }
+                modde_games::tools::optiscaler::apply_game_defaults(&mut config, context.as_ref());
+                let managed = modde_games::tools::optiscaler::managed_paths_from_config(&config);
+                match modde_games::tools::optiscaler::scan_optiscaler_install(
+                    &game_id, &game_dir, &managed,
+                ) {
+                    Ok(state) => {
+                        let paths = state
+                            .recognized_files
+                            .iter()
+                            .map(|file| state.executable_dir.join(&file.rel_path))
+                            .map(|path| {
+                                path.strip_prefix(&game_dir)
+                                    .unwrap_or(&path)
+                                    .to_string_lossy()
+                                    .replace('\\', "/")
+                            })
+                            .collect::<Vec<_>>();
+                        let applied = modde_games::tools::AppliedFiles {
+                            files: paths.iter().map(PathBuf::from).collect(),
+                        };
+                        config.enabled = true;
+                        config.set(
+                            "managed_manifest",
+                            modde_games::tools::optiscaler::managed_manifest_json(
+                                &game_dir, &applied,
+                            ),
+                        );
+                        let settings_json = serde_json::to_string(&config.settings)
+                            .unwrap_or_else(|_| "{}".to_string());
+                        let _ = crate::app::block_on(db.save_tool_config(
+                            &typed_game_id,
+                            "optiscaler",
+                            true,
+                            &settings_json,
+                        ));
+                        let _ = crate::app::block_on(
+                            db.clear_applied_files(&typed_game_id, "optiscaler"),
+                        );
+                        let _ = crate::app::block_on(db.save_applied_files(
+                            &typed_game_id,
+                            "optiscaler",
+                            &paths,
+                        ));
+                        self.tool_state.active_tool_id = Some("optiscaler".to_string());
+                        self.status_message =
+                            format!("Adopted OptiScaler ({} file(s))", paths.len());
+                        self.pending_tools_load_status_message = Some(self.status_message.clone());
+                        return self.start_tools_load();
                     }
                     Err(err) => {
-                        self.status_message = format!("Failed to open tool database: {err}");
+                        self.status_message = format!("Failed to scan OptiScaler: {err}");
                     }
                 }
             }
@@ -3148,52 +3184,43 @@ impl Modde {
                     self.status_message = "Select a game before resetting OptiScaler".to_string();
                     return Task::none();
                 };
-                match modde_core::db::ModdeDb::open() {
-                    Ok(db) => {
-                        let typed_game_id = GameId::from(game_id.as_str());
-                        let tool = modde_games::tools::resolve_tool("optiscaler")
-                            .expect("optiscaler tool is registered");
-                        let mut config = db
-                            .load_tool_config(&typed_game_id, "optiscaler")
-                            .ok()
-                            .flatten()
-                            .map_or_else(
-                                || tool.default_config(),
-                                |row| modde_games::tools::ToolConfig {
-                                    tool_id: row.tool_id,
-                                    enabled: row.enabled,
-                                    settings: serde_json::from_str(&row.settings_json)
-                                        .unwrap_or_default(),
-                                },
-                            );
-                        if let serde_json::Value::Object(map) = &mut config.settings {
-                            map.remove("ini_overrides");
-                            map.insert("force_config_reset".to_string(), serde_json::json!(true));
-                        }
-                        let settings_json = serde_json::to_string(&config.settings)
-                            .unwrap_or_else(|_| "{}".to_string());
-                        match db.save_tool_config(
-                            &typed_game_id,
-                            "optiscaler",
-                            config.enabled,
-                            &settings_json,
-                        ) {
-                            Ok(()) => {
-                                self.tool_state.active_tool_id = Some("optiscaler".to_string());
-                                self.status_message =
-                                    "Reset OptiScaler config overrides".to_string();
-                                self.pending_tools_load_status_message =
-                                    Some(self.status_message.clone());
-                                return self.start_tools_load();
-                            }
-                            Err(err) => {
-                                self.status_message =
-                                    format!("Failed to reset OptiScaler config: {err}");
-                            }
-                        }
+                let db = self.db.clone();
+                let typed_game_id = GameId::from(game_id.as_str());
+                let tool = modde_games::tools::resolve_tool("optiscaler")
+                    .expect("optiscaler tool is registered");
+                let mut config =
+                    crate::app::block_on(db.load_tool_config(&typed_game_id, "optiscaler"))
+                        .ok()
+                        .flatten()
+                        .map_or_else(
+                            || tool.default_config(),
+                            |row| modde_games::tools::ToolConfig {
+                                tool_id: row.tool_id,
+                                enabled: row.enabled,
+                                settings: serde_json::from_str(&row.settings_json)
+                                    .unwrap_or_default(),
+                            },
+                        );
+                if let serde_json::Value::Object(map) = &mut config.settings {
+                    map.remove("ini_overrides");
+                    map.insert("force_config_reset".to_string(), serde_json::json!(true));
+                }
+                let settings_json =
+                    serde_json::to_string(&config.settings).unwrap_or_else(|_| "{}".to_string());
+                match crate::app::block_on(db.save_tool_config(
+                    &typed_game_id,
+                    "optiscaler",
+                    config.enabled,
+                    &settings_json,
+                )) {
+                    Ok(()) => {
+                        self.tool_state.active_tool_id = Some("optiscaler".to_string());
+                        self.status_message = "Reset OptiScaler config overrides".to_string();
+                        self.pending_tools_load_status_message = Some(self.status_message.clone());
+                        return self.start_tools_load();
                     }
                     Err(err) => {
-                        self.status_message = format!("Failed to open tool database: {err}");
+                        self.status_message = format!("Failed to reset OptiScaler config: {err}");
                     }
                 }
             }

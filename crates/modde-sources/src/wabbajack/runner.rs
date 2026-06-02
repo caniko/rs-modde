@@ -29,6 +29,7 @@ use crate::wabbajack::staging::{StagingStore, is_compressed_path, logical_path_f
 /// User-supplied options controlling a single Wabbajack install run.
 #[derive(Debug, Clone)]
 pub struct WabbajackInstallOptions {
+    pub db: Option<modde_core::db::ModdeDb>,
     pub path: PathBuf,
     pub profile_name: Option<String>,
     pub game_dir: Option<PathBuf>,
@@ -232,7 +233,8 @@ pub async fn install_wabbajack(
         deploy_mo2_to_game(&staging, game_dir, options.force)
             .await
             .context("failed to deploy mods to game directory")?;
-        let launcher_report = configure_wine_overrides(&game_id, game_dir, &staging)?;
+        let launcher_report =
+            configure_wine_overrides(&game_id, game_dir, &staging, options.db.as_ref()).await?;
         if !launcher_report.is_empty()
             && let Some(tx) = &launcher_progress_tx
         {
@@ -256,7 +258,12 @@ pub async fn install_wabbajack(
         });
     }
 
-    let pm = ProfileManager::open().context("failed to open profile database")?;
+    let pm = match options.db {
+        Some(db) => ProfileManager::with_db(db),
+        None => ProfileManager::open()
+            .await
+            .context("failed to open profile database")?,
+    };
     let profile = Profile {
         id: None,
         name: profile_name.clone(),
@@ -272,7 +279,7 @@ pub async fn install_wabbajack(
         })),
     };
 
-    save_profile_and_settings(&pm, &profile, options.game_dir.as_deref())?;
+    save_profile_and_settings(&pm, &profile, options.game_dir.as_deref()).await?;
 
     if let Err(e) = cache_wabbajack_file(&options.path, &manifest_hash) {
         warn!("failed to cache wabbajack source file: {e:#}");
@@ -287,12 +294,12 @@ pub async fn install_wabbajack(
     })
 }
 
-fn save_profile_and_settings(
+async fn save_profile_and_settings(
     pm: &ProfileManager,
     profile: &Profile,
     game_dir: Option<&Path>,
 ) -> Result<()> {
-    pm.create_or_update(profile)?;
+    pm.create_or_update(profile).await?;
     let mut settings = modde_core::settings::AppSettings::load();
     if let Some(gd) = game_dir {
         settings.set_game_path(&profile.game_id, gd.to_path_buf());
@@ -308,10 +315,11 @@ fn save_profile_and_settings(
 /// # Errors
 ///
 /// Returns an error if launcher configuration fails.
-pub fn configure_wine_overrides(
+pub async fn configure_wine_overrides(
     game_id: &GameId,
     game_dir: &Path,
     staging: &Path,
+    db: Option<&modde_core::db::ModdeDb>,
 ) -> Result<modde_games::launcher::LauncherConfigurationReport> {
     let mut report = modde_games::launcher::LauncherConfigurationReport::default();
     let Some(plugin) = modde_games::resolve_game_plugin(game_id.as_str()) else {
@@ -335,9 +343,17 @@ pub fn configure_wine_overrides(
         report.wine_overrides = modde_games::launcher::apply_wine_overrides(&launcher, &overrides)?;
     }
 
-    let tool_env_vars = match modde_core::db::ModdeDb::open() {
-        Ok(db) => modde_games::launcher::collect_tool_env_vars(game_id, &db).unwrap_or_default(),
-        Err(_) => Vec::new(),
+    let tool_env_vars = if let Some(db) = db {
+        modde_games::launcher::collect_tool_env_vars(game_id, db)
+            .await
+            .unwrap_or_default()
+    } else {
+        match modde_core::db::ModdeDb::open().await {
+            Ok(db) => modde_games::launcher::collect_tool_env_vars(game_id, &db)
+                .await
+                .unwrap_or_default(),
+            Err(_) => Vec::new(),
+        }
     };
 
     if let Some(wrapper) =

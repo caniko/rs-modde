@@ -420,9 +420,9 @@ pub struct ProfileManager {
 }
 
 impl ProfileManager {
-    /// Open the profile manager using the default database path.
-    pub fn open() -> Result<Self> {
-        let db = ModdeDb::open()?;
+    /// Open the profile manager using the configured database backend.
+    pub async fn open() -> Result<Self> {
+        let db = ModdeDb::open().await?;
         Ok(Self { db })
     }
 
@@ -437,43 +437,46 @@ impl ProfileManager {
     }
 
     /// List profile summaries, optionally filtered by game.
-    pub fn list(&self) -> Result<Vec<ProfileSummary>> {
-        self.db.list_profiles(None)
+    pub async fn list(&self) -> Result<Vec<ProfileSummary>> {
+        self.db.list_profiles(None).await
     }
 
     /// List profiles for a specific game.
-    pub fn list_for_game(&self, game_id: &GameId) -> Result<Vec<ProfileSummary>> {
-        self.db.list_profiles(Some(game_id))
+    pub async fn list_for_game(&self, game_id: &GameId) -> Result<Vec<ProfileSummary>> {
+        self.db.list_profiles(Some(game_id)).await
     }
 
     /// Load a profile by name. If `game_id` is None, the name must be unambiguous.
-    pub fn load(&self, name: &str, game_id: Option<&GameId>) -> Result<Profile> {
+    pub async fn load(&self, name: &str, game_id: Option<&GameId>) -> Result<Profile> {
         match game_id {
-            Some(gid) => self.db.load_profile(name, gid),
-            None => self.db.load_profile_by_name(name),
+            Some(gid) => self.db.load_profile(name, gid).await,
+            None => self.db.load_profile_by_name(name).await,
         }
     }
 
     /// Create a new profile, returning its database ID.
-    pub fn create(&self, profile: &Profile) -> Result<i64> {
+    pub async fn create(&self, profile: &Profile) -> Result<i64> {
         validate_profile_name(&profile.name)?;
-        self.db.create_profile(profile)
+        self.db.create_profile(profile).await
     }
 
     /// Update an existing profile.
-    pub fn update(&self, profile: &Profile) -> Result<()> {
-        self.db.update_profile(profile)
+    pub async fn update(&self, profile: &Profile) -> Result<()> {
+        self.db.update_profile(profile).await
     }
 
     /// Create a profile if it doesn't exist, or update it if it does.
-    pub fn create_or_update(&self, profile: &Profile) -> Result<i64> {
+    pub async fn create_or_update(&self, profile: &Profile) -> Result<i64> {
         validate_profile_name(&profile.name)?;
-        match self.db.create_profile(profile) {
+        match self.db.create_profile(profile).await {
             Ok(id) => Ok(id),
             Err(CoreError::Database(_)) => {
-                self.db.update_profile(profile)?;
+                self.db.update_profile(profile).await?;
                 // Return the existing ID
-                let loaded = self.db.load_profile(&profile.name, &profile.game_id)?;
+                let loaded = self
+                    .db
+                    .load_profile(&profile.name, &profile.game_id)
+                    .await?;
                 Ok(loaded.id.unwrap_or(0))
             }
             Err(e) => Err(e),
@@ -481,19 +484,19 @@ impl ProfileManager {
     }
 
     /// Delete a profile. If `game_id` is None, the name must be unambiguous.
-    pub fn delete(&self, name: &str, game_id: Option<&GameId>) -> Result<()> {
+    pub async fn delete(&self, name: &str, game_id: Option<&GameId>) -> Result<()> {
         if let Some(gid) = game_id {
-            self.db.delete_profile(name, gid)
+            self.db.delete_profile(name, gid).await
         } else {
             // Resolve the game_id first
-            let profile = self.db.load_profile_by_name(name)?;
-            self.db.delete_profile(name, &profile.game_id)
+            let profile = self.db.load_profile_by_name(name).await?;
+            self.db.delete_profile(name, &profile.game_id).await
         }
     }
 
     /// Import existing TOML profile files into the database.
-    pub fn import_toml(&self, profiles_dir: &Path) -> Result<usize> {
-        self.db.import_toml_profiles(profiles_dir)
+    pub async fn import_toml(&self, profiles_dir: &Path) -> Result<usize> {
+        self.db.import_toml_profiles(profiles_dir).await
     }
 
     /// Staging directory for a profile (still on-disk).
@@ -521,24 +524,25 @@ impl ProfileManager {
     ///
     /// If existing saves are detected with no active profile, returns
     /// `ActivateResult::AdoptionRequired` so the caller can prompt the user.
-    pub fn activate(
+    pub async fn activate(
         &self,
         name: &str,
         game_id: &GameId,
         save_dir: Option<&Path>,
     ) -> Result<ActivateResult> {
         self.activate_with_fingerprint(name, game_id, save_dir, None)
+            .await
     }
 
     /// Activate with an optional mod fingerprint embedded in the save capture.
-    pub fn activate_with_fingerprint(
+    pub async fn activate_with_fingerprint(
         &self,
         name: &str,
         game_id: &GameId,
         save_dir: Option<&Path>,
         fingerprint: Option<&SaveFingerprint>,
     ) -> Result<ActivateResult> {
-        let profile = self.db.load_profile(name, game_id)?;
+        let profile = self.db.load_profile(name, game_id).await?;
         let profile_id = profile
             .id
             .ok_or_else(|| CoreError::Other("profile has no database ID".into()))?;
@@ -547,18 +551,18 @@ impl ProfileManager {
             let sm = SaveManager::new(&self.db);
 
             // Check for unadopted saves
-            if let Some(count) = sm.detect_unadopted(game_id, dir)? {
+            if let Some(count) = sm.detect_unadopted(game_id, dir).await? {
                 return Ok(ActivateResult::AdoptionRequired { save_count: count });
             }
 
             // Get current active profile (if any) to capture its saves
-            let current = self.db.get_active_profile(game_id)?;
+            let current = self.db.get_active_profile(game_id).await?;
             let current_name = current.map(|(_, name)| name);
 
             sm.activate_with_fingerprint(game_id, name, current_name.as_deref(), dir, fingerprint)?;
         }
 
-        self.db.set_active_profile(game_id, profile_id)?;
+        self.db.set_active_profile(game_id, profile_id).await?;
 
         Ok(ActivateResult::Activated)
     }
@@ -567,12 +571,18 @@ impl ProfileManager {
     ///
     /// `save_dir` is the game's save directory. If `None`, save swapping is skipped.
     /// `fingerprint` is the current profile's mod fingerprint.
-    pub fn try_profile(&self, name: &str, game_id: &GameId, save_dir: Option<&Path>) -> Result<()> {
+    pub async fn try_profile(
+        &self,
+        name: &str,
+        game_id: &GameId,
+        save_dir: Option<&Path>,
+    ) -> Result<()> {
         self.try_profile_with_fingerprint(name, game_id, save_dir, None)
+            .await
     }
 
     /// Try a profile experimentally with a mod fingerprint.
-    pub fn try_profile_with_fingerprint(
+    pub async fn try_profile_with_fingerprint(
         &self,
         name: &str,
         game_id: &GameId,
@@ -581,23 +591,24 @@ impl ProfileManager {
     ) -> Result<()> {
         let (current_id, current_name) = self
             .db
-            .get_active_profile(game_id)?
+            .get_active_profile(game_id)
+            .await?
             .ok_or_else(|| CoreError::NoActiveProfile(game_id.to_string()))?;
 
-        let new_profile = self.db.load_profile(name, game_id)?;
+        let new_profile = self.db.load_profile(name, game_id).await?;
         let new_id = new_profile
             .id
             .ok_or_else(|| CoreError::Other("profile has no database ID".into()))?;
 
         // Push current profile onto experiment stack (before switching)
-        self.db.push_experiment(game_id, current_id)?;
+        self.db.push_experiment(game_id, current_id).await?;
 
         if let Some(dir) = save_dir {
             let sm = SaveManager::new(&self.db);
             sm.activate_with_fingerprint(game_id, name, Some(&current_name), dir, fingerprint)?;
         }
 
-        self.db.set_active_profile(game_id, new_id)?;
+        self.db.set_active_profile(game_id, new_id).await?;
 
         Ok(())
     }
@@ -607,12 +618,13 @@ impl ProfileManager {
     ///
     /// `save_dir` is the game's save directory. If `None`, save swapping is skipped.
     /// `fingerprint` is the current profile's mod fingerprint.
-    pub fn rollback(&self, game_id: &GameId, save_dir: Option<&Path>) -> Result<String> {
+    pub async fn rollback(&self, game_id: &GameId, save_dir: Option<&Path>) -> Result<String> {
         self.rollback_with_fingerprint(game_id, save_dir, None)
+            .await
     }
 
     /// Roll back with a mod fingerprint.
-    pub fn rollback_with_fingerprint(
+    pub async fn rollback_with_fingerprint(
         &self,
         game_id: &GameId,
         save_dir: Option<&Path>,
@@ -620,15 +632,17 @@ impl ProfileManager {
     ) -> Result<String> {
         let prev_id = self
             .db
-            .pop_experiment(game_id)?
+            .pop_experiment(game_id)
+            .await?
             .ok_or_else(|| CoreError::NotInExperiment(game_id.to_string()))?;
 
         let (_current_id, current_name) = self
             .db
-            .get_active_profile(game_id)?
+            .get_active_profile(game_id)
+            .await?
             .ok_or_else(|| CoreError::NoActiveProfile(game_id.to_string()))?;
 
-        let prev_profile = self.db.load_profile_by_id(prev_id)?;
+        let prev_profile = self.db.load_profile_by_id(prev_id).await?;
 
         if let Some(dir) = save_dir {
             let sm = SaveManager::new(&self.db);
@@ -641,30 +655,30 @@ impl ProfileManager {
             )?;
         }
 
-        self.db.set_active_profile(game_id, prev_id)?;
+        self.db.set_active_profile(game_id, prev_id).await?;
 
         Ok(prev_profile.name.clone())
     }
 
     /// Accept the current experiment, clearing the experiment stack.
-    pub fn commit(&self, game_id: &GameId) -> Result<()> {
-        let depth = self.db.experiment_depth(game_id)?;
+    pub async fn commit(&self, game_id: &GameId) -> Result<()> {
+        let depth = self.db.experiment_depth(game_id).await?;
         if depth == 0 {
             return Err(CoreError::NotInExperiment(game_id.to_string()));
         }
-        self.db.clear_experiment_stack(game_id)?;
+        self.db.clear_experiment_stack(game_id).await?;
         Ok(())
     }
 
     /// Get the currently active profile and experiment depth for a game.
-    pub fn active(&self, game_id: &GameId) -> Result<Option<ActiveProfileInfo>> {
-        let (profile_id, _name) = match self.db.get_active_profile(game_id)? {
+    pub async fn active(&self, game_id: &GameId) -> Result<Option<ActiveProfileInfo>> {
+        let (profile_id, _name) = match self.db.get_active_profile(game_id).await? {
             Some(pair) => pair,
             None => return Ok(None),
         };
 
-        let profile = self.db.load_profile_by_id(profile_id)?;
-        let experiment_depth = self.db.experiment_depth(game_id)?;
+        let profile = self.db.load_profile_by_id(profile_id).await?;
+        let experiment_depth = self.db.experiment_depth(game_id).await?;
 
         Ok(Some(ActiveProfileInfo {
             profile,
@@ -679,13 +693,14 @@ impl ProfileManager {
     /// [`Self::fork_with_options`] (or `modde profile fork --unlock`) for
     /// the "fork to diverge" workflow where the new profile starts
     /// unlocked so it can be freely reorganised.
-    pub fn fork(&self, source_name: &str, new_name: &str, game_id: &GameId) -> Result<i64> {
+    pub async fn fork(&self, source_name: &str, new_name: &str, game_id: &GameId) -> Result<i64> {
         self.fork_with_options(source_name, new_name, game_id, ForkOptions::default())
+            .await
     }
 
     /// Fork a profile with explicit control over whether the new profile
     /// inherits locks. See [`ForkOptions`] for the flags.
-    pub fn fork_with_options(
+    pub async fn fork_with_options(
         &self,
         source_name: &str,
         new_name: &str,
@@ -693,7 +708,7 @@ impl ProfileManager {
         options: ForkOptions,
     ) -> Result<i64> {
         validate_profile_name(new_name)?;
-        let source = self.db.load_profile(source_name, game_id)?;
+        let source = self.db.load_profile(source_name, game_id).await?;
 
         // Clone then optionally strip. Done in two steps so the decision
         // logic is obvious — one place to look when auditing lock flow.
@@ -717,7 +732,7 @@ impl ProfileManager {
             load_order_lock,
         };
 
-        let new_id = self.db.create_profile(&new_profile)?;
+        let new_id = self.db.create_profile(&new_profile).await?;
 
         // Fork the save branch
         SaveManager::fork_saves(game_id, source_name, new_name)?;

@@ -223,9 +223,9 @@ async fn e2e_wabbajack_source_resolve_deploy_verify() {
     };
 
     // Save and reload via DB
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
-    pm.create(&profile).unwrap();
-    let loaded = pm.load("wj_profile", None).unwrap();
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
+    pm.create(&profile).await.unwrap();
+    let loaded = pm.load("wj_profile", None).await.unwrap();
     match &loaded.source {
         ProfileSource::Wabbajack { manifest_hash } => {
             assert_eq!(manifest_hash, "abc123");
@@ -430,9 +430,9 @@ async fn e2e_deploy_then_rollback_verify() {
 
 // ── 5. Multiple profiles for same game ───────────────────────────────
 
-#[test]
-fn e2e_multiple_profiles_same_game() {
-    let mgr = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn e2e_multiple_profiles_same_game() {
+    let mgr = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     let p1 = Profile {
         id: None,
@@ -476,18 +476,24 @@ fn e2e_multiple_profiles_same_game() {
         load_order_lock: None,
     };
 
-    mgr.create(&p1).unwrap();
-    mgr.create(&p2).unwrap();
-    mgr.create(&p3).unwrap();
+    mgr.create(&p1).await.unwrap();
+    mgr.create(&p2).await.unwrap();
+    mgr.create(&p3).await.unwrap();
 
-    let mut names: Vec<String> = mgr.list().unwrap().into_iter().map(|s| s.name).collect();
+    let mut names: Vec<String> = mgr
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|s| s.name)
+        .collect();
     names.sort();
     assert_eq!(names, vec!["heavy_modded", "minimalist", "vanilla_plus"]);
 
     // Each profile resolves independently
-    let r1 = resolve(&mgr.load("vanilla_plus", None).unwrap()).unwrap();
-    let r2 = resolve(&mgr.load("heavy_modded", None).unwrap()).unwrap();
-    let r3 = resolve(&mgr.load("minimalist", None).unwrap()).unwrap();
+    let r1 = resolve(&mgr.load("vanilla_plus", None).await.unwrap()).unwrap();
+    let r2 = resolve(&mgr.load("heavy_modded", None).await.unwrap()).unwrap();
+    let r3 = resolve(&mgr.load("minimalist", None).await.unwrap()).unwrap();
     assert_eq!(r1.order.len(), 2);
     assert_eq!(r2.order.len(), 5);
     assert_eq!(r3.order.len(), 1);
@@ -664,9 +670,9 @@ fn e2e_circular_dependency_three_way() {
 
 // ── 9. Profile save/modify/save/load roundtrip ──────────────────────
 
-#[test]
-fn e2e_profile_save_modify_save_load() {
-    let pm = ProfileManager::with_db(ModdeDb::open_memory().unwrap());
+#[tokio::test]
+async fn e2e_profile_save_modify_save_load() {
+    let pm = ProfileManager::with_db(ModdeDb::open_memory().await.unwrap());
 
     // Initial profile
     let mut profile = Profile {
@@ -679,7 +685,7 @@ fn e2e_profile_save_modify_save_load() {
         load_order_rules: smallvec![],
         load_order_lock: None,
     };
-    let id = pm.create(&profile).unwrap();
+    let id = pm.create(&profile).await.unwrap();
     profile.id = Some(id);
 
     // Modify: add a mod and a rule
@@ -688,14 +694,14 @@ fn e2e_profile_save_modify_save_load() {
         mod_id: ModId::from("mod_c"),
         after: ModId::from("mod_a"),
     });
-    pm.update(&profile).unwrap();
+    pm.update(&profile).await.unwrap();
 
     // Modify again: disable mod_b
     profile.mods[1].enabled = false;
-    pm.update(&profile).unwrap();
+    pm.update(&profile).await.unwrap();
 
     // Load and verify we get the latest state
-    let loaded = pm.load("evolving", None).unwrap();
+    let loaded = pm.load("evolving", None).await.unwrap();
     assert_eq!(loaded.mods.len(), 3);
     assert!(loaded.mods[0].enabled); // mod_a
     assert!(!loaded.mods[1].enabled); // mod_b disabled

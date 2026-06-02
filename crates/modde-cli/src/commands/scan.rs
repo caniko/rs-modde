@@ -11,7 +11,7 @@ use modde_core::scanner::{
 };
 use modde_games::ScanContext;
 
-pub fn handle(
+pub async fn handle(
     game: String,
     game_dir: Option<PathBuf>,
     manifest: Option<PathBuf>,
@@ -223,10 +223,15 @@ pub fn handle(
             return Ok(());
         }
 
-        let pm = ProfileManager::open().context("failed to open profile database")?;
+        let pm = ProfileManager::open()
+            .await
+            .context("failed to open profile database")?;
 
         // Load existing profile or create a new one.
-        let mut profile = if let Ok(p) = pm.load(profile_name, Some(&GameId::from(game.as_str()))) {
+        let mut profile = if let Ok(p) = pm
+            .load(profile_name, Some(&GameId::from(game.as_str())))
+            .await
+        {
             p
         } else {
             println!("Creating new profile '{profile_name}' for game '{game}'");
@@ -333,6 +338,7 @@ pub fn handle(
         }
 
         pm.create_or_update(&profile)
+            .await
             .context("failed to save profile")?;
 
         println!(
