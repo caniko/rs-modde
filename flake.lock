@@ -229,11 +229,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1777536753,
-        "narHash": "sha256-0lLJir4zYlQ+00hMGhhSs8VbBV8oHtHOZd2OIwv7NEA=",
+        "lastModified": 1780425807,
+        "narHash": "sha256-vPrpqec/uHpOu0u4P+XdL70MWaHyn4zh8IfpCmp1yIs=",
         "owner": "caniko",
         "repo": "osxcross",
-        "rev": "25e6c510f1530d2b430da35ea6d4fda460cb5569",
+        "rev": "246fc035534167fadba187a602bc4a40990974dc",
         "type": "github"
       },
       "original": {
@@ -277,11 +277,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1780419971,
-        "narHash": "sha256-GvQL4LfVf5XAHNr5QCBOqxKRG2v4m0HfeJDZRvqHIKM=",
+        "lastModified": 1780425874,
+        "narHash": "sha256-DkzccHjrlpEX5KkM+yMh2C+camr1DHknPyE6u1hZblY=",
         "ref": "refs/heads/main",
-        "rev": "781e2422ef132ceba548435cfa449f39ca3bba5b",
-        "revCount": 52,
+        "rev": "3fc1de9241c81d147f2e36937e3efcc29712349a",
+        "revCount": 53,
         "type": "git",
         "url": "https://codeberg.org/caniko/rs-harbor.git"
       },

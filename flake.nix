@@ -255,6 +255,10 @@
         toolchainAarch64 = rs-harbor.lib.mkToolchain {pkgs = pkgsAarch64Linux;};
         craneLibAarch64 = toolchainAarch64.craneLib;
         darwinSigtool = pkgs.darwin.sigtool;
+        # Ad-hoc sign the cross-built Mach-O binaries. sigtool's `codesign`
+        # spawns `codesign_allocate`, which osxcross provides unprefixed on PATH
+        # (osxcross is in the darwin nativeBuildInputs via mkCrossBuilder), so no
+        # CODESIGN_ALLOCATE wiring is needed here.
         signDarwinBinaries = ''
           for bin in "$out"/bin/*; do
             if [ -f "$bin" ]; then
@@ -268,15 +272,6 @@
             exit 1
           '';
         darwinNativeBuildInputs = nativeBuildInputs ++ [darwinSigtool];
-        # sigtool's `codesign` (run by signDarwinBinaries in the package
-        # postInstall) spawns `codesign_allocate`, which osxcross ships only
-        # under arch-prefixed names (e.g. arm64-apple-darwin25-codesign_allocate).
-        # Point sigtool at the one matching the target via the CODESIGN_ALLOCATE
-        # env var it honours; without it the bare-name spawn fails and the build
-        # aborts at the signing step. Set on the package build only (not the deps
-        # build, which never signs) so cargoArtifacts stay cache-stable.
-        darwinCodesignAllocate = osxcrossArch:
-          "${cross.osxcrossToolchain}/bin/${osxcrossArch}-apple-${cross.osxcrossToolchain.darwinTarget}-codesign_allocate";
         darwinArgs = pname:
           commonArgs
           // lib.optionalAttrs (cross.osxcrossRustHelpers != null) cross.osxcrossRustHelpers.commonEnv
@@ -392,7 +387,6 @@
             darwinCrossBuilderX86.buildPackage (darwinX86Args
               // {
                 cargoArtifacts = darwinX86CargoArtifacts;
-                CODESIGN_ALLOCATE = darwinCodesignAllocate "x86_64";
               })
           else mkDarwinUnavailable "modde-darwin-x86_64";
         darwinArmCargoArtifacts =
@@ -405,7 +399,6 @@
             darwinCrossBuilderArm.buildPackage (darwinArmArgs
               // {
                 cargoArtifacts = darwinArmCargoArtifacts;
-                CODESIGN_ALLOCATE = darwinCodesignAllocate "arm64";
               })
           else mkDarwinUnavailable "modde-darwin-aarch64";
       in {
