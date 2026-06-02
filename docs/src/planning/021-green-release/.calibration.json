@@ -1,0 +1,218 @@
+{
+ "schema_version": 1,
+ "plan": {
+  "id": "168225ed-bd62-42ef-b611-1356e186e5a8",
+  "name": "Plan: rs-modde 0.2.1 \u2014 fully green multi-channel release",
+  "flavor": "claude",
+  "worktype": null,
+  "created_at": 1780376571,
+  "phase_count": 7,
+  "wave_count": 4,
+  "max_chain_depth": 4,
+  "repo_spread": 8,
+  "routing_dist": {
+   "high": 2,
+   "low": 1,
+   "max": 1,
+   "medium": 3
+  },
+  "shape_hash": "186bd9e8dbf41a8a368be7d3d48d4402e339c5dfc41eabb3640936cf33c3e753"
+ },
+ "triggers": [
+  {
+   "name": "shared-file-contention",
+   "input_value": 2.0,
+   "threshold": 2.0,
+   "fired": true,
+   "section_added": "Shared-file lockstep"
+  },
+  {
+   "name": "external-repo-phases",
+   "input_value": 7.0,
+   "threshold": 1.0,
+   "fired": true,
+   "section_added": "External repo coordination"
+  },
+  {
+   "name": "convergence-point",
+   "input_value": 4.0,
+   "threshold": 3.0,
+   "fired": true,
+   "section_added": "Merge-readiness checklist"
+  },
+  {
+   "name": "ownership-boundary-spread",
+   "input_value": 8.0,
+   "threshold": 2.0,
+   "fired": true,
+   "section_added": "PR sequencing & cross-owner coordination"
+  },
+  {
+   "name": "risk-concentration",
+   "input_value": 1.0,
+   "threshold": 2.0,
+   "fired": false,
+   "section_added": null
+  },
+  {
+   "name": "risk-late-in-plan",
+   "input_value": 1.0,
+   "threshold": 1.0,
+   "fired": true,
+   "section_added": "Late-risk warning"
+  },
+  {
+   "name": "infrastructure-spof",
+   "input_value": 0.0,
+   "threshold": 1.0,
+   "fired": false,
+   "section_added": null
+  },
+  {
+   "name": "revendor-phase",
+   "input_value": 0.0,
+   "threshold": 1.0,
+   "fired": false,
+   "section_added": null
+  },
+  {
+   "name": "long-serial-chain",
+   "input_value": 4.0,
+   "threshold": 4.0,
+   "fired": true,
+   "section_added": "Serial-chain recovery"
+  },
+  {
+   "name": "mid-plan-rerouting",
+   "input_value": 7.0,
+   "threshold": 10.0,
+   "fired": false,
+   "section_added": null
+  },
+  {
+   "name": "trivial-phase-swamp",
+   "input_value": 1.3333333333333333,
+   "threshold": 4.0,
+   "fired": false,
+   "section_added": null
+  },
+  {
+   "name": "no-integrated-verification",
+   "input_value": 0.0,
+   "threshold": 1.0,
+   "fired": false,
+   "section_added": null
+  },
+  {
+   "name": "routing-tier-inversion",
+   "input_value": 1.0,
+   "threshold": 1.0,
+   "fired": true,
+   "section_added": null
+  },
+  {
+   "name": "mechanical-streak",
+   "input_value": 1.0,
+   "threshold": 3.0,
+   "fired": false,
+   "section_added": null
+  },
+  {
+   "name": "hidden-prerequisite",
+   "input_value": 0.0,
+   "threshold": 1.0,
+   "fired": false,
+   "section_added": null
+  }
+ ],
+ "phases": [
+  {
+   "ordinal": 1,
+   "slug": "fix-windows-cross-build",
+   "routing_tier": "medium",
+   "files": [
+    "/data/nvme0/can/Projects/rs-modde/flake.nix` \u2014 windows build args",
+    "/data/nvme0/can/Projects/rs-modde/nix/patches/unrar-ng-sys-target-windows-cross.patch"
+   ]
+  },
+  {
+   "ordinal": 2,
+   "slug": "verify-all-cross-targets",
+   "routing_tier": "low",
+   "files": [
+    "None persistent. Only nix `result*` symlinks (gitignored) and, if step 3 uses"
+   ]
+  },
+  {
+   "ordinal": 3,
+   "slug": "diagnose-runner-teardown",
+   "routing_tier": "medium",
+   "files": [
+    "/data/nvme0/can/Projects/canix/root/hosts/atlas/server/forgejo-runners.nix",
+    "/data/nvme0/can/Projects/canix/root/modules/config/nix.nix` \u2014 only if an OOM"
+   ]
+  },
+  {
+   "ordinal": 4,
+   "slug": "audit-release-secrets",
+   "routing_tier": "medium",
+   "files": [
+    "/data/nvme0/can/Projects/canix/root/hosts/atlas/server/forgejo-runners.nix",
+    "/data/nvme0/can/Projects/canix/root/modules/server/forgejo-runner-secrets/*.nix",
+    "Codeberg repo/org **Actions secrets** (UI) \u2014 registration is out-of-repo;"
+   ]
+  },
+  {
+   "ordinal": 5,
+   "slug": "harden-simit-generator",
+   "routing_tier": "high",
+   "files": [
+    "/data/nvme0/can/Projects/rs-modde/.forgejo/workflows/release.yml",
+    "/data/nvme0/can/Projects/simit/src/render/release_workflow.rs` (+ any",
+    "/data/nvme0/can/Projects/simit/tests/*` (render fixtures, `init release"
+   ]
+  },
+  {
+   "ordinal": 6,
+   "slug": "prerelease-validation",
+   "routing_tier": "high",
+   "files": [
+    "/data/nvme0/can/Projects/rs-modde` \u2014 tags only (and, if a generator bug is",
+    "CHANGELOG.md` \u2014 an rc section if the validate-tag check requires one for the"
+   ]
+  },
+  {
+   "ordinal": 7,
+   "slug": "real-release",
+   "routing_tier": "max",
+   "files": [
+    "/data/nvme0/can/Projects/rs-modde` \u2014 tags only (and, if a generator bug"
+   ]
+  }
+ ],
+ "meta_heuristics_fired": [
+  "threshold-proximity",
+  "high-stakes-combo"
+ ],
+ "tags": {
+  "flavor": "claude",
+  "risk": "high",
+  "scope": "cross-org"
+ },
+ "verify": {
+  "verified_at": 1780383232,
+  "elapsed_seconds": null,
+  "outcome": "partial",
+  "phase_outcomes": {
+   "1": "passed",
+   "2": "skipped",
+   "3": "passed",
+   "4": "skipped",
+   "5": "skipped",
+   "6": "skipped",
+   "7": "skipped"
+  },
+  "emergency_changes": null,
+  "surprises": "P1 passed LOCALLY and genuinely (not a cache mirage): both modde-windows (zyx8pf) and the modde-windows-DEPS output (vmy32ll, the exact buildDepsOnly drv that failed in run 198) are signed 'ultimate' = built from source on this machine; unrar compiled, no PowrProf.h. No flake change was needed (user correctly stopped, no commit). missed-signal/risk: UNEXPLAINED local-vs-CI drv divergence. flake.nix+flake.lock are byte-identical at 8a042f1 (run 198, FAILED windows) and 69e23df (current, BUILDS); modde.spec (CI-rewritten) and release.yml are NOT in the crane fileset, so source is identical too \u2014 yet the deps drv hash differs (local 4481p2 vs run198 bfsqwh7). So local windows success does NOT prove the atlas release will build windows. The blocker is retired LOCALLY but must be re-confirmed ON ATLAS (Phase 02 build-only dispatch and/or the Phase 06 prerelease run) before trusting the real release. P3 passed (host reboot teardown, OOM ruled out). 1,2,4,5,6,7 pending/not-executed; 5 optional."
+ }
+}
