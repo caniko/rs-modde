@@ -1384,6 +1384,7 @@
               nix build .#modde-windows --out-link windows-result
               mkdir -p release/windows-x86_64
               cp windows-result/bin/modde.exe windows-result/bin/modde-ui.exe release/windows-x86_64/
+              if [ -f windows-result/bin/libmcfgthread-2.dll ]; then cp windows-result/bin/libmcfgthread-2.dll release/windows-x86_64/; fi
               # Windows tar.gz/zip and individual signed .exe assets are produced
               # by the Authenticode signing step, after the .exe files are signed.
 

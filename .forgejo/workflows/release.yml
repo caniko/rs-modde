@@ -46,13 +46,14 @@ jobs:
     runs-on: atlas-nix-trusted
     enable-openid-connect: true
     env:
-      NIX_CONFIG: "experimental-features = nix-command flakes"
+      NIX_CONFIG: |
+        experimental-features = nix-command flakes
+        accept-flake-config = true
       XDG_CACHE_HOME: "/tmp/.cache"
     steps:
       - uses: https://code.forgejo.org/actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Validate tag
         run: |
           set -euo pipefail
@@ -78,11 +79,13 @@ jobs:
 
           IS_PRERELEASE=false
           if printf '%s\n' "$VERSION" | grep -Eq -- '-(rc|beta|alpha)\.[0-9]+$'; then IS_PRERELEASE=true; fi
-          { printf 'VERSION=%s\n' "$VERSION"; printf 'IS_PRERELEASE=%s\n' "$IS_PRERELEASE"; } > release-env
 
           GNUPGHOME="$(mktemp -d)"; export GNUPGHOME; chmod 700 "$GNUPGHOME"
           gpg --batch --import "$tag_worktree/keys/maintainers.gpg"
           git verify-tag "$VERSION"
+          validated_sha="$(git -C "$tag_worktree" rev-parse HEAD)"
+          git checkout --detach "$validated_sha"
+          { printf 'VERSION=%s\n' "$VERSION"; printf 'IS_PRERELEASE=%s\n' "$IS_PRERELEASE"; } > release-env
       - name: Rewrite modde.spec Version
         run: |
           . ./release-env
@@ -125,6 +128,7 @@ jobs:
         run: |
           set -euo pipefail
           . ./release-env
+          export VERSION IS_PRERELEASE
           mkdir -p release
           copy_nix_binary() {
             result_dir="$1"; binary="$2"; destination="$3"
