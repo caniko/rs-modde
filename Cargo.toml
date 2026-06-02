@@ -132,8 +132,12 @@ sqlx = { version = "0.8", default-features = false, features = [
   "sqlite",
 ] }
 
-# Git
-git2 = "0.20"
+# Git — local repository operations only (snapshot save/restore in
+# modde-core). default-features=false drops the `ssh`+`https` transports,
+# which otherwise pull libssh2-sys + openssl-sys; on the apple-darwin cross
+# target (darwinArgs.buildInputs=[]) openssl-sys has no OpenSSL to link and
+# fails. modde makes zero network git calls, so the transports are dead weight.
+git2 = { version = "0.20", default-features = false }
 
 # Image processing
 image = "0.25"
