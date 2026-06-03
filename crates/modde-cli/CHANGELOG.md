@@ -5,13 +5,18 @@ changelog is the authoritative release history.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-03
+
 ### Added
 
-- Homebrew tap publication support is tracked at the workspace release level.
+- `modde config show` and `modde config set-database` for inspecting and
+  setting the database backend.
+- Async database dispatch for CLI commands that read or write profile, mod,
+  save, tool, and diagnostics data.
 
 ### Changed
 
-- Release CI Homebrew tap generation is tracked at the workspace release level.
+- Release workflow changes are tracked in the workspace changelog.
 
 ## [0.2.0] - 2026-05-19
 

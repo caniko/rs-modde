@@ -10,11 +10,6 @@ on:
       - "*.*.*"
   workflow_dispatch:
     inputs:
-      version:
-        description: "Existing release tag to publish without moving the tag."
-        required: false
-        default: ""
-        type: string
       force_publish:
         description: "Bypass release smoke checks and continue publishing."
         required: false
@@ -43,8 +38,7 @@ jobs:
       - name: Validate signed release tag
         run: |
           set -euo pipefail
-          tag="${{ inputs.version }}"
-          if [ -z "$tag" ]; then tag="${GITHUB_REF_NAME:-${FORGE_REF_NAME:-${CODEBERG_REF_NAME:-}}}"; fi
+          tag="${GITHUB_REF_NAME:-${FORGE_REF_NAME:-${CODEBERG_REF_NAME:-}}}"
           if [ -z "$tag" ]; then
             ref="${GITHUB_REF:-${FORGE_REF:-${CODEBERG_REF:-}}}"
             tag="${ref#refs/tags/}"
@@ -54,8 +48,6 @@ jobs:
             echo "Tag must be an exact semver version like 0.1.1, got '$tag'" >&2
             exit 1
           fi
-          git fetch --force --tags origin "refs/tags/${tag}:refs/tags/${tag}"
-          git checkout --detach "$tag"
 
           # cargo pkgid scopes the version lookup to the crate this workflow publishes.
           version="$(nix develop -c cargo pkgid -p modde-sources | awk -F'[#@]' '{print $NF}')"
@@ -83,6 +75,7 @@ jobs:
           trap 'rm -rf "$GNUPGHOME"' EXIT
           chmod 700 "$GNUPGHOME"
           gpg --batch --import keys/maintainers.gpg
+          git fetch --force --tags origin "refs/tags/${tag}:refs/tags/${tag}"
           git verify-tag "$tag"
 
       - name: Check flake
@@ -91,11 +84,11 @@ jobs:
       - name: Test
         run: nix develop -c cargo test -p modde-sources
 
-      - name: Check cargo-deny
-        run: nix shell nixpkgs#cargo-deny -c cargo-deny --version
+      - name: Install cargo-deny
+        run: nix develop -c cargo install cargo-deny --locked --version 0.18.3
 
       - name: Deny dependency policy
-        run: nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#cargo-deny -c cargo deny check bans licenses sources
+        run: nix develop -c cargo deny check bans licenses sources
 
       - name: Clippy
         run: nix develop -c cargo clippy -p modde-sources --all-targets -- --deny warnings
@@ -109,8 +102,7 @@ jobs:
         run: |
           set -euo pipefail
           crate_name='modde-sources'
-          version="${{ inputs.version }}"
-          if [ -z "$version" ]; then version="${GITHUB_REF_NAME:-${FORGE_REF_NAME:-${CODEBERG_REF_NAME:-}}}"; fi
+          version="${GITHUB_REF_NAME:-${FORGE_REF_NAME:-${CODEBERG_REF_NAME:-}}}"
           if [ -z "$version" ]; then
             ref="${GITHUB_REF:-${FORGE_REF:-${CODEBERG_REF:-}}}"
             version="${ref#refs/tags/}"

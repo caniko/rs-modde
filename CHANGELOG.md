@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-03
+
+### Added
+
+- **Core/CLI**: Added an async SQLx-backed database layer with SQLite by
+  default, optional PostgreSQL support, migrations, parity tests, and
+  `modde config` commands for inspecting and setting the database backend.
+- **Release ops**: Added reusable `nix run .#sign-release` and
+  `nix run .#verify-release` minisign helpers for local/CI release-signature
+  parity.
+
+### Changed
+
+- **GUI**: Moved profile, tool, and settings writes off the iced render thread
+  so UI update handlers dispatch database work asynchronously.
+- **Release ops**: Regenerated simit-managed crate CI/publish workflows and
+  added the generated pre-commit hook module.
+- **Release ops**: Renamed the Debian/Ubuntu APT publication repository from
+  `caniko/rs-modde-apt` to `caniko/apt-modde`.
+
+### Fixed
+
+- **Release ops**: Hardened Codeberg release dispatch and publish workflows so
+  artifact builds run from the validated signed tag and keep the dispatch target
+  on `trunk`.
+- **Builds**: Fixed Windows release builds and macOS cross-builds, including
+  sandboxed SDK wiring, OpenSSL-free local git usage, and osxcross
+  `codesign_allocate` handling.
+
 ## [0.2.1] - 2026-05-31
 
 ### Added
@@ -60,5 +89,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Diagnostics**: Form 43 detection, missing master detection, shadowed mod detection, load order validation
 - **Nix**: Flake with binary, docs, and website outputs; home-manager module for declarative configuration
 
-[Unreleased]: https://codeberg.org/caniko/rs-modde/compare/0.2.1...HEAD
+[Unreleased]: https://codeberg.org/caniko/rs-modde/compare/0.3.0...HEAD
+[0.3.0]: https://codeberg.org/caniko/rs-modde/compare/0.2.1...0.3.0
 [0.2.1]: https://codeberg.org/caniko/rs-modde/compare/0.2.0...0.2.1

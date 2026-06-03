@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build a signed apt repository tree from release/*.deb and push it to
-# caniko/rs-modde-apt over SSH for Codeberg Pages serving.
+# caniko/apt-modde over SSH for Codeberg Pages serving.
 #
 # The script is idempotent for a given tag: rebuilding the same set of .deb
 # files re-creates the same Packages/Release files (modulo Release timestamps).
@@ -12,12 +12,12 @@
 #   APT_REPO_GPG_KEY_ID       long-form key id or fingerprint that reprepro
 #                             references via SignWith (e.g. D18B...E408)
 #   APT_REPO_SSH_KEY          ed25519 private key with write deploy-key access
-#                             to caniko/rs-modde-apt
+#                             to caniko/apt-modde
 #
 # Optional:
 #   APT_REPO_GPG_PASSPHRASE   if the apt key is password-protected
 #   APT_REPO_REMOTE           git remote URL override for local testing
-#                             (default: rs-modde-apt on Codeberg over SSH)
+#                             (default: apt-modde on Codeberg over SSH)
 #   APT_REPO_BRANCH           branch override for local testing
 #                             (default: pages)
 #
@@ -34,7 +34,7 @@
 set -euo pipefail
 
 VERSION="${VERSION:?VERSION must be set to the release tag}"
-APT_REPO_REMOTE="${APT_REPO_REMOTE:-ssh://git@codeberg.org/caniko/rs-modde-apt.git}"
+APT_REPO_REMOTE="${APT_REPO_REMOTE:-ssh://git@codeberg.org/caniko/apt-modde.git}"
 APT_REPO_BRANCH="${APT_REPO_BRANCH:-pages}"
 
 # --- soft gates: any missing piece is a clean skip, not a failure ---

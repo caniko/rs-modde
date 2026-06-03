@@ -170,13 +170,13 @@ compromised.
 ### APT Repository Push Key
 
 APT repository publication uses a per-repository ed25519 SSH deploy key on
-`caniko/rs-modde-apt`, not a Codeberg access token. The private key is stored as
+`caniko/apt-modde`, not a Codeberg access token. The private key is stored as
 the canix-managed `modde_apt_repo_ssh_key` runner credential and is exposed to
 release CI as `APT_REPO_SSH_KEY`; the matching public key is registered on
-`caniko/rs-modde-apt` with write access. To rotate the push credential, generate
+`caniko/apt-modde` with write access. To rotate the push credential, generate
 a fresh ed25519 key pair, store the private half as the `modde_apt_repo_ssh_key`
 canix runner credential (surfaced to CI as `APT_REPO_SSH_KEY`), and register the
-new public half as a write-access deploy key on `caniko/rs-modde-apt`.
+new public half as a write-access deploy key on `caniko/apt-modde`.
 
 ## Windows Code Signing
 

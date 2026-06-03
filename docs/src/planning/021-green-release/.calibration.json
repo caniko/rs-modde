@@ -200,7 +200,7 @@
   "scope": "cross-org"
  },
  "verify": {
-  "verified_at": 1780383232,
+  "verified_at": 1780432414,
   "elapsed_seconds": null,
   "outcome": "partial",
   "phase_outcomes": {
@@ -208,11 +208,11 @@
    "2": "skipped",
    "3": "passed",
    "4": "skipped",
-   "5": "skipped",
+   "5": "passed",
    "6": "skipped",
    "7": "skipped"
   },
   "emergency_changes": null,
-  "surprises": "P1 passed LOCALLY and genuinely (not a cache mirage): both modde-windows (zyx8pf) and the modde-windows-DEPS output (vmy32ll, the exact buildDepsOnly drv that failed in run 198) are signed 'ultimate' = built from source on this machine; unrar compiled, no PowrProf.h. No flake change was needed (user correctly stopped, no commit). missed-signal/risk: UNEXPLAINED local-vs-CI drv divergence. flake.nix+flake.lock are byte-identical at 8a042f1 (run 198, FAILED windows) and 69e23df (current, BUILDS); modde.spec (CI-rewritten) and release.yml are NOT in the crane fileset, so source is identical too \u2014 yet the deps drv hash differs (local 4481p2 vs run198 bfsqwh7). So local windows success does NOT prove the atlas release will build windows. The blocker is retired LOCALLY but must be re-confirmed ON ATLAS (Phase 02 build-only dispatch and/or the Phase 06 prerelease run) before trusting the real release. P3 passed (host reboot teardown, OOM ruled out). 1,2,4,5,6,7 pending/not-executed; 5 optional."
+  "surprises": "PLAN OUTPACED BY EXECUTION: HEAD 69e23df->49f19ee (8 commits: sqlx DB backend 2b87e5c, darwin fix f61afb9, hardened+regenerated release.yml 300b587, minisign binding 2a9762a, modde-ui render-thread). Tree clean; db/ refactor now COMMITTED (explains last verify's drv-churn). P1 passed: modde-windows builds from-source at HEAD 49f19ee (ultimate) WITH the new sqlx backend \u2014 the sqlx-windows cross-compile risk I flagged is RETIRED. P3 passed: run-199 = host reboot teardown. P5 passed: release.yml has accept-flake-config=true + checks out validated_sha before build (parity); simit --check not re-run by me. UPDATE (bg rebuild done): all 6 Linux-buildable targets confirmed green from-source at HEAD 49f19ee (modde, aarch64-linux, windows, appimage-cli, appimage-ui, flatpak-manifest \u2014 all ultimate). P2 still NOT passed: only because (a) darwin x86_64/aarch64 not realized locally at HEAD (f61afb9 verified aarch64 at that commit; HEAD moved) and (b) criterion#2 (proven ON ATLAS) unmet \u2014 latest CI run is still 199, nothing on atlas. P4 partial (canix wiring commits, no complete mapping/verify). P6/P7 not started (no -rc tag). missed-signal: plan treated darwin local-fail as permanent and scope as frozen at 0.2.1 fixes; execution fixed darwin and added a sqlx DB backend (scope widening). no dead-weight."
  }
 }

@@ -1,11 +1,11 @@
 //! Persistent storage for modde, backed by `SQLite` (default) or `PostgreSQL`.
 //!
 //! The public [`ModdeDb`] API is identical across both backends and async
-//! throughout. Each method is written once against the [`backend::Db`] executor
+//! throughout. Each method is written once against the internal `Db` executor
 //! using portable SQL (`?` placeholders, `RETURNING id`, `ON CONFLICT … DO
 //! UPDATE … EXCLUDED`, `lower(name)`, `bool` columns, and a `{NOW}` token);
 //! the executor rewrites placeholders/`now()` per dialect. The only genuinely
-//! per-backend code is schema creation/migration in [`migrate`].
+//! per-backend code is schema creation and migration.
 
 mod backend;
 mod migrate;

@@ -174,7 +174,7 @@ release should treat such a skip as a release blocker for that channel.
 | Nix flake / home-manager | flake outputs | n/a (consumed directly from the repo) | Live |
 | Attic cache | `https://attic.candee.baby/canix` | always | Live |
 | Fedora COPR | SRPM upload | always; prereleases land in `caniko/rs-modde-testing` | Wired, not publicly discoverable |
-| Debian/Ubuntu APT | `.deb` via reprepro pushed to `caniko/rs-modde-apt` | stable only; `modde_apt_repo_ssh_key` | Staged, host not provisioned |
+| Debian/Ubuntu APT | `.deb` via reprepro pushed to `caniko/apt-modde` | stable only; `modde_apt_repo_ssh_key` | Staged, host not provisioned |
 | Arch AUR | `modde`, `modde-bin`, `modde-git` PKGBUILDs | stable only; `AUR_SSH_KEY` | Staged, not pushed |
 | Flathub | `com.tartanoglu.modde` manifest PR | stable only; `FLATHUB_TOKEN` | Staged, submission not accepted |
 | crates.io | per-crate `cargo publish` | stable only | Stable-only |
@@ -198,7 +198,7 @@ Channel notes worth remembering across releases:
   winget and Scoop, which do not accept `.tar.gz`. The Scoop `hash` matches the
   downloaded `.zip`, not the binaries inside it.
 - **APT publishes over SSH**, not an HTTPS token: the runner pushes a
-  reprepro-built tree to the `pages` branch of `caniko/rs-modde-apt` using the
+  reprepro-built tree to the `pages` branch of `caniko/apt-modde` using the
   `modde_apt_repo_ssh_key` deploy key (write access), pinning `codeberg.org`'s
   host key and using `--force-with-lease`. The repository signing key
   fingerprint and key-rotation procedure are documented in

@@ -385,7 +385,7 @@ pub(super) struct ToolLoadRequest {
 /// Owned, off-thread-computed result of (re)loading the profile + data-tab +
 /// tool context for a game/profile pair.
 ///
-/// Built by [`super::model::load_profile_context`] on a blocking task and
+/// Built by `load_profile_context` on a blocking task and
 /// applied synchronously by `Modde::apply_profile_context`, so the iced event
 /// loop never blocks on the multi-query profile reload that
 /// `reload_profile`/`switch_game_context` used to perform inline.

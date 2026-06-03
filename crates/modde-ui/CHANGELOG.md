@@ -5,13 +5,16 @@ changelog is the authoritative release history.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-03
+
 ### Added
 
-- Homebrew tap publication support is tracked at the workspace release level.
+- Async profile and tool write operations backed by the shared database handle.
 
 ### Changed
 
-- Release CI Homebrew tap generation is tracked at the workspace release level.
+- Profile, tool, and settings writes now run off the iced render thread.
+- Release workflow changes are tracked in the workspace changelog.
 
 ## [0.2.0] - 2026-05-19
 

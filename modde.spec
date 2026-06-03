@@ -1,7 +1,7 @@
 %global crate modde
 
 Name:           modde
-Version:        0.2.1
+Version:        0.3.0
 Release:        1%{?dist}
 Summary:        Cross-platform game mod manager
 

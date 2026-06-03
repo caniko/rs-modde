@@ -338,7 +338,7 @@ jobs:
           APT_REPO_GPG_KEY_ID: ${{ secrets.modde_apt_repo_gpg_key_id }}
           APT_REPO_GPG_PASSPHRASE: ${{ secrets.modde_apt_repo_gpg_passphrase }}
           APT_REPO_SSH_KEY: ${{ secrets.modde_apt_repo_ssh_key }}
-          APT_REPO_REMOTE: ssh://git@codeberg.org/caniko/rs-modde-apt.git
+          APT_REPO_REMOTE: ssh://git@codeberg.org/caniko/apt-modde.git
           APT_REPO_BRANCH: pages
           APT_DISTRIBUTION: stable
         run: |

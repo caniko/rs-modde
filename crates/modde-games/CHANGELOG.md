@@ -5,13 +5,15 @@ changelog is the authoritative release history.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-03
+
 ### Added
 
-- Homebrew tap publication support is tracked at the workspace release level.
+- Release workflow changes are tracked in the workspace changelog.
 
 ### Changed
 
-- Release CI Homebrew tap generation is tracked at the workspace release level.
+- Launcher integration was updated for the async database backend.
 
 ## [0.2.0] - 2026-05-19
 

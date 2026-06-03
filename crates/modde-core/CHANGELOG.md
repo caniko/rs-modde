@@ -5,13 +5,18 @@ changelog is the authoritative release history.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-03
+
 ### Added
 
-- Homebrew tap publication support is tracked at the workspace release level.
+- Async SQLx-backed database layer with SQLite by default and optional
+  PostgreSQL support.
+- Database migrations and PostgreSQL parity coverage for profile, mod, save,
+  settings, tool, and deployment flows.
 
 ### Changed
 
-- Release CI Homebrew tap generation is tracked at the workspace release level.
+- Release workflow changes are tracked in the workspace changelog.
 
 ## [0.2.0] - 2026-05-19
 

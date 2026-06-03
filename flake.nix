@@ -1535,7 +1535,7 @@
           project = "caniko/rs-modde";
         };
         apt = {
-          repo_url = "ssh://git@codeberg.org/caniko/rs-modde-apt.git";
+          repo_url = "ssh://git@codeberg.org/caniko/apt-modde.git";
           label = "modde";
           # cargo-target=deb-name (cargo-deb names the file after [metadata.deb].name)
           packages = ["modde-cli=modde" "modde-ui=modde-ui"];
