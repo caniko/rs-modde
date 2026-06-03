@@ -66,11 +66,18 @@ assets = [
 [lints]
 workspace = true
 
+[features]
+# Headless offscreen screenshot CLI support. Non-default so release binaries
+# carry zero extra weight. Pulls iced_test (the dual-backend tiny-skia renderer)
+# in as a normal dependency only when enabled.
+screenshot = ["dep:iced_test"]
+
 [dependencies]
 modde-core = { workspace = true }
 modde-sources = { workspace = true }
 modde-games = { workspace = true }
 iced = { version = "0.14", features = ["tokio", "image", "svg", "advanced"] }
+iced_test = { version = "0.14", optional = true }
 tokio = { workspace = true }
 futures = { workspace = true }
 anyhow = { workspace = true }

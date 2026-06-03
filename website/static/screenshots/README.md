@@ -1,9 +1,20 @@
-# Screenshot Placeholders
+# Screenshots
 
-This directory is reserved for future website screenshots.
+These images are generated headlessly and reproducibly from modde itself —
+no GPU, display, or manual capture needed — via the `screenshot` cargo feature:
 
-The landing page currently references these placeholder slots:
+```sh
+modde dev screenshot --all --out website/static/screenshots
+# or one screen at a time:
+modde dev screenshot --screen mod-list --out website/static/screenshots/mod-list.png
+```
 
-- `mod-list.png`
-- `download-queue.gif`
-- `fomod-wizard.png`
+(Build with `cargo run -p modde-cli --features screenshot -- dev screenshot ...`.)
+
+Served at `https://modde.tartanoglu.com/screenshots/` and referenced by the landing page and
+by `dist/com.tartanoglu.modde.metainfo.xml` (Flathub/AppStream). Regenerate
+whenever the UI changes:
+
+- `mod-list.png` — active profile's mod list
+- `downloads.png` — download queue (`downloads` screen)
+- `fomod-wizard.png` — FOMOD installer wizard

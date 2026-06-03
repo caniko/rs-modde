@@ -60,6 +60,9 @@ assets = [
 default = ["rar"]
 rar = ["modde-sources/rar"]
 heap-profile = []
+# Hidden `modde dev screenshot` command for headless GUI asset capture.
+# Non-default; enables the modde-ui headless screenshot backend.
+screenshot = ["modde-ui/screenshot"]
 remote-telemetry = [
   "dep:detritus",
   "dep:detritus-protocol",

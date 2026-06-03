@@ -345,6 +345,22 @@ impl Modde {
         }
     }
 
+    /// Crate-internal accessor for the headless screenshot backend, which
+    /// lives in the sibling `crate::screenshot` module and so cannot reach
+    /// `view()`/`theme()` directly. Only compiled with the `screenshot`
+    /// feature so the default build is unaffected.
+    #[cfg(feature = "screenshot")]
+    pub(crate) fn render_root(&self) -> Element<'_, Message> {
+        self.view()
+    }
+
+    /// Crate-internal accessor for the active `iced::Theme`. See
+    /// [`Self::render_root`].
+    #[cfg(feature = "screenshot")]
+    pub(crate) fn active_theme(&self) -> Theme {
+        self.theme()
+    }
+
     /// Subscribe to external refresh signals from the CLI.
     ///
     /// We bind a Unix domain socket at [`modde_core::ipc::socket_path`]

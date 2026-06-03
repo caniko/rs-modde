@@ -292,6 +292,59 @@ enum DevAction {
         #[arg(long, default_value = "nix/tool-schema.nix")]
         out: PathBuf,
     },
+    /// Render a GUI screen headlessly (offscreen, no GPU/display) to a PNG.
+    ///
+    /// Used to generate Flathub / website assets and for future CI
+    /// automation. Run with `ICED_BACKEND=tiny-skia` for determinism.
+    #[cfg(feature = "screenshot")]
+    #[command(hide = true)]
+    Screenshot {
+        /// Which screen to render (ignored when `--all` is set).
+        #[arg(long, value_enum, default_value_t = ScreenArg::ModList)]
+        screen: ScreenArg,
+        /// Output PNG path. With `--all`, this is the output *directory*
+        /// (each screen written as `<dir>/<screen>.png`).
+        #[arg(long, default_value = "screenshot.png")]
+        out: PathBuf,
+        /// Render every screen into the `--out` directory.
+        #[arg(long)]
+        all: bool,
+        /// Logical window width in points.
+        #[arg(long, default_value_t = 1280.0)]
+        width: f32,
+        /// Logical window height in points.
+        #[arg(long, default_value_t = 800.0)]
+        height: f32,
+        /// HiDPI scale factor (2.0 = crisp).
+        #[arg(long, default_value_t = 2.0)]
+        scale: f32,
+        /// modde theme name (Dark, Light, Dracula, Nord, ...).
+        #[arg(long, default_value = "Dark")]
+        theme: String,
+    },
+}
+
+#[cfg(feature = "screenshot")]
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum ScreenArg {
+    ModList,
+    Downloads,
+    FomodWizard,
+    Tools,
+    BrowseNexus,
+}
+
+#[cfg(feature = "screenshot")]
+impl From<ScreenArg> for modde_ui::screenshot::Screen {
+    fn from(value: ScreenArg) -> Self {
+        match value {
+            ScreenArg::ModList => modde_ui::screenshot::Screen::ModList,
+            ScreenArg::Downloads => modde_ui::screenshot::Screen::Downloads,
+            ScreenArg::FomodWizard => modde_ui::screenshot::Screen::FomodWizard,
+            ScreenArg::Tools => modde_ui::screenshot::Screen::Tools,
+            ScreenArg::BrowseNexus => modde_ui::screenshot::Screen::BrowseNexus,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -1363,6 +1416,37 @@ fn run_command(cli: Cli) -> Result<()> {
         Commands::Dev {
             action: DevAction::ExportToolSchema { out },
         } => return commands::nix_schema::handle_export(&out),
+        #[cfg(feature = "screenshot")]
+        Commands::Dev {
+            action:
+                DevAction::Screenshot {
+                    screen,
+                    out,
+                    all,
+                    width,
+                    height,
+                    scale,
+                    theme,
+                },
+        } => {
+            let opts = modde_ui::screenshot::ShotOptions {
+                width,
+                height,
+                scale,
+                theme,
+            };
+            if all {
+                for shot in modde_ui::screenshot::all_screens() {
+                    let path = out.join(format!("{}.png", shot.as_str()));
+                    modde_ui::screenshot::capture_to_png(*shot, &opts, &path)?;
+                    println!("wrote {}", path.display());
+                }
+            } else {
+                modde_ui::screenshot::capture_to_png(screen.into(), &opts, &out)?;
+                println!("wrote {}", out.display());
+            }
+            return Ok(());
+        }
         Commands::Config { action } => {
             return match action {
                 ConfigAction::Show => commands::config::handle_show(),
