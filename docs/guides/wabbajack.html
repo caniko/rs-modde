@@ -1,0 +1,608 @@
+<!DOCTYPE HTML>
+<html lang="en" class="coal sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Wabbajack modlists - modde Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Documentation for modde — a NixOS-native, Linux-first game mod manager.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "coal";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex-ed74f3b0.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-4ac01a02.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('coal')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">modde Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde/_edit/trunk/docs/src/guides/wabbajack.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                            <span class=fa-svg id="git-edit-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M421.7 220.3l-11.3 11.3-22.6 22.6-205 205c-6.6 6.6-14.8 11.5-23.8 14.1L30.8 511c-8.4 2.5-17.5 .2-23.7-6.1S-1.5 489.7 1 481.2L38.7 353.1c2.6-9 7.5-17.2 14.1-23.8l205-205 22.6-22.6 11.3-11.3 33.9 33.9 62.1 62.1 33.9 33.9zM96 353.9l-9.3 9.3c-.9 .9-1.6 2.1-2 3.4l-25.3 86 86-25.3c1.3-.4 2.5-1.1 3.4-2l9.3-9.3H112c-8.8 0-16-7.2-16-16V353.9zM453.3 19.3l39.4 39.4c25 25 25 65.5 0 90.5l-14.5 14.5-22.6 22.6-11.3 11.3-33.9-33.9-62.1-62.1L314.3 67.7l11.3-11.3 22.6-22.6 14.5-14.5c25-25 65.5-25 90.5 0z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="wabbajack-modlists"><a class="header" href="#wabbajack-modlists">Wabbajack Modlists</a></h1>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p><a href="https://www.wabbajack.org/">Wabbajack</a> is a modlist installer originally built
+for Windows. A <code>.wabbajack</code> file is a recipe — not a bundle of mods — that
+records exactly which archives to download from the internet and exactly how to
+reconstruct a curated mod setup from them. modde reads that recipe and replays
+it <strong>natively on Linux</strong>: no Windows VM, no Wine-hosted Wabbajack client, no
+<code>.NET</code> runtime. modde parses the manifest, resolves and verifies every download,
+applies binary patches, repacks Bethesda archives, and stages the result, all in
+Rust.</p>
+<p>This means a <code>.wabbajack</code> list authored on Windows installs the same way a
+NixOS user expects any other package to install: content-addressed, hash-verified,
+resumable, and reproducible.</p>
+<h2 id="how-it-works"><a class="header" href="#how-it-works">How it works</a></h2>
+<p>A <code>.wabbajack</code> file is a ZIP archive. Inside it is a single JSON <strong>manifest</strong>
+(named <code>modlist</code> or <code>*.json</code>) plus inline patch/data blobs. modde reads the
+manifest into a <a href="https://codeberg.org/caniko/rs-modde"><code>WabbajackManifest</code></a>
+with two top-level lists:</p>
+<ul>
+<li><strong><code>Archives</code></strong> — every external file the list needs, each identified by its
+Wabbajack hash (an xxHash64 stored as little-endian base64), its size, and a
+source <code>State</code> describing where to fetch it.</li>
+<li><strong><code>Directives</code></strong> — the ordered list of operations that turn downloaded
+archives plus inline data into the final mod layout.</li>
+</ul>
+<p>modde converts the raw archives into typed <strong>download directives</strong> and the raw
+directives into typed <strong>install directives</strong>, then drives them through a
+pipeline: download/verify → resumable staging → apply directives → optional
+BSA/BA2 repack → validate → deploy.</p>
+<p>modde does not install Steam or Heroic games; install the game with its launcher
+first, then point <code>gameDir</code> at the installed game directory.</p>
+<h3 id="archive-sources-download-directives"><a class="header" href="#archive-sources-download-directives">Archive sources (download directives)</a></h3>
+<p>Each <code>Archive</code> carries a <code>State</code> whose <code>$type</code> selects a downloader. modde maps
+them to typed download directives:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Wabbajack <code>State</code></th><th>modde directive</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>NexusDownloader</code></td><td><code>Nexus</code></td><td>Resolved via the Nexus API (game domain + mod id + file id). Requires an API key.</td></tr>
+<tr><td><code>WabbajackCDNDownloader</code></td><td><code>WabbajackCdn</code></td><td>Authored-files / generated-output archives hosted on Wabbajack’s CDN.</td></tr>
+<tr><td><code>GitHubDownloader</code></td><td><code>GitHub</code></td><td>Release asset by <code>user/repo</code>, tag, and asset name.</td></tr>
+<tr><td><code>GoogleDriveDownloader</code></td><td><code>GoogleDrive</code></td><td>By Drive file id.</td></tr>
+<tr><td><code>MegaDownloader</code></td><td><code>Mega</code></td><td>By MEGA URL.</td></tr>
+<tr><td><code>MediaFireDownloader</code></td><td><code>MediaFire</code></td><td>By MediaFire URL. The MediaFire download backend resolves the real file.</td></tr>
+<tr><td><code>HttpDownloader</code></td><td><code>DirectURL</code></td><td>Plain HTTP(S) with optional headers.</td></tr>
+<tr><td><code>ModDBDownloader</code></td><td><code>DirectURL</code></td><td>Direct URL plus a ModDB HTML mirror resolver that follows the <code>/downloads/start/&lt;id&gt;/all</code> mirror page.</td></tr>
+<tr><td><code>ManualDownloader</code></td><td><code>Manual</code></td><td>A site (workupload, sharemods, LoversLab, …) that needs a human to click through. modde cannot fetch these unattended.</td></tr>
+<tr><td><code>GameFileSourceDownloader</code></td><td><em>(not a download)</em></td><td>Points at a file inside the <strong>local game install</strong>, not the internet. See <a href="#gamefilesource-vanilla-game-files">game-file sources</a>.</td></tr>
+</tbody>
+</table>
+</div>
+<p>Every download is verified against its manifest hash before it is trusted. modde
+never substitutes a similarly named file — the hash is the only safe identity for
+an archive.</p>
+<h3 id="install-directives"><a class="header" href="#install-directives">Install directives</a></h3>
+<p>modde supports the full set of directives a typical Bethesda/MO2 modlist uses.
+Each directive writes into the MO2-style staging layout (<code>mods/&lt;Mod Name&gt;/…</code>)
+before deployment.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Directive</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td><strong><code>FromArchive</code></strong></td><td>Extract one file out of a source archive (identified by <code>ArchiveHashPath = [hash, inner/path]</code>) and place it at the <code>To</code> path. The bread-and-butter directive — most files in a list are <code>FromArchive</code>.</td></tr>
+<tr><td><strong><code>PatchedFromArchive</code></strong></td><td>Extract a basis file from an archive, then apply an <strong>OctoDiff</strong> binary delta patch (<code>PatchID</code>) to reconstruct a modified file. Used when a list ships a small edit to a large vanilla/mod file rather than redistributing it. modde applies the <code>OCTODELTA</code> patch in pure Rust with bounds and output-size checks, and verifies the patched output against the directive’s expected <code>Hash</code>.</td></tr>
+<tr><td><strong><code>InlineFile</code></strong></td><td>Write a file whose bytes are stored inline in the <code>.wabbajack</code> (by <code>SourceDataID</code>). Used for small generated/config files.</td></tr>
+<tr><td><strong><code>RemappedInlineFile</code></strong></td><td>Like <code>InlineFile</code>, but with path-remapping applied by the author. modde treats it identically to <code>InlineFile</code> for placement and verifies its expected <code>Hash</code>.</td></tr>
+<tr><td><strong><code>CreateBSA</code></strong> / BA2 repack</td><td>Reconstruct a Bethesda archive from a set of <code>FileStates</code>. modde repacks the staged loose files into a real <code>.bsa</code> (Skyrim, magic <code>BSA\0</code>, SSE version 105) or <code>.ba2</code> (Fallout 4, magic <code>BTDX</code>/<code>GNRL</code>), computing the Bethesda/BA2 name hashes the games expect. The output format is chosen from the <code>To</code> extension.</td></tr>
+<tr><td><strong>Manual</strong> (<code>ManualDownloader</code> archive)</td><td>Not a directive type, but the corresponding archive must be human-fetched (see <a href="#missing-authored-and-manual-archives">missing archives</a>).</td></tr>
+<tr><td><strong><code>GameFileSource</code></strong></td><td>Archives sourced from vanilla game files (see below). The directives that consume them are ordinary <code>FromArchive</code>/<code>PatchedFromArchive</code>.</td></tr>
+</tbody>
+</table>
+</div>
+<p>Directives that read from a single source archive are <strong>grouped per archive</strong> so
+each downloaded archive is opened once, all of its outputs (extractions and
+patches) are produced together, and the archive can then be released or pruned.
+This keeps memory and I/O bounded even for lists with thousands of directives.</p>
+<p>Unknown / unsupported directive <code>$type</code>s parse as <code>Unknown</code> and are surfaced as
+hard blockers by <a href="#assessing-readiness"><code>modde wabbajack assess</code></a> rather than
+being silently skipped.</p>
+<h3 id="gamefilesource-vanilla-game-files"><a class="header" href="#gamefilesource-vanilla-game-files">GameFileSource: vanilla game files</a></h3>
+<p>Some lists reference files that ship with the base game instead of downloading
+them. Wabbajack records these as <code>GameFileSourceDownloader</code> archives that name a
+game-relative path (e.g. <code>Data\Skyrim.esm</code>). These entries are <strong>not downloads</strong> —
+modde reads and verifies them straight out of your installed game directory.</p>
+<p>For example, several Skyrim SE lists (including <em>Legends of the Frost</em>) carry
+<code>GameFileSourceDownloader</code> entries. Pass <code>--game-dir</code> (CLI) or set <code>gameDir</code>
+(Home Manager) so modde can locate and hash those files. If a list has
+game-file sources and no game directory is provided, the install is blocked
+until you point it at the install.</p>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<ul>
+<li><strong>A Nexus Mods API key</strong> — required for every <code>NexusDownloader</code> archive (the
+bulk of most lists). See <a href="nexus.html">Nexus integration</a>.</li>
+<li><strong>The base game installed</strong> — install it via Steam/Heroic first; modde does
+not install games.</li>
+<li><strong>The game install path</strong> for lists that reference vanilla files
+(<code>GameFileSourceDownloader</code>) — supply <code>--game-dir</code> / <code>gameDir</code>.</li>
+<li><strong>Sufficient disk space</strong> — you need room for the downloaded archives <strong>and</strong>
+the staged/deployed output simultaneously. Large Bethesda lists routinely need
+hundreds of gigabytes. Staging compresses eligible files (see
+<a href="#resumable-zstd-staging">resumable zstd staging</a>) to soften this, but plan for
+the full footprint.</li>
+</ul>
+<h2 id="declarative-installation-home-manager"><a class="header" href="#declarative-installation-home-manager">Declarative installation (Home Manager)</a></h2>
+<pre><code class="language-nix">programs.modde = {
+  enable = true;
+  nexus.apiKeyFile = "/run/secrets/nexus-api-key";
+
+  profiles.my-modlist = {
+    game = "skyrim-se";
+    installMode = "auto";
+    gameDir = "/home/me/.local/share/Steam/steamapps/common/Skyrim Special Edition";
+    wabbajackList = {
+      url = "https://example.com/modlist.wabbajack";
+      hash = "sha256-...";
+    };
+  };
+};
+</code></pre>
+<p>If the modlist is already available locally, for example through
+<code>pkgs.requireFile</code> or a custom fetcher, use <code>path</code> instead of <code>url</code> and <code>hash</code>:</p>
+<pre><code class="language-nix">programs.modde.profiles.my-modlist = {
+  game = "skyrim-se";
+  gameDir = "/home/me/.local/share/Steam/steamapps/common/Skyrim Special Edition";
+  wabbajackList = {
+    path = /nix/store/...-Legends-of-the-Frost.wabbajack;
+  };
+};
+</code></pre>
+<p>Use <code>installMode = "await-game"</code> while the game is not installed yet. Activation
+will skip install/deploy and print the next step instead of failing.</p>
+<h2 id="cli-installation"><a class="header" href="#cli-installation">CLI installation</a></h2>
+<pre><code class="language-bash">modde install wabbajack /path/to/modlist.wabbajack \
+  --profile my-modlist \
+  --game-dir "/home/me/.local/share/Steam/steamapps/common/Skyrim Special Edition"
+</code></pre>
+<p>Wabbajack registry pages usually link through to an authored-files URL for the
+actual <code>.wabbajack</code> archive. Some authored-files CDN links now resolve through
+Wabbajack’s chunked download page instead of a plain file response, so
+<code>pkgs.fetchurl</code> may 404 even when modde’s chunk-aware downloader works. In that
+case, download the file with <code>modde wabbajack download</code> and use
+<code>wabbajackList.path</code>, or use a dedicated fetcher that reconstructs the chunks.</p>
+<h3 id="the-full-modde-install-wabbajack-flag-set"><a class="header" href="#the-full-modde-install-wabbajack-flag-set">The full <code>modde install wabbajack</code> flag set</a></h3>
+<pre><code class="language-bash">modde install wabbajack &lt;PATH&gt; [flags]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Default</th><th>Effect</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--profile &lt;name&gt;</code></td><td>derived from list</td><td>Target profile to create/update.</td></tr>
+<tr><td><code>--game-dir &lt;path&gt;</code></td><td>auto-detect</td><td>Game install to deploy into and to read <code>GameFileSource</code> files from.</td></tr>
+<tr><td><code>--force</code></td><td>off</td><td>Force a full reinstall, skipping the preflight short-circuit (the cheap existence check that lets an already-staged list skip straight to deploy).</td></tr>
+<tr><td><code>--no-deploy</code></td><td>off</td><td>Stage into modde’s data directory but <strong>skip the final copy into <code>--game-dir</code></strong>. Ideal for Stock-Game lists that must not write into the live install, and for staging a list before the game is even present.</td></tr>
+<tr><td><code>--continue-on-error</code></td><td>off</td><td>Log per-archive failures (download errors, missing files, broken upstream links) and keep going instead of aborting. Lets you drop manually-fetched archives in and re-run to fill the gaps.</td></tr>
+<tr><td><code>--reset-staging</code></td><td>off</td><td>Explicitly discard existing staging before installing. By default modde <strong>resumes</strong> compatible staging and <strong>adopts</strong> incompatible-but-present staging without deleting it (see below).</td></tr>
+<tr><td><code>--skip-validate</code></td><td>off</td><td>Skip post-staging hash validation before deploy. Faster, but you forfeit the safety net.</td></tr>
+<tr><td><code>--missing-archive-policy &lt;p&gt;</code></td><td><code>fail</code></td><td>What to do when downloadable manual/Nexus archives are missing. One of <code>fail</code>, <code>omit-files</code>, <code>omit-mods</code> (see below).</td></tr>
+<tr><td><code>--archive-retention &lt;p&gt;</code></td><td><code>keep</code></td><td>Source-archive retention after a batch is integrated: <code>keep</code>, <code>prune-applied</code>, or <code>auto</code>.</td></tr>
+<tr><td><code>--diagnostics-dir &lt;path&gt;</code></td><td>none</td><td>Write apply diagnostics (heartbeat + per-batch JSONL) here for later analysis.</td></tr>
+<tr><td><code>--diagnostics-interval &lt;s&gt;</code></td><td><code>30</code></td><td>Diagnostics heartbeat interval in seconds.</td></tr>
+<tr><td><code>--stall-warn-seconds &lt;s&gt;</code></td><td><code>600</code></td><td>Warn when apply makes no batch/sentinel progress for this long.</td></tr>
+<tr><td><code>--stall-abort-seconds &lt;s&gt;</code></td><td><code>1800</code></td><td>Abort when stalled this long <em>and</em> cgroup memory/swap are saturated.</td></tr>
+<tr><td><code>--acquire-missing</code></td><td>off</td><td>Frontload assisted acquisition of missing manual archives before applying.</td></tr>
+<tr><td><code>--no-acquire-missing</code></td><td>off</td><td>Disable the automatic frontloaded acquisition pass entirely.</td></tr>
+<tr><td><code>--acquire-download-dir &lt;path&gt;</code></td><td>data dir</td><td>Browser download directory to watch during assisted acquisition.</td></tr>
+<tr><td><code>--acquire-include-nexus</code></td><td>off</td><td>Also attempt to acquire missing <strong>Nexus</strong> archives during the frontload pass.</td></tr>
+<tr><td><code>--acquire-browser-controller</code></td><td>off</td><td>Drive controlled Chromium tabs (with a managed profile and auto-download prefs) for acquisition instead of just opening the system browser.</td></tr>
+<tr><td><code>--acquire-timeout &lt;s&gt;</code></td><td><code>900</code></td><td>Per-archive assisted-acquisition timeout in seconds.</td></tr>
+</tbody>
+</table>
+</div>
+<h4 id="--missing-archive-policy"><a class="header" href="#--missing-archive-policy"><code>--missing-archive-policy</code></a></h4>
+<p>When optional manual/Nexus archives cannot be obtained, this controls how far
+the install proceeds:</p>
+<ul>
+<li><strong><code>fail</code></strong> <em>(default)</em> — abort before bulk work; print every missing archive
+with a validation command. Safest: you get a complete list back, not a
+partial install.</li>
+<li><strong><code>omit-files</code></strong> — skip only the directives that depend on a missing archive
+(plus any downstream <code>CreateBSA</code> that consumed those files). Everything else
+installs.</li>
+<li><strong><code>omit-mods</code></strong> — skip the entire MO2 mod root (<code>mods/&lt;Mod Name&gt;/…</code>) that any
+missing archive feeds, so you never end up with a half-populated mod folder.</li>
+</ul>
+<p>Use <a href="#assessing-readiness"><code>modde wabbajack missing-impact</code></a> first to see exactly
+which mods each policy would drop.</p>
+<h4 id="--archive-retention"><a class="header" href="#--archive-retention"><code>--archive-retention</code></a></h4>
+<p>After modde finishes integrating an archive’s batch of directives it can free
+the downloaded source file:</p>
+<ul>
+<li><strong><code>keep</code></strong> <em>(default)</em> — keep all source archives (fastest re-runs; most disk).</li>
+<li><strong><code>prune-applied</code></strong> — delete each source archive once its batch is fully
+applied. <code>GameFileSource</code>-backed archives are never pruned (they live in your
+game install, not the store).</li>
+<li><strong><code>auto</code></strong> — prune small single-use archives but keep large or multi-directive
+archives that are likely to be re-read, balancing disk against re-extraction
+cost.</li>
+</ul>
+<h4 id="acquiring-missing-archives-during-install"><a class="header" href="#acquiring-missing-archives-during-install">Acquiring missing archives during install</a></h4>
+<p>Unless <code>--no-acquire-missing</code> is set, <code>modde install wabbajack</code> runs an
+assisted-acquisition frontload pass before applying directives. For each missing
+manual archive it first tries a direct download; if the source needs a human
+(login, captcha, mirror selection) it opens the page in your browser (or, with
+<code>--acquire-browser-controller</code>, in managed Chromium tabs configured to
+auto-download into the watched directory) and waits for a matching file to land,
+importing it only when its hash matches. With <code>--acquire-include-nexus</code> it also
+resolves Nexus archives via the API. If acquisition leaves archives unresolved
+and the policy is <code>fail</code>, the install stops with the exact list of what is still
+missing.</p>
+<h2 id="assessing-readiness"><a class="header" href="#assessing-readiness">Assessing readiness</a></h2>
+<p>For large lists, do not start blind. The <code>modde wabbajack</code> subcommands inspect a
+<code>.wabbajack</code> (and your store) <strong>without mutating anything</strong> so you can fix
+problems before committing hours of downloading.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Command</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>modde wabbajack assess &lt;list&gt;</code></td><td>Full readiness report: archive/directive type histograms, downloadable vs store-present counts, missing archives with remediation, manual-download list, game-file-source presence (<code>--game-dir</code>), staging layout action (create/resume/adopt), RAR support, and <strong>hard blockers</strong> vs <strong>warnings</strong>. Exits non-zero if any hard blocker exists. Supports <code>--profile</code>, <code>--game-dir</code>, <code>--json</code>.</td></tr>
+<tr><td><code>modde wabbajack missing-impact &lt;list&gt;</code></td><td>Which downloadable archives are missing and <em>what they block</em>: directly blocked directives + output bytes, affected <code>CreateBSA</code> outputs, and the <code>omit-mods</code> blast radius. <code>--json</code> for machines; <code>--nix-snippet</code> prints a Home Manager <code>manualArchives</code> block to fill in.</td></tr>
+<tr><td><code>modde wabbajack manual-links &lt;list&gt;</code></td><td>Just the manual-download URLs (workupload / sharemods / LoversLab) that require an operator visit, with the store path each file must end up at.</td></tr>
+<tr><td><code>modde wabbajack acquire-missing &lt;list&gt;</code></td><td>Run the assisted-acquisition flow standalone (direct → browser → controlled Chromium), importing only hash-matching downloads. Flags: <code>--download-dir</code>, <code>--include-nexus</code>, <code>--browser-controller</code>, <code>--timeout</code>, <code>--json</code>.</td></tr>
+<tr><td><code>modde wabbajack import-archive &lt;list&gt; &lt;files…&gt;</code></td><td>Import already-downloaded archives into the store by hashing them and matching against the manifest (see below).</td></tr>
+<tr><td><code>modde wabbajack analyze-diagnostics &lt;dir&gt;</code></td><td>Summarize a previous run’s <code>--diagnostics-dir</code> JSONL: heartbeats, last phase, max idle, peak RSS/swap/cgroup memory, and the ten slowest archive batches with per-phase timings. The tool you reach for when a run stalled or thrashed.</td></tr>
+</tbody>
+</table>
+</div>
+<p>A typical pre-flight is:</p>
+<pre><code class="language-bash">modde wabbajack assess /path/to/list.wabbajack \
+  --game-dir "/path/to/game" --profile my-modlist
+modde wabbajack missing-impact /path/to/list.wabbajack
+</code></pre>
+<p>If <code>assess</code> reports only warnings (no hard blockers) you are ready for a
+validated staged deploy. If it reports missing archives but no hard blockers, it
+will tell you a partial staging is possible with
+<code>install wabbajack --no-deploy --continue-on-error --skip-validate</code>.</p>
+<h2 id="resumable-zstd-staging"><a class="header" href="#resumable-zstd-staging">Resumable zstd staging</a></h2>
+<p>Wabbajack installs are long. modde stages into a versioned, <strong>resumable</strong> layout
+so an interrupted run picks up where it left off instead of starting over.</p>
+<ul>
+<li><strong>Layout versioning</strong> — staging records a <code>staging-layout.json</code> describing the
+layout version and compression policy. On the next run modde compares it:
+<ul>
+<li>matching → <strong>resume</strong> (reuse staged work);</li>
+<li>present but incompatible → <strong>adopt</strong> in place (keep files, rewrite the
+layout marker) — it does <em>not</em> delete your work;</li>
+<li>absent → <strong>create</strong> fresh.
+<code>--reset-staging</code> (or <code>assess</code>’s <code>adopt</code> notice) is the only thing that
+deletes staging.</li>
+</ul>
+</li>
+<li><strong>Per-archive and per-BSA sentinels</strong> — completed archive batches and
+<code>CreateBSA</code> outputs drop sentinel files so a resumed run skips finished work.
+<code>assess</code> reports <code>archive sentinels: X/Y</code> and <code>BSA sentinels: X/Y</code> so you can
+see how far a previous run got.</li>
+<li><strong>Transparent zstd compression</strong> — large, compressible staged files (textures,
+meshes, audio blobs) are stored zstd-compressed with a <code>.modde-zst</code> suffix.
+modde resolves, hashes, and materializes logical paths regardless of whether a
+file is plain or compressed, so validation and deploy are oblivious to it.
+Files that compress poorly or must stay byte-exact are <strong>never</strong> compressed:
+plugins (<code>.esp</code>/<code>.esm</code>/<code>.esl</code>), executables and DLLs, config formats
+(<code>.ini</code>/<code>.json</code>/<code>.toml</code>/<code>.yaml</code>/<code>.xml</code>/…), MO2 metadata (<code>meta.ini</code>/<code>meta.json</code>),
+BSA temp-build files, and anything under the staging <code>_state</code> directory. The
+size threshold and compression level are tunable with the <code>MODDE_ZSTD_MIN_BYTES</code>
+and <code>MODDE_ZSTD_LEVEL</code> environment variables (level is clamped to 1–22).</li>
+<li><strong>Post-staging validation</strong> — before deploy (unless <code>--skip-validate</code>), modde
+re-hashes every expected file against the manifest. <code>InlineFile</code>,
+<code>RemappedInlineFile</code>, and <code>PatchedFromArchive</code> carry expected output hashes and
+are fully verified; <code>FromArchive</code> outputs are existence-checked (the manifest
+does not carry a post-extraction hash for them). Validation accepts both xxHash64
+and xxh3 digests and reads compressed staged files transparently.</li>
+</ul>
+<h2 id="missing-authored-and-manual-archives"><a class="header" href="#missing-authored-and-manual-archives">Missing authored and manual archives</a></h2>
+<p>Some Wabbajack modlists reference generated authored-files archives hosted by
+Wabbajack, or manual-download archives behind a site that needs a human. If those
+upstream entries disappear, modde fails before bulk downloads (under the default
+<code>fail</code> policy) and prints every missing archive plus a <code>curl -fI</code> validation
+command. modde will not substitute similarly named files because the manifest
+hash is the only safe identity for an archive.</p>
+<p>If you already have the exact missing archives in an old Wabbajack cache or a
+backup, import them into the modde store:</p>
+<pre><code class="language-bash">modde wabbajack import-archive /path/to/list.wabbajack \
+  /path/to/missing-archive-1.7z \
+  /path/to/missing-archive-2.7z
+</code></pre>
+<p>The import command hashes each file and imports only archives whose Wabbajack
+hash matches an archive referenced by the manifest. It classifies each input as:</p>
+<ul>
+<li><strong>imported</strong> — hash matched a referenced archive; hard-linked (or copied) into
+the store and re-verified;</li>
+<li><strong>already-present</strong> — the store already holds a verified copy;</li>
+<li><strong>mismatched</strong> — the <em>filename</em> matches a manifest archive but the bytes do
+not (refused; this is the dangerous case the hash check catches);</li>
+<li><strong>unused</strong> — the file’s hash is not referenced by this manifest at all.</li>
+</ul>
+<p>Mismatched and unused inputs are reported and <strong>not</strong> imported, and the command
+exits non-zero if it refused anything.</p>
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<h3 id="hash-mismatches-and-the-nix-prefetch-trick"><a class="header" href="#hash-mismatches-and-the-nix-prefetch-trick">Hash mismatches (and the <code>nix prefetch</code> trick)</a></h3>
+<p>Every archive and every patched/inline output is hash-verified. A mismatch means
+the bytes you have are not the bytes the list was built against — never force it
+through, because a single wrong file can corrupt the whole load order silently.</p>
+<ul>
+<li>For a missing/wrong <strong><code>.wabbajack</code> file itself</strong> fetched declaratively, recompute
+the Nix hash with <code>nix store prefetch-file &lt;url&gt;</code> (or <code>nix-prefetch-url</code>) and
+paste the reported <code>sha256-…</code> into <code>wabbajackList.hash</code>. A <code>hash mismatch</code>
+during the Home Manager build almost always means the URL now serves a
+different (or chunk-wrapped) body — see the chunked-download note above.</li>
+<li>For a missing/wrong <strong>archive inside the list</strong>, use
+<code>modde wabbajack assess</code> / <code>missing-impact</code> to identify it by Wabbajack hash,
+obtain the exact file (correct mod/file id on Nexus, or the original manual
+source), and <code>import-archive</code> it. The import refuses anything whose hash does
+not match, so you cannot accidentally poison the store.</li>
+<li>A <strong>post-staging validation mismatch</strong> points at a bad source archive or a
+failed patch. Re-run with <code>--reset-staging</code> for the affected list after fixing
+the offending input; a corrupt compressed staged file (<code>.modde-zst</code>) is caught
+by validation and re-extracted on the next run.</li>
+</ul>
+<h3 id="missing-authored--manual-archives"><a class="header" href="#missing-authored--manual-archives">Missing authored / manual archives</a></h3>
+<p>If <code>assess</code> lists manual archives, run <code>modde wabbajack manual-links</code> to get the
+exact URLs and target store paths, fetch them by hand (or with
+<code>acquire-missing --browser-controller</code>), and <code>import-archive</code> them. If an
+authored-files archive has truly vanished upstream and you have no backup, you
+cannot reproduce that exact file — switch the install to <code>--missing-archive-policy omit-mods</code> to drop just the affected mods, after reviewing the
+<code>missing-impact</code> blast radius.</p>
+<h3 id="stalls-and-thrash"><a class="header" href="#stalls-and-thrash">Stalls and thrash</a></h3>
+<p>Very large lists can appear to hang during archive verification/extraction.</p>
+<ul>
+<li>Run with <code>--diagnostics-dir &lt;dir&gt;</code>; afterward (or on another terminal against a
+prior run) use <code>modde wabbajack analyze-diagnostics &lt;dir&gt;</code> to see the last
+phase, max idle time, peak memory/swap, and the slowest batches. A
+<code>bottleneck: archive trust/download verification wall before extraction</code> line
+means the time is going into hashing, not a true hang.</li>
+<li><code>--stall-warn-seconds</code> surfaces a warning when no batch/sentinel progress
+happens for a while; <code>--stall-abort-seconds</code> aborts only when stalled <em>and</em>
+cgroup memory/swap are saturated (genuine thrash) so a slow-but-progressing run
+is never killed prematurely.</li>
+<li>If memory is the constraint, set <code>--archive-retention auto</code> (or
+<code>prune-applied</code>) to free integrated archives, and lower <code>MODDE_ZSTD_LEVEL</code> to
+reduce compression CPU.</li>
+<li>An interrupted run is safe to resume — just re-run the same command. modde
+resumes compatible staging and skips finished archive/BSA sentinels.</li>
+</ul>
+<h2 id="migrating-an-existing-on-disk-install"><a class="header" href="#migrating-an-existing-on-disk-install">Migrating an existing on-disk install</a></h2>
+<p>If you already deployed a Wabbajack list (on Windows, or a prior run) and want
+modde to <em>track</em> it without reinstalling, scan the game directory and match it
+against the manifest instead. See <a href="scanning.html">Mod scanning</a> for
+<code>modde scan --manifest …</code>, threshold tuning, and duplicate pruning.</p>
+<h2 id="supported-games"><a class="header" href="#supported-games">Supported games</a></h2>
+<p>Not all Wabbajack games are supported yet. See the <a href="../games/supported-games.html#wabbajack-game-mapping">Wabbajack game mapping</a>
+for the current list.</p>
+<h2 id="see-also"><a class="header" href="#see-also">See also</a></h2>
+<ul>
+<li><a href="scanning.html">Mod scanning</a> — track an already-installed list via manifest matching</li>
+<li><a href="nexus.html">Nexus integration</a> — API key setup and download resolution</li>
+<li><a href="deployment.html">Deployment</a> — how staged mods reach the game directory</li>
+<li><a href="profiles.html">Profiles</a> — load-order locks applied by Wabbajack installs</li>
+<li><a href="troubleshooting.html">Troubleshooting</a> — general install/runtime issues</li>
+<li><a href="../games/supported-games.html">Supported games</a> — game coverage and Wabbajack mapping</li>
+<li><a href="../reference/cli.html">CLI reference</a> — every flag, generated from the binary</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../guides/nexus.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../guides/downloads.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../guides/nexus.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../guides/downloads.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,456 @@
+<!DOCTYPE HTML>
+<html lang="en" class="coal sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Your first profile - modde Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Documentation for modde — a NixOS-native, Linux-first game mod manager.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "coal";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex-ed74f3b0.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-4ac01a02.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('coal')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">modde Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde/_edit/trunk/docs/src/getting-started/first-profile.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                            <span class=fa-svg id="git-edit-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M421.7 220.3l-11.3 11.3-22.6 22.6-205 205c-6.6 6.6-14.8 11.5-23.8 14.1L30.8 511c-8.4 2.5-17.5 .2-23.7-6.1S-1.5 489.7 1 481.2L38.7 353.1c2.6-9 7.5-17.2 14.1-23.8l205-205 22.6-22.6 11.3-11.3 33.9 33.9 62.1 62.1 33.9 33.9zM96 353.9l-9.3 9.3c-.9 .9-1.6 2.1-2 3.4l-25.3 86 86-25.3c1.3-.4 2.5-1.1 3.4-2l9.3-9.3H112c-8.8 0-16-7.2-16-16V353.9zM453.3 19.3l39.4 39.4c25 25 25 65.5 0 90.5l-14.5 14.5-22.6 22.6-11.3 11.3-33.9-33.9-62.1-62.1L314.3 67.7l11.3-11.3 22.6-22.6 14.5-14.5c25-25 65.5-25 90.5 0z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="your-first-profile"><a class="header" href="#your-first-profile">Your first profile</a></h1>
+<p>This walkthrough takes you from a fresh modde install to a deployed, playable
+Skyrim Special Edition profile with a couple of mods, all from the command line.
+The commands are identical on Linux, macOS, and Windows, and every one uses the
+<code>skyrim-se</code> game id. If you use Nix and prefer the declarative home-manager
+workflow, see the <a href="quick-start.html">Quick Start</a>; this page is the imperative
+tour for newcomers.</p>
+<p>By the end you will have:</p>
+<ul>
+<li>modde installed and a Nexus key configured</li>
+<li>Skyrim SE detected</li>
+<li>a profile named <code>first-run</code></li>
+<li>two mods installed (one plain Nexus mod, one with a FOMOD installer)</li>
+<li>a conflict report you understand</li>
+<li>the profile deployed into the game directory</li>
+<li>the game launched and a save captured into the vault</li>
+</ul>
+<h2 id="0-before-you-start"><a class="header" href="#0-before-you-start">0. Before you start</a></h2>
+<p>modde never installs the base game. Install <strong>Skyrim Special Edition</strong> through
+Steam or Heroic first and launch it once so the launcher writes its files. modde
+will detect that install in the next step.</p>
+<p>You also need a <a href="https://www.nexusmods.com/">Nexus Mods</a> account. Downloading
+mod files over CDN links requires a Nexus <strong>Premium</strong> subscription.</p>
+<h2 id="1-install-modde"><a class="header" href="#1-install-modde">1. Install modde</a></h2>
+<p>Install modde however suits your platform — a native package manager, a direct
+download, Cargo, or, if you use Nix, the flake. Every channel ships both the
+<code>modde</code> CLI and the <code>modde-ui</code> desktop app. A few examples:</p>
+<pre><code class="language-bash"># Arch Linux (AUR)
+yay -S modde-bin
+
+# Fedora / RHEL (COPR)
+sudo dnf copr enable caniko/rs-modde &amp;&amp; sudo dnf install modde modde-ui
+
+# Debian / Ubuntu (apt) — see Installation for the keyring setup
+sudo apt install modde modde-ui
+
+# macOS (Homebrew)
+brew tap caniko/modde https://codeberg.org/caniko/homebrew-modde
+brew install modde
+
+# Windows (winget)
+winget install Caniko.Modde
+
+# Any platform with Cargo (builds the CLI from source)
+cargo install modde-cli
+</code></pre>
+<p>If you use Nix, modde is also a flake — <code>nix run codeberg:caniko/rs-modde -- detect</code>
+to try it without installing, or <code>nix profile install codeberg:caniko/rs-modde</code>
+to add both binaries to your profile. The home-manager module additionally lets
+you declare your profiles as code.</p>
+<p>See <a href="installation.html">Installation</a> for the full channel list, the exact
+commands, the macOS Gatekeeper quarantine-clear step, the Windows Authenticode
+signature check, and release verification. From here on, the walkthrough assumes
+<code>modde</code> is on your <code>PATH</code>.</p>
+<h2 id="2-configure-nexus-authentication"><a class="header" href="#2-configure-nexus-authentication">2. Configure Nexus authentication</a></h2>
+<p>Save your Nexus API key to the system keyring once:</p>
+<pre><code class="language-bash">modde nexus auth
+</code></pre>
+<p>This prompts for your key and stores it securely in your OS keyring (the
+secret-service on Linux, Keychain on macOS, the Credential Manager on Windows).
+Confirm it worked — and check whether you have Premium — with:</p>
+<pre><code class="language-bash">modde nexus status
+</code></pre>
+<p>If you manage secrets declaratively, set <code>nexus.apiKeyFile</code> in home-manager
+instead. The full credential precedence (OAuth token, key file, env var,
+keyring, …) is documented in the <a href="../guides/nexus.html">Nexus Mods guide</a>.</p>
+<h2 id="3-detect-your-game"><a class="header" href="#3-detect-your-game">3. Detect your game</a></h2>
+<pre><code class="language-bash">modde detect
+</code></pre>
+<p>modde scans Steam and Heroic (GOG, Epic, Sideload) and prints every game it
+found with its id and install path. You should see a row for Skyrim Special
+Edition with the id <code>skyrim-se</code>. Copy that id; you will pass it as <code>--game</code> to
+nearly every command.</p>
+<p>If Skyrim does not appear, make sure it is installed and has been launched once.
+You can still proceed by passing paths explicitly, or register a custom game
+with <code>modde game add</code> (see <a href="../games/supported-games.html">Supported games</a>).</p>
+<h2 id="4-create-a-profile"><a class="header" href="#4-create-a-profile">4. Create a profile</a></h2>
+<p>A <strong>profile</strong> is a named, per-game collection of mods with its own load order,
+save assignments, and deployment state. Create one:</p>
+<pre><code class="language-bash">modde profile create first-run --game skyrim-se
+</code></pre>
+<p>Confirm it exists and see which profile is active:</p>
+<pre><code class="language-bash">modde profile list --game skyrim-se
+modde profile active --game skyrim-se
+</code></pre>
+<p>Profiles are cheap. Later you can fork <code>first-run</code> to experiment without risking
+your working setup — see <a href="../guides/profiles.html">Profile management</a>.</p>
+<h2 id="5-add-your-first-mod-a-plain-nexus-mod"><a class="header" href="#5-add-your-first-mod-a-plain-nexus-mod">5. Add your first mod (a plain Nexus mod)</a></h2>
+<p>Install a single mod straight from its Nexus page URL into the profile. modde
+fetches the file list, picks the latest main file, downloads it over CDN
+(Premium required), extracts it, and adds it to the profile:</p>
+<pre><code class="language-bash">modde install mod \
+  https://www.nexusmods.com/skyrimspecialedition/mods/12345 \
+  --profile first-run
+</code></pre>
+<p>Replace <code>12345</code> with the real mod id from the URL of the mod you want. A SkyUI-
+or USSEP-style utility mod is a good, low-risk first pick.</p>
+<h2 id="6-add-a-second-mod-one-with-a-fomod-installer"><a class="header" href="#6-add-a-second-mod-one-with-a-fomod-installer">6. Add a second mod (one with a FOMOD installer)</a></h2>
+<p>Many larger Skyrim mods ship a <strong>FOMOD</strong> installer that asks questions (texture
+resolution, compatibility patches, optional features). modde detects
+<code>fomod/ModuleConfig.xml</code> automatically. For a reproducible, non-interactive
+install you can record your answers in a config file first.</p>
+<p>Inspect what a mod offers without installing it:</p>
+<pre><code class="language-bash">modde fomod inspect /path/to/extracted-mod
+</code></pre>
+<p>Generate a choices template, edit it, then install with it applied:</p>
+<pre><code class="language-bash">modde fomod generate /path/to/extracted-mod --format toml &gt; my-choices.toml
+# edit my-choices.toml to pick the options you want
+
+modde install mod \
+  https://www.nexusmods.com/skyrimspecialedition/mods/67890 \
+  --profile first-run \
+  --fomod-config my-choices.toml
+</code></pre>
+<p>Your selections are saved to the profile and replayed on future deployments, so
+the result is deterministic. The <a href="../guides/fomod.html">FOMOD guide</a> covers
+generating, inspecting, and applying configs in depth.</p>
+<h2 id="7-analyze-conflicts"><a class="header" href="#7-analyze-conflicts">7. Analyze conflicts</a></h2>
+<p>Two mods that both ship the same file will collide; only one can win. modde
+resolves collisions by <strong>load order priority</strong> — the mod later in the list wins.
+Before deploying, see what overlaps:</p>
+<pre><code class="language-bash">modde collisions --profile first-run
+</code></pre>
+<p>The report groups conflicts by severity:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Level</th><th>Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td>Critical</td><td>Will cause game issues</td></tr>
+<tr><td>Major</td><td>Likely visible problems</td></tr>
+<tr><td>Cosmetic</td><td>Minor visual differences</td></tr>
+</tbody>
+</table>
+</div>
+<p>By default cosmetic conflicts are hidden; add <code>--all</code> to see them. To get
+ready-to-run commands that hide files which never win anyway:</p>
+<pre><code class="language-bash">modde collisions --profile first-run --all --suggest-hides
+</code></pre>
+<p>For a broader health check (missing masters, Form 43 plugins, and more), run:</p>
+<pre><code class="language-bash">modde diagnostics --game skyrim-se --profile first-run
+</code></pre>
+<p>For Bethesda games you can also sort plugin order with the LOOT masterlist
+(<code>modde loot sort --game skyrim-se</code>). Conflict resolution, per-file hiding, and
+plugin load order are all covered in the
+<a href="../guides/conflicts.html">Conflicts &amp; load order guide</a>.</p>
+<h2 id="8-deploy"><a class="header" href="#8-deploy">8. Deploy</a></h2>
+<p>Now build the symlink farm and link it into the game directory:</p>
+<pre><code class="language-bash">modde deploy --profile first-run --game skyrim-se
+</code></pre>
+<p>Deployment is non-destructive: it never edits your original game files, stages
+everything under <code>~/.local/share/modde/staging/first-run/</code>, and keeps the
+previous deployment in <code>staging.bak/</code> so you can <code>modde rollback</code> at any time.
+Check that deployed files match their sources with:</p>
+<pre><code class="language-bash">modde verify --profile first-run
+</code></pre>
+<p>What each phase does — Build, Materialize, Deploy — is detailed in the
+<a href="../guides/deployment.html">Deployment &amp; VFS guide</a>.</p>
+<h2 id="9-play"><a class="header" href="#9-play">9. Play</a></h2>
+<p>Launch the modded game. <code>modde play</code> switches to the profile (swapping saves),
+deploys, launches through the detected launcher, and auto-captures saves when
+the game exits:</p>
+<pre><code class="language-bash">modde play first-run --game skyrim-se
+</code></pre>
+<p>A note on launchers:</p>
+<ul>
+<li><strong>Heroic / direct launch</strong> — modde waits for the game to exit, then captures
+saves automatically.</li>
+<li><strong>Steam launch</strong> — Steam returns immediately, so modde hands save capture to
+its launch wrapper. If a save is not captured, run capture manually (next
+step).</li>
+</ul>
+<p>Skip steps with <code>--no-switch</code>, <code>--no-deploy</code>, or <code>--no-capture</code>. See
+<a href="../guides/playing.html">Playing a game</a>.</p>
+<h2 id="10-capture-a-save"><a class="header" href="#10-capture-a-save">10. Capture a save</a></h2>
+<p>modde keeps a <strong>git-backed save vault</strong> per game, with one branch per profile
+and a mod fingerprint embedded in each snapshot. After <code>modde play</code> exits, your
+save should already be captured. To capture explicitly at any point:</p>
+<pre><code class="language-bash">modde save capture --game skyrim-se --profile first-run -m "first run, level 5"
+</code></pre>
+<p>If you launched through Steam and the wrapper has not captured yet:</p>
+<pre><code class="language-bash">modde save auto-capture --game skyrim-se
+</code></pre>
+<p>Browse the history and restore an earlier snapshot when you want:</p>
+<pre><code class="language-bash">modde save history --game skyrim-se --profile first-run
+modde save restore &lt;commit-id&gt; --game skyrim-se --profile first-run
+</code></pre>
+<p>If you already had saves before setting up modde, adopt them once with
+<code>modde save adopt --game skyrim-se --profile first-run</code> so the first profile
+switch handles them cleanly. Fingerprinting, watching, and assignments are
+covered in <a href="../guides/saves.html">Save management</a>.</p>
+<h2 id="where-to-go-next"><a class="header" href="#where-to-go-next">Where to go next</a></h2>
+<p>You now have a complete, reproducible modded profile. Branch out from here:</p>
+<ul>
+<li><a href="../guides/profiles.html">Profile management</a> — fork <code>first-run</code>, lock load order,
+and use the experiment stack to try changes non-destructively</li>
+<li><a href="../guides/wabbajack.html">Wabbajack modlists</a> — install a full <code>.wabbajack</code> list
+instead of hand-picking mods</li>
+<li><a href="../guides/nexus.html">Nexus Mods</a> — Collections, the <code>nxm://</code> handler, and update
+checks</li>
+<li><a href="../guides/conflicts.html">Conflicts &amp; load order</a> — deeper conflict resolution
+and Bethesda plugin sorting</li>
+<li><a href="../guides/tools.html">Tools &amp; overlays</a> — MangoHud, ReShade, OptiScaler, Proton
+settings, and running xEdit/BodySlide with overwrite capture</li>
+<li><a href="../guides/saves.html">Save management</a> — fingerprinting, watching, and restore</li>
+</ul>
+<h2 id="see-also"><a class="header" href="#see-also">See also</a></h2>
+<ul>
+<li><a href="quick-start.html">Quick Start</a> — the same flow, condensed, plus the
+declarative home-manager path</li>
+<li><a href="installation.html">Installation</a> — install channels and verification</li>
+<li><a href="../games/supported-games.html">Supported games</a> — every shipping game id</li>
+<li><a href="../guides/deployment.html">Deployment &amp; VFS</a> — how deploy works</li>
+<li><a href="../guides/playing.html">Playing a game</a> — <code>modde play</code> reference</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../getting-started/quick-start.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../games/supported-games.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../getting-started/quick-start.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../games/supported-games.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

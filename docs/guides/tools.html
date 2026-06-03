@@ -1,0 +1,558 @@
+<!DOCTYPE HTML>
+<html lang="en" class="coal sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Tools &amp; overlays - modde Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Documentation for modde — a NixOS-native, Linux-first game mod manager.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "coal";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex-ed74f3b0.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-4ac01a02.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('coal')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">modde Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde/_edit/trunk/docs/src/guides/tools.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                            <span class=fa-svg id="git-edit-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M421.7 220.3l-11.3 11.3-22.6 22.6-205 205c-6.6 6.6-14.8 11.5-23.8 14.1L30.8 511c-8.4 2.5-17.5 .2-23.7-6.1S-1.5 489.7 1 481.2L38.7 353.1c2.6-9 7.5-17.2 14.1-23.8l205-205 22.6-22.6 11.3-11.3 33.9 33.9 62.1 62.1 33.9 33.9zM96 353.9l-9.3 9.3c-.9 .9-1.6 2.1-2 3.4l-25.3 86 86-25.3c1.3-.4 2.5-1.1 3.4-2l9.3-9.3H112c-8.8 0-16-7.2-16-16V353.9zM453.3 19.3l39.4 39.4c25 25 25 65.5 0 90.5l-14.5 14.5-22.6 22.6-11.3 11.3-33.9-33.9-62.1-62.1L314.3 67.7l11.3-11.3 22.6-22.6 14.5-14.5c25-25 65.5-25 90.5 0z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="tools--overlays"><a class="header" href="#tools--overlays">Tools &amp; Overlays</a></h1>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>modde can manage gaming tools and overlays that enhance or modify how games run: performance overlays, graphics post-processing layers, upscaling and frame-generation frameworks, performance boosters, and per-game Proton launch settings. Each tool is a per-game integration with its own enabled flag and JSON settings blob persisted in modde’s database.</p>
+<p>The current truthful scope is <strong>narrower than Mod Organizer 2’s tool management</strong> (which is why tool management is marked <strong>Partial</strong> in the <a href="../reference/parity.html">capability matrix</a>): modde manages a fixed set of six gaming tools through a uniform enable/configure/apply pipeline. It does not provide arbitrary executable-tool registration <em>inside</em> the tools panel — that lives in the separate, fully shipped <a href="executables.html">Executables &amp; external tools</a> feature.</p>
+<p>Each tool contributes one or more of the following at launch or deploy time:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Mechanism</th><th>What it does</th><th>Tools that use it</th></tr>
+</thead>
+<tbody>
+<tr><td>Environment variable</td><td>Exported into the game’s launch environment</td><td>MangoHud, vkBasalt, OptiScaler, Proton</td></tr>
+<tr><td>Wrapper command</td><td>Chained before the game executable</td><td>GameMode</td></tr>
+<tr><td>Generated config file</td><td>Written under <code>~/.local/share/modde/tools/&lt;game_id&gt;/</code></td><td>MangoHud, vkBasalt</td></tr>
+<tr><td>File patch (apply/revert)</td><td>DLLs / shaders copied into the executable directory</td><td>ReShade, OptiScaler</td></tr>
+<tr><td>Wine DLL override</td><td>Forces Wine to load the native proxy DLL</td><td>ReShade, OptiScaler, Proton</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="supported-tools"><a class="header" href="#supported-tools">Supported tools</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Tool ID</th><th>Category</th><th>Description</th><th>Linux only</th></tr>
+</thead>
+<tbody>
+<tr><td><code>mangohud</code></td><td>Overlay</td><td>Performance HUD (FPS, frame timing, CPU/GPU telemetry)</td><td>Yes</td></tr>
+<tr><td><code>vkbasalt</code></td><td>Post-Processing</td><td>Vulkan post-processing layer (CAS sharpening, FXAA, shaders)</td><td>Yes</td></tr>
+<tr><td><code>gamemode</code></td><td>Performance</td><td>Feral GameMode wrapper for system performance tuning</td><td>Yes</td></tr>
+<tr><td><code>reshade</code></td><td>Post-Processing</td><td>ReShade shader injection via proxy DLL</td><td>No (Wine/Proton)</td></tr>
+<tr><td><code>optiscaler</code></td><td>Upscaler</td><td>DLSS/FSR/XeSS upscaling and frame-generation replacement</td><td>No (Wine/Proton)</td></tr>
+<tr><td><code>proton</code></td><td>Performance</td><td>Per-game Proton, prefix, environment, and DLL-override settings</td><td>No</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="command-summary"><a class="header" href="#command-summary">Command summary</a></h2>
+<p>All tool commands take <code>--game &lt;game_id&gt;</code>. The verbs are the same across every tool, but each verb only does something for tools that implement it.</p>
+<pre><code class="language-bash"># Discovery
+modde tool list --game skyrim-se        # auto-detect known external tool executables
+modde tool status --game skyrim-se      # enabled/disabled + availability for all six tools
+
+# Lifecycle
+modde tool enable &lt;tool_id&gt;  --game skyrim-se
+modde tool disable &lt;tool_id&gt; --game skyrim-se
+modde tool configure &lt;tool_id&gt; --game skyrim-se -- key=value key=value ...
+
+# File patches (ReShade, OptiScaler)
+modde tool apply  &lt;tool_id&gt; --game skyrim-se
+modde tool revert &lt;tool_id&gt; --game skyrim-se
+
+# Release-backed tools (OptiScaler)
+modde tool releases &lt;tool_id&gt; --game skyrim-se
+modde tool install-release &lt;tool_id&gt; --game skyrim-se --tag &lt;tag&gt; --asset &lt;asset&gt;
+</code></pre>
+<p><code>configure</code> parses each <code>key=value</code> pair: <code>true</code>/<code>false</code> become booleans, anything that parses as a number becomes a number, and everything else is stored as a string. <code>enable</code> and <code>configure</code> regenerate the tool’s config file when it has one; <code>disable</code> preserves stored settings so re-enabling restores them.</p>
+<h2 id="checking-status"><a class="header" href="#checking-status">Checking status</a></h2>
+<p><code>modde tool status --game &lt;id&gt;</code> prints every tool with its category, enabled state, the number of files it has applied, and whether the underlying program is available on the system:</p>
+<pre><code class="language-bash">modde tool status --game stellar-blade
+</code></pre>
+<p>Availability is detected per tool: MangoHud, vkBasalt, and GameMode look for their binary or Vulkan layer on Linux; Proton reports whether <code>protonup-rs</code> is present and how many GE-Proton installs exist; ReShade and OptiScaler always report “available” because their payloads are user-provided or downloaded on demand. For OptiScaler, <code>status</code> additionally prints a live install scan of the executable directory (see <a href="#optiscaler">OptiScaler</a> below).</p>
+<hr>
+<h2 id="mangohud"><a class="header" href="#mangohud">MangoHud</a></h2>
+<p><strong>Category:</strong> Overlay · <strong>Linux only</strong> · enabled via environment variable + generated config.</p>
+<p>MangoHud is a performance HUD that draws FPS, frame timing, and CPU/GPU telemetry over the running game.</p>
+<h3 id="how-it-is-enabled"><a class="header" href="#how-it-is-enabled">How it is enabled</a></h3>
+<p>When enabled, MangoHud contributes the environment variable <code>MANGOHUD=1</code>. If the per-game config is non-empty, modde also exports <code>MANGOHUD_CONFIG</code> pointing at the generated file:</p>
+<pre><code>~/.local/share/modde/tools/&lt;game_id&gt;/MangoHud.conf
+</code></pre>
+<h3 id="settings"><a class="header" href="#settings">Settings</a></h3>
+<p>MangoHud exposes <strong>100+ settings</strong> organised into UI sections: <em>Layout</em>, <em>FPS and Frame Timing</em>, <em>CPU</em>, <em>GPU</em>, <em>Memory and IO</em>, <em>Compatibility</em>, <em>Logging</em>, and <em>Filtering</em>. A few representative keys:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Key</th><th>Section</th><th>Type</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>position</code></td><td>Layout</td><td>select</td><td><code>top-left</code> … <code>bottom-right</code></td></tr>
+<tr><td><code>fps_limit</code> / <code>fps_limit_method</code></td><td>FPS</td><td>text / <code>late</code>|<code>early</code></td><td>frame-rate cap and limiter mode</td></tr>
+<tr><td><code>background_alpha</code></td><td>Layout</td><td>number 0–1</td><td>HUD background opacity</td></tr>
+<tr><td><code>cpu_temp</code>, <code>gpu_temp</code>, <code>gpu_junction_temp</code></td><td>CPU / GPU</td><td>bool</td><td>per-sensor toggles</td></tr>
+<tr><td><code>custom_text_center</code></td><td>Layout</td><td>text</td><td>free-form HUD text</td></tr>
+<tr><td><code>gamemode</code>, <code>vkbasalt</code></td><td>Compatibility</td><td>bool</td><td>show whether those layers are active</td></tr>
+<tr><td><code>output_folder</code>, <code>log_duration</code>, <code>upload_logs</code></td><td>Logging</td><td>path / number / bool</td><td>benchmark logging</td></tr>
+</tbody>
+</table>
+</div>
+<p>The fresh-enable defaults turn on <code>position=top-left</code>, <code>fps</code>, <code>frametime</code>, <code>cpu_stats</code>, and <code>gpu_stats</code>.</p>
+<h3 id="config-generation"><a class="header" href="#config-generation">Config generation</a></h3>
+<p>The generated <code>MangoHud.conf</code> is a flat key/value file. Booleans render as a bare key when <code>true</code> (e.g. <code>fps</code>) and as <code>key=0</code> when <code>false</code>; numbers and strings render as <code>key=value</code>. Keys beginning with <code>_</code> (modde’s internal markers such as <code>_game_id</code>) are skipped. The file always starts with <code># Generated by modde — do not edit manually</code>.</p>
+<pre><code class="language-bash">modde tool enable mangohud --game skyrim-se
+modde tool configure mangohud --game skyrim-se -- \
+  position=top-right fps_limit=60 fps_limit_method=late gpu_temp=true custom_text_center=skyrim
+</code></pre>
+<h3 id="apply--revert"><a class="header" href="#apply--revert">Apply / revert</a></h3>
+<p>MangoHud writes no files into the game directory, so <code>apply</code>/<code>revert</code> are no-ops. Disabling the tool stops exporting the env vars; the config file is left on disk and reused on re-enable.</p>
+<hr>
+<h2 id="vkbasalt"><a class="header" href="#vkbasalt">vkBasalt</a></h2>
+<p><strong>Category:</strong> Post-Processing · <strong>Linux only</strong> · enabled via environment variable + generated config.</p>
+<p>vkBasalt is a Vulkan post-processing layer that applies Contrast Adaptive Sharpening (CAS), FXAA, and ReShade-compatible shader effects to any Vulkan game (including DXVK/VKD3D titles under Proton).</p>
+<h3 id="how-it-is-enabled-1"><a class="header" href="#how-it-is-enabled-1">How it is enabled</a></h3>
+<p>When enabled, vkBasalt contributes <code>ENABLE_VKBASALT=1</code> plus <code>VKBASALT_CONFIG_FILE</code> pointing at:</p>
+<pre><code>~/.local/share/modde/tools/&lt;game_id&gt;/vkBasalt.conf
+</code></pre>
+<p>Availability detection looks for the implicit Vulkan layer JSON (<code>/usr/share/vulkan/implicit_layer.d/vkBasalt.json</code>, <code>/etc/vulkan/...</code>), a <code>vkbasalt</code> binary on <code>PATH</code>, or <code>vkBasalt.json</code> under any directory in <code>VK_LAYER_PATH</code> (covers Nix profile installs).</p>
+<h3 id="settings-1"><a class="header" href="#settings-1">Settings</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Key</th><th>Section</th><th>Type</th><th>Default</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>toggleKey</code></td><td>Activation</td><td>text</td><td><code>Home</code></td><td>key that toggles vkBasalt at runtime</td></tr>
+<tr><td><code>enableOnLaunch</code></td><td>Activation</td><td>bool</td><td><code>true</code></td><td>start with effects already active</td></tr>
+<tr><td><code>effects</code></td><td>Effects</td><td>list</td><td><code>["cas"]</code></td><td>colon/comma-joined list, e.g. <code>cas:fxaa</code></td></tr>
+<tr><td><code>casSharpness</code></td><td>Effects</td><td>number 0–1</td><td><code>0.4</code></td><td>CAS strength</td></tr>
+<tr><td><code>reshadeTexturePath</code></td><td>ReShade Paths</td><td>path</td><td>—</td><td>optional ReShade texture dir</td></tr>
+<tr><td><code>reshadeIncludePath</code></td><td>ReShade Paths</td><td>path</td><td>—</td><td>optional ReShade shader include dir</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="config-generation-1"><a class="header" href="#config-generation-1">Config generation</a></h3>
+<p>The generated <code>vkBasalt.conf</code> writes <code>toggleKey = &lt;key&gt;</code>, <code>enableOnLaunch = True/False</code>, a colon-joined <code>effects = ...</code> line, <code>casSharpness = ...</code>, and any ReShade paths. It also begins with the <code># Generated by modde</code> banner.</p>
+<pre><code class="language-bash">modde tool enable vkbasalt --game cyberpunk2077
+modde tool configure vkbasalt --game cyberpunk2077 -- casSharpness=0.5 toggleKey=F10
+</code></pre>
+<h3 id="apply--revert-1"><a class="header" href="#apply--revert-1">Apply / revert</a></h3>
+<p>No files are written into the game directory; <code>apply</code>/<code>revert</code> are no-ops.</p>
+<hr>
+<h2 id="gamemode"><a class="header" href="#gamemode">GameMode</a></h2>
+<p><strong>Category:</strong> Performance · <strong>Linux only</strong> · enabled via a wrapper command.</p>
+<p>GameMode is Feral Interactive’s daemon that applies CPU governor, scheduling, and GPU performance tuning for the lifetime of the game process.</p>
+<h3 id="how-it-is-enabled-2"><a class="header" href="#how-it-is-enabled-2">How it is enabled</a></h3>
+<p>GameMode has no env vars and no config files. When enabled it contributes a single wrapper command, <code>gamemoderun</code>, which modde chains in front of the game executable in the launch pipeline. Availability detection looks for <code>gamemoderun</code> on <code>PATH</code>.</p>
+<p>The only “setting” is a read-only note explaining that the wrapper is applied when enabled.</p>
+<pre><code class="language-bash">modde tool enable gamemode --game skyrim-se
+modde tool status --game skyrim-se   # confirm "yes" availability and "enabled"
+</code></pre>
+<h3 id="apply--revert-2"><a class="header" href="#apply--revert-2">Apply / revert</a></h3>
+<p>No files; <code>apply</code>/<code>revert</code> are no-ops. Disabling removes <code>gamemoderun</code> from the launch chain.</p>
+<hr>
+<h2 id="reshade"><a class="header" href="#reshade">ReShade</a></h2>
+<p><strong>Category:</strong> Post-Processing · Wine/Proton · enabled via proxy-DLL copy + Wine DLL override.</p>
+<p>ReShade injects post-processing shaders into DirectX games running under Wine/Proton by placing a <strong>proxy DLL</strong> (typically <code>dxgi.dll</code>) next to the game executable. Wine must be told to load the native proxy instead of its built-in stub, so ReShade contributes a <code>WINEDLLOVERRIDES</code> entry for the chosen DLL base name.</p>
+<h3 id="settings-2"><a class="header" href="#settings-2">Settings</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Key</th><th>Section</th><th>Type</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>source_dir</code></td><td>Source</td><td>path</td><td>Directory holding ReShade DLLs, <code>ReShade.ini</code>, and shader folders. <strong>Required</strong> for apply.</td></tr>
+<tr><td><code>dll_name</code></td><td>Deployment</td><td>select</td><td><code>dxgi.dll</code> (default), <code>d3d11.dll</code>, or <code>dinput8.dll</code></td></tr>
+<tr><td><code>derived_executable_dir</code></td><td>Detected Game</td><td>read-only</td><td>Where files land, derived from the game’s metadata</td></tr>
+</tbody>
+</table>
+</div>
+<p>Because ReShade binaries are Windows files the user supplies, ReShade always reports as “available (user-provided)”; you must point <code>source_dir</code> at a folder you have populated.</p>
+<h3 id="apply--revert-3"><a class="header" href="#apply--revert-3">Apply / revert</a></h3>
+<p><code>modde tool apply reshade</code> copies, into the game’s executable directory:</p>
+<ol>
+<li>the selected proxy DLL (<code>dll_name</code>) from <code>source_dir</code>,</li>
+<li><code>ReShade.ini</code> if present, and</li>
+<li>the <code>reshade-shaders/</code> and <code>reshade-presets/</code> directories if present (copied recursively).</li>
+</ol>
+<p>modde records every file it wrote so <code>modde tool revert reshade</code> removes exactly those files. The Wine DLL override (e.g. <code>dxgi</code>) is contributed automatically while the tool is enabled.</p>
+<pre><code class="language-bash">modde tool enable reshade --game cyberpunk2077
+modde tool configure reshade --game cyberpunk2077 -- \
+  source_dir=/home/me/reshade dll_name=dxgi.dll
+modde tool apply reshade --game cyberpunk2077
+# later …
+modde tool revert reshade --game cyberpunk2077
+</code></pre>
+<p>The apply has a non-mutating preview internally (it reports which planned files are missing, changed, or already match), so re-applying after editing a preset only rewrites what changed.</p>
+<hr>
+<h2 id="optiscaler"><a class="header" href="#optiscaler">OptiScaler</a></h2>
+<p><strong>Category:</strong> Upscaler · Wine/Proton · enabled via proxy-DLL copy + Wine DLL override (and an optional env var). Release-backed.</p>
+<p>OptiScaler replaces a game’s upscaler/frame-generation inputs (DLSS/FSR/XeSS) by hooking through a proxy DLL. It also subsumes modde’s old <strong>fgmod</strong> DLL-restore logic. This is the most involved tool; it supports release downloading, community profiles, FSR4 payload variants, OptiPatcher, and companion DLLs.</p>
+<h3 id="sources"><a class="header" href="#sources">Sources</a></h3>
+<p>Where OptiScaler files come from is chosen with <code>source_mode</code>:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th><code>source_mode</code></th><th>UI label</th><th>Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td><code>github_release</code></td><td>Official GitHub releases</td><td>Releases from <code>optiscaler/OptiScaler</code> (encoded as <code>official:&lt;tag&gt;</code>)</td></tr>
+<tr><td><code>goverlay_builds</code></td><td>GOverlay builds</td><td>The external <code>benjamimgois/OptiScaler-builds</code> feed, with a <code>goverlay_channel</code> selector</td></tr>
+<tr><td><code>goverlay_fgmod</code></td><td>GOverlay fgmod directory</td><td>An existing local <code>~/.local/share/goverlay/fgmod</code> install (the default)</td></tr>
+<tr><td><code>local_dir</code></td><td>Local OptiScaler directory</td><td>A folder you point at with <code>local_source_dir</code>, containing <code>OptiScaler.dll</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>When <code>source_mode = goverlay_builds</code>, a <code>goverlay_channel</code> setting selects <code>edge</code> (bleeding-edge), <code>stable</code>, <code>master</code>, or <code>any</code>. Bleeding-edge FSR 4.0.2-capable builds are typically distributed through the GOverlay builds feed rather than official OptiScaler releases.</p>
+<h3 id="releases-list-and-install"><a class="header" href="#releases-list-and-install">Releases: list and install</a></h3>
+<p>OptiScaler is the only release-backed tool (<code>supports_releases() == true</code>). <code>modde tool releases optiscaler</code> merges official and GOverlay releases and lists installable <code>.zip</code>/<code>.7z</code> assets. <code>install-release</code> downloads and extracts the chosen asset into modde’s per-tag cache, then records the selection back into the tool config:</p>
+<pre><code class="language-bash">modde tool releases optiscaler --game stellar-blade
+modde tool install-release optiscaler --game stellar-blade \
+  --tag official:v0.9.1 --asset OptiScaler.7z
+</code></pre>
+<p>Archives are flattened so that <code>OptiScaler.dll</code>, <code>OptiScaler.ini</code>, companion DLLs, <code>OptiPatcher.asi</code>, and the FSR4 payload directories land predictably in the cache. (<code>.7z</code> extraction shells out to <code>7zz</code>/<code>7z</code>.) Installing from a local archive path is also supported internally for offline pinning.</p>
+<h3 id="key-settings"><a class="header" href="#key-settings">Key settings</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Key</th><th>Type</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>proxy_dll</code></td><td>select</td><td>DLL OptiScaler is loaded as: <code>dxgi.dll</code> (default), <code>version.dll</code>, <code>dbghelp.dll</code>, <code>d3d12.dll</code>, <code>wininet.dll</code>, <code>winhttp.dll</code>, <code>winmm.dll</code>, <code>nvngx.dll</code>, or <code>OptiScaler.asi</code></td></tr>
+<tr><td><code>dll_overrides</code></td><td>text</td><td>Extra Wine DLL override base names (comma/space separated)</td></tr>
+<tr><td><code>copy_companion_files</code></td><td>bool (default on)</td><td>Copy <code>fakenvapi.dll</code>, <code>nvngx-wrapper.dll</code>, and other DLLs found beside OptiScaler</td></tr>
+<tr><td><code>fsr4_variant</code></td><td>select</td><td><code>latest_fp8</code> (“Latest (FP8)”) or <code>int8_402</code> (“4.0.2c (INT8)”) — copied as <code>amd_fidelityfx_upscaler_dx12.dll</code></td></tr>
+<tr><td><code>emulate_fp8</code></td><td>bool</td><td>Only meaningful for the FP8 variant; exports <code>DXIL_SPIRV_CONFIG=wmma_rdna3_workaround</code></td></tr>
+<tr><td><code>enable_optipatcher</code></td><td>bool</td><td>Deploy <code>plugins/OptiPatcher.asi</code> to unlock DLSS/DLSS-FG inputs without whole-game spoofing</td></tr>
+<tr><td><code>spoof_dlss</code></td><td>bool</td><td>Fallback DXGI spoofing path for games that still need it</td></tr>
+</tbody>
+</table>
+</div>
+<p>There are also exposed OptiScaler <code>.ini</code> overrides (<code>ini_overrides.*</code>), e.g. the in-game menu shortcut key, menu scale, the FSR upscaler/frame-generation backend indices, and fakenvapi/LatencyFlex toggles. Additional <code>.ini</code> keys discovered in the selected release’s <code>OptiScaler.ini</code> are surfaced as advanced overrides.</p>
+<h3 id="fsr4-variants-and-fp8-emulation"><a class="header" href="#fsr4-variants-and-fp8-emulation">FSR4 variants and FP8 emulation</a></h3>
+<p><code>fsr4_variant</code> selects which FSR4 payload is copied as <code>amd_fidelityfx_upscaler_dx12.dll</code>: <code>latest_fp8</code> (FP8) or <code>int8_402</code> (INT8, 4.0.2c). The two payloads ship in <code>FSR4_LATEST/</code> and <code>FSR4_INT8/</code> directories inside the source. <code>emulate_fp8</code> only applies to the FP8 variant and, when set, exports <code>DXIL_SPIRV_CONFIG=wmma_rdna3_workaround</code> so FP8 paths run on RDNA3 via the WMMA workaround.</p>
+<h3 id="optipatcher-and-companion-dlls"><a class="header" href="#optipatcher-and-companion-dlls">OptiPatcher and companion DLLs</a></h3>
+<p>When <code>enable_optipatcher</code> is on, apply deploys <code>plugins/OptiPatcher.asi</code> and sets <code>Plugins.LoadAsiPlugins=true</code> in the merged <code>.ini</code>. If the patcher is not cached, <code>install-release</code> fetches the latest <code>OptiPatcher.asi</code> from <code>optiscaler/OptiPatcher</code>. With <code>copy_companion_files</code> on, any extra <code>.dll</code> next to OptiScaler (fakenvapi, nvngx wrapper, etc.) is copied alongside the proxy.</p>
+<h3 id="install-scanning-and-backups"><a class="header" href="#install-scanning-and-backups">Install scanning and backups</a></h3>
+<p>Before apply, OptiScaler scans the executable directory and classifies the install as <code>absent</code>, <code>managed</code>, <code>unmanaged</code>, <code>partially managed</code>, or <code>conflicted</code> (more than one recognised proxy DLL). <code>modde tool status</code> prints this as a one-line summary, e.g.:</p>
+<pre><code>OptiScaler install: unmanaged; version v0.9.1; proxy dxgi.dll
+</code></pre>
+<p>If an existing install is <em>unmanaged</em>, <em>partially managed</em>, or <em>conflicted</em>, apply first backs up the recognised files (with a JSON manifest) so the previous state can be recovered. When you adopt an existing working install rather than reinstalling, modde records the files as managed.</p>
+<h3 id="fgmod-restore"><a class="header" href="#fgmod-restore">fgmod restore</a></h3>
+<p>OptiScaler carries the fgmod DLL-restore behaviour: fgmod deletes certain DLLs at launch (<code>dxgi.dll</code>, <code>winmm.dll</code>, <code>nvngx.dll</code>, <code>_nvngx.dll</code>, <code>nvngx-wrapper.dll</code>, <code>dlss-enabler.dll</code>, <code>OptiScaler.dll</code>). modde’s launch wrapper scans the staging <code>mods/&lt;mod&gt;/bin/x64</code> directories and restores any of those DLLs into the executable directory so a re-deploy does not leave the game broken.</p>
+<h3 id="community-profiles"><a class="header" href="#community-profiles">Community profiles</a></h3>
+<p>For some games modde ships community-tested OptiScaler profiles (game-owned metadata). Selecting a profile via <code>optiscaler_profile=&lt;id&gt;</code> applies its <code>proxy_dll</code>, source, FSR4 variant, OptiPatcher flag, <code>.ini</code> overrides, and records its tested version, source URL, and notes. Profiles never imply OptiScaler is enabled by default.</p>
+<p>For <strong>Stellar Blade</strong> the default profile is <code>community-dxgi</code>, which uses <code>dxgi.dll</code> as the proxy and enables OptiPatcher so DLSS/DLSS-FG inputs are unlocked without spoofing. You can also define your own profiles in <code>~/.local/share/modde/games/&lt;game_id&gt;.optiscaler.toml</code> (an <code>[[optiscaler.profile]]</code> array); user profiles merge over built-ins of the same <code>id</code>.</p>
+<pre><code class="language-bash">modde tool enable optiscaler --game stellar-blade
+modde tool configure optiscaler --game stellar-blade -- optiscaler_profile=community-dxgi
+modde tool apply optiscaler --game stellar-blade
+</code></pre>
+<p>See the deeper deployment notes in the supported-game page for <a href="../games/stellar-blade.html">Stellar Blade</a> and <a href="../games/cyberpunk2077.html">Cyberpunk 2077</a>.</p>
+<hr>
+<h2 id="proton"><a class="header" href="#proton">Proton</a></h2>
+<p><strong>Category:</strong> Performance · enabled via launch environment + DLL overrides. Does <strong>not</strong> install Proton or the game.</p>
+<p>The <code>proton</code> tool stores per-game launch-compatibility settings that feed modde’s existing env-var, DLL-override, and wrapper collection. It does not install Steam, the game, or a Proton runner.</p>
+<h3 id="runner-selection"><a class="header" href="#runner-selection">Runner selection</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Key</th><th>Type</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>version_mode</code></td><td>select</td><td><code>launcher_default</code> (use the launcher’s runner), <code>installed_version</code> (use a specific installed GE-Proton), or <code>install_with_protonup_rs</code> (request an install via protonup-rs)</td></tr>
+<tr><td><code>selected_version</code></td><td>select</td><td><code>latest</code> or a specific GE-Proton tag; the option list merges the GE-Proton catalog with locally installed compatibility tools</td></tr>
+<tr><td><code>install_target</code></td><td>select</td><td>Target passed to protonup-rs (<code>steam</code>)</td></tr>
+</tbody>
+</table>
+</div>
+<p><code>version_mode = launcher_default</code> is the default and needs nothing else. The UI can load the upstream GE-Proton catalog from <code>GloriousEggroll/proton-ge-custom</code> and merge it with installed runners found under Steam’s <code>compatibilitytools.d</code> directories. Installing a selected version still requires <code>protonup-rs</code> on <code>PATH</code>; modde invokes it non-interactively (<code>--tool GEProton --version &lt;tag&gt; --for steam</code>).</p>
+<h3 id="environment-prefix-and-overrides"><a class="header" href="#environment-prefix-and-overrides">Environment, prefix, and overrides</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Key</th><th>Type</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>prefix_path_override</code></td><td>path</td><td>Exports <code>WINEPREFIX</code>; blank uses launcher detection</td></tr>
+<tr><td><code>extra_env</code></td><td>text</td><td>Extra <code>KEY=VALUE</code> lines (one per line; <code>#</code> comments ignored) exported at launch</td></tr>
+<tr><td><code>dll_override_mode</code></td><td>select</td><td><code>auto</code>, <code>forced</code>, or <code>off</code> — how Proton contributes forced DLL overrides</td></tr>
+<tr><td><code>forced_dll_overrides</code></td><td>text</td><td>Comma/space-separated DLL base names, e.g. <code>dxgi, winmm</code></td></tr>
+<tr><td><code>wrapper_order</code></td><td>select</td><td><code>after-modde</code> or <code>before-tools</code> — where Proton integration sits in the launch chain</td></tr>
+</tbody>
+</table>
+</div>
+<p>When <code>dll_override_mode</code> is not <code>off</code>, the names in <code>forced_dll_overrides</code> (with any <code>.dll</code> suffix stripped) are contributed as Wine DLL overrides.</p>
+<h3 id="compatibility-toggles-40-env-flags"><a class="header" href="#compatibility-toggles-40-env-flags">Compatibility toggles (40+ env flags)</a></h3>
+<p>Proton exposes <strong>40+ boolean toggles</strong>, each of which exports one environment variable when set. A non-exhaustive sample:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Setting</th><th>Exports</th></tr>
+</thead>
+<tbody>
+<tr><td><code>steamdeck</code></td><td><code>SteamDeck=1</code></td></tr>
+<tr><td><code>proton_enable_hdr</code></td><td><code>PROTON_ENABLE_HDR=1</code></td></tr>
+<tr><td><code>enable_hdr_wsi</code></td><td><code>ENABLE_HDR_WSI=1</code></td></tr>
+<tr><td><code>proton_enable_wayland</code></td><td><code>PROTON_ENABLE_WAYLAND=1</code></td></tr>
+<tr><td><code>proton_log</code></td><td><code>PROTON_LOG=1</code></td></tr>
+<tr><td><code>radv_perftest_rt</code></td><td><code>RADV_PERFTEST=rt,emulate_rt</code></td></tr>
+<tr><td><code>proton_enable_nvapi</code></td><td><code>PROTON_ENABLE_NVAPI=1</code></td></tr>
+<tr><td><code>mesa_loader_zink</code></td><td><code>MESA_LOADER_DRIVER_OVERRIDE=zink</code></td></tr>
+<tr><td><code>proton_fsr4_upgrade</code></td><td><code>PROTON_FSR4_UPGRADE=1</code></td></tr>
+<tr><td><code>proton_dlss_upgrade</code></td><td><code>PROTON_DLSS_UPGRADE=1</code></td></tr>
+<tr><td><code>proton_xess_upgrade</code></td><td><code>PROTON_XESS_UPGRADE=1</code></td></tr>
+<tr><td><code>proton_use_wow64</code></td><td><code>PROTON_USE_WOW64=1</code></td></tr>
+<tr><td><code>proton_no_ntsync</code></td><td><code>PROTON_NO_NTSYNC=1</code></td></tr>
+<tr><td><code>enable_mesa_antilag</code></td><td><code>ENABLE_LAYER_MESA_ANTI_LAG=1</code></td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-bash"># Keep the launcher's default runner
+modde tool configure proton --game cyberpunk2077 -- version_mode=launcher_default
+
+# Export extra variables and enable HDR
+modde tool configure proton --game cyberpunk2077 -- \
+  proton_enable_hdr=true extra_env='PROTON_LOG=1'
+
+# Force DLL overrides a mod needs
+modde tool configure proton --game cyberpunk2077 -- \
+  dll_override_mode=forced forced_dll_overrides=dxgi,winmm
+</code></pre>
+<h3 id="apply--revert-4"><a class="header" href="#apply--revert-4">Apply / revert</a></h3>
+<p>Proton writes no files into the game directory; it only contributes environment variables and DLL overrides at launch. There is nothing to <code>apply</code>/<code>revert</code>.</p>
+<hr>
+<h2 id="see-also"><a class="header" href="#see-also">See also</a></h2>
+<ul>
+<li><a href="executables.html">Executables &amp; external tools</a> — the shipped (Done) named-executable manager for xEdit, BodySlide, Nemesis, etc.</li>
+<li><a href="playing.html">Playing &amp; launching</a> — how launch env vars and wrappers reach the game</li>
+<li><a href="deployment.html">Deployment &amp; VFS</a> — how applied files and staging interact</li>
+<li><a href="../games/supported-games.html">Supported games</a> — per-game OptiScaler/Proton notes</li>
+<li><a href="../reference/parity.html">Feature parity</a> — why tool management is Partial</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../guides/saves.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../guides/executables.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../guides/saves.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../guides/executables.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,1331 @@
+<!DOCTYPE HTML>
+<html lang="en" class="coal sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>CLI reference - modde Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Documentation for modde — a NixOS-native, Linux-first game mod manager.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "coal";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex-ed74f3b0.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-4ac01a02.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('coal')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">modde Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde/_edit/trunk/docs/src/reference/cli.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                            <span class=fa-svg id="git-edit-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M421.7 220.3l-11.3 11.3-22.6 22.6-205 205c-6.6 6.6-14.8 11.5-23.8 14.1L30.8 511c-8.4 2.5-17.5 .2-23.7-6.1S-1.5 489.7 1 481.2L38.7 353.1c2.6-9 7.5-17.2 14.1-23.8l205-205 22.6-22.6 11.3-11.3 33.9 33.9 62.1 62.1 33.9 33.9zM96 353.9l-9.3 9.3c-.9 .9-1.6 2.1-2 3.4l-25.3 86 86-25.3c1.3-.4 2.5-1.1 3.4-2l9.3-9.3H112c-8.8 0-16-7.2-16-16V353.9zM453.3 19.3l39.4 39.4c25 25 25 65.5 0 90.5l-14.5 14.5-22.6 22.6-11.3 11.3-33.9-33.9-62.1-62.1L314.3 67.7l11.3-11.3 22.6-22.6 14.5-14.5c25-25 65.5-25 90.5 0z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="cli-reference"><a class="header" href="#cli-reference">CLI Reference</a></h1>
+<p>This is the exhaustive reference for the <code>modde</code> command-line interface. Every
+top-level command group, every subcommand, every flag, and the environment
+variables modde reads are documented here. The binary is invoked as <code>modde</code>
+(installed via the <a href="../getting-started/installation.html">Nix flake</a>); the GUI is
+the same binary under <code>modde gui</code>.</p>
+<p>Run <code>modde --help</code> or <code>modde &lt;command&gt; --help</code> at any time for the
+clap-generated usage of a specific command.</p>
+<h2 id="global-flags"><a class="header" href="#global-flags">Global flags</a></h2>
+<p>These flags are accepted on every command (clap <code>global = true</code>).</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Environment</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--data-dir &lt;path&gt;</code></td><td><code>MODDE_DATA_DIR</code></td><td>Override the data directory for a single invocation (default: <code>~/.local/share/modde</code>)</td></tr>
+<tr><td><code>--heap-profile &lt;path&gt;</code></td><td><code>MODDE_HEAP_PROFILE</code></td><td><strong>Feature-gated.</strong> Write a DHAT heap profile. Requires building with <code>--features heap-profile</code>; errors out otherwise</td></tr>
+<tr><td><code>--debug-panic</code></td><td>—</td><td><strong>Feature-gated, hidden.</strong> Panic after startup to smoke-test the <code>remote-telemetry</code> crash-capture path. Only compiled in with <code>--features remote-telemetry</code></td></tr>
+</tbody>
+</table>
+</div>
+<p><code>--data-dir</code> overrides the active instance (see <a href="#modde-instance"><code>modde instance</code></a>)
+for that one command only — it does not change the persisted active instance. The
+release builds shipped through the flake do <strong>not</strong> enable <code>heap-profile</code> or
+<code>remote-telemetry</code>, so <code>--heap-profile</code> returns an explanatory error and
+<code>--debug-panic</code> is absent unless you build those features yourself.</p>
+<h2 id="environment-variables"><a class="header" href="#environment-variables">Environment variables</a></h2>
+<p>modde reads the following environment variables in addition to the <code>--data-dir</code>
+override above.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Variable</th><th>Default</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>MODDE_DATA_DIR</code></td><td><code>~/.local/share/modde</code></td><td>Data directory (DB, store, downloads, backups). Equivalent to <code>--data-dir</code>.</td></tr>
+<tr><td><code>NEXUS_API_KEY</code></td><td>—</td><td>Nexus Mods API key, used when no modde-owned config-file key is present.</td></tr>
+<tr><td><code>NEXUS_API_KEY_FILE</code></td><td>—</td><td>Path to a file containing the Nexus API key (read after the keyring is consulted).</td></tr>
+<tr><td><code>GITHUB_TOKEN</code></td><td>—</td><td>Bearer token for the GitHub API; raises rate limits for release-backed tools (<code>reshade</code>, <code>optiscaler</code>).</td></tr>
+<tr><td><code>RUST_LOG</code></td><td>—</td><td><code>tracing</code>/<code>env_logger</code>-style filter controlling log verbosity (e.g. <code>RUST_LOG=modde=debug</code>).</td></tr>
+<tr><td><code>MODDE_BYTE_CACHE_MIB</code></td><td><code>512</code></td><td>Size (MiB) of the in-memory LRU byte cache used by the download/source layer.</td></tr>
+<tr><td><code>MODDE_ZSTD_MIN_BYTES</code></td><td><code>1048576</code></td><td>Minimum file size (bytes) before Wabbajack staging entries are zstd-compressed. Default 1 MiB.</td></tr>
+<tr><td><code>MODDE_ZSTD_LEVEL</code></td><td><code>9</code></td><td>zstd compression level for staging (clamped to the 1–22 range).</td></tr>
+<tr><td><code>MODDE_ARCHIVE_RETENTION</code></td><td><code>keep</code></td><td>Default source-archive retention after a Wabbajack archive batch integrates. Accepts <code>keep</code>, <code>prune-applied</code> (aliases <code>prune</code>/<code>delete</code>), or <code>auto</code>. The <code>--archive-retention</code> flag on <code>install wabbajack</code> overrides this.</td></tr>
+<tr><td><code>MODDE_HEAP_PROFILE</code></td><td>—</td><td>Same as the <code>--heap-profile</code> flag; only meaningful in a <code>heap-profile</code> build.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="nexus-api-key-resolution-order"><a class="header" href="#nexus-api-key-resolution-order">Nexus API key resolution order</a></h3>
+<p>When a command needs a Nexus key, modde resolves it in this order and uses the
+first source that yields a non-empty value:</p>
+<ol>
+<li>The modde-owned config file (written by <a href="#nexus-auth"><code>modde nexus auth</code></a>).</li>
+<li><code>NEXUS_API_KEY</code>.</li>
+<li>The system keyring.</li>
+<li><code>NEXUS_API_KEY_FILE</code>.</li>
+<li>A legacy key stored in app settings.</li>
+</ol>
+<p>An OAuth token (if present and unexpired) takes precedence over the API-key
+chain. Under Home Manager, prefer <code>programs.modde.nexus.apiKeyFile</code>, which feeds
+<code>NEXUS_API_KEY_FILE</code>.</p>
+<hr>
+<h2 id="modde-profile"><a class="header" href="#modde-profile"><code>modde profile</code></a></h2>
+<p>Manage mod profiles.</p>
+<h3 id="profile-list"><a class="header" href="#profile-list"><code>profile list</code></a></h3>
+<p>List all profiles.</p>
+<pre><code class="language-bash">modde profile list [--game &lt;id&gt;]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--game</code></td><td>Filter by game ID</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="profile-create"><a class="header" href="#profile-create"><code>profile create</code></a></h3>
+<p>Create a new profile.</p>
+<pre><code class="language-bash">modde profile create &lt;name&gt; --game &lt;id&gt;
+</code></pre>
+<h3 id="profile-delete"><a class="header" href="#profile-delete"><code>profile delete</code></a></h3>
+<p>Delete a profile.</p>
+<pre><code class="language-bash">modde profile delete &lt;name&gt; [--game &lt;id&gt;]
+</code></pre>
+<h3 id="profile-switch"><a class="header" href="#profile-switch"><code>profile switch</code></a></h3>
+<p>Switch to a profile. Automatically swaps saves.</p>
+<pre><code class="language-bash">modde profile switch &lt;name&gt; --game &lt;id&gt;
+</code></pre>
+<h3 id="profile-active"><a class="header" href="#profile-active"><code>profile active</code></a></h3>
+<p>Show the active profile for a game.</p>
+<pre><code class="language-bash">modde profile active --game &lt;id&gt;
+</code></pre>
+<h3 id="profile-try"><a class="header" href="#profile-try"><code>profile try</code></a></h3>
+<p>Push a profile onto the experiment stack. Can be stacked multiple times.</p>
+<pre><code class="language-bash">modde profile try &lt;name&gt; --game &lt;id&gt;
+</code></pre>
+<h3 id="profile-rollback"><a class="header" href="#profile-rollback"><code>profile rollback</code></a></h3>
+<p>Pop the experiment stack, returning to the previous profile.</p>
+<pre><code class="language-bash">modde profile rollback --game &lt;id&gt;
+</code></pre>
+<h3 id="profile-commit"><a class="header" href="#profile-commit"><code>profile commit</code></a></h3>
+<p>Accept the current experiment and clear the rollback stack.</p>
+<pre><code class="language-bash">modde profile commit --game &lt;id&gt;
+</code></pre>
+<h3 id="profile-fork"><a class="header" href="#profile-fork"><code>profile fork</code></a></h3>
+<p>Clone a profile including its mods, load order rules, and saves.</p>
+<pre><code class="language-bash">modde profile fork &lt;source&gt; &lt;name&gt; --game &lt;id&gt; [--unlock]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--unlock</code></td><td>Strip profile-level lock and all per-mod pins from the fork</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="profile-lock"><a class="header" href="#profile-lock"><code>profile lock</code></a></h3>
+<p>Apply a manual load order lock to a profile.</p>
+<pre><code class="language-bash">modde profile lock &lt;name&gt; [--game &lt;id&gt;] [--note &lt;text&gt;]
+</code></pre>
+<h3 id="profile-unlock"><a class="header" href="#profile-unlock"><code>profile unlock</code></a></h3>
+<p>Clear the profile-level load order lock.</p>
+<pre><code class="language-bash">modde profile unlock &lt;name&gt; [--game &lt;id&gt;]
+</code></pre>
+<h3 id="profile-lock-info"><a class="header" href="#profile-lock-info"><code>profile lock-info</code></a></h3>
+<p>Show lock status and per-mod pins for a profile.</p>
+<pre><code class="language-bash">modde profile lock-info &lt;name&gt; [--game &lt;id&gt;]
+</code></pre>
+<h3 id="profile-lock-mod"><a class="header" href="#profile-lock-mod"><code>profile lock-mod</code></a></h3>
+<p>Pin an individual mod in place.</p>
+<pre><code class="language-bash">modde profile lock-mod &lt;name&gt; &lt;mod_id&gt; [--game &lt;id&gt;] [--note &lt;text&gt;]
+</code></pre>
+<h3 id="profile-unlock-mod"><a class="header" href="#profile-unlock-mod"><code>profile unlock-mod</code></a></h3>
+<p>Release a per-mod pin.</p>
+<pre><code class="language-bash">modde profile unlock-mod &lt;name&gt; &lt;mod_id&gt; [--game &lt;id&gt;]
+</code></pre>
+<h3 id="profile-dedup"><a class="header" href="#profile-dedup"><code>profile dedup</code></a></h3>
+<p>Detect filesystem-scanner rows that duplicate Wabbajack manifest entries.</p>
+<pre><code class="language-bash">modde profile dedup &lt;name&gt; [--game &lt;id&gt;] [--manifest &lt;path&gt;] [--apply]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--manifest</code></td><td>Path to a <code>.wabbajack</code> file as the authoritative reference</td></tr>
+<tr><td><code>--apply</code></td><td>Actually delete leaked rows (without this flag, dry-run only)</td></tr>
+</tbody>
+</table>
+</div>
+<p>Without <code>--manifest</code>, this runs the layer-1 heuristic: it lists filesystem-scanner
+rows (<code>cet/*</code>, <code>reds/*</code>, <code>tweak/*</code>, <code>archive/*</code>, <code>redmod/*</code>) on a locked profile as
+read-only “suspects”. With <code>--manifest</code>, the manifest’s install directives classify
+each suspect as LEAKED (safe to delete) or GENUINE (a user addition to keep), and
+<code>--apply</code> deletes the LEAKED rows.</p>
+<hr>
+<h2 id="modde-play"><a class="header" href="#modde-play"><code>modde play</code></a></h2>
+<p>Switch profile, deploy mods, and launch the game.</p>
+<pre><code class="language-bash">modde play [profile] --game &lt;id&gt; [--no-deploy] [--no-switch] [--no-capture]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--no-deploy</code></td><td>Skip mod deployment</td></tr>
+<tr><td><code>--no-switch</code></td><td>Skip profile switch</td></tr>
+<tr><td><code>--no-capture</code></td><td>Skip save auto-capture after game exit</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="modde-deploy"><a class="header" href="#modde-deploy"><code>modde deploy</code></a></h2>
+<p>Deploy mods for the active or specified profile.</p>
+<pre><code class="language-bash">modde deploy [--profile &lt;name&gt;] [--game &lt;id&gt;]
+</code></pre>
+<hr>
+<h2 id="modde-rollback"><a class="header" href="#modde-rollback"><code>modde rollback</code></a></h2>
+<p>Rollback to the previous deployment.</p>
+<pre><code class="language-bash">modde rollback [--profile &lt;name&gt;] [--game &lt;id&gt;]
+</code></pre>
+<hr>
+<h2 id="modde-install"><a class="header" href="#modde-install"><code>modde install</code></a></h2>
+<p>Install mods from various sources.</p>
+<h3 id="install-wabbajack"><a class="header" href="#install-wabbajack"><code>install wabbajack</code></a></h3>
+<p>Install from a Wabbajack modlist. This is the largest single command in the CLI;
+the defaults below match a normal full install.</p>
+<pre><code class="language-bash">modde install wabbajack &lt;path&gt; [--profile &lt;name&gt;] [--game-dir &lt;path&gt;] [flags...]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--profile</code></td><td>—</td><td>Target profile (created if it doesn’t exist)</td></tr>
+<tr><td><code>--game-dir</code></td><td>—</td><td>Game installation directory to deploy mods into</td></tr>
+<tr><td><code>--force</code></td><td><code>false</code></td><td>Force full reinstall, skipping preflight checks</td></tr>
+<tr><td><code>--no-deploy</code></td><td><code>false</code></td><td>Stage into modde’s data dir but skip the final copy into <code>--game-dir</code> (Stock-Game lists)</td></tr>
+<tr><td><code>--continue-on-error</code></td><td><code>false</code></td><td>Log per-archive failures instead of aborting; install proceeds as far as possible</td></tr>
+<tr><td><code>--reset-staging</code></td><td><code>false</code></td><td>Explicitly discard existing Wabbajack staging before installing</td></tr>
+<tr><td><code>--skip-validate</code></td><td><code>false</code></td><td>Skip staging validation before deploy</td></tr>
+<tr><td><code>--diagnostics-dir</code></td><td>—</td><td>Write apply diagnostics JSONL to this directory (consumed by <code>wabbajack analyze-diagnostics</code>)</td></tr>
+<tr><td><code>--diagnostics-interval</code></td><td><code>30</code></td><td>Diagnostics heartbeat interval in seconds</td></tr>
+<tr><td><code>--stall-warn-seconds</code></td><td><code>600</code></td><td>Warn when apply makes no batch/sentinel progress for this many seconds</td></tr>
+<tr><td><code>--stall-abort-seconds</code></td><td><code>1800</code></td><td>Abort when stalled this long and cgroup memory/swap are saturated</td></tr>
+<tr><td><code>--archive-retention</code></td><td><code>keep</code></td><td>Source-archive retention after successful integration: <code>keep</code>, <code>prune-applied</code>, or <code>auto</code></td></tr>
+<tr><td><code>--missing-archive-policy</code></td><td><code>fail</code></td><td>Behavior for missing optional manual/Nexus archives: <code>fail</code>, <code>omit-files</code>, or <code>omit-mods</code></td></tr>
+<tr><td><code>--acquire-missing</code></td><td><code>false</code></td><td>Frontload assisted manual-archive acquisition before applying</td></tr>
+<tr><td><code>--acquire-download-dir</code></td><td>—</td><td>Browser download directory to watch during assisted acquisition</td></tr>
+<tr><td><code>--acquire-timeout</code></td><td><code>900</code></td><td>Per-archive assisted acquisition timeout in seconds</td></tr>
+<tr><td><code>--acquire-include-nexus</code></td><td><code>false</code></td><td>Include Nexus archives in frontloaded acquisition</td></tr>
+<tr><td><code>--acquire-browser-controller</code></td><td><code>false</code></td><td>Use controlled Chromium tabs for frontloaded acquisition</td></tr>
+<tr><td><code>--no-acquire-missing</code></td><td><code>false</code></td><td>Disable automatic frontloaded manual-archive acquisition</td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-bash"># Smoke-run a large list without writing into the live game install
+modde install wabbajack ./lotf.wabbajack --profile lotf \
+  --no-deploy --continue-on-error --skip-validate \
+  --diagnostics-dir ./wj-diag --missing-archive-policy omit-mods
+</code></pre>
+<p>See the <a href="../guides/wabbajack.html">Wabbajack guide</a> for the full readiness workflow.</p>
+<h3 id="install-nexus-collection"><a class="header" href="#install-nexus-collection"><code>install nexus-collection</code></a></h3>
+<p>Install a Nexus Collection.</p>
+<pre><code class="language-bash">modde install nexus-collection &lt;slug&gt; [--version &lt;rev&gt;] [--profile &lt;name&gt;]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--version</code></td><td>Pin a specific collection revision</td></tr>
+<tr><td><code>--profile</code></td><td>Target profile (created if it doesn’t exist)</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="install-mod"><a class="header" href="#install-mod"><code>install mod</code></a></h3>
+<p>Install a single mod from Nexus.</p>
+<pre><code class="language-bash">modde install mod &lt;url&gt; [--profile &lt;name&gt;] [--fomod-config &lt;path&gt;]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--fomod-config</code></td><td>Path to a FOMOD declarative config (TOML or JSON) for non-interactive installation</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="modde-mod"><a class="header" href="#modde-mod"><code>modde mod</code></a></h2>
+<p>Manage individual mods.</p>
+<h3 id="mod-remove"><a class="header" href="#mod-remove"><code>mod remove</code></a></h3>
+<p>Remove an installed mod from a profile and unlink its staged files. Removal uses
+the V8 <code>installed_mod_files</code> manifest, so it is precise — no orphaned files, no
+collateral damage.</p>
+<pre><code class="language-bash">modde mod remove &lt;mod_id&gt; [--profile &lt;name&gt;]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--profile</code></td><td>Profile to remove from. Defaults to the active / unambiguous profile.</td></tr>
+</tbody>
+</table>
+</div>
+<p>The <code>mod_id</code> is the id stored in the profile — usually
+<code>&lt;domain&gt;_&lt;mod_id&gt;_&lt;file_id&gt;</code> for Nexus installs.</p>
+<h3 id="mod-diagnose"><a class="header" href="#mod-diagnose"><code>mod diagnose</code></a></h3>
+<p>Print the skill-dossier path and an inline prompt for a mod whose install type
+could not be detected. Handy for piping into an agent or pasting into a chat.</p>
+<pre><code class="language-bash">modde mod diagnose &lt;mod_id&gt;
+</code></pre>
+<hr>
+<h2 id="modde-wabbajack"><a class="header" href="#modde-wabbajack"><code>modde wabbajack</code></a></h2>
+<p>Search, download, inspect, prepare, and support Wabbajack modlists. These are the
+read-only and supporting utilities; the actual install runs through
+<a href="#install-wabbajack"><code>modde install wabbajack</code></a>.</p>
+<h3 id="wabbajack-search"><a class="header" href="#wabbajack-search"><code>wabbajack search</code></a></h3>
+<p>Search public Wabbajack modlist catalogs.</p>
+<pre><code class="language-bash">modde wabbajack search [query] [--game &lt;id&gt;] [--source official|authored|both] [--json]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--game</code></td><td>—</td><td>Filter by game ID</td></tr>
+<tr><td><code>--source</code></td><td><code>both</code></td><td>Catalog source: <code>official</code>, <code>authored</code>, or <code>both</code></td></tr>
+<tr><td><code>--json</code></td><td>—</td><td>Emit machine-readable JSON</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="wabbajack-download"><a class="header" href="#wabbajack-download"><code>wabbajack download</code></a></h3>
+<p>Download a <code>.wabbajack</code> file by URL, machine URL, or title. Authored-files URLs
+are downloaded through modde’s chunk-aware downloader when required.</p>
+<pre><code class="language-bash">modde wabbajack download &lt;url-or-machine-url&gt; [--output &lt;dir&gt;]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--output</code></td><td>Output directory for the downloaded file</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="wabbajack-hm-snippet"><a class="header" href="#wabbajack-hm-snippet"><code>wabbajack hm-snippet</code></a></h3>
+<p>Generate a Home Manager profile snippet for a <code>.wabbajack</code> source.</p>
+<pre><code class="language-bash">modde wabbajack hm-snippet &lt;url-or-file&gt; --profile &lt;name&gt; --game &lt;id&gt; [--game-dir &lt;path&gt;] [--output &lt;path&gt;]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--profile</code></td><td>Profile name to emit in the snippet (required)</td></tr>
+<tr><td><code>--game</code></td><td>Game ID to emit in the snippet (required)</td></tr>
+<tr><td><code>--game-dir</code></td><td>Game install directory to emit</td></tr>
+<tr><td><code>--output</code></td><td>Write the snippet to a file instead of stdout</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="wabbajack-import-archive"><a class="header" href="#wabbajack-import-archive"><code>wabbajack import-archive</code></a></h3>
+<p>Import local archives into the modde store by matching the Wabbajack manifest
+hash. Useful when an upstream authored-files archive disappeared but you still
+have the exact archive in an old Wabbajack cache.</p>
+<pre><code class="language-bash">modde wabbajack import-archive &lt;path.wabbajack&gt; &lt;archive-path&gt;...
+</code></pre>
+<p>The command hashes each archive and imports only files whose Wabbajack hash is
+referenced by the manifest. Matching by filename is intentionally refused — only
+exact hash matches are accepted.</p>
+<h3 id="wabbajack-acquire-missing"><a class="header" href="#wabbajack-acquire-missing"><code>wabbajack acquire-missing</code></a></h3>
+<p>Open manual Wabbajack archive pages and import matching browser downloads.</p>
+<pre><code class="language-bash">modde wabbajack acquire-missing &lt;manifest&gt; [flags...]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--download-dir</code></td><td>—</td><td>Browser download directory to watch</td></tr>
+<tr><td><code>--data-dir</code></td><td>—</td><td>Override the data directory for this acquisition</td></tr>
+<tr><td><code>--browser-profile</code></td><td>—</td><td>Browser profile directory to use</td></tr>
+<tr><td><code>--include-nexus</code></td><td><code>false</code></td><td>Include Nexus archives in acquisition</td></tr>
+<tr><td><code>--browser-controller</code></td><td><code>false</code></td><td>Drive controlled Chromium tabs instead of just watching downloads</td></tr>
+<tr><td><code>--timeout</code></td><td><code>900</code></td><td>Per-archive acquisition timeout in seconds</td></tr>
+<tr><td><code>--json</code></td><td><code>false</code></td><td>Emit machine-readable JSON</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="wabbajack-missing-impact"><a class="header" href="#wabbajack-missing-impact"><code>wabbajack missing-impact</code></a></h3>
+<p>Report missing manual/Nexus archives and their install impact (how many files /
+mods would be omitted).</p>
+<pre><code class="language-bash">modde wabbajack missing-impact &lt;manifest&gt; [--data-dir &lt;path&gt;] [--json] [--nix-snippet]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--data-dir</code></td><td>Override the data directory</td></tr>
+<tr><td><code>--json</code></td><td>Emit machine-readable JSON</td></tr>
+<tr><td><code>--nix-snippet</code></td><td>Print Home Manager <code>manualArchives</code> entries for the missing archives</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="wabbajack-manual-links"><a class="header" href="#wabbajack-manual-links"><code>wabbajack manual-links</code></a></h3>
+<p>Print missing manual-archive URLs that require an operator to visit each page.</p>
+<pre><code class="language-bash">modde wabbajack manual-links &lt;manifest&gt; [--data-dir &lt;path&gt;] [--json]
+</code></pre>
+<h3 id="wabbajack-assess"><a class="header" href="#wabbajack-assess"><code>wabbajack assess</code></a></h3>
+<p>Assess readiness for a large Wabbajack install without mutating any state.</p>
+<pre><code class="language-bash">modde wabbajack assess &lt;manifest&gt; [--profile &lt;name&gt;] [--game-dir &lt;path&gt;] [--json]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--profile</code></td><td>Profile context for the assessment</td></tr>
+<tr><td><code>--game-dir</code></td><td>Game install directory to assess against</td></tr>
+<tr><td><code>--json</code></td><td>Emit machine-readable JSON</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="wabbajack-analyze-diagnostics"><a class="header" href="#wabbajack-analyze-diagnostics"><code>wabbajack analyze-diagnostics</code></a></h3>
+<p>Summarize the Wabbajack diagnostics JSONL written by a previous install run (the
+directory passed to <code>--diagnostics-dir</code>).</p>
+<pre><code class="language-bash">modde wabbajack analyze-diagnostics &lt;diagnostics-dir&gt; [--json]
+</code></pre>
+<pre><code class="language-bash"># Assess, resolve missing archives, then analyze the run afterwards
+modde wabbajack assess ./lotf.wabbajack --game-dir ~/Games/skyrim
+modde wabbajack missing-impact ./lotf.wabbajack --nix-snippet
+modde wabbajack analyze-diagnostics ./wj-diag
+</code></pre>
+<hr>
+<h2 id="modde-game"><a class="header" href="#modde-game"><code>modde game</code></a></h2>
+<p>Manage user-defined games. Built-in games are resolved from the internal registry;
+these commands register and inspect generic / user-defined games via a GameSpec
+TOML. (User-defined game support is <strong>Partial</strong> — deployment, conflict analysis,
+and launchers work, but there is no bespoke per-game scanner or save tracker. See
+the <a href="../games/generic-games.html">generic games guide</a>.)</p>
+<h3 id="game-add"><a class="header" href="#game-add"><code>game add</code></a></h3>
+<p>Add or overwrite a user-defined game registration.</p>
+<pre><code class="language-bash">modde game add &lt;id&gt; --display-name &lt;name&gt; --executable-dir &lt;path&gt; [flags...]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--display-name</code></td><td>Human-readable name (required)</td></tr>
+<tr><td><code>--executable-dir</code></td><td>Directory containing the game executable, relative to the install (required)</td></tr>
+<tr><td><code>--steam-app-id</code></td><td>Steam App ID, for launcher detection</td></tr>
+<tr><td><code>--install-dir-name</code></td><td>Steam <code>steamapps/common</code> directory name</td></tr>
+<tr><td><code>--mod-dir</code></td><td>Mod deployment subdirectory</td></tr>
+<tr><td><code>--nexus-domain</code></td><td>Nexus Mods domain slug for this game</td></tr>
+<tr><td><code>--proxy-dll &lt;name&gt;</code></td><td>Proxy DLL name (repeatable) used by OptiScaler/ReShade-style hooks</td></tr>
+<tr><td><code>--force</code></td><td>Overwrite an existing user-defined game TOML</td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-bash">modde game add stalker2 \
+  --display-name "S.T.A.L.K.E.R. 2" \
+  --executable-dir "Stalker2/Binaries/Win64" \
+  --steam-app-id 1643320 \
+  --nexus-domain stalker2heartofchornobyl \
+  --proxy-dll dinput8.dll
+</code></pre>
+<h3 id="game-list"><a class="header" href="#game-list"><code>game list</code></a></h3>
+<p>List user-defined games.</p>
+<pre><code class="language-bash">modde game list
+</code></pre>
+<h3 id="game-remove"><a class="header" href="#game-remove"><code>game remove</code></a></h3>
+<p>Remove a user-defined game registration.</p>
+<pre><code class="language-bash">modde game remove &lt;id&gt; [--yes]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--yes</code></td><td>Skip the confirmation prompt</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="game-detect"><a class="header" href="#game-detect"><code>game detect</code></a></h3>
+<p>Detect executable-bearing directories under a game install (helps you pick the
+right <code>--executable-dir</code> for <code>game add</code>).</p>
+<pre><code class="language-bash">modde game detect &lt;install-path&gt;
+</code></pre>
+<h3 id="game-show"><a class="header" href="#game-show"><code>game show</code></a></h3>
+<p>Show a resolved game registration (user-defined first, then the built-in registry).</p>
+<pre><code class="language-bash">modde game show &lt;id&gt;
+</code></pre>
+<h3 id="game-export"><a class="header" href="#game-export"><code>game export</code></a></h3>
+<p>Export a game registration to TOML.</p>
+<pre><code class="language-bash">modde game export &lt;id&gt; [--with-optiscaler] [--output &lt;path&gt;]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--with-optiscaler</code></td><td>Append resolved OptiScaler profiles to the exported TOML</td></tr>
+<tr><td><code>--output</code></td><td>Write to a file instead of stdout</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="game-import"><a class="header" href="#game-import"><code>game import</code></a></h3>
+<p>Import a game registration from TOML.</p>
+<pre><code class="language-bash">modde game import &lt;path&gt; [--force]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--force</code></td><td>Overwrite an existing destination TOML</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="game-import-profile"><a class="header" href="#game-import-profile"><code>game import-profile</code></a></h3>
+<p>Import OptiScaler profiles from TOML for a game.</p>
+<pre><code class="language-bash">modde game import-profile &lt;path&gt; --for &lt;game-id&gt; [--force]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--for</code></td><td>Game ID the profiles apply to (required)</td></tr>
+<tr><td><code>--force</code></td><td>Overwrite an existing destination TOML</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="modde-exec"><a class="header" href="#modde-exec"><code>modde exec</code></a></h2>
+<p>Manage named launch targets (<code>xEdit</code>, <code>BodySlide</code>, <code>FNIS</code>, etc.). This is a thin
+alias for the executable subset of <a href="#modde-tool"><code>modde tool</code></a> — the underlying
+storage is shared, so <code>modde exec list</code> and <code>modde tool list-executables</code> print
+the same rows. Executable management is <strong>Done</strong> end to end (named executables
+with args, working dir, env, Wine DLL overrides, a configurable output mod, and
+overwrite capture). See the <a href="../guides/executables.html">executables guide</a>.</p>
+<h3 id="exec-add"><a class="header" href="#exec-add"><code>exec add</code></a></h3>
+<p>Save (or update) a named launch target. Re-running with the same name overwrites
+the existing entry, so <code>add</code> doubles as <code>edit</code>.</p>
+<pre><code class="language-bash">modde exec add &lt;name&gt; &lt;executable&gt; --game &lt;id&gt; [flags...] [-- &lt;args&gt;...]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--game</code></td><td>—</td><td>Game ID (required)</td></tr>
+<tr><td><code>--working-dir</code></td><td>game install</td><td>Working directory for the launched process</td></tr>
+<tr><td><code>--output-mod</code></td><td><code>__overwrite__</code></td><td>Mod that captures files written during the run</td></tr>
+<tr><td><code>--wine-dll-overrides</code></td><td>—</td><td>Wine DLL overrides, e.g. <code>dinput8=n,b;winmm=n,b</code></td></tr>
+<tr><td><code>--env KEY=VALUE</code></td><td>—</td><td>Environment variable assignment (repeatable)</td></tr>
+<tr><td><code>-- &lt;args&gt;...</code></td><td>—</td><td>Default arguments to pass when running this executable</td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-bash">modde exec add xEdit "~/tools/SSEEdit/SSEEdit.exe" --game skyrim-se \
+  --wine-dll-overrides "dinput8=n,b" --env "SSE_GAME_PATH=Z:\\game" -- -IKnowWhatImDoing
+</code></pre>
+<h3 id="exec-list"><a class="header" href="#exec-list"><code>exec list</code></a></h3>
+<p>List configured launch targets for a game.</p>
+<pre><code class="language-bash">modde exec list --game &lt;id&gt;
+</code></pre>
+<h3 id="exec-remove"><a class="header" href="#exec-remove"><code>exec remove</code></a></h3>
+<p>Remove a launch target.</p>
+<pre><code class="language-bash">modde exec remove &lt;name&gt; --game &lt;id&gt;
+</code></pre>
+<h3 id="exec-run"><a class="header" href="#exec-run"><code>exec run</code></a></h3>
+<p>Run a saved launch target with overwrite capture.</p>
+<pre><code class="language-bash">modde exec run &lt;name&gt; --game &lt;id&gt; [--profile &lt;name&gt;] [-- &lt;args&gt;...]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--profile</code></td><td>Profile context for the run</td></tr>
+<tr><td><code>-- &lt;args&gt;...</code></td><td>Additional arguments appended after the saved defaults</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="modde-nexus"><a class="header" href="#modde-nexus"><code>modde nexus</code></a></h2>
+<p>Nexus Mods account management.</p>
+<h3 id="nexus-auth"><a class="header" href="#nexus-auth"><code>nexus auth</code></a></h3>
+<p>Save your API key to modde’s config (and the system keyring where available).</p>
+<pre><code class="language-bash">modde nexus auth
+</code></pre>
+<h3 id="nexus-status"><a class="header" href="#nexus-status"><code>nexus status</code></a></h3>
+<p>Show API key validity and premium status.</p>
+<pre><code class="language-bash">modde nexus status
+</code></pre>
+<hr>
+<h2 id="modde-nxm"><a class="header" href="#modde-nxm"><code>modde nxm</code></a></h2>
+<p>Handle <code>nxm://</code> download links from Nexus Mods.</p>
+<h3 id="nxm-handle"><a class="header" href="#nxm-handle"><code>nxm handle</code></a></h3>
+<p>Handle an <code>nxm://</code> download URI.</p>
+<pre><code class="language-bash">modde nxm handle &lt;uri&gt; [--profile &lt;name&gt;]
+</code></pre>
+<h3 id="nxm-install"><a class="header" href="#nxm-install"><code>nxm install</code></a></h3>
+<p>Install the <code>nxm://</code> URI handler for your desktop environment.</p>
+<pre><code class="language-bash">modde nxm install
+</code></pre>
+<hr>
+<h2 id="modde-save"><a class="header" href="#modde-save"><code>modde save</code></a></h2>
+<p>Manage save files and the git-backed save vault. See the
+<a href="../guides/saves.html">saves guide</a> for the conceptual model.</p>
+<h3 id="save-assign"><a class="header" href="#save-assign"><code>save assign</code></a></h3>
+<p>Assign a save file to a profile.</p>
+<pre><code class="language-bash">modde save assign &lt;path&gt; --profile &lt;name&gt; [--game &lt;id&gt;] [--label &lt;text&gt;]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--profile</code></td><td>Target profile (required)</td></tr>
+<tr><td><code>--game</code></td><td>Game ID</td></tr>
+<tr><td><code>--label</code></td><td>Optional label for this save</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="save-unassign"><a class="header" href="#save-unassign"><code>save unassign</code></a></h3>
+<p>Remove a save assignment.</p>
+<pre><code class="language-bash">modde save unassign &lt;path&gt;
+</code></pre>
+<h3 id="save-list"><a class="header" href="#save-list"><code>save list</code></a></h3>
+<p>List saves for a profile.</p>
+<pre><code class="language-bash">modde save list --profile &lt;name&gt; [--game &lt;id&gt;]
+</code></pre>
+<h3 id="save-scan"><a class="header" href="#save-scan"><code>save scan</code></a></h3>
+<p>Scan for unassigned save files.</p>
+<pre><code class="language-bash">modde save scan --game &lt;id&gt;
+</code></pre>
+<h3 id="save-adopt"><a class="header" href="#save-adopt"><code>save adopt</code></a></h3>
+<p>Import existing saves from the game directory into a profile’s vault. If no
+profile is active for the game, the adopted profile becomes active.</p>
+<pre><code class="language-bash">modde save adopt --game &lt;id&gt; --profile &lt;name&gt;
+</code></pre>
+<h3 id="save-capture"><a class="header" href="#save-capture"><code>save capture</code></a></h3>
+<p>Snapshot current saves into the vault (creates a new snapshot).</p>
+<pre><code class="language-bash">modde save capture --game &lt;id&gt; --profile &lt;name&gt; [-m &lt;message&gt;]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>-m</code>, <code>--message</code></td><td>Optional message for the snapshot</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="save-history"><a class="header" href="#save-history"><code>save history</code></a></h3>
+<p>Show save snapshot history.</p>
+<pre><code class="language-bash">modde save history --game &lt;id&gt; --profile &lt;name&gt; [--limit &lt;n&gt;]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--limit</code></td><td><code>20</code></td><td>Max entries to show</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="save-restore"><a class="header" href="#save-restore"><code>save restore</code></a></h3>
+<p>Restore saves from a specific snapshot.</p>
+<pre><code class="language-bash">modde save restore &lt;commit&gt; --game &lt;id&gt; --profile &lt;name&gt;
+</code></pre>
+<p>The <code>&lt;commit&gt;</code> may be a full commit ID or an unambiguous prefix.</p>
+<h3 id="save-auto-capture"><a class="header" href="#save-auto-capture"><code>save auto-capture</code></a></h3>
+<p>Detect and capture new saves (called by the launch wrapper on game exit; defaults
+to the active profile).</p>
+<pre><code class="language-bash">modde save auto-capture --game &lt;id&gt; [--profile &lt;name&gt;]
+</code></pre>
+<h3 id="save-watch"><a class="header" href="#save-watch"><code>save watch</code></a></h3>
+<p>Watch for save changes and auto-capture via polling.</p>
+<pre><code class="language-bash">modde save watch --game &lt;id&gt; [--profile &lt;name&gt;] [--interval &lt;secs&gt;]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--interval</code></td><td><code>30</code></td><td>Poll interval in seconds</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="modde-update"><a class="header" href="#modde-update"><code>modde update</code></a></h2>
+<p>Check for, and apply, updates. With no flags, <code>update check</code> checks for a new
+<strong>modde</strong> release; with <code>--mods</code>, <code>--profile</code>, or <code>--game</code>, it checks tracked
+profile mods on Nexus instead.</p>
+<h3 id="update-check"><a class="header" href="#update-check"><code>update check</code></a></h3>
+<pre><code class="language-bash">modde update check [--profile &lt;name&gt;] [--game &lt;id&gt;] [--period &lt;period&gt;] [--mods]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--profile</code></td><td>—</td><td>Check this profile’s tracked Nexus mods</td></tr>
+<tr><td><code>--game</code></td><td>—</td><td>Restrict to this game</td></tr>
+<tr><td><code>--period</code></td><td><code>1w</code></td><td>Time window: <code>1d</code>, <code>1w</code>, or <code>1m</code></td></tr>
+<tr><td><code>--mods</code></td><td>—</td><td>Check Nexus-tracked profile mods instead of modde itself</td></tr>
+</tbody>
+</table>
+</div>
+<p>If none of <code>--mods</code>, <code>--profile</code>, or <code>--game</code> is given, this performs the product
+(modde) update check.</p>
+<h3 id="update-apply"><a class="header" href="#update-apply"><code>update apply</code></a></h3>
+<p>Download and install the latest MAIN file for any tracked mod in the profile that
+has a newer Nexus version.</p>
+<pre><code class="language-bash">modde update apply [--profile &lt;name&gt;] [--game &lt;id&gt;] [flags...]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--period &lt;period&gt;</code></td><td>Time window to scan: <code>1d</code>, <code>1w</code>, or <code>1m</code> (default <code>1w</code>)</td></tr>
+<tr><td><code>--dry-run</code></td><td>Print the mods that would be updated without downloading</td></tr>
+<tr><td><code>--confirm-locked</code></td><td>Acknowledge that the profile is locked (Wabbajack / Collection / TOML import); <strong>required</strong> for any locked profile, since updating drifts it away from its authoritative source</td></tr>
+<tr><td><code>--accept-breaking</code></td><td>Permit applying updates that look like breaking semver bumps (major version change)</td></tr>
+<tr><td><code>--yes</code></td><td>Skip interactive prompts (assume “yes”); still refuses breaking updates unless <code>--accept-breaking</code> is also set</td></tr>
+</tbody>
+</table>
+</div>
+<p>Breaking (major semver) updates always require an interactive y/N confirmation
+per mod even with <code>--accept-breaking</code>, unless <code>--yes</code> is also passed.</p>
+<pre><code class="language-bash"># Preview, then apply on a locked Wabbajack profile, allowing major bumps
+modde update apply --profile lotf --period 1m --dry-run
+modde update apply --profile lotf --period 1m --confirm-locked --accept-breaking
+</code></pre>
+<hr>
+<h2 id="modde-loot"><a class="header" href="#modde-loot"><code>modde loot</code></a></h2>
+<p>LOOT masterlist integration for Bethesda plugin sorting.</p>
+<h3 id="loot-sort"><a class="header" href="#loot-sort"><code>loot sort</code></a></h3>
+<p>Sort plugins using LOOT masterlist rules.</p>
+<pre><code class="language-bash">modde loot sort --game &lt;id&gt; [--data-dir &lt;path&gt;]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--data-dir</code></td><td>Path to the game <code>Data</code> directory (auto-detected if omitted)</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="loot-validate"><a class="header" href="#loot-validate"><code>loot validate</code></a></h3>
+<p>Validate plugins for Form 43 and missing master errors.</p>
+<pre><code class="language-bash">modde loot validate --game &lt;id&gt;
+</code></pre>
+<hr>
+<h2 id="modde-tool"><a class="header" href="#modde-tool"><code>modde tool</code></a></h2>
+<p>External tool, executable, and overlay management. This command exposes both the
+overlay/patch surface (MangoHud, vkBasalt, GameMode, ReShade, OptiScaler, Proton)
+and the full named-executable surface (the same storage <code>modde exec</code> aliases).</p>
+<h3 id="tool-run"><a class="header" href="#tool-run"><code>tool run</code></a></h3>
+<p>Run an external tool by path with overwrite capture.</p>
+<pre><code class="language-bash">modde tool run &lt;executable&gt; [--profile &lt;name&gt;] [--game &lt;id&gt;] [-- &lt;args&gt;...]
+</code></pre>
+<h3 id="tool-add-executable"><a class="header" href="#tool-add-executable"><code>tool add-executable</code></a></h3>
+<p>Save a named executable launch target for a game. Equivalent to
+<a href="#exec-add"><code>modde exec add</code></a>.</p>
+<pre><code class="language-bash">modde tool add-executable &lt;name&gt; &lt;executable&gt; --game &lt;id&gt; [flags...] [-- &lt;args&gt;...]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--game</code></td><td>—</td><td>Game ID (required)</td></tr>
+<tr><td><code>--working-dir</code></td><td>game install</td><td>Working directory</td></tr>
+<tr><td><code>--output-mod</code></td><td><code>__overwrite__</code></td><td>Mod that captures files written during the run</td></tr>
+<tr><td><code>--wine-dll-overrides</code></td><td>—</td><td>Wine DLL overrides, e.g. <code>dinput8=n,b;winmm=n,b</code></td></tr>
+<tr><td><code>--env KEY=VALUE</code></td><td>—</td><td>Environment variable assignment (repeatable)</td></tr>
+<tr><td><code>-- &lt;args&gt;...</code></td><td>—</td><td>Default arguments</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="tool-list-executables"><a class="header" href="#tool-list-executables"><code>tool list-executables</code></a></h3>
+<p>List saved executable launch targets for a game.</p>
+<pre><code class="language-bash">modde tool list-executables --game &lt;id&gt;
+</code></pre>
+<h3 id="tool-remove-executable"><a class="header" href="#tool-remove-executable"><code>tool remove-executable</code></a></h3>
+<p>Remove a saved executable launch target.</p>
+<pre><code class="language-bash">modde tool remove-executable &lt;name&gt; --game &lt;id&gt;
+</code></pre>
+<h3 id="tool-run-executable"><a class="header" href="#tool-run-executable"><code>tool run-executable</code></a></h3>
+<p>Run a saved executable launch target with overwrite capture. Equivalent to
+<a href="#exec-run"><code>modde exec run</code></a>.</p>
+<pre><code class="language-bash">modde tool run-executable &lt;name&gt; --game &lt;id&gt; [--profile &lt;name&gt;] [-- &lt;args&gt;...]
+</code></pre>
+<h3 id="tool-list"><a class="header" href="#tool-list"><code>tool list</code></a></h3>
+<p>List detected tools for a game.</p>
+<pre><code class="language-bash">modde tool list --game &lt;id&gt;
+</code></pre>
+<h3 id="tool-status"><a class="header" href="#tool-status"><code>tool status</code></a></h3>
+<p>Show status of all gaming tools and overlays.</p>
+<pre><code class="language-bash">modde tool status --game &lt;id&gt;
+</code></pre>
+<h3 id="tool-enable"><a class="header" href="#tool-enable"><code>tool enable</code></a></h3>
+<p>Enable a tool or overlay.</p>
+<pre><code class="language-bash">modde tool enable &lt;tool_id&gt; --game &lt;id&gt;
+</code></pre>
+<p>Tool IDs: <code>mangohud</code>, <code>vkbasalt</code>, <code>gamemode</code>, <code>reshade</code>, <code>optiscaler</code>, <code>proton</code>.</p>
+<h3 id="tool-disable"><a class="header" href="#tool-disable"><code>tool disable</code></a></h3>
+<p>Disable a tool or overlay.</p>
+<pre><code class="language-bash">modde tool disable &lt;tool_id&gt; --game &lt;id&gt;
+</code></pre>
+<h3 id="tool-configure"><a class="header" href="#tool-configure"><code>tool configure</code></a></h3>
+<p>Configure tool settings as <code>key=value</code> pairs.</p>
+<pre><code class="language-bash">modde tool configure &lt;tool_id&gt; --game &lt;id&gt; -- &lt;key=value&gt;...
+</code></pre>
+<h3 id="tool-apply"><a class="header" href="#tool-apply"><code>tool apply</code></a></h3>
+<p>Apply tool patches to the game directory (DLLs, configs).</p>
+<pre><code class="language-bash">modde tool apply &lt;tool_id&gt; --game &lt;id&gt;
+</code></pre>
+<h3 id="tool-revert"><a class="header" href="#tool-revert"><code>tool revert</code></a></h3>
+<p>Revert tool patches from the game directory.</p>
+<pre><code class="language-bash">modde tool revert &lt;tool_id&gt; --game &lt;id&gt;
+</code></pre>
+<h3 id="tool-releases"><a class="header" href="#tool-releases"><code>tool releases</code></a></h3>
+<p>List releases for a release-backed tool (<code>reshade</code>, <code>optiscaler</code>). Set
+<code>GITHUB_TOKEN</code> to raise the GitHub API rate limit.</p>
+<pre><code class="language-bash">modde tool releases &lt;tool_id&gt; --game &lt;id&gt;
+</code></pre>
+<h3 id="tool-install-release"><a class="header" href="#tool-install-release"><code>tool install-release</code></a></h3>
+<p>Install a specific release asset for a release-backed tool, downloading it from
+GitHub.</p>
+<pre><code class="language-bash">modde tool install-release &lt;tool_id&gt; --game &lt;id&gt; --tag &lt;tag&gt; --asset &lt;asset&gt;
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--tag</code></td><td>Release tag (required)</td></tr>
+<tr><td><code>--asset</code></td><td>Asset filename (required)</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="tool-install-release-from-path"><a class="header" href="#tool-install-release-from-path"><code>tool install-release-from-path</code></a></h3>
+<p>Install a specific release asset from an already-downloaded local file.</p>
+<pre><code class="language-bash">modde tool install-release-from-path &lt;tool_id&gt; --game &lt;id&gt; --tag &lt;tag&gt; --asset &lt;asset&gt; &lt;path&gt;
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--tag</code></td><td>Release tag the asset corresponds to</td></tr>
+<tr><td><code>--asset</code></td><td>Asset filename</td></tr>
+<tr><td><code>&lt;path&gt;</code></td><td>Local path to the downloaded asset</td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-bash">modde tool releases optiscaler --game cyberpunk2077
+modde tool install-release optiscaler --game cyberpunk2077 \
+  --tag v0.7.7 --asset OptiScaler_v0.7.7.7z
+</code></pre>
+<p>See the <a href="../guides/tools.html">tools guide</a> for what each overlay does.</p>
+<hr>
+<h2 id="modde-fomod"><a class="header" href="#modde-fomod"><code>modde fomod</code></a></h2>
+<p>FOMOD installer utilities. See the <a href="../guides/fomod.html">FOMOD guide</a>.</p>
+<h3 id="fomod-generate"><a class="header" href="#fomod-generate"><code>fomod generate</code></a></h3>
+<p>Generate a declarative FOMOD config template from a mod’s <code>ModuleConfig.xml</code>.</p>
+<pre><code class="language-bash">modde fomod generate &lt;mod_path&gt; [--all] [--format &lt;fmt&gt;]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--all</code></td><td>Include all plugins (not just defaults)</td></tr>
+<tr><td><code>--format</code></td><td>Output format: <code>toml</code> (default), <code>json</code>, or <code>nix</code></td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="fomod-apply"><a class="header" href="#fomod-apply"><code>fomod apply</code></a></h3>
+<p>Apply a declarative FOMOD config non-interactively.</p>
+<pre><code class="language-bash">modde fomod apply &lt;mod_path&gt; --config &lt;path&gt; --dest &lt;dir&gt;
+</code></pre>
+<h3 id="fomod-inspect"><a class="header" href="#fomod-inspect"><code>fomod inspect</code></a></h3>
+<p>Inspect a mod’s FOMOD steps, groups, and plugins.</p>
+<pre><code class="language-bash">modde fomod inspect &lt;mod_path&gt;
+</code></pre>
+<hr>
+<h2 id="modde-scan"><a class="header" href="#modde-scan"><code>modde scan</code></a></h2>
+<p>Scan a game directory for installed mods. See the
+<a href="../guides/scanning.html">scanning guide</a>.</p>
+<pre><code class="language-bash">modde scan --game &lt;id&gt; [--game-dir &lt;path&gt;] [--manifest &lt;path&gt;] [--import-to &lt;profile&gt;] [--threshold &lt;0.0-1.0&gt;] [--dry-run] [--prune-duplicates]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--game-dir</code></td><td>auto-detected</td><td>Game installation path</td></tr>
+<tr><td><code>--manifest</code></td><td>—</td><td><code>.wabbajack</code> file for manifest matching</td></tr>
+<tr><td><code>--import-to</code></td><td>—</td><td>Import discovered mods into this profile</td></tr>
+<tr><td><code>--threshold</code></td><td><code>0.5</code></td><td>Minimum file presence fraction for a match</td></tr>
+<tr><td><code>--dry-run</code></td><td>—</td><td>Report only, don’t write to database</td></tr>
+<tr><td><code>--prune-duplicates</code></td><td>—</td><td>Remove filesystem-scanner rows covered by the manifest (requires <code>--manifest</code> and <code>--import-to</code>)</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="modde-collisions"><a class="header" href="#modde-collisions"><code>modde collisions</code></a></h2>
+<p>Analyse mod file collisions. See the <a href="../guides/conflicts.html">conflicts guide</a>.</p>
+<pre><code class="language-bash">modde collisions [--profile &lt;name&gt;] [--game &lt;id&gt;] [--all] [--suggest-hides]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--all</code></td><td>Show all collisions including cosmetic ones</td></tr>
+<tr><td><code>--suggest-hides</code></td><td>Suggest hide commands for redundant files</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="modde-diagnostics"><a class="header" href="#modde-diagnostics"><code>modde diagnostics</code></a></h2>
+<p>Run diagnostic checks for common modding issues.</p>
+<pre><code class="language-bash">modde diagnostics --game &lt;id&gt; [--profile &lt;name&gt;]
+</code></pre>
+<hr>
+<h2 id="modde-export"><a class="header" href="#modde-export"><code>modde export</code></a></h2>
+<p>Export a profile’s mod list to CSV.</p>
+<pre><code class="language-bash">modde export [--profile &lt;name&gt;] [--game &lt;id&gt;] [--columns &lt;col,col,...&gt;] [--output &lt;path&gt;]
+</code></pre>
+<p>Outputs to stdout if <code>--output</code> is omitted.</p>
+<hr>
+<h2 id="modde-verify"><a class="header" href="#modde-verify"><code>modde verify</code></a></h2>
+<p>Verify installed file integrity for a profile.</p>
+<pre><code class="language-bash">modde verify [--profile &lt;name&gt;] [--game &lt;id&gt;]
+</code></pre>
+<hr>
+<h2 id="modde-backup"><a class="header" href="#modde-backup"><code>modde backup</code></a></h2>
+<p>Manage mod and plugin order backups.</p>
+<h3 id="backup-create"><a class="header" href="#backup-create"><code>backup create</code></a></h3>
+<p>Create a backup of an installed mod’s content-store directory.</p>
+<pre><code class="language-bash">modde backup create &lt;mod_id&gt;
+</code></pre>
+<h3 id="backup-restore"><a class="header" href="#backup-restore"><code>backup restore</code></a></h3>
+<p>Restore a mod from its latest backup.</p>
+<pre><code class="language-bash">modde backup restore &lt;mod_id&gt;
+</code></pre>
+<h3 id="backup-list"><a class="header" href="#backup-list"><code>backup list</code></a></h3>
+<p>List available backups for a mod.</p>
+<pre><code class="language-bash">modde backup list &lt;mod_id&gt;
+</code></pre>
+<h3 id="backup-plugins"><a class="header" href="#backup-plugins"><code>backup plugins</code></a></h3>
+<p>Backup the real plugin order for a profile. modde reads the DB-backed order first
+and falls back to native <code>plugins.txt</code> when needed.</p>
+<pre><code class="language-bash">modde backup plugins --profile &lt;name&gt; --game &lt;id&gt;
+</code></pre>
+<h3 id="backup-restore-plugins"><a class="header" href="#backup-restore-plugins"><code>backup restore-plugins</code></a></h3>
+<p>Restore plugin load order from a backup, writing back to both the profile DB state
+and native <code>plugins.txt</code> when the game uses one.</p>
+<pre><code class="language-bash">modde backup restore-plugins --profile &lt;name&gt; --game &lt;id&gt;
+</code></pre>
+<hr>
+<h2 id="modde-stock"><a class="header" href="#modde-stock"><code>modde stock</code></a></h2>
+<p>Manage vanilla game snapshots.</p>
+<h3 id="stock-snapshot"><a class="header" href="#stock-snapshot"><code>stock snapshot</code></a></h3>
+<p>Capture a snapshot of the vanilla game installation.</p>
+<pre><code class="language-bash">modde stock snapshot &lt;game_id&gt;
+</code></pre>
+<h3 id="stock-verify"><a class="header" href="#stock-verify"><code>stock verify</code></a></h3>
+<p>Verify snapshot integrity against the current installation.</p>
+<pre><code class="language-bash">modde stock verify &lt;game_id&gt;
+</code></pre>
+<hr>
+<h2 id="modde-detect"><a class="header" href="#modde-detect"><code>modde detect</code></a></h2>
+<p>Detect installed games across Steam and Heroic launchers.</p>
+<pre><code class="language-bash">modde detect
+</code></pre>
+<hr>
+<h2 id="modde-instance"><a class="header" href="#modde-instance"><code>modde instance</code></a></h2>
+<p>Manage modde instances (multiple data directories). <code>instance switch</code> changes the
+active modde data root used by the database, store, downloads, and backups unless
+<code>--data-dir</code> overrides it for a single command.</p>
+<h3 id="instance-create"><a class="header" href="#instance-create"><code>instance create</code></a></h3>
+<p>Create a new instance.</p>
+<pre><code class="language-bash">modde instance create &lt;name&gt; --data-dir &lt;path&gt;
+</code></pre>
+<h3 id="instance-list"><a class="header" href="#instance-list"><code>instance list</code></a></h3>
+<p>List all instances.</p>
+<pre><code class="language-bash">modde instance list
+</code></pre>
+<h3 id="instance-switch"><a class="header" href="#instance-switch"><code>instance switch</code></a></h3>
+<p>Switch to a different instance.</p>
+<pre><code class="language-bash">modde instance switch &lt;name&gt;
+</code></pre>
+<hr>
+<h2 id="modde-skill"><a class="header" href="#modde-skill"><code>modde skill</code></a></h2>
+<p>Install and update the built-in modde-maintained agent skills (written under
+<code>~/.agents/skills/</code>). The built-in set is <code>modde-hm-integration</code>,
+<code>wabbajack-readiness</code>, and <code>manual-archive-curation</code>.</p>
+<h3 id="skill-list"><a class="header" href="#skill-list"><code>skill list</code></a></h3>
+<p>List built-in modde skills and their install status (<code>missing</code>, <code>installed</code>,
+<code>outdated</code>, or <code>newer</code>).</p>
+<pre><code class="language-bash">modde skill list
+</code></pre>
+<h3 id="skill-path"><a class="header" href="#skill-path"><code>skill path</code></a></h3>
+<p>Print the target skill directory (<code>$HOME/.agents/skills</code>).</p>
+<pre><code class="language-bash">modde skill path
+</code></pre>
+<h3 id="skill-install"><a class="header" href="#skill-install"><code>skill install</code></a></h3>
+<p>Install or update one built-in skill, or <code>all</code>.</p>
+<pre><code class="language-bash">modde skill install &lt;name|all&gt; [--force]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--force</code></td><td>Replace installed skills even when the installed version is newer</td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-bash">modde skill install all
+modde skill install wabbajack-readiness --force
+</code></pre>
+<hr>
+<h2 id="modde-import"><a class="header" href="#modde-import"><code>modde import</code></a></h2>
+<p>Import existing TOML-format profiles into the database.</p>
+<pre><code class="language-bash">modde import
+</code></pre>
+<hr>
+<h2 id="modde-gui"><a class="header" href="#modde-gui"><code>modde gui</code></a></h2>
+<p>Launch the graphical user interface (the same binary, with its own iced runtime).</p>
+<pre><code class="language-bash">modde gui
+</code></pre>
+<hr>
+<h2 id="common-workflows"><a class="header" href="#common-workflows">Common workflows</a></h2>
+<h3 id="first-install-and-play-nexus-collection"><a class="header" href="#first-install-and-play-nexus-collection">First install and play (Nexus collection)</a></h3>
+<pre><code class="language-bash">modde nexus auth                                  # store the API key once
+modde detect                                      # find installed games
+modde install nexus-collection my-collection --profile main
+modde play main --game skyrim-se                  # switch + deploy + launch + capture
+</code></pre>
+<h3 id="prepare-and-run-a-large-wabbajack-list"><a class="header" href="#prepare-and-run-a-large-wabbajack-list">Prepare and run a large Wabbajack list</a></h3>
+<pre><code class="language-bash">modde wabbajack assess ./lotf.wabbajack --game-dir ~/Games/skyrim
+modde wabbajack missing-impact ./lotf.wabbajack --nix-snippet
+modde wabbajack import-archive ./lotf.wabbajack ~/Downloads/manual-archive.7z
+modde install wabbajack ./lotf.wabbajack --profile lotf \
+  --game-dir ~/Games/skyrim --continue-on-error --diagnostics-dir ./wj-diag
+modde wabbajack analyze-diagnostics ./wj-diag
+</code></pre>
+<h3 id="experiment-safely-with-the-rollback-stack"><a class="header" href="#experiment-safely-with-the-rollback-stack">Experiment safely with the rollback stack</a></h3>
+<pre><code class="language-bash">modde profile fork main experiment --game skyrim-se --unlock
+modde profile try experiment --game skyrim-se     # push onto the stack
+modde update apply --profile experiment --period 1m --accept-breaking
+modde profile rollback --game skyrim-se           # undo if it broke
+modde profile commit --game skyrim-se             # or keep it
+</code></pre>
+<h3 id="wire-up-a-modding-tool"><a class="header" href="#wire-up-a-modding-tool">Wire up a modding tool</a></h3>
+<pre><code class="language-bash">modde exec add xEdit "~/tools/SSEEdit/SSEEdit.exe" --game skyrim-se \
+  --wine-dll-overrides "dinput8=n,b"
+modde exec run xEdit --game skyrim-se --profile main   # output captured to __overwrite__
+modde collisions --profile main --game skyrim-se --suggest-hides
+</code></pre>
+<h3 id="back-up-before-and-capture-after-a-session"><a class="header" href="#back-up-before-and-capture-after-a-session">Back up before and capture after a session</a></h3>
+<pre><code class="language-bash">modde backup plugins --profile main --game skyrim-se
+modde save capture --game skyrim-se --profile main -m "before the dungeon"
+modde play main --game skyrim-se                  # auto-captures saves on exit
+modde save history --game skyrim-se --profile main
+</code></pre>
+<h2 id="see-also"><a class="header" href="#see-also">See also</a></h2>
+<ul>
+<li><a href="../getting-started/installation.html">Installation</a> — what install channel is live today</li>
+<li><a href="../configuration/hm-module.html">Home-Manager module reference</a> — the declarative surface</li>
+<li><a href="parity.html">Parity audit</a> — what is <code>Done</code> vs <code>Partial</code></li>
+<li><a href="../games/supported-games.html">Supported games</a> — the 15 built-in games</li>
+<li><a href="../games/generic-games.html">Generic games guide</a> — user-defined game support</li>
+<li><a href="../guides/wabbajack.html">Wabbajack guide</a> — readiness and install workflow</li>
+<li><a href="../guides/executables.html">Executables guide</a> — named launch targets</li>
+<li><a href="../guides/saves.html">Saves guide</a> — the git-backed save vault</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../configuration/settings-file.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../reference/architecture.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../configuration/settings-file.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../reference/architecture.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

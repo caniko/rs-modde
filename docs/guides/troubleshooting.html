@@ -1,0 +1,638 @@
+<!DOCTYPE HTML>
+<html lang="en" class="coal sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Troubleshooting - modde Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Documentation for modde — a NixOS-native, Linux-first game mod manager.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "coal";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex-ed74f3b0.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-4ac01a02.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('coal')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">modde Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde/_edit/trunk/docs/src/guides/troubleshooting.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                            <span class=fa-svg id="git-edit-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M421.7 220.3l-11.3 11.3-22.6 22.6-205 205c-6.6 6.6-14.8 11.5-23.8 14.1L30.8 511c-8.4 2.5-17.5 .2-23.7-6.1S-1.5 489.7 1 481.2L38.7 353.1c2.6-9 7.5-17.2 14.1-23.8l205-205 22.6-22.6 11.3-11.3 33.9 33.9 62.1 62.1 33.9 33.9zM96 353.9l-9.3 9.3c-.9 .9-1.6 2.1-2 3.4l-25.3 86 86-25.3c1.3-.4 2.5-1.1 3.4-2l9.3-9.3H112c-8.8 0-16-7.2-16-16V353.9zM453.3 19.3l39.4 39.4c25 25 25 65.5 0 90.5l-14.5 14.5-22.6 22.6-11.3 11.3-33.9-33.9-62.1-62.1L314.3 67.7l11.3-11.3 22.6-22.6 14.5-14.5c25-25 65.5-25 90.5 0z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h1>
+<p>This page is organized as <strong>symptom → cause → fix</strong>. Start from the index below,
+jump to the matching section, and follow the commands. Every problem links to the
+guide that covers the underlying workflow in depth.</p>
+<p>If a command itself is misbehaving (wrong flags, missing subcommand), check the
+<a href="../reference/cli.html">CLI reference</a> first — this page covers <em>runtime</em> and
+<em>environment</em> problems, not command syntax. For install-time and build-host
+problems (Nix flake errors, <code>openssl-sys</code>, Home-Manager wiring), see the
+<a href="../getting-started/installation.html#troubleshooting">Installation guide’s Troubleshooting section</a>;
+the most common one is reproduced under <a href="#build-openssl-sys-failures-build-host-issue">Build / <code>openssl-sys</code> failures</a>
+below.</p>
+<h2 id="by-symptom"><a class="header" href="#by-symptom">By symptom</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Symptom</th><th>Section</th><th>Related guide</th></tr>
+</thead>
+<tbody>
+<tr><td><code>modde detect</code> doesn’t list my game</td><td><a href="#game-not-detected">Game not detected</a></td><td><a href="playing.html">Playing</a></td></tr>
+<tr><td>Generic game registered but install not found</td><td><a href="#generic-game-not-detected">Generic game not detected</a></td><td><a href="../games/generic-games.html">Generic games</a></td></tr>
+<tr><td><code>modde game detect</code> finds nothing / wrong dir</td><td><a href="#generic-game-not-detected">Generic game not detected</a></td><td><a href="../games/generic-games.html">Generic games</a></td></tr>
+<tr><td>Wabbajack list wants local game files</td><td><a href="#wabbajack-install-issues">Wabbajack install issues</a></td><td><a href="wabbajack.html">Wabbajack</a></td></tr>
+<tr><td>Home Manager says profile is “awaiting game install”</td><td><a href="#wabbajack-install-issues">Wabbajack install issues</a></td><td><a href="wabbajack.html">Wabbajack</a></td></tr>
+<tr><td>Wabbajack URL/hash mismatch</td><td><a href="#wabbajack-install-issues">Wabbajack install issues</a></td><td><a href="wabbajack.html">Wabbajack</a></td></tr>
+<tr><td>modde reports unavailable authored files</td><td><a href="#wabbajack-install-issues">Wabbajack install issues</a></td><td><a href="wabbajack.html">Wabbajack</a></td></tr>
+<tr><td>Nexus auth fails / CDN download refused</td><td><a href="#nexus-api-authentication-fails">Nexus API authentication fails</a></td><td><a href="nexus.html">Nexus</a></td></tr>
+<tr><td>Deployment fails with symlink errors</td><td><a href="#deployment-fails">Deployment fails</a></td><td><a href="deployment.html">Deployment</a></td></tr>
+<tr><td>Game left in a broken state after deploy</td><td><a href="#deployment-fails">Deployment fails</a></td><td><a href="deployment.html">Deployment</a></td></tr>
+<tr><td><code>modde tool apply</code> says “could not detect install dir”</td><td><a href="#tool-apply-revert-failures">Tool apply / revert failures</a></td><td><a href="tools.html">Tools</a></td></tr>
+<tr><td><code>modde tool apply</code> says “No files to apply”</td><td><a href="#tool-apply-revert-failures">Tool apply / revert failures</a></td><td><a href="tools.html">Tools</a></td></tr>
+<tr><td><code>modde tool revert</code> says “No applied files to revert”</td><td><a href="#tool-apply-revert-failures">Tool apply / revert failures</a></td><td><a href="tools.html">Tools</a></td></tr>
+<tr><td>OptiScaler: game crashes on first boot</td><td><a href="#optiscaler-first-boot-crash">OptiScaler first-boot crash</a></td><td><a href="tools.html">Tools</a></td></tr>
+<tr><td>Save vault wants “adoption”</td><td><a href="#save-vault-issues">Save vault issues</a></td><td><a href="saves.html">Saves</a></td></tr>
+<tr><td><code>save restore</code> warns about fingerprint mismatch</td><td><a href="#save-vault-issues">Save vault issues</a></td><td><a href="saves.html">Saves</a></td></tr>
+<tr><td>Can’t reorder mods (profile locked)</td><td><a href="#profile-is-locked">Profile is locked</a></td><td><a href="profiles.html">Profiles</a></td></tr>
+<tr><td>Mod stuck on “pending user input”</td><td><a href="#fomod-install-stuck-on-pending-user-input">FOMOD install stuck</a></td><td><a href="fomod.html">FOMOD</a></td></tr>
+<tr><td>“Unknown install type” / dossier written</td><td><a href="#unknown-install-type-dossier-written">Unknown install type</a></td><td><a href="mod-installation.html">Mod installation</a></td></tr>
+<tr><td>Extraction fails (<code>7z</code> / <code>unrar</code> missing)</td><td><a href="#missing-extractors">Missing extractors</a></td><td><a href="mod-installation.html">Mod installation</a></td></tr>
+<tr><td>Database looks corrupted</td><td><a href="#database-issues">Database issues</a></td><td><a href="data-management.html">Data management</a></td></tr>
+<tr><td><code>cargo build</code>/<code>test</code> fails in <code>openssl-sys</code></td><td><a href="#build-openssl-sys-failures-build-host-issue">Build / <code>openssl-sys</code> failures</a></td><td><a href="../getting-started/installation.html#cargo">Installation</a></td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="game-not-detected"><a class="header" href="#game-not-detected">Game not detected</a></h2>
+<p><strong>Symptom:</strong> <code>modde detect</code> does not list a game you have installed.</p>
+<p><strong>Cause:</strong> modde auto-detects games via Steam and Heroic (GOG, Epic, Sideload).
+A game only appears when the launcher’s own metadata can be read and matched to a
+built-in or user-defined game registration. A game installed outside a supported
+launcher, or in a non-default library, may not be found automatically.</p>
+<p><strong>Fix:</strong></p>
+<pre><code class="language-bash">modde detect
+</code></pre>
+<p>If your game doesn’t appear:</p>
+<ul>
+<li>Verify the game is installed via a supported launcher.</li>
+<li>For Steam, ensure the game’s <code>appmanifest_*.acf</code> file exists in your Steam
+library (including extra libraries listed in <code>libraryfolders.vdf</code>).</li>
+<li>For Heroic, check that the game appears in <code>~/.config/heroic/GamesConfig/</code>.</li>
+<li>Use <code>--game-dir</code> flags to specify the path manually on commands that accept it
+(for example <code>modde scan --game &lt;id&gt; --game-dir &lt;path&gt;</code>), or set
+<code>gameDir</code> in a Home-Manager profile.</li>
+</ul>
+<p>See <a href="playing.html">Playing a game</a> for how detection feeds into <code>modde play</code>, and
+<a href="deployment.html">Deployment &amp; VFS</a> for what happens once a game is detected.</p>
+<h2 id="generic-game-not-detected"><a class="header" href="#generic-game-not-detected">Generic game not detected</a></h2>
+<p><strong>Symptom:</strong> You registered a user-defined game with <code>modde game add</code>, but modde
+cannot find its install directory, or <code>modde game detect</code> reports the wrong
+directory (or none at all).</p>
+<p><strong>Cause:</strong> Generic (user-defined) game support is <strong><code>Partial</code></strong> — it gives you
+deployment, conflict classification, launcher integration, and executable
+management, but <strong>no bespoke scanner or save tracker</strong>. Detection runs an
+override-free chain: <code>install_path_override</code> → <code>install_dir_name</code> under a Steam
+<code>steamapps/common/</code> library → modde’s generic launcher detection keyed on the
+game ID. If none of those resolve, modde has nowhere to deploy. The most common
+causes are an <code>install_dir_name</code> that doesn’t exactly match the Steam folder, a
+missing <code>steam_app_id</code>, or an <code>executable_dir</code> pointing at the launcher stub
+instead of the real binary.</p>
+<p><strong>Fix:</strong></p>
+<ol>
+<li>
+<p>Find the real executable directory. <code>modde game detect</code> walks an install path
+(up to 4 levels deep) and lists executable-bearing directories, largest first:</p>
+<pre><code class="language-bash">modde game detect "/home/you/.local/share/Steam/steamapps/common/Voidrunner"
+</code></pre>
+<p>The top result (largest <code>.exe</code>) is almost always your <code>executable_dir</code>. If it
+reports <code>No executable-bearing directories found under &lt;path&gt;</code>, the path is
+wrong — pass the actual install root.</p>
+</li>
+<li>
+<p>Inspect and correct the spec:</p>
+<pre><code class="language-bash">modde game show &lt;id&gt;      # full resolved spec + source path
+modde game list           # all user-defined games and their files
+</code></pre>
+</li>
+<li>
+<p>Re-register with the right detection fields (use <code>--force</code> to overwrite):</p>
+<pre><code class="language-bash">modde game add &lt;id&gt; \
+  --display-name "&lt;name&gt;" \
+  --executable-dir "Binaries/Win64" \
+  --steam-app-id 998877 \
+  --install-dir-name "Voidrunner" \
+  --force
+</code></pre>
+<p><code>install_path_override</code> is <strong>not</strong> settable from <code>add</code>. If detection still
+fails (non-Steam install, unusual layout), edit
+<code>~/.local/share/modde/games/&lt;id&gt;.toml</code> by hand to add an absolute
+<code>install_path_override = "/abs/path"</code>, or <code>modde game import</code> a spec that
+contains it. When set and present on disk, the override short-circuits all
+other detection.</p>
+</li>
+</ol>
+<blockquote>
+<p><strong>What you do not get:</strong> <code>modde scan --game &lt;id&gt;</code> has no game-specific
+heuristics for a generic game, and <code>modde save</code> save-profile features are
+unavailable — generic games ship <code>scanner: None</code> and <code>save_tracker: None</code>.
+That is the boundary of the <code>Partial</code> status, not a bug. Import mods directly
+into a profile instead of scanning.</p>
+</blockquote>
+<p>See <a href="../games/generic-games.html">Generic &amp; user-defined games</a> for the full
+GameSpec schema, validation rules, and the <code>modde game</code> CLI surface.</p>
+<h2 id="wabbajack-install-issues"><a class="header" href="#wabbajack-install-issues">Wabbajack install issues</a></h2>
+<p><strong>Symptom / cause / fix</strong> for the common Wabbajack failure modes. See the
+<a href="wabbajack.html">Wabbajack modlists guide</a> for the full workflow.</p>
+<p>If a Skyrim SE modlist reports that it references local game files, pass
+<code>--game-dir "/path/to/Skyrim Special Edition"</code> or set <code>profiles.&lt;name&gt;.gameDir</code>
+in Home Manager. Lists such as Legends of the Frost need vanilla files from the
+local <code>Data/</code> directory (these are Wabbajack <code>GameFileSourceDownloader</code> entries —
+not downloads, but reads of the installed game).</p>
+<p>If Home Manager says a profile is awaiting game install, install the game with
+Steam or Heroic first. modde waits for launcher-managed game installs; it does
+not install Skyrim itself. After the game exists, set <code>gameDir</code> and rebuild Home
+Manager. (Use <code>installMode = "await-game"</code> to keep activation non-fatal until
+then — see <a href="deployment.html#wabbajack-profiles">Deployment &amp; VFS</a>.)</p>
+<p>If a local game file fails hash verification, verify that Skyrim SE is fully
+installed, up to date, and not modified in place. Wabbajack expects exact
+vanilla file contents for game-file sources.</p>
+<p>If Home Manager reports a Wabbajack URL/hash mismatch, recompute the Nix fetch
+hash for the actual authored-files <code>.wabbajack</code> URL and update
+<code>wabbajackList.hash</code>. Note that some authored-files CDN links resolve through
+Wabbajack’s chunked download page, so <code>pkgs.fetchurl</code> may 404 even when modde’s
+chunk-aware downloader works — in that case download with
+<code>modde wabbajack download</code> and use <code>wabbajackList.path</code> instead.</p>
+<p>If downloads fail before staging begins, check that
+<code>programs.modde.nexus.apiKeyFile</code> points to a readable Nexus API key file (see
+<a href="nexus.html#authentication">Nexus authentication</a>).</p>
+<p>If modde reports unavailable Wabbajack authored files, the upstream
+authored-files entries referenced by the <code>.wabbajack</code> manifest are missing.
+The error lists each archive, expected hash, metadata URL, and a <code>curl -fI</code>
+validation command. The upstream modlist or Wabbajack authored-files publisher
+must restore those exact files or publish a newer <code>.wabbajack</code> manifest.</p>
+<p>If you have the exact archives locally, import them explicitly:</p>
+<pre><code class="language-bash">modde wabbajack import-archive /path/to/list.wabbajack /path/to/archive.7z
+</code></pre>
+<p>Import matches by Wabbajack hash only. A file with the same name but a different
+hash is refused.</p>
+<h2 id="nexus-api-authentication-fails"><a class="header" href="#nexus-api-authentication-fails">Nexus API authentication fails</a></h2>
+<p><strong>Symptom:</strong> Browsing, downloading, or installing from Nexus fails with an auth
+error, or downloads are refused.</p>
+<p><strong>Cause:</strong> A missing/invalid API key, or a Free (non-Premium) account trying to
+generate CDN download links. See <a href="nexus.html">Nexus Mods</a> for the full setup.</p>
+<p><strong>Fix.</strong> Check your API key status:</p>
+<pre><code class="language-bash">modde nexus status
+</code></pre>
+<p>If invalid, re-authenticate:</p>
+<pre><code class="language-bash">modde nexus auth
+</code></pre>
+<p><strong>API key lookup order</strong>: OAuth token, <code>~/.config/modde/nexus_api_key</code>,
+<code>NEXUS_API_KEY</code> env var, system keyring, <code>NEXUS_API_KEY_FILE</code> env var, legacy
+<code>settings.toml</code> key.</p>
+<p><strong>CDN downloads require Premium</strong>: Free Nexus accounts cannot generate CDN
+download links. You’ll see an error if you try to download without Premium. For
+declarative (sops-nix / Home-Manager) key wiring, see
+<a href="nexus.html#using-sops-nix-declarative">Nexus → Using sops-nix</a>.</p>
+<h2 id="deployment-fails"><a class="header" href="#deployment-fails">Deployment fails</a></h2>
+<p>See <a href="deployment.html">Deployment &amp; VFS</a> for how the symlink farm is built and
+deployed.</p>
+<h3 id="symlink-errors"><a class="header" href="#symlink-errors">Symlink errors</a></h3>
+<p><strong>Symptom:</strong> deployment fails with symlink errors.</p>
+<p><strong>Cause:</strong> the game directory is missing, read-only, or has files locked by
+another process; or the staging directory is incomplete.</p>
+<p><strong>Fix:</strong></p>
+<ul>
+<li>Check that the target game directory exists and is writable.</li>
+<li>Ensure no other process has locked files in the game directory.</li>
+<li>Verify the staging directory at <code>~/.local/share/modde/staging/&lt;profile&gt;/</code> is
+intact.</li>
+</ul>
+<h3 id="rollback"><a class="header" href="#rollback">Rollback</a></h3>
+<p><strong>Symptom:</strong> a deployment left the game in a broken state.</p>
+<p><strong>Cause:</strong> the most recent deploy produced an unwanted layout; the previous good
+state is preserved in <code>staging.bak/</code>.</p>
+<p><strong>Fix:</strong></p>
+<pre><code class="language-bash">modde rollback --profile my-skyrim
+</code></pre>
+<p>This atomically swaps back to the previous deployment. To check that deployed
+files still match their sources, run <code>modde verify --profile my-skyrim</code> (see
+<a href="deployment.html#verifying-integrity">Deployment → Verifying integrity</a>).</p>
+<h2 id="tool-apply--revert-failures"><a class="header" href="#tool-apply--revert-failures">Tool apply / revert failures</a></h2>
+<p><strong>Symptom:</strong> <code>modde tool apply &lt;tool&gt; --game &lt;id&gt;</code> or
+<code>modde tool revert &lt;tool&gt; --game &lt;id&gt;</code> fails, or prints that there was nothing
+to do.</p>
+<p><strong>Cause and fix</strong> depend on the message:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Message</th><th>Cause</th><th>Fix</th></tr>
+</thead>
+<tbody>
+<tr><td><code>unknown tool: '&lt;tool&gt;'</code></td><td>The tool ID is not one modde manages.</td><td>Use a valid ID: <code>mangohud</code>, <code>vkbasalt</code>, <code>gamemode</code>, <code>reshade</code>, <code>optiscaler</code>, or <code>proton</code>. See <a href="tools.html#supported-tools">Tools &amp; overlays</a>.</td></tr>
+<tr><td><code>unsupported game: '&lt;id&gt;'</code></td><td>The game ID isn’t a built-in or registered user-defined game.</td><td>Check <code>modde game list</code> / <code>modde game show &lt;id&gt;</code>; register it with <a href="../games/generic-games.html#modde-game-add"><code>modde game add</code></a>.</td></tr>
+<tr><td><code>could not detect install dir for &lt;game&gt;</code></td><td><code>apply</code>/<code>revert</code> need the real game directory and detection failed.</td><td>Make sure the game is installed and detected (see <a href="#game-not-detected">Game not detected</a>). For a generic game, fix detection (see <a href="#generic-game-not-detected">Generic game not detected</a>).</td></tr>
+<tr><td><code>No files to apply for &lt;tool&gt;</code></td><td>The tool is a launch/config integration (Proton, MangoHud, vkBasalt, GameMode) that does <strong>not</strong> write files into the game directory — or the chosen profile/config yields no files.</td><td>This is expected for those tools; they contribute env vars, wrapper commands, generated config files, and Wine DLL overrides at deploy/launch time, not patched files. Only ReShade and OptiScaler normally stage files into the game directory.</td></tr>
+<tr><td><code>No applied files to revert for &lt;tool&gt;</code></td><td>modde has no record of files it applied for that tool/game, so there is nothing to remove.</td><td>Nothing to revert. If you applied files <em>outside</em> modde, it will not own or remove them — modde only reverts what it recorded via <code>tool apply</code>.</td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>How tracking works.</strong> <code>modde tool apply</code> records the exact relative paths it
+wrote into the database, and <code>modde tool revert</code> removes only those recorded
+files, then clears the record. This is why reverting is clean and why a manual,
+out-of-band copy of a DLL is not something <code>revert</code> will touch. If you adopted an
+<em>existing</em> OptiScaler install (rather than letting modde install it), modde
+records the working files so <code>revert</code> stays accurate — see
+<a href="tools.html#applying-tool-patches">Tools → Applying tool patches</a>.</p>
+<pre><code class="language-bash"># Re-apply cleanly: revert what modde tracked, then apply again
+modde tool revert reshade --game skyrim-se
+modde tool apply  reshade --game skyrim-se
+</code></pre>
+<h2 id="optiscaler-first-boot-crash"><a class="header" href="#optiscaler-first-boot-crash">OptiScaler first-boot crash</a></h2>
+<p><strong>Symptom:</strong> After applying an OptiScaler profile (for example Stellar Blade’s
+<code>community-dxgi</code>), the game <strong>crashes on the very first launch</strong> with the proxy
+DLL in place.</p>
+<p><strong>Cause:</strong> This is a known OptiScaler quirk for some titles: the proxy DLL
+(<code>dxgi.dll</code>) initialises on first boot and the game can die before the next
+launch succeeds. It is documented in the bundled profile notes, <strong>not</strong> a bad
+install.</p>
+<p><strong>Fix:</strong> <strong>Relaunch the game.</strong> It typically works on the second launch. Before
+assuming the install is broken:</p>
+<ul>
+<li>
+<p>Confirm the prerequisites first. For Proton/UE titles like Stellar Blade, the
+Proton prefix must exist (<code>compatdata/&lt;appid&gt;/pfx</code>) — <strong>launch the game once</strong>
+so Proton materialises the prefix, then apply OptiScaler and relaunch.</p>
+</li>
+<li>
+<p>Verify the proxy and companion files were staged:</p>
+<pre><code class="language-bash">modde tool apply optiscaler --game stellar-blade
+</code></pre>
+<p>This writes <code>dxgi.dll</code> and companion files into the game’s <code>Binaries/Win64</code>.</p>
+</li>
+<li>
+<p>If frame-gen HUD elements look wrong (interpolation artifacts on the HUD under
+DLSSG), set the <strong>in-game sharpness slider to 0</strong> — also a documented
+workaround, not a modde bug.</p>
+</li>
+</ul>
+<p>If it still crashes on every launch, revert and re-apply to rule out a partial
+write:</p>
+<pre><code class="language-bash">modde tool revert optiscaler --game stellar-blade
+modde tool apply  optiscaler --game stellar-blade
+</code></pre>
+<p>See <a href="tools.html#applying-tool-patches">Tools &amp; overlays</a> for the OptiScaler source
+selector (official releases vs GOverlay builds) and the
+<a href="../games/stellar-blade.html#optiscaler-the-community-dxgi-profile">Stellar Blade</a>
+page for that game’s specific profile notes.</p>
+<h2 id="save-vault-issues"><a class="header" href="#save-vault-issues">Save vault issues</a></h2>
+<p>See <a href="saves.html">Save management</a> for how the git-backed vault, branches, and
+fingerprinting work.</p>
+<h3 id="adoption-required"><a class="header" href="#adoption-required">“Adoption required”</a></h3>
+<p><strong>Symptom:</strong> Switching to a profile for the first time refuses to proceed because
+existing saves are detected.</p>
+<p><strong>Cause:</strong> modde will not silently overwrite saves it has never seen. It asks you
+to <strong>adopt</strong> them into a profile first, so they become the initial vault snapshot.</p>
+<p><strong>Fix:</strong></p>
+<pre><code class="language-bash">modde save adopt --game skyrim-se --profile my-skyrim
+</code></pre>
+<h3 id="restoring-from-an-incompatible-snapshot"><a class="header" href="#restoring-from-an-incompatible-snapshot">Restoring from an incompatible snapshot</a></h3>
+<p><strong>Symptom:</strong> <code>save restore</code> warns about a fingerprint mismatch.</p>
+<p><strong>Cause:</strong> the snapshot was created with a different set of save-breaking mods
+(modde embeds a SHA-256 fingerprint of save-breaking mods in each snapshot).</p>
+<p><strong>Fix:</strong> You can still restore, but the save may not load correctly in-game.
+Browse history to find a compatible snapshot:</p>
+<pre><code class="language-bash">modde save history --game skyrim-se --profile my-skyrim
+</code></pre>
+<p>See <a href="saves.html#save-fingerprinting">Save fingerprinting</a> for how compatibility is
+computed and reported.</p>
+<h2 id="profile-is-locked"><a class="header" href="#profile-is-locked">Profile is locked</a></h2>
+<p><strong>Symptom:</strong> you can’t reorder or remove mods.</p>
+<p><strong>Cause:</strong> the profile is locked — automatically after a Wabbajack install, a
+Nexus Collection, or a TOML import (to preserve a curator’s load order), or
+manually.</p>
+<p><strong>Fix.</strong> Inspect the lock:</p>
+<pre><code class="language-bash">modde profile lock-info my-skyrim
+</code></pre>
+<p>To unlock:</p>
+<pre><code class="language-bash">modde profile unlock my-skyrim
+</code></pre>
+<p>Or fork the profile with <code>--unlock</code> to create a freely editable copy (this strips
+both the profile-level lock and all per-mod pins):</p>
+<pre><code class="language-bash">modde profile fork my-skyrim my-skyrim-custom --game skyrim-se --unlock
+</code></pre>
+<p>See <a href="profiles.html#load-order-locking">Profile management → Load order locking</a>.</p>
+<h2 id="fomod-install-stuck-on-pending-user-input"><a class="header" href="#fomod-install-stuck-on-pending-user-input">FOMOD install stuck on “pending user input”</a></h2>
+<p><strong>Symptom:</strong> a mod’s install status is <code>PendingUserInput</code> and it never finishes.</p>
+<p><strong>Cause:</strong> the mod ships a FOMOD installer that needs your selections (texture
+resolution, compatibility patches, and so on).</p>
+<p><strong>Fix.</strong> Either complete the wizard in the GUI, or apply a declarative config:</p>
+<ol>
+<li>Open the GUI (<code>modde gui</code>) and complete the wizard, or</li>
+<li>Generate and apply a declarative config:</li>
+</ol>
+<pre><code class="language-bash">modde fomod generate /path/to/mod --format toml &gt; choices.toml
+# Edit choices.toml to select your options
+modde fomod apply /path/to/mod --config choices.toml --dest /path/to/output
+</code></pre>
+<p>See the <a href="fomod.html">FOMOD installer guide</a> for inspecting a mod’s options and for
+passing <code>--fomod-config</code> during a Nexus install.</p>
+<h2 id="unknown-install-type-dossier-written"><a class="header" href="#unknown-install-type-dossier-written">Unknown install type (dossier written)</a></h2>
+<p><strong>Symptom:</strong> modde can’t determine how to install a mod and stops.</p>
+<p><strong>Cause:</strong> the archive layout doesn’t match any recognized install method (single
+file set, FOMOD, or a game-specific layout). modde writes a <strong>dossier</strong> so you can
+investigate instead of guessing.</p>
+<p><strong>Fix.</strong> The dossier lands at
+<code>~/.local/share/modde/unknown-installers/&lt;slug&gt;/</code> and contains the archive tree,
+file samples, and metadata.</p>
+<pre><code class="language-bash">modde mod diagnose &lt;mod_id&gt;
+</code></pre>
+<p>This prints the dossier path for investigation. See the
+<a href="mod-installation.html">Mod installation guide</a> for how install methods are
+detected and what a valid layout looks like.</p>
+<h2 id="missing-extractors"><a class="header" href="#missing-extractors">Missing extractors</a></h2>
+<p><strong>Symptom:</strong> extraction fails for <code>.7z</code> or <code>.rar</code> archives.</p>
+<p><strong>Cause:</strong> modde shells out to <code>7z</code> (7-Zip) and <code>unrar</code> for certain archive
+formats, and they are not on your <code>PATH</code>.</p>
+<p><strong>Fix:</strong> On NixOS these are included in the development shell (<code>7zz</code>, <code>unrar</code>).
+If running modde standalone, install them and ensure they are on your <code>PATH</code>.
+This is the same class of problem as a bare-host build — the Nix dev shell
+provides every external tool modde needs (see
+<a href="#build-openssl-sys-failures-build-host-issue">Build / <code>openssl-sys</code> failures</a>).</p>
+<h2 id="database-issues"><a class="header" href="#database-issues">Database issues</a></h2>
+<p><strong>Symptom:</strong> modde commands error out reading state, or the database looks
+corrupted.</p>
+<p><strong>Cause:</strong> the SQLite database at <code>~/.local/share/modde/modde.db</code> was interrupted
+mid-write (power loss, killed process), leaving recovery files behind.</p>
+<p><strong>Fix:</strong></p>
+<ol>
+<li>Check if a <code>.db-journal</code> or <code>.db-wal</code> file exists (SQLite recovery files).</li>
+<li>Back up the database before attempting repairs.</li>
+<li>Try running any modde command — the schema migration system may repair minor
+issues.</li>
+</ol>
+<p>See the <a href="data-management.html">Data management guide</a> for the full on-disk layout
+(database, store, staging, save vaults) and backup guidance.</p>
+<h2 id="exporting-your-mod-list"><a class="header" href="#exporting-your-mod-list">Exporting your mod list</a></h2>
+<p>For sharing or debugging, export your profile to CSV:</p>
+<pre><code class="language-bash">modde export --profile my-skyrim --output modlist.csv
+</code></pre>
+<p>See <a href="data-management.html">Data management</a> for other export/backup paths.</p>
+<h2 id="build--openssl-sys-failures-build-host-issue"><a class="header" href="#build--openssl-sys-failures-build-host-issue">Build / <code>openssl-sys</code> failures (build-host issue)</a></h2>
+<p><strong>Symptom:</strong> A <code>cargo build</code>, <code>cargo install modde-cli</code>, or <code>cargo test</code> fails in
+<code>openssl-sys</code> with something like <code>Could not find directory of OpenSSL installation</code>, or fails to <em>link</em> with errors mentioning <code>wayland</code>, <code>xkbcommon</code>,
+or <code>vulkan</code>.</p>
+<p><strong>Cause:</strong> <strong>This is a build-host environment problem, not a modde bug.</strong> modde
+does not vendor OpenSSL, and the GUI links against system Wayland / <code>libxkbcommon</code>
+/ Vulkan libraries. A bare host without those headers cannot build the workspace,
+and a plain <code>cargo build</code>/<code>cargo test</code> outside the Nix shell is not a reliable
+signal.</p>
+<p><strong>Fix — use the Nix dev shell (recommended):</strong></p>
+<pre><code class="language-bash">nix develop . -c cargo build --release
+# or, against the remote flake:
+nix develop codeberg:caniko/rs-modde
+</code></pre>
+<p>Inside <code>nix develop</code>, OpenSSL, SQLite, the GUI system libraries, and the external
+extractors (<code>7zz</code>, <code>unrar</code>) are all provided, and <code>LD_LIBRARY_PATH</code> is set for
+you. This is the <strong>authoritative</strong> build/test environment.</p>
+<p>If you must build on a bare host, install the dev headers and point <code>pkg-config</code>
+at them. On Debian/Ubuntu:</p>
+<pre><code class="language-bash">sudo apt install ca-certificates gcc pkg-config \
+  libssl-dev libsqlite3-dev libdbus-1-dev \
+  libwayland-dev libxkbcommon-dev libvulkan-dev
+</code></pre>
+<p>On Fedora: <code>sudo dnf install openssl-devel pkg-config sqlite-devel dbus-devel wayland-devel libxkbcommon-devel vulkan-loader-devel</code>. If OpenSSL is in a
+non-standard prefix, export <code>OPENSSL_DIR</code> (or <code>PKG_CONFIG_PATH</code>). The full
+treatment, including the Home-Manager and flake-registry pitfalls, is in the
+<a href="../getting-started/installation.html#troubleshooting">Installation guide’s Troubleshooting section</a>.</p>
+<h2 id="see-also"><a class="header" href="#see-also">See also</a></h2>
+<ul>
+<li><a href="playing.html">Playing a game</a> — launch flow and game detection</li>
+<li><a href="wabbajack.html">Wabbajack modlists</a> — <code>.wabbajack</code> install workflow</li>
+<li><a href="nexus.html">Nexus Mods</a> — API keys, downloads, collections</li>
+<li><a href="deployment.html">Deployment &amp; VFS</a> — symlink farm, rollback, verify</li>
+<li><a href="tools.html">Tools &amp; overlays</a> — apply/revert, OptiScaler, Proton</li>
+<li><a href="saves.html">Save management</a> — vaults, fingerprinting, restore</li>
+<li><a href="profiles.html">Profile management</a> — locks, forks, experiment stack</li>
+<li><a href="fomod.html">FOMOD installer</a> — interactive and declarative installs</li>
+<li><a href="../games/generic-games.html">Generic &amp; user-defined games</a> — register your own title</li>
+<li><a href="../reference/cli.html">CLI reference</a> — every command and flag</li>
+<li><a href="../getting-started/installation.html#troubleshooting">Installation</a> — build-host and Nix issues</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../guides/data-management.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../configuration/hm-module.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../guides/data-management.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../configuration/hm-module.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

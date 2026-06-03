@@ -1,0 +1,519 @@
+<!DOCTYPE HTML>
+<html lang="en" class="coal sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Glossary - modde Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Documentation for modde — a NixOS-native, Linux-first game mod manager.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "coal";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex-ed74f3b0.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-4ac01a02.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('coal')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">modde Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde/_edit/trunk/docs/src/reference/glossary.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                            <span class=fa-svg id="git-edit-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M421.7 220.3l-11.3 11.3-22.6 22.6-205 205c-6.6 6.6-14.8 11.5-23.8 14.1L30.8 511c-8.4 2.5-17.5 .2-23.7-6.1S-1.5 489.7 1 481.2L38.7 353.1c2.6-9 7.5-17.2 14.1-23.8l205-205 22.6-22.6 11.3-11.3 33.9 33.9 62.1 62.1 33.9 33.9zM96 353.9l-9.3 9.3c-.9 .9-1.6 2.1-2 3.4l-25.3 86 86-25.3c1.3-.4 2.5-1.1 3.4-2l9.3-9.3H112c-8.8 0-16-7.2-16-16V353.9zM453.3 19.3l39.4 39.4c25 25 25 65.5 0 90.5l-14.5 14.5-22.6 22.6-11.3 11.3-33.9-33.9-62.1-62.1L314.3 67.7l11.3-11.3 22.6-22.6 14.5-14.5c25-25 65.5-25 90.5 0z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="glossary"><a class="header" href="#glossary">Glossary</a></h1>
+<p>This page defines the vocabulary the rest of the documentation assumes — both
+modde’s own concepts and the wider modding terms (FOMOD, LOOT, Wabbajack, REDmod,
+…) you meet when you actually install mods. Each entry is one to three sentences
+with a link to the guide that covers it in depth. Terms are grouped by theme;
+within a group they read roughly in the order you encounter them.</p>
+<h2 id="modde-core-concepts"><a class="header" href="#modde-core-concepts">modde core concepts</a></h2>
+<h3 id="profile"><a class="header" href="#profile">Profile</a></h3>
+<p>A profile is modde’s central organizing unit: a per-game bundle of an ordered mod
+set, a load order (and plugin order), a branch in the save vault, and the
+deployment state that records exactly what was staged. Profiles are scoped by
+<code>(name, game_id)</code>, so a <code>default</code> profile for Skyrim and a <code>default</code> for Fallout 4
+coexist without collision. See <a href="../guides/profiles.html">Profile management</a>.</p>
+<h3 id="instance"><a class="header" href="#instance">Instance</a></h3>
+<p>An instance is a named, self-contained data directory. Instances let you run
+entirely separate modde states — a daily driver and a Wabbajack testbed, say —
+without sharing a database, store, or save vaults; the active instance is recorded
+in <code>~/.config/modde/instances.toml</code>. See
+<a href="../guides/data-management.html">Data, instances &amp; backups</a>.</p>
+<h3 id="store"><a class="header" href="#store">Store</a></h3>
+<p>The store (<code>&lt;data&gt;/store/</code>) is modde’s content-addressed mod file repository: the
+actual staged bytes of every installed mod, one directory per mod, that the VFS
+symlinks point into. The database’s per-mod file manifest maps each profile’s mods
+to the precise files they staged, which is what makes uninstall surgical. See
+<a href="../guides/deployment.html">Deployment &amp; VFS</a>.</p>
+<h3 id="staging"><a class="header" href="#staging">Staging</a></h3>
+<p>Staging is the per-profile scratch tree (<code>profiles/&lt;profile&gt;/staging/</code>) that
+<code>materialize()</code> writes the symlink farm into before it is projected onto the game
+directory. For Wabbajack profiles, “staging” instead means the pre-resolved
+<code>mods/&lt;mod&gt;/…</code> layout the modlist install produces. See
+<a href="../guides/deployment.html">Deployment &amp; VFS</a>.</p>
+<h3 id="deploy"><a class="header" href="#deploy">Deploy</a></h3>
+<p>To deploy is to project the active profile’s materialized staging tree into the
+game’s resolved mod directory — creating the symlinks (or, for Wabbajack, hardlinks
+or copies) the game actually sees. <code>modde deploy</code> (and <code>modde play</code>, which deploys
+before launching) run this step. See <a href="../guides/deployment.html">Deployment &amp; VFS</a>.</p>
+<h3 id="rollback"><a class="header" href="#rollback">Rollback</a></h3>
+<p><code>modde rollback</code> swaps a profile’s <code>staging</code> and <code>staging.bak</code> directories with
+atomic directory renames, restoring a deliberately-preserved earlier deploy state;
+it fails if no <code>staging.bak</code> exists, and you must re-run <code>modde deploy</code> afterward to
+re-project the restored tree. See
+<a href="../guides/deployment.html#rollback">Deployment &amp; VFS</a>.</p>
+<h2 id="ordering-and-conflicts"><a class="header" href="#ordering-and-conflicts">Ordering and conflicts</a></h2>
+<h3 id="load-order-vs-plugin-order"><a class="header" href="#load-order-vs-plugin-order">Load order vs. plugin order</a></h3>
+<p>These are two independent ordering systems, and conflating them is the most common
+source of confusion. <strong>Load order</strong> (mod install priority) decides which <em>file</em>
+wins when two mods ship the same path — later mod in the list wins, resolved by the
+VFS. <strong>Plugin order</strong> decides the sequence Bethesda <code>.esp</code>/<code>.esm</code>/<code>.esl</code> plugins
+load in the engine — a separate axis managed by LOOT and <code>plugins.txt</code>. See
+<a href="../guides/conflicts.html">Conflicts &amp; load order</a>.</p>
+<h3 id="vfs--symlink-farm"><a class="header" href="#vfs--symlink-farm">VFS / symlink farm</a></h3>
+<p>The VFS (virtual filesystem) is the merged, modded view of the game’s data
+directory that modde assembles as a <strong>symlink farm</strong>: symlinks pointing back at the
+content-addressed store, so the real install on disk stays pristine. Unlike MO2’s
+USVFS — which hooks file-system calls per process — modde’s symlinks live in the
+real filesystem and are globally visible to every process without API hooking. See
+<a href="../guides/deployment.html">Deployment &amp; VFS</a>.</p>
+<h3 id="conflict--collision"><a class="header" href="#conflict--collision">Conflict / collision</a></h3>
+<p>A conflict (or collision) is when two or more enabled mods provide the same relative
+path, so only one version can be deployed. modde resolves it by load order priority
+— the highest-priority provider wins — and <code>modde collisions</code> reports the pairs,
+per-file winners, and severities. See
+<a href="../guides/conflicts.html">Conflicts &amp; load order</a>.</p>
+<h3 id="collision-severity-cosmetic--config--dangerous"><a class="header" href="#collision-severity-cosmetic--config--dangerous">Collision severity (cosmetic / config / dangerous)</a></h3>
+<p>Each colliding file is graded by extension into a severity level: <strong>Cosmetic</strong>
+(visual/audio only — <code>dds</code>, <code>nif</code>, <code>wav</code>; low risk), <strong>Config</strong> (may change
+behaviour — <code>ini</code>, <code>json</code>, <code>toml</code>), <strong>Dangerous</strong> (scripts/plugins/DLLs that can
+crash or corrupt saves — <code>esp</code>, <code>esm</code>, <code>dll</code>, <code>pex</code>), with <strong>Unknown</strong> for
+unrecognised extensions. A mod pair’s reported severity is the <em>worst</em> among its
+colliding files, and the classifier is per-game. See
+<a href="../guides/conflicts.html#collision-severity">Collision severity</a>.</p>
+<h3 id="shadowed-mod"><a class="header" href="#shadowed-mod">Shadowed mod</a></h3>
+<p>A shadowed mod is one whose <em>every</em> file is overridden by higher-priority mods, so
+it contributes nothing to the deployed VFS. The collision report lists it as
+<code>"&lt;mod&gt;" (N files, all overridden by &lt;mods&gt;)</code> and a diagnostic suggests disabling
+it to shrink the deploy. See
+<a href="../guides/conflicts.html#shadowed-mods-and-redundant-files">Shadowed mods and redundant files</a>.</p>
+<h3 id="redundant-file"><a class="header" href="#redundant-file">Redundant file</a></h3>
+<p>A redundant file is a single path from a mod that always loses the conflict — it is
+never the deployed winner. <code>modde collisions --suggest-hides</code> turns each into an
+actionable <code>modde profile hide</code> command. See
+<a href="../guides/conflicts.html#shadowed-mods-and-redundant-files">Shadowed mods and redundant files</a>.</p>
+<h3 id="hidden-file"><a class="header" href="#hidden-file">Hidden file</a></h3>
+<p>A hidden file is a single file you exclude from a mod without disabling the whole
+mod (modde’s equivalent of MO2’s <code>.mohidden</code>). Hidden files are recorded per
+profile and skipped during the VFS build, so the next-highest provider of that path
+wins instead. See <a href="../guides/conflicts.html#per-file-hiding">Per-file hiding</a>.</p>
+<h3 id="overwrite-mod"><a class="header" href="#overwrite-mod">Overwrite mod</a></h3>
+<p>The overwrite (output) mod is the destination that captures files a launched
+executable writes back into the deployed tree — for example xEdit output or
+generated patches — so they are not lost between deploys. It is configurable per
+executable and is part of the shipped executable-management feature. See
+<a href="../guides/executables.html">Executables &amp; external tools</a>.</p>
+<h2 id="saves"><a class="header" href="#saves">Saves</a></h2>
+<h3 id="save-vault"><a class="header" href="#save-vault">Save vault</a></h3>
+<p>A save vault is the git-backed history of a game’s saves: one git repository per
+game under <code>&lt;data&gt;/saves/&lt;game_id&gt;/</code>, with one branch per profile. Every capture is
+an ordinary git commit, so you get full history, branching, and the ability to roll
+a profile’s saves back to any point. See <a href="../guides/saves.html">Save management</a>.</p>
+<h3 id="save-snapshot"><a class="header" href="#save-snapshot">Save snapshot</a></h3>
+<p>A save snapshot is a single capture in the vault — a git commit on the profile’s
+branch containing the live save files at that moment, plus the mod fingerprint
+embedded as commit trailers. <code>modde save history</code> lists them and <code>modde save restore &lt;commit&gt;</code> restores one. See <a href="../guides/saves.html">Save management</a>.</p>
+<h3 id="save-fingerprint"><a class="header" href="#save-fingerprint">Save fingerprint</a></h3>
+<p>A save fingerprint is a SHA-256 hash computed over only the <strong>enabled,
+save-breaking</strong> mods of a profile (sorted and de-duplicated), stored as a commit
+trailer on each snapshot. On restore, modde compares the snapshot’s fingerprint
+against your current profile’s and warns when the save-breaking mod set differs.
+See <a href="../guides/saves.html#save-breaking-mods-and-the-fingerprint">Save-breaking mods and the fingerprint</a>.</p>
+<h3 id="save-breaking-mod"><a class="header" href="#save-breaking-mod">Save-breaking mod</a></h3>
+<p>A save-breaking mod is one whose presence or absence can make a save game
+incompatible — typically anything that changes the game’s serialized data: script
+extenders and their plugins, mods that bake scripts or records into saves,
+framework mods. Cosmetic mods (textures, reshades, UI tweaks) are <em>not</em>
+save-breaking, and each game plugin classifies its own mods. See
+<a href="../guides/saves.html#save-breaking-mods-and-the-fingerprint">Save management</a>.</p>
+<h2 id="experiments-profiles-and-instances"><a class="header" href="#experiments-profiles-and-instances">Experiments, profiles, and instances</a></h2>
+<h3 id="experiment-stack"><a class="header" href="#experiment-stack">Experiment stack</a></h3>
+<p>The experiment stack lets you try profile changes non-destructively, like git
+branches for your mod setup: <code>modde profile try</code> pushes the current profile and
+activates another, <code>rollback</code> pops back one level, and <code>commit</code> accepts wherever
+you landed and clears the history. Saves swap along with each step. See
+<a href="../guides/profiles.html#experiment-stack">Experiment stack</a>.</p>
+<h3 id="stock-snapshot"><a class="header" href="#stock-snapshot">Stock snapshot</a></h3>
+<p>A stock (vanilla) snapshot is a preserved, hardlinked copy of a clean game install,
+captured with <code>modde stock snapshot &lt;game&gt;</code> before you mod anything. modde computes
+a deterministic tree hash over it so <code>modde stock verify</code> can later tell whether the
+install has drifted from vanilla. See
+<a href="../guides/data-management.html#stock-vanilla-game-snapshots">Stock snapshots</a>.</p>
+<h2 id="install-formats-and-methods"><a class="header" href="#install-formats-and-methods">Install formats and methods</a></h2>
+<h3 id="fomod"><a class="header" href="#fomod">FOMOD</a></h3>
+<p>FOMOD is the most common <em>scripted installer</em> format on Nexus: instead of a flat
+archive, the mod ships a <code>fomod/ModuleConfig.xml</code> script that asks the user
+questions (texture resolution, body type, optional patches) and copies a different
+file set depending on the answers. modde supports it interactively (a wizard) and
+declaratively (a generated config you can pin and replay). See
+<a href="../guides/fomod.html">FOMOD installer</a>.</p>
+<h3 id="fomod-declarative-config"><a class="header" href="#fomod-declarative-config">FOMOD declarative config</a></h3>
+<p>A FOMOD declarative config is a file (TOML, JSON, or Nix) that records your FOMOD
+answers so an install is reproducible and non-interactive — the path used by Home
+Manager and any automation. Generate one with <code>modde fomod generate</code>, then pass it
+as <code>--fomod-config</code>. See
+<a href="../guides/fomod.html#declarative-installation">Declarative installation</a>.</p>
+<h3 id="bain"><a class="header" href="#bain">BAIN</a></h3>
+<p>BAIN (BAIN Archive INstaller) is the Wrye Bash multi-option layout: an archive of
+numbered subdirectories like <code>00 Core</code>, <code>01 Option</code> that you pick from. modde
+auto-<em>detects</em> BAIN by the numbered-subdir convention, but the interactive
+sub-package selection flow is still <code>Partial</code> — until a selection is made,
+execution returns <code>RequiresUserInput</code>. See
+<a href="../guides/mod-installation.html">How mod installation works</a> and the
+<a href="parity.html">parity audit</a>.</p>
+<h3 id="install-method"><a class="header" href="#install-method">Install method</a></h3>
+<p>An install method is modde’s classification of an archive’s layout
+(<code>InstallMethod</code>): <code>BareExtract</code>, <code>SingleFileSet</code>, <code>DirectoryMod</code>, <code>Fomod</code>,
+<code>REDmod</code>, <code>Bain</code>, <code>DllOverlay</code>, and more. Detection is ordered so game-specific
+layouts win before generic guesses; most methods stage automatically, while FOMOD
+and BAIN may pause for input. See
+<a href="../guides/mod-installation.html">How mod installation works</a>.</p>
+<h2 id="cyberpunk-2077--redengine"><a class="header" href="#cyberpunk-2077--redengine">Cyberpunk 2077 / REDengine</a></h2>
+<h3 id="redmod"><a class="header" href="#redmod">REDmod</a></h3>
+<p>REDmod is CD Projekt Red’s official mod packaging format for Cyberpunk 2077 — a
+package keyed off an <code>info.json</code> manifest (plus <code>archives/</code>) that installs under
+<code>&lt;install&gt;/mods/&lt;name&gt;/</code>. modde detects it, symlinks the package, and runs a
+post-deploy <code>redmod deploy</code> pass to register it as a loadable archive. See
+<a href="../games/cyberpunk2077.html">Cyberpunk 2077</a>.</p>
+<h3 id="redscript--cet--tweakxl"><a class="header" href="#redscript--cet--tweakxl">REDscript / CET / TweakXL</a></h3>
+<p>These are the major loose-file Cyberpunk modding frameworks modde deploys:
+<strong>REDscript</strong> (compiled gameplay scripts under <code>r6/scripts/</code>), <strong>CET</strong> (Cyber Engine
+Tweaks, a Lua console/UI loaded via a <code>version.dll</code> proxy under
+<code>bin/x64/plugins/cyber_engine_tweaks/</code>), and <strong>TweakXL</strong> (data tweaks under
+<code>r6/tweaks/</code>). modde deploys their files into the correct roots; each framework
+sequences its own loading. See <a href="../games/cyberpunk2077.html">Cyberpunk 2077</a>.</p>
+<h2 id="bethesda-plugins-and-archives"><a class="header" href="#bethesda-plugins-and-archives">Bethesda plugins and archives</a></h2>
+<h3 id="bsa--ba2"><a class="header" href="#bsa--ba2">BSA / BA2</a></h3>
+<p>BSA (Skyrim) and BA2 (Fallout 4) are Bethesda’s packed archive container formats
+for game assets. modde reads and indexes their contents so a loose
+<code>textures/sky.dds</code> correctly collides with a <code>sky.dds</code> packed inside another mod’s
+<code>.bsa</code>; the container extension itself classifies as cosmetic, with danger judged by
+what is inside. Wabbajack lists can also have modde repack loose files back into a
+real <code>.bsa</code>/<code>.ba2</code>. See
+<a href="../guides/conflicts.html#archive-aware-conflicts-bsa-ba2-pak">Archive-aware conflicts</a>.</p>
+<h3 id="pak--ucas--utoc"><a class="header" href="#pak--ucas--utoc">pak / ucas / utoc</a></h3>
+<p><code>pak</code>, <code>ucas</code>, and <code>utoc</code> are the Unreal Engine 4/5 archive formats — the archive
+extensions modde’s UE classifier recognises for titles like Stellar Blade and
+Oblivion Remastered. UE games route mod paks into a <code>~mods/</code> directory at deploy
+time. See <a href="../guides/conflicts.html#per-game-classifiers">Per-game classifiers</a> and
+<a href="../games/supported-games.html">Supported games</a>.</p>
+<h3 id="master--plugin"><a class="header" href="#master--plugin">Master / plugin</a></h3>
+<p>A plugin is a Bethesda content file (<code>.esp</code>, <code>.esm</code>, <code>.esl</code>); a master is a plugin
+that another plugin depends on (declared in its header). modde reads the first ~1 KB
+of each active plugin’s TES4 header and flags <strong>missing masters</strong> — a plugin
+requiring a master not in the active load order, which crashes the game on load. See
+<a href="../guides/conflicts.html#validating-plugins">Validating plugins</a>.</p>
+<h3 id="form-43"><a class="header" href="#form-43">Form 43</a></h3>
+<p>Form 43 (record header version <code>0.94</code>) is the old Skyrim LE (“Oldrim”) plugin
+format. Using a Form 43 plugin in Skyrim SE/AE (which expects Form 44, <code>1.70</code>) can
+crash the game; <code>modde loot validate</code> detects it and the fix is to resave the plugin
+in the Creation Kit. See <a href="../guides/conflicts.html#validating-plugins">Validating plugins</a>.</p>
+<h3 id="loot"><a class="header" href="#loot">LOOT</a></h3>
+<p>LOOT (the Load Order Optimisation Tool) is the community standard for sorting
+Bethesda plugin load order. <code>modde loot sort</code> parses the LOOT masterlist and derives
+load-after / incompatible rules for the plugins you actually have active. See
+<a href="../guides/conflicts.html#loot-sorting">LOOT sorting</a>.</p>
+<h3 id="masterlist"><a class="header" href="#masterlist">Masterlist</a></h3>
+<p>The masterlist is LOOT’s community-maintained YAML file of per-plugin <code>after</code>,
+<code>requires</code>, and <code>incompatible</code> rules for a game. modde caches it locally and, if it
+is missing, prints the exact <code>curl</code> command to fetch the right one; masterlists ship
+for Skyrim SE/AE, Fallout 4, Fallout 76, and Starfield. See
+<a href="../guides/conflicts.html#loot-sorting">LOOT sorting</a>.</p>
+<h2 id="wabbajack"><a class="header" href="#wabbajack">Wabbajack</a></h2>
+<h3 id="wabbajack-modlist"><a class="header" href="#wabbajack-modlist">Wabbajack modlist</a></h3>
+<p>A Wabbajack modlist (a <code>.wabbajack</code> file) is a <em>recipe</em>, not a bundle of mods: it
+records exactly which archives to download and exactly how to reconstruct a curated
+mod setup from them. modde replays that recipe natively on Linux — no Windows VM,
+no Wine-hosted client — verifying every download against its hash. See
+<a href="../guides/wabbajack.html">Wabbajack modlists</a>.</p>
+<h3 id="directive"><a class="header" href="#directive">Directive</a></h3>
+<p>A directive is one step in a Wabbajack manifest’s ordered install plan. modde
+supports the common types: <code>FromArchive</code> (extract one file from a source archive),
+<code>PatchedFromArchive</code> (extract then apply an OctoDiff binary delta),
+<code>InlineFile</code>/<code>RemappedInlineFile</code> (write bytes stored inside the <code>.wabbajack</code>), and
+<code>CreateBSA</code>/BA2 repack. See
+<a href="../guides/wabbajack.html#install-directives">Install directives</a>.</p>
+<h2 id="nexus"><a class="header" href="#nexus">Nexus</a></h2>
+<h3 id="nexus-collection"><a class="header" href="#nexus-collection">Nexus Collection</a></h3>
+<p>A Nexus Collection is a curated, version-pinned set of mods published on Nexus.
+modde resolves it by slug (discovering the game domain and latest revision, then
+fetching the pinned manifest) and installing it locks the profile to preserve the
+curator’s intended load order. See
+<a href="../guides/nexus.html#nexus-collections">Nexus Collections</a>.</p>
+<h3 id="nxm"><a class="header" href="#nxm"><code>nxm://</code></a></h3>
+<p><code>nxm://</code> is the URI scheme Nexus’s “Download with [manager]” buttons emit, carrying
+the game domain, mod ID, file ID, and a short-lived <code>key</code>/<code>expires</code> pair. Run
+<code>modde nxm install</code> to register modde as the system handler so clicking a Nexus
+download link hands the URI to modde. See
+<a href="../guides/nexus.html#nxm-protocol-handler">The nxm:// handler</a>.</p>
+<h2 id="games-and-engines"><a class="header" href="#games-and-engines">Games and engines</a></h2>
+<h3 id="gameplugin"><a class="header" href="#gameplugin">GamePlugin</a></h3>
+<p>A <code>GamePlugin</code> is the per-game integration trait inside modde: each of the 15
+built-in titles is a <code>GamePlugin</code> that knows that game’s archive layouts, mod
+directory, save location, conflict classifier, and Wine/Proton DLL-override quirks.
+It also supplies the analyze hook that lets a game claim a layout (REDmod, an ENB
+pack) before any generic install probe runs. See
+<a href="../games/supported-games.html">Games</a> and <a href="architecture.html">Architecture</a>.</p>
+<h3 id="generic-game"><a class="header" href="#generic-game">Generic game</a></h3>
+<p>A generic game is a user-defined title registered at runtime with <code>modde game add</code>
+or an imported GameSpec TOML, rather than a hand-coded <code>GamePlugin</code>. Generic game
+support is <code>Partial</code>: deployment, conflict classification, launcher integration, and
+executable management work, but there is no bespoke filesystem scanner and no save
+tracker. See <a href="../games/generic-games.html">Generic &amp; user-defined games</a>.</p>
+<h2 id="tools-and-runtime"><a class="header" href="#tools-and-runtime">Tools and runtime</a></h2>
+<h3 id="optiscaler"><a class="header" href="#optiscaler">OptiScaler</a></h3>
+<p>OptiScaler is an upscaler/frame-generation replacement (DLSS/FSR/XeSS) that hooks a
+game through a proxy DLL, which modde manages as a release-backed tool — including
+release downloading, community profiles, FSR4 payload variants, and OptiPatcher. It
+also subsumes modde’s old fgmod DLL-restore logic. See
+<a href="../guides/tools.html#optiscaler">OptiScaler</a>.</p>
+<h3 id="proton--wine-dll-override"><a class="header" href="#proton--wine-dll-override">Proton / Wine DLL override</a></h3>
+<p>A Wine DLL override (<code>WINEDLLOVERRIDES</code>) tells Wine/Proton to load a mod’s <em>native</em>
+proxy DLL instead of its own built-in stub — required for frameworks that ship as a
+proxy DLL (CET’s <code>version.dll</code>, ReShade’s <code>dxgi.dll</code>, OptiScaler). modde detects the
+proxy DLLs a deploy places and contributes the overrides automatically, surfaced
+through the per-game <strong>Proton</strong> tool integration. See
+<a href="../guides/tools.html">Tools &amp; overlays</a> and
+<a href="../games/cyberpunk2077.html#wine-dll-overrides">Cyberpunk Wine DLL overrides</a>.</p>
+<h2 id="see-also"><a class="header" href="#see-also">See also</a></h2>
+<ul>
+<li><a href="../guides/conflicts.html">Conflicts &amp; load order</a> — severity, shadowed mods, LOOT, Form 43</li>
+<li><a href="../guides/deployment.html">Deployment &amp; VFS</a> — the symlink farm, staging, deploy, rollback</li>
+<li><a href="../guides/saves.html">Save management</a> — vaults, snapshots, fingerprints, save-breaking mods</li>
+<li><a href="../guides/profiles.html">Profile management</a> — profiles, locking, the experiment stack</li>
+<li><a href="../guides/mod-installation.html">How mod installation works</a> — install methods, FOMOD, BAIN</li>
+<li><a href="../guides/wabbajack.html">Wabbajack modlists</a> — modlists, directives, archive sources</li>
+<li><a href="../guides/nexus.html">Nexus Mods</a> — Collections, <code>nxm://</code>, browse/search</li>
+<li><a href="../guides/tools.html">Tools &amp; overlays</a> — OptiScaler, Proton, Wine DLL overrides</li>
+<li><a href="../games/generic-games.html">Generic &amp; user-defined games</a> — GamePlugin vs generic games</li>
+<li><a href="parity.html">MO2 parity &amp; capability audit</a> — the <code>Done</code> / <code>Partial</code> status of every feature</li>
+<li><a href="cli.html">CLI reference</a> — every command and flag</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../reference/parity.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../faq.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../reference/parity.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../faq.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

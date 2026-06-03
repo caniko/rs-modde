@@ -1,0 +1,524 @@
+<!DOCTYPE HTML>
+<html lang="en" class="coal sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Oblivion Remastered - modde Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Documentation for modde — a NixOS-native, Linux-first game mod manager.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "coal";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex-ed74f3b0.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-4ac01a02.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('coal')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">modde Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde/_edit/trunk/docs/src/games/oblivion-remastered.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                            <span class=fa-svg id="git-edit-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M421.7 220.3l-11.3 11.3-22.6 22.6-205 205c-6.6 6.6-14.8 11.5-23.8 14.1L30.8 511c-8.4 2.5-17.5 .2-23.7-6.1S-1.5 489.7 1 481.2L38.7 353.1c2.6-9 7.5-17.2 14.1-23.8l205-205 22.6-22.6 11.3-11.3 33.9 33.9 62.1 62.1 33.9 33.9zM96 353.9l-9.3 9.3c-.9 .9-1.6 2.1-2 3.4l-25.3 86 86-25.3c1.3-.4 2.5-1.1 3.4-2l9.3-9.3H112c-8.8 0-16-7.2-16-16V353.9zM453.3 19.3l39.4 39.4c25 25 25 65.5 0 90.5l-14.5 14.5-22.6 22.6-11.3 11.3-33.9-33.9-62.1-62.1L314.3 67.7l11.3-11.3 22.6-22.6 14.5-14.5c25-25 65.5-25 90.5 0z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="the-elder-scrolls-iv-oblivion-remastered"><a class="header" href="#the-elder-scrolls-iv-oblivion-remastered">The Elder Scrolls IV: Oblivion Remastered</a></h1>
+<p>Oblivion Remastered is a hybrid: an Unreal Engine 5 presentation layer wrapped
+around the original Gamebryo simulation. modde models that split directly — the
+plugin recognises both the UE pak <code>~mods</code> layout (<code>.pak</code> / <code>.ucas</code> / <code>.utoc</code>)
+<strong>and</strong> Bethesda-style <code>.esp</code> / <code>.esm</code> plugins, and its scanner walks both the
+UE pak directory and a <code>Data/</code> plugin tree. The game id is <code>oblivion-remastered</code>.</p>
+<blockquote>
+<p><strong>Overall status: <code>Partial</code>.</strong> Deployment, scanning, conflict classification,
+Wine DLL-override detection, and save tracking all work, and the title is
+wired into the install pipeline (Steam/Heroic detection, Nexus, Wabbajack).
+What keeps it short of <code>Done</code> is the same ceiling as the other UE titles: no
+bespoke load-order editor for the ESP/ESM side, no pak-internal asset
+conflict resolution (conflicts are classified by filename, not by archive
+contents), and the install-method coverage is narrower than the mature
+Creation Engine games. See <a href="supported-games.html">Supported games</a> for the
+status baseline and <a href="../reference/parity.html">Parity</a> for the
+MO2/Vortex/Wabbajack comparison.</p>
+</blockquote>
+<h2 id="engine-and-registration"><a class="header" href="#engine-and-registration">Engine and registration</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>Value</th></tr>
+</thead>
+<tbody>
+<tr><td>Display name</td><td>The Elder Scrolls IV: Oblivion Remastered</td></tr>
+<tr><td>Game id</td><td><code>oblivion-remastered</code></td></tr>
+<tr><td>Engine family</td><td><code>Unreal4</code> (UE5 layout; shares modde’s UE pak handling)</td></tr>
+<tr><td>Project folder</td><td><code>OblivionRemastered/</code> (under the install root)</td></tr>
+<tr><td>Steam App ID</td><td><code>2623190</code></td></tr>
+<tr><td>Steam install dir</td><td><code>Oblivion Remastered</code></td></tr>
+<tr><td>Heroic (GOG/Epic)</td><td>not registered</td></tr>
+<tr><td>Nexus domain</td><td><code>oblivionremastered</code></td></tr>
+<tr><td>Wabbajack name</td><td><code>OblivionRemastered</code> → <code>oblivion-remastered</code></td></tr>
+<tr><td>Save profiles</td><td>enabled</td></tr>
+<tr><td>Plugin system</td><td>yes (ESP/ESM are recognised alongside paks)</td></tr>
+</tbody>
+</table>
+</div>
+<p>The plugin is its own <code>GamePlugin</code> implementation rather than a plain instance
+of the shared UE4 game type — that is what lets it carry the Bethesda plugin
+extensions, the Gamebryo-style save layout, and the blended content policy.</p>
+<h2 id="install-detection"><a class="header" href="#install-detection">Install detection</a></h2>
+<p>modde finds the install through the launcher integration, keyed on the Steam
+App ID <code>2623190</code> (Steam install dir <code>Oblivion Remastered</code>). There is no
+registered Heroic/GOG/Epic mapping, so detection is Steam-first; a manually
+specified install path also works for non-Steam copies.</p>
+<p>On Linux and macOS the game runs through Proton/Wine, so modde resolves the
+prefix-rooted paths (saves, and the Wine DLL overrides described below) under the
+Steam compat data tree (on Windows these are native paths, no prefix involved):</p>
+<pre><code>&lt;steam&gt;/steamapps/compatdata/2623190/pfx/drive_c/...
+</code></pre>
+<p>If you have never launched the game, that prefix will not exist yet. modde’s
+prefix-dependent lookups return “not found” in that case — launch the game once
+through Steam/Proton so Proton creates the prefix, then re-run.</p>
+<h2 id="mod-directory-and-deploy-strategy"><a class="header" href="#mod-directory-and-deploy-strategy">Mod directory and deploy strategy</a></h2>
+<p>The deploy root for pak-style mods is the UE <code>~mods</code> directory under the
+project’s <code>Content/Paks</code>:</p>
+<pre><code>&lt;install&gt;/OblivionRemastered/Content/Paks/~mods
+</code></pre>
+<p>The leading tilde is load-bearing: UE’s pak mounter sorts <code>~mods</code> <strong>after</strong> the
+shipping paks, so mod paks override base content. modde deploys mods here the
+same way it deploys for every other game — a profile’s enabled mods are linked
+into the live game tree, and switching profiles re-links the set. Plugin-style
+content (<code>.esp</code> / <code>.esm</code>) belongs in the game’s <code>Data/</code> tree, which the scanner
+also walks (see below).</p>
+<h2 id="what-scanning-finds"><a class="header" href="#what-scanning-finds">What scanning finds</a></h2>
+<p>The scanner inspects two locations:</p>
+<pre><code>Content/Paks/~mods     # UE pak mods
+Data                   # Bethesda-style plugins
+</code></pre>
+<ul>
+<li><strong>Pak mods</strong> are discovered by grouping files that share a stem across the
+<code>.pak</code> / <code>.ucas</code> / <code>.utoc</code> extensions into a single mod (so a <code>.pak</code> and its
+sidecar <code>.ucas</code>/<code>.utoc</code> count as one mod, not three). These come from the
+<code>paks-mods</code> source location at confidence <code>0.9</code>, with mod ids prefixed <code>pak/</code>.</li>
+<li><strong>Plugins</strong> are discovered as one mod per top-level <code>.esp</code> file directly in
+<code>Data/</code> (source location <code>Data</code>, confidence <code>0.8</code>, mod ids prefixed
+<code>plugin/</code>). No prefixes are ignored, so master files are listed too.</li>
+</ul>
+<p>Each discovered mod also has a footprint used for matching against a known mod:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Mod id form</th><th>Footprint path</th></tr>
+</thead>
+<tbody>
+<tr><td><code>pak/&lt;stem&gt;</code></td><td><code>oblivionremastered/content/paks/~mods/&lt;stem&gt;.pak</code></td></tr>
+<tr><td><code>plugin/&lt;stem&gt;</code></td><td><code>data/&lt;stem&gt;.esp</code></td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="conflict-classification"><a class="header" href="#conflict-classification">Conflict classification</a></h2>
+<p>Oblivion Remastered uses modde’s <strong>pak collision classifier</strong> (archive
+extensions <code>pak</code> / <code>ucas</code> / <code>utoc</code>, default severity table). When two enabled
+mods write the same relative path, the severity is decided by file type:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Extension(s)</th><th>Severity</th></tr>
+</thead>
+<tbody>
+<tr><td><code>esp</code>, <code>esm</code>, <code>dll</code>, <code>lua</code>, <code>ws</code></td><td>Dangerous</td></tr>
+<tr><td><code>pak</code>, <code>ucas</code>, <code>utoc</code> (as archive members)</td><td>Dangerous</td></tr>
+<tr><td><code>ini</code>, <code>json</code>, <code>xml</code></td><td>Config</td></tr>
+<tr><td><code>dds</code>, <code>png</code>, <code>jpg</code>, <code>tga</code>, <code>nif</code></td><td>Cosmetic</td></tr>
+</tbody>
+</table>
+</div>
+<p>Conflicts are detected by overlapping deployed paths, not by cracking open pak
+archives — two paks that touch different in-game assets but never collide on a
+file path are not flagged. Texture/mesh collisions are reported but treated as
+cosmetic (last-writer-wins is usually fine); plugin and pak collisions are
+flagged as dangerous because they can change game logic or load behaviour.
+See <a href="../guides/conflicts.html">Conflict detection</a> for how severities drive the
+UI and resolution.</p>
+<h3 id="save-breaking-classification"><a class="header" href="#save-breaking-classification">Save-breaking classification</a></h3>
+<p>Separately from path collisions, modde classifies each mod’s <em>content</em> to
+decide whether enabling or disabling it should invalidate save compatibility.
+For Oblivion Remastered:</p>
+<ul>
+<li><strong>Save-breaking extensions</strong>: <code>esp</code>, <code>esm</code>, <code>pak</code>, <code>ucas</code>, <code>utoc</code>, <code>dll</code>,
+<code>lua</code></li>
+<li><strong>Save-breaking directories</strong>: <code>plugins</code>, <code>logicmods</code></li>
+<li><strong>Cosmetic extensions</strong>: <code>dds</code>, <code>png</code>, <code>jpg</code>, <code>tga</code>, <code>nif</code></li>
+</ul>
+<p>This classification feeds the save-fingerprint logic below: only save-breaking
+mods contribute to the fingerprint, so swapping a texture pack will not trigger
+a false “incompatible save” warning, while toggling a plugin or a logic pak
+will.</p>
+<h2 id="save-tracking"><a class="header" href="#save-tracking">Save tracking</a></h2>
+<p>Saves live under the Proton prefix, in the remastered Documents tree:</p>
+<pre><code>&lt;steam&gt;/steamapps/compatdata/2623190/pfx/drive_c/users/steamuser/Documents/My Games/Oblivion Remastered/Saves
+</code></pre>
+<p>The save tracker is non-recursive over that directory and matches two
+extensions, <code>.ess</code> and <code>.sav</code>, excluding <code>*.bak</code>. Every match is filed under
+the <code>manual</code> category and labelled by its relative filename. What the tracker
+records per save is its path, category, label, and last-modified time — it does
+<strong>not</strong> hash individual save files.</p>
+<p>Save <em>fingerprinting</em> happens at the vault layer, and it fingerprints your
+<strong>mod set</strong>, not the save bytes: modde computes a SHA-256 over the sorted list
+of enabled save-breaking mods (per the classification above) and embeds it as a
+git commit trailer in each snapshot:</p>
+<pre><code>Mod-Fingerprint: a1b2c3d4e5f6
+Save-Breaking-Mods: pak/some-overhaul, plugin/somequest
+</code></pre>
+<p>On restore, modde compares the snapshot’s fingerprint to your current profile
+and warns if save-breaking mods were added or removed since that save was
+taken. Oblivion Remastered opts into per-profile save layering, so each
+profile gets its own branch in the git-backed vault and profile switches
+capture/restore automatically. See <a href="../guides/saves.html">Save management</a> for
+the full vault, fingerprint, and restore workflow.</p>
+<h2 id="plugins-and-load-order"><a class="header" href="#plugins-and-load-order">Plugins and load order</a></h2>
+<p>modde recognises the ESP/ESM plugin system (it is reported as a plugin-capable
+game) and scans <code>Data/</code> for plugins, so plugin mods are discovered, classified
+as save-breaking, and conflict-checked by path. There is <strong>no</strong> dedicated
+load-order editor for the Bethesda side of this title in modde today — load
+order for plugins is managed by the game/community tooling you already use, and
+pak ordering is governed by UE’s <code>~mods</code> mounting. Treat plugin ordering as
+out-of-band for now.</p>
+<h2 id="installer-specifics"><a class="header" href="#installer-specifics">Installer specifics</a></h2>
+<p>When you add a downloaded archive, modde’s analyzer picks the layout:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Archive shape</th><th>Detected method</th></tr>
+</thead>
+<tbody>
+<tr><td><code>.pak</code> / <code>.ucas</code> / <code>.utoc</code> files at the archive root</td><td><code>SingleFileSet</code> — files stage straight into the resolved mod root</td></tr>
+<tr><td>A top-level <code>Data/</code> directory</td><td><code>StripContentRoot { root: "Data" }</code> — the <code>Data/</code> wrapper is stripped before staging</td></tr>
+</tbody>
+</table>
+</div>
+<p>modde also recognises a <strong>bare</strong> archive layout for this game: an archive whose
+root contains any of the directories <code>data</code>, <code>mods</code>, <code>content</code>, <code>paks</code>, or
+<code>~mods</code> (matched case-insensitively), or root files with the extensions <code>esp</code>,
+<code>esm</code>, <code>pak</code>, <code>ucas</code>, or <code>utoc</code>. That recognition lets it accept the loosely
+packed archives common on Nexus for this title without a wrapper directory.</p>
+<p>FOMOD installers are handled by modde’s generic FOMOD pipeline when an archive
+ships a <code>fomod/ModuleConfig.xml</code>; that path is engine-agnostic and not specific
+to this game. There is no REDmod or SMAPI path here — those belong to Cyberpunk
+2077 and Stardew Valley respectively. See <a href="../guides/fomod.html">FOMOD installers</a>
+and the <a href="../guides/deployment.html">installer pipeline</a> for the staging and
+uninstall model.</p>
+<h2 id="gaming-tools-that-matter-here"><a class="header" href="#gaming-tools-that-matter-here">Gaming tools that matter here</a></h2>
+<p>Mod loaders, ReShade/ENB-style injectors, and upscalers for this title ship as
+<strong>proxy DLLs</strong> dropped next to the shipping executable in:</p>
+<pre><code>&lt;install&gt;/OblivionRemastered/Binaries/Win64
+</code></pre>
+<p>modde detects which proxy DLLs are present from this set and surfaces them as
+Wine DLL overrides (see below):</p>
+<pre><code>dwmapi   xinput1_3   d3d11   dxgi   version   winmm
+</code></pre>
+<p>That covers the usual suspects — generic ASI/loader proxies (<code>version</code>,
+<code>winmm</code>), UE-loader proxies (<code>dwmapi</code>, <code>xinput1_3</code>), and the graphics-swapper
+slots (<code>d3d11</code>, <code>dxgi</code>) used by ReShade and DLSS/FSR swappers such as
+<strong>OptiScaler</strong>.</p>
+<p>This game does not ship a curated OptiScaler profile in modde (unlike Stellar
+Blade), so OptiScaler is installed and tuned manually as a <code>dxgi</code>/<code>d3d11</code> proxy.
+The named-executable and proxy-DLL machinery is fully supported regardless — see
+<a href="../guides/tools.html">Tools and executables</a> for adding a launcher executable
+with arguments, working dir, env, and DLL overrides, and capturing its output.</p>
+<h2 id="linux-and-proton-notes"><a class="header" href="#linux-and-proton-notes">Linux and Proton notes</a></h2>
+<p>These notes cover the game’s runtime on Linux and macOS, where Oblivion
+Remastered runs through Proton/Wine. On Windows the game runs natively — there is
+no Wine prefix or <code>WINEDLLOVERRIDES</code>, the save directory is its native Windows
+location, and proxy DLLs load directly. modde itself runs natively on all three
+platforms.</p>
+<ul>
+<li><strong>Run the game once first.</strong> The save directory and the proxy-DLL overrides
+are resolved relative to the Proton prefix at <code>compatdata/2623190/pfx</code>. If you
+have not launched the game, that prefix does not exist and prefix-rooted
+lookups will report “not found”.</li>
+<li><strong>DLL overrides are automatic from what is present.</strong> modde builds
+<code>WINEDLLOVERRIDES</code> from the proxy DLLs it finds in <code>Binaries/Win64</code> (or in a
+mod’s staging dir), so Wine loads the native (mod) DLL instead of its built-in
+stub. You do not hand-write the override string.</li>
+<li><strong><code>~mods</code> ordering is a UE convention, not a modde trick.</strong> If a pak mod is
+not taking effect, confirm it landed in <code>Content/Paks/~mods</code> and not loose in
+<code>Content/Paks</code>.</li>
+<li><strong>Texture/mesh collisions are last-writer-wins.</strong> They are reported as
+cosmetic; if a visual mod loses to another, adjust which one deploys, since
+modde does not merge pak contents.</li>
+</ul>
+<h2 id="worked-example"><a class="header" href="#worked-example">Worked example</a></h2>
+<h3 id="cli"><a class="header" href="#cli">CLI</a></h3>
+<pre><code class="language-bash"># Detect installs and confirm the game is found
+modde game list
+
+# Install a Nexus pak mod by URL (domain resolves to oblivion-remastered)
+modde mod install "https://www.nexusmods.com/oblivionremastered/mods/1234"
+
+# Scan the live install for already-present mods (paks + Data plugins)
+modde mod scan --game oblivion-remastered
+
+# Inspect conflicts for the active profile
+modde conflicts --game oblivion-remastered
+
+# Adopt existing saves into a profile, then capture
+modde save adopt --game oblivion-remastered --profile main
+modde save capture --game oblivion-remastered --profile main -m "fresh start"
+
+# Add OptiScaler (or any injector) as a dxgi proxy executable launcher
+modde tool add-executable \
+  --game oblivion-remastered \
+  --name "Oblivion Remastered (modded)" \
+  --working-dir "OblivionRemastered/Binaries/Win64"
+modde exec --game oblivion-remastered "Oblivion Remastered (modded)"
+</code></pre>
+<h3 id="home-manager-profile-snippet"><a class="header" href="#home-manager-profile-snippet">home-manager profile snippet</a></h3>
+<p>A minimal modde profile for this title via the home-manager module:</p>
+<pre><code class="language-nix">{
+  programs.modde = {
+    enable = true;
+
+    profiles.oblivion-remastered = {
+      game = "oblivion-remastered";
+      mods = [
+        # Nexus URLs or local archive paths; paks land in
+        # OblivionRemastered/Content/Paks/~mods, plugins in Data/.
+        "https://www.nexusmods.com/oblivionremastered/mods/1234"
+      ];
+    };
+  };
+}
+</code></pre>
+<p>modde installs the same way for every game — through your platform’s native
+package manager, a direct download, Cargo, or, if you use Nix, the flake and its
+home-manager module. The home-manager module additionally lets you declare this
+profile as code. See <a href="../getting-started/installation.html">Installation</a> for the
+full set of install channels.</p>
+<h2 id="see-also"><a class="header" href="#see-also">See also</a></h2>
+<ul>
+<li><a href="supported-games.html">Supported games</a></li>
+<li><a href="oblivion.html">Oblivion</a> (the Gamebryo original) and the sibling UE titles in
+the per-game list</li>
+<li><a href="../guides/conflicts.html">Conflict detection</a></li>
+<li><a href="../guides/saves.html">Save management</a></li>
+<li><a href="../guides/deployment.html">Deployment and the installer pipeline</a></li>
+<li><a href="../guides/fomod.html">FOMOD installers</a></li>
+<li><a href="../guides/tools.html">Tools and executables</a></li>
+<li><a href="../guides/scanning.html">Scanning</a></li>
+<li><a href="../reference/parity.html">Parity reference</a></li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../games/oblivion.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../games/cyberpunk2077.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../games/oblivion.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../games/cyberpunk2077.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

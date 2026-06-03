@@ -1,0 +1,583 @@
+<!DOCTYPE HTML>
+<html lang="en" class="coal sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Cyberpunk 2077 - modde Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Documentation for modde — a NixOS-native, Linux-first game mod manager.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "coal";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex-ed74f3b0.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-4ac01a02.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('coal')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">modde Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde/_edit/trunk/docs/src/games/cyberpunk2077.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                            <span class=fa-svg id="git-edit-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M421.7 220.3l-11.3 11.3-22.6 22.6-205 205c-6.6 6.6-14.8 11.5-23.8 14.1L30.8 511c-8.4 2.5-17.5 .2-23.7-6.1S-1.5 489.7 1 481.2L38.7 353.1c2.6-9 7.5-17.2 14.1-23.8l205-205 22.6-22.6 11.3-11.3 33.9 33.9 62.1 62.1 33.9 33.9zM96 353.9l-9.3 9.3c-.9 .9-1.6 2.1-2 3.4l-25.3 86 86-25.3c1.3-.4 2.5-1.1 3.4-2l9.3-9.3H112c-8.8 0-16-7.2-16-16V353.9zM453.3 19.3l39.4 39.4c25 25 25 65.5 0 90.5l-14.5 14.5-22.6 22.6-11.3 11.3-33.9-33.9-62.1-62.1L314.3 67.7l11.3-11.3 22.6-22.6 14.5-14.5c25-25 65.5-25 90.5 0z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="cyberpunk-2077"><a class="header" href="#cyberpunk-2077">Cyberpunk 2077</a></h1>
+<p>Cyberpunk 2077 is one of the few non-Bethesda titles that modde supports <strong>end to
+end</strong>. Its overall status is <code>Done</code> in <a href="https://codeberg.org/caniko/rs-modde/src/branch/trunk/docs/capability-matrix.toml"><code>docs/capability-matrix.toml</code></a> and on
+the <a href="supported-games.html">supported games</a> page: the scanner, conflict classifier,
+and save tracker are all wired up, and deployment runs a real <code>REDmod</code> deploy pass
+after staging.</p>
+<p>The game id is <strong><code>cyberpunk2077</code></strong>. Use it verbatim with every CLI command and in
+home-manager profiles.</p>
+<h2 id="engine-and-status"><a class="header" href="#engine-and-status">Engine and status</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Property</th><th>Value</th></tr>
+</thead>
+<tbody>
+<tr><td>Engine family</td><td>REDengine 4 (<code>EngineFamily::CyberpunkRedEngine</code>)</td></tr>
+<tr><td>Game id</td><td><code>cyberpunk2077</code></td></tr>
+<tr><td>Display name</td><td>Cyberpunk 2077</td></tr>
+<tr><td>Overall status</td><td><code>Done</code></td></tr>
+<tr><td>Scanner</td><td>Yes</td></tr>
+<tr><td>Conflict detection</td><td>Yes</td></tr>
+<tr><td>Save tracking</td><td><code>Done</code></td></tr>
+<tr><td>Steam App ID</td><td><code>1091500</code></td></tr>
+<tr><td>Heroic (GOG) app id</td><td><code>1423049311</code></td></tr>
+<tr><td>Heroic (Epic) app id</td><td><code>Ginger</code></td></tr>
+<tr><td>Nexus domain</td><td><code>cyberpunk2077</code></td></tr>
+<tr><td>Nexus numeric game id</td><td><code>3333</code></td></tr>
+<tr><td>Wabbajack name</td><td><code>Cyberpunk2077</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>The numeric Nexus id is present, so Cyberpunk 2077 appears in the UI’s <em>Browse
+Nexus</em> picker (which needs the numeric id), and the Nexus side panel can fetch
+mod metadata via REST v1 and GraphQL v2. The mod information dialog is still
+<code>Partial</code>: only the Nexus-metadata side panel exists — there is no MO2-style
+file-tree / INI / conflict dialog yet.</p>
+<h2 id="install-detection"><a class="header" href="#install-detection">Install detection</a></h2>
+<p>modde locates the install through its launcher ids. For Steam it uses App ID
+<code>1091500</code> and the <code>steamapps/common/Cyberpunk 2077</code> directory; for Heroic it
+matches the GOG app id <code>1423049311</code> or the Epic app id <code>Ginger</code>. The same ids
+drive Proton-prefix discovery for save tracking.</p>
+<p>Because Cyberpunk runs through Proton/Wine on Linux, the game writes its saves
+inside a Wine prefix rather than a native Linux path. modde checks two prefixes,
+in order:</p>
+<ol>
+<li><strong>Heroic</strong> (GOG / sideload):
+<code>~/Games/Heroic/Prefixes/default/Cyberpunk 2077/pfx/drive_c/users/steamuser/Saved Games/CD Projekt Red/Cyberpunk 2077</code></li>
+<li><strong>Steam Proton</strong>: the Steam compat prefix under
+<code>steamapps/compatdata/1091500/pfx/drive_c/users/steamuser/Saved Games/CD Projekt Red/Cyberpunk 2077</code></li>
+</ol>
+<p>The first prefix that exists on disk wins. If neither is present (for example,
+the game has never been launched under that launcher, so the prefix has not been
+created), save tracking reports no save directory.</p>
+<h2 id="mod-directory-and-deploy-strategy"><a class="header" href="#mod-directory-and-deploy-strategy">Mod directory and deploy strategy</a></h2>
+<p>The canonical mod directory is <code>&lt;install&gt;/mods/</code> — the REDmod loader’s directory.
+Deployment is a <strong>two-step</strong> process:</p>
+<ol>
+<li><strong>Per-mod symlink.</strong> For every entry in the profile’s staging directory, modde
+symlinks the mod directory into <code>&lt;install&gt;/mods/&lt;name&gt;/</code>. If a target name
+already exists (a real directory, a file, or a stale symlink), it is removed
+first so the new symlink is clean. This keeps the game directory pointing at
+modde-managed staging rather than copying bytes around.</li>
+<li><strong>Post-deploy REDmod deploy hook.</strong> After symlinking, modde runs a REDmod
+deploy pass (see below). This is what turns the symlinked REDmod packages into
+the game’s loadable <code>mod</code> archives.</li>
+</ol>
+<p>Symlink deployment means an uninstall or redeploy is cheap and non-destructive to
+your staged sources.</p>
+<h3 id="the-redmod-deploy-hook"><a class="header" href="#the-redmod-deploy-hook">The REDmod deploy hook</a></h3>
+<p>modde looks for the <code>redmod</code> binary in two places:</p>
+<ul>
+<li><code>&lt;install&gt;/tools/redmod/bin/redmod</code> (or <code>redmod.exe</code> on Windows) — the copy
+CD Projekt Red ships alongside the game, and</li>
+<li>anywhere on <code>PATH</code>.</li>
+</ul>
+<p>If a <code>redmod</code> binary is found and <code>&lt;install&gt;/mods/</code> contains at least one
+subdirectory, modde invokes:</p>
+<pre><code class="language-bash">redmod deploy -mod &lt;mods/dir-1&gt; -mod &lt;mods/dir-2&gt; ...
+</code></pre>
+<p>with the game directory as the working directory, passing one <code>-mod</code> flag per mod
+subdirectory. If the binary is <strong>not</strong> found, modde logs a warning and skips the
+step — it does not fail the deploy. That means loose-file content (redscript,
+TweakXL, CET, <code>.archive</code> files) is still deployed by the symlink pass; only the
+REDmod-packaged content needs the deploy hook to be registered. A non-zero exit
+from <code>redmod deploy</code> <em>does</em> surface as a deploy error, with the tool’s stderr
+attached.</p>
+<blockquote>
+<p><strong>Gotcha:</strong> REDmod is an optional component in the GOG/Steam installers. If you
+intend to use REDmod packages, install the <em>REDmod</em> DLC/tool so the
+<code>tools/redmod/bin/redmod</code> binary exists, or put a <code>redmod</code> binary on <code>PATH</code>.</p>
+</blockquote>
+<h3 id="bare-layout-recognition"><a class="header" href="#bare-layout-recognition">Bare-layout recognition</a></h3>
+<p>When you install an archive that is <strong>not</strong> a REDmod package, modde recognizes a
+“bare” Cyberpunk layout if the extraction root contains any of these top-level
+directories: <code>r6</code>, <code>archive</code>, <code>archives</code>, <code>bin</code>, <code>engine</code>, <code>mods</code>, <code>red4ext</code>.
+A bare extract is treated as a single mod and symlinked into <code>&lt;install&gt;/mods/&lt;name&gt;/</code>,
+preserving the loose-file tree the mod author shipped.</p>
+<h2 id="what-scanning-finds"><a class="header" href="#what-scanning-finds">What scanning finds</a></h2>
+<p><code>modde scan --game cyberpunk2077</code> walks five known mod roots under the install
+directory and reports a confidence score per discovered mod:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Scan root</th><th>Mod kind</th><th>id prefix</th><th>Confidence</th></tr>
+</thead>
+<tbody>
+<tr><td><code>bin/x64/plugins/cyber_engine_tweaks/mods/&lt;name&gt;/</code></td><td>Cyber Engine Tweaks (CET)</td><td><code>cet/</code></td><td>0.70, or 0.95 if <code>init.lua</code> present</td></tr>
+<tr><td><code>r6/scripts/&lt;name&gt;/</code></td><td>redscript</td><td><code>reds/</code></td><td>0.90</td></tr>
+<tr><td><code>r6/tweaks/&lt;name&gt;/</code></td><td>TweakXL</td><td><code>tweak/</code></td><td>0.90</td></tr>
+<tr><td><code>archive/pc/mod/&lt;file&gt;.archive</code></td><td>loose <code>.archive</code></td><td><code>archive/</code></td><td>0.85</td></tr>
+<tr><td><code>mods/&lt;name&gt;/</code></td><td>REDmod package</td><td><code>redmod/</code></td><td>0.95 with <code>info.json</code>, else 0.80</td></tr>
+</tbody>
+</table>
+</div>
+<p>For REDmod packages, the scanner reads the <code>info.json</code> manifest and pulls the
+mod’s <code>name</code> and <code>version</code> from it (falling back to the directory name when the
+manifest is missing or unparseable). The manifest fields modde parses are <code>name</code>,
+<code>version</code>, <code>custom_sounds</code>, and <code>scripts</code>.</p>
+<p>Each discovered mod’s id footprint is stable and lowercased, so modde can detect
+stale duplicates across redeploys — for example a CET mod maps to the directory
+footprint <code>bin/x64/plugins/cyber_engine_tweaks/mods/&lt;name&gt;/</code> and a loose archive
+maps to the file footprint <code>archive/pc/mod/&lt;stem&gt;.archive</code>.</p>
+<h2 id="conflict-classification"><a class="header" href="#conflict-classification">Conflict classification</a></h2>
+<p>modde classifies conflicts at the <strong>loose-file level</strong>. Cyberpunk’s <code>.archive</code>
+container format is proprietary and not yet reverse-engineered in this codebase,
+so the classifier does not index <em>inside</em> <code>.archive</code> files — two mods that both
+ship <code>archive/pc/mod/foo.archive</code> collide on the file itself, but modde cannot
+peek at the resources packed within.</p>
+<p>Conflicts are graded by extension into three severities:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Severity</th><th>Extensions</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Dangerous</strong></td><td><code>reds</code>, <code>lua</code>, <code>tweak</code>, <code>xl</code>, <code>yaml</code>, <code>yml</code>, <code>dll</code></td></tr>
+<tr><td><strong>Config</strong></td><td><code>ini</code>, <code>cfg</code>, <code>json</code>, <code>toml</code></td></tr>
+<tr><td><strong>Cosmetic</strong></td><td><code>archive</code>, <code>png</code>, <code>jpg</code>, <code>dds</code>, <code>tga</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>A <em>Dangerous</em> collision means two mods are fighting over executable game logic
+(scripts, tweaks, or a native DLL) and the result is likely a crash or broken
+behavior. <em>Config</em> collisions usually need a manual merge. <em>Cosmetic</em> collisions
+are last-writer-wins texture/material overrides and are generally safe.</p>
+<p>See the <a href="../guides/conflicts.html">conflicts guide</a> for how modde surfaces and
+resolves these.</p>
+<h2 id="save-tracking"><a class="header" href="#save-tracking">Save tracking</a></h2>
+<p>Save tracking is <code>Done</code>. Once the save directory is resolved (see
+<a href="#install-detection">Install detection</a>), modde treats each top-level save folder
+as a save and categorizes it by directory-name prefix:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Prefix</th><th>Category</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ManualSave-</code></td><td>manual</td></tr>
+<tr><td><code>AutoSave-</code></td><td>auto</td></tr>
+<tr><td><code>QuickSave-</code></td><td>quick</td></tr>
+<tr><td><code>PointOfNoReturn-</code></td><td>point-of-no-return</td></tr>
+</tbody>
+</table>
+</div>
+<p>Anything that does not match a known prefix is bucketed as <strong>manual</strong> (the default
+category). The scan is <strong>non-recursive</strong> (each save is one directory), and the
+<code>user.gls</code> settings file is explicitly excluded so it is never mistaken for a save.</p>
+<p><strong>What is fingerprinted.</strong> For each save, modde tries to extract a human-readable
+label. When a save uses CDPR’s <em>NamedSaves</em>, the directory contains a
+<code>metadata.9.json</code>; modde reads it and uses the <code>customName</code> (or <code>name</code>) field as
+the label. If that file is missing or has no usable name, it falls back to the
+save’s directory name. The capture summary is reported <strong>by category</strong>, so a
+snapshot tells you how many manual / auto / quick / point-of-no-return saves were
+captured.</p>
+<p>Cyberpunk 2077 also declares <code>supports_save_profiles = true</code>, so its saves
+participate in <a href="../guides/saves.html">save profiles</a>.</p>
+<h2 id="plugin-and-load-order-handling"><a class="header" href="#plugin-and-load-order-handling">Plugin and load-order handling</a></h2>
+<p>Cyberpunk 2077 has <strong>no ESP/ESM plugin list</strong> or <code>loadorder.txt</code>-style ordering
+the way Bethesda titles do. There is therefore no plugin enable/disable or
+load-order panel for this title. Ordering is whatever the underlying frameworks
+impose:</p>
+<ul>
+<li><strong>REDmod</strong> order is established by the <code>redmod deploy</code> pass over the mods in
+<code>&lt;install&gt;/mods/</code>.</li>
+<li><strong>redscript</strong>, <strong>TweakXL</strong>, and <strong>CET</strong> each resolve their own loading; modde’s
+job is to deploy the files into the correct roots, not to sequence them.</li>
+</ul>
+<p>If two logic mods genuinely conflict, modde flags it as a <em>Dangerous</em> collision
+(see above) rather than trying to reorder them.</p>
+<h2 id="installer-specifics"><a class="header" href="#installer-specifics">Installer specifics</a></h2>
+<p>modde inspects an extracted archive and picks an install method:</p>
+<ul>
+<li><strong>REDmod packages</strong> are detected by a top-level <code>info.json</code> <em>plus</em> an
+<code>archives/</code> (or <code>archive/</code>) subdirectory. modde records the install as a REDmod
+install whose manifest is <code>info.json</code>, and the post-deploy hook later registers
+it with <code>redmod deploy</code>.</li>
+<li><strong>Bare Cyberpunk extracts</strong> (loose redscript / TweakXL / CET / <code>.archive</code>
+trees) are recognized by the top-level directory names listed under
+<a href="#bare-layout-recognition">Bare-layout recognition</a> and symlinked wholesale
+into <code>mods/</code>.</li>
+<li><strong>FOMOD installers</strong> are handled by modde’s general FOMOD engine when a mod
+ships an XML installer; see the <a href="../guides/fomod.html">FOMOD guide</a>. This is the
+same engine used across all supported titles.</li>
+</ul>
+<p>There is no SMAPI or <code>.pak</code>/<code>.ucas</code>/<code>.utoc</code> handling for Cyberpunk — those belong
+to Stardew Valley and the Unreal titles respectively.</p>
+<h2 id="gaming-tools-that-matter"><a class="header" href="#gaming-tools-that-matter">Gaming tools that matter</a></h2>
+<p>modde’s tool integrations (<code>modde tool ...</code>) apply to Cyberpunk just as they do to
+other titles — MangoHud, vkBasalt, GameMode, ReShade, OptiScaler, and per-game
+Proton settings. See the <a href="../guides/tools.html">Tools &amp; Overlays guide</a> for the
+full workflow.</p>
+<p>Cyberpunk does <strong>not</strong> ship a built-in OptiScaler profile in modde’s registry
+(its <code>optiscaler_profiles</code> list is empty, unlike Stellar Blade). You can still
+enable and apply OptiScaler manually with <code>modde tool enable optiscaler</code> /
+<code>modde tool apply optiscaler</code>, but you choose the proxy DLL and release yourself —
+modde does not auto-select a known-good proxy for this title. <code>dxgi.dll</code> is the
+proxy most OptiScaler/upscaling setups use on Cyberpunk.</p>
+<h3 id="wine-dll-overrides"><a class="header" href="#wine-dll-overrides">Wine DLL overrides</a></h3>
+<p>Many Cyberpunk frameworks ship as <strong>proxy DLLs</strong> that hijack a Windows system DLL
+name in the executable directory <code>bin/x64</code>. Under Wine/Proton these need a
+<code>native,builtin</code> override so Wine loads the mod’s DLL instead of its own built-in
+stub. modde scans <code>bin/x64</code> and emits overrides for any of these it finds:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Proxy DLL</th><th>Typically used by</th></tr>
+</thead>
+<tbody>
+<tr><td><code>version</code></td><td>CET (Cyber Engine Tweaks), ASI loaders</td></tr>
+<tr><td><code>winmm</code></td><td>ASI loaders, some mod frameworks</td></tr>
+<tr><td><code>dinput8</code></td><td>various mod frameworks</td></tr>
+<tr><td><code>d3d11</code></td><td>ReShade, ENB</td></tr>
+<tr><td><code>dxgi</code></td><td>OptiScaler, ReShade (often handled by fgmod)</td></tr>
+<tr><td><code>winhttp</code></td><td>some mod loaders</td></tr>
+<tr><td><code>xinput1_3</code></td><td>controller-hook mods</td></tr>
+</tbody>
+</table>
+</div>
+<p>modde can compute these overrides both from the live game directory and from the
+staging directory before deploy (it searches nested <code>mods/.../bin/x64</code> layouts).
+The detected overrides are surfaced through the Proton tool integration so they
+end up in your launch environment automatically — no manual <code>WINEDLLOVERRIDES</code>
+editing required for the proxies modde knows about. If you use a proxy DLL not in
+the list above, set it explicitly, e.g.:</p>
+<pre><code class="language-bash">modde tool configure proton --game cyberpunk2077 \
+  dll_override_mode=forced forced_dll_overrides=dxgi,version
+</code></pre>
+<h2 id="linux--proton-notes-and-known-gotchas"><a class="header" href="#linux--proton-notes-and-known-gotchas">Linux / Proton notes and known gotchas</a></h2>
+<p>These notes cover the game’s runtime on Linux and macOS, where Cyberpunk runs
+through Proton/Wine. On Windows the game runs natively — there is no Wine prefix,
+and saves and proxy DLLs live at their native Windows locations. modde itself runs
+natively on all three platforms.</p>
+<ul>
+<li><strong>Launch the game once first.</strong> Saves live inside the Proton/Heroic prefix.
+Until the game has been run under your launcher, the prefix (and the save
+directory) does not exist, and save tracking has nothing to find.</li>
+<li><strong>Install REDmod if you use REDmod packages.</strong> Without the
+<code>tools/redmod/bin/redmod</code> binary (or a <code>redmod</code> on <code>PATH</code>), the post-deploy hook
+is skipped with a warning. Loose-file mods still deploy.</li>
+<li><strong>Proxy DLLs need overrides.</strong> CET (<code>version.dll</code>), ReShade (<code>d3d11</code>/<code>dxgi</code>),
+OptiScaler (<code>dxgi</code>), and friends will silently do nothing under Wine without the
+<code>native,builtin</code> override. modde detects the common ones in <code>bin/x64</code>; verify
+with <code>modde tool status --game cyberpunk2077</code> and the <a href="../guides/troubleshooting.html">troubleshooting
+guide</a> if a framework does not load.</li>
+<li><strong><code>.archive</code> internals are opaque.</strong> modde detects archive-vs-archive collisions
+by filename but cannot diff their contents, so two large <code>.archive</code> mods that
+touch overlapping resources may both report clean while still visually
+conflicting in-game.</li>
+<li><strong>Game runtime differs by platform.</strong> The Proton/Heroic prefix paths above are
+how Cyberpunk runs on Linux and macOS, where it runs through Proton/Wine. On
+Windows the game runs natively, so there is no Wine prefix — saves and proxy
+DLLs live at their native Windows locations. modde itself runs natively on all
+three platforms; see <a href="../getting-started/installation.html">installation</a>.</li>
+</ul>
+<h2 id="worked-example"><a class="header" href="#worked-example">Worked example</a></h2>
+<h3 id="home-manager-profile"><a class="header" href="#home-manager-profile">Home-Manager profile</a></h3>
+<pre><code class="language-nix">programs.modde = {
+  enable = true;
+
+  nexus.apiKeyFile = "/run/secrets/nexus-api-key";
+
+  profiles = {
+    cyberpunk-mods = {
+      game = "cyberpunk2077";
+      installMode = "auto";
+      gameDir = "/home/me/.local/share/Steam/steamapps/common/Cyberpunk 2077";
+
+      nexusCollection = {
+        slug = "my-cyberpunk-collection";
+        version = "2.1.0";
+      };
+
+      tools = {
+        gamemode.enable = true;
+        proton = {
+          enable = true;
+          settings = {
+            # CET ships as version.dll; force the override so Wine loads it.
+            dllOverrideMode = "forced";
+            forcedDllOverrides = "version,dxgi";
+          };
+        };
+      };
+    };
+  };
+};
+</code></pre>
+<p>See the <a href="../configuration/hm-module.html">home-manager module reference</a> for every
+profile and tool option.</p>
+<h3 id="cli"><a class="header" href="#cli">CLI</a></h3>
+<pre><code class="language-bash"># Discover the install and inspect what is already there
+modde scan --game cyberpunk2077
+
+# Install a mod from a Nexus URL (REDmod, CET, redscript, TweakXL, or .archive)
+modde install --game cyberpunk2077 https://www.nexusmods.com/cyberpunk2077/mods/107
+
+# Deploy the active profile: symlinks into mods/, then runs `redmod deploy`
+modde deploy --game cyberpunk2077
+
+# Check for conflicts before playing
+modde conflicts --game cyberpunk2077
+
+# Capture and list saves from the resolved Proton/Heroic prefix
+modde saves list --game cyberpunk2077
+
+# Force a Wine DLL override if a proxy framework is not loading
+modde tool configure proton --game cyberpunk2077 \
+  dll_override_mode=forced forced_dll_overrides=version,dxgi
+</code></pre>
+<h2 id="see-also"><a class="header" href="#see-also">See also</a></h2>
+<ul>
+<li><a href="supported-games.html">Supported games</a></li>
+<li><a href="witcher3.html">The Witcher 3</a> — the other REDengine title</li>
+<li><a href="../guides/deployment.html">Deployment</a></li>
+<li><a href="../guides/scanning.html">Scanning</a></li>
+<li><a href="../guides/conflicts.html">Conflicts</a></li>
+<li><a href="../guides/saves.html">Saves</a></li>
+<li><a href="../guides/fomod.html">FOMOD installers</a></li>
+<li><a href="../guides/tools.html">Tools &amp; Overlays</a></li>
+<li><a href="../guides/nexus.html">Nexus integration</a></li>
+<li><a href="../configuration/hm-module.html">Home-Manager module</a></li>
+<li><a href="../reference/parity.html">Parity reference</a></li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../games/oblivion-remastered.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../games/witcher3.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../games/oblivion-remastered.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../games/witcher3.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

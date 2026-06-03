@@ -1,0 +1,561 @@
+<!DOCTYPE HTML>
+<html lang="en" class="coal sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Starfield - modde Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Documentation for modde — a NixOS-native, Linux-first game mod manager.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "coal";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex-ed74f3b0.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-4ac01a02.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('coal')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">modde Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+                        <a href="https://codeberg.org/caniko/rs-modde/_edit/trunk/docs/src/games/starfield.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                            <span class=fa-svg id="git-edit-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M421.7 220.3l-11.3 11.3-22.6 22.6-205 205c-6.6 6.6-14.8 11.5-23.8 14.1L30.8 511c-8.4 2.5-17.5 .2-23.7-6.1S-1.5 489.7 1 481.2L38.7 353.1c2.6-9 7.5-17.2 14.1-23.8l205-205 22.6-22.6 11.3-11.3 33.9 33.9 62.1 62.1 33.9 33.9zM96 353.9l-9.3 9.3c-.9 .9-1.6 2.1-2 3.4l-25.3 86 86-25.3c1.3-.4 2.5-1.1 3.4-2l9.3-9.3H112c-8.8 0-16-7.2-16-16V353.9zM453.3 19.3l39.4 39.4c25 25 25 65.5 0 90.5l-14.5 14.5-22.6 22.6-11.3 11.3-33.9-33.9-62.1-62.1L314.3 67.7l11.3-11.3 22.6-22.6 14.5-14.5c25-25 65.5-25 90.5 0z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="starfield"><a class="header" href="#starfield">Starfield</a></h1>
+<p>Starfield is one of modde’s five built-in Bethesda Creation Engine titles. It
+shares the data-driven <code>BethesdaGame</code> plugin with Skyrim SE/AE and the Fallout
+games, so its deploy strategy, conflict classification, and plugin handling are
+the same engine-wide machinery — only the per-title metadata (app ID, save
+folder, INI names, archive extension) differs.</p>
+<h2 id="engine--overall-status"><a class="header" href="#engine--overall-status">Engine &amp; overall status</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Property</th><th>Value</th></tr>
+</thead>
+<tbody>
+<tr><td>Engine family</td><td>Bethesda Creation Engine</td></tr>
+<tr><td>modde game id</td><td><code>starfield</code></td></tr>
+<tr><td>Display name</td><td><code>Starfield</code></td></tr>
+<tr><td>Steam App ID</td><td><code>1716740</code></td></tr>
+<tr><td>Nexus domain</td><td><code>starfield</code></td></tr>
+<tr><td>Nexus numeric game id</td><td><code>4187</code></td></tr>
+<tr><td>Wabbajack name</td><td><code>Starfield</code></td></tr>
+<tr><td>Mod directory</td><td><code>Data/</code> (under the install root)</td></tr>
+<tr><td>Archive extension</td><td><code>.ba2</code></td></tr>
+<tr><td>Managed INI files</td><td><code>StarfieldPrefs.ini</code>, <code>StarfieldCustom.ini</code></td></tr>
+<tr><td>Save extension</td><td><code>.sfs</code></td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>Overall status: <code>Partial</code>.</strong> The scanner, conflict classifier, plugin/load-order
+handling, and diagnostics are all wired in and exercised, but Starfield’s overall
+path is held at <code>Partial</code> because the broader modding workflow around it is still
+maturing relative to the fully battle-tested Skyrim SE / Fallout 4 paths.</p>
+<p><strong>Save tracking is <code>Done</code>.</strong> Starfield ships a dedicated <code>.sfs</code> save tracker that
+is reachable end to end through the same git-backed save vault every other game
+uses. See <a href="#save-tracking">Save tracking</a> below and the
+<a href="supported-games.html">canonical status table</a> for how this lines up with the
+other titles.</p>
+<blockquote>
+<p>Status vocabulary follows the repository’s
+<a href="https://codeberg.org/caniko/rs-modde/src/branch/trunk/docs/capability-matrix.toml"><code>docs/capability-matrix.toml</code></a>
+and the <a href="../reference/parity.html">parity audit</a>. <code>Done</code> means shipped end to
+end and user-reachable; <code>Partial</code> means core logic exists but the surrounding
+workflow is not yet fully trustworthy.</p>
+</blockquote>
+<h2 id="how-modde-detects-the-install"><a class="header" href="#how-modde-detects-the-install">How modde detects the install</a></h2>
+<p>Starfield is registered with a Steam App ID (<code>1716740</code>) and the Steam library
+folder name <code>Starfield</code>. modde’s launcher detection uses these to locate the
+install under your Steam libraries. No Heroic GOG or Epic IDs are registered for
+Starfield, so launcher auto-detection is Steam-oriented; for any other source you
+can always point a profile at the install directory explicitly.</p>
+<p>Because Starfield runs through Proton on Linux, modde reads its Windows-side game
+data — <code>plugins.txt</code> and the per-profile INI files — from inside the Proton
+prefix rather than from a native Linux path. The relevant locations under the
+Steam compatibility prefix are:</p>
+<pre><code class="language-text"># Save games (auto-detected by the plugin)
+~/.local/share/Steam/steamapps/compatdata/1716740/pfx/drive_c/Users/steamuser/Documents/My Games/Starfield/Saves
+
+# Load order (read by the scanner)
+~/.local/share/Steam/steamapps/compatdata/1716740/pfx/drive_c/users/steamuser/AppData/Local/Starfield/plugins.txt
+</code></pre>
+<p>The save directory is resolved relative to your detected Steam <code>common/</code> folder,
+so a non-default Steam library still resolves correctly as long as the
+<code>compatdata/1716740/pfx</code> prefix exists. If the prefix has not been created yet
+(you have never launched the game), save detection returns nothing rather than
+guessing a path.</p>
+<h2 id="mod-directory--deploy-strategy"><a class="header" href="#mod-directory--deploy-strategy">Mod directory &amp; deploy strategy</a></h2>
+<p>Like every Bethesda title, Starfield’s mod directory is <code>Data/</code> under the game’s
+install root. modde deploys with the standard <strong>symlink-farm virtual filesystem</strong>:
+mods are staged in an intermediate directory and symlinked into <code>Data/</code>, leaving
+the original game files untouched and the whole deployment reversible.</p>
+<p>The build/materialize/deploy pipeline, priority ordering (profile overrides win,
+then later mods in the load order), rollback, and <code>modde verify</code> all behave
+exactly as documented in <a href="../guides/deployment.html">Deployment &amp; VFS</a>. Nothing
+about Starfield changes the deploy model — it is the same engine-wide path used
+by Skyrim SE and Fallout 4.</p>
+<p>When modde recognizes a <strong>bare</strong> (loose-files) mod layout during extraction, it
+keys off the shared Bethesda layout policy: recognized root directories include
+<code>data</code>, <code>meshes</code>, <code>textures</code>, <code>scripts</code>, <code>interface</code>, <code>sound</code>, <code>music</code>,
+<code>materials</code>, <code>seq</code>, <code>shadersfx</code>, and <code>strings</code> (matched case-insensitively), plus
+root-level files with <code>.esp</code>, <code>.esm</code>, <code>.esl</code>, <code>.bsa</code>, or <code>.ba2</code> extensions. A mod
+archive that unpacks into one of these is treated as already rooted at <code>Data/</code>.</p>
+<h2 id="what-scanning-finds"><a class="header" href="#what-scanning-finds">What scanning finds</a></h2>
+<p>Starfield uses the data-driven <code>BethesdaScanner</code>, the same plugins.txt-aware
+scanner as Skyrim SE and Fallout 4 (Fallout 76 is the exception — it uses the
+loose-archive scanner). Scanning the <code>Data/</code> directory does the following:</p>
+<ol>
+<li><strong>Reads <code>plugins.txt</code> for authoritative load order.</strong> modde locates
+<code>plugins.txt</code> inside the Proton prefix (path above) and parses it. Each line is
+a plugin; a leading <code>*</code> marks it <strong>enabled</strong>, an unprefixed line is
+<strong>disabled</strong>, and <code>#</code>/blank lines are ignored.</li>
+<li><strong>Emits plugins listed in <code>plugins.txt</code> first</strong>, at high confidence (<code>0.95</code>).
+For each plugin it pairs companion archives that share the plugin’s stem —
+both <code>&lt;stem&gt;.ba2</code> and the texture-suffixed <code>&lt;stem&gt; - Textures.ba2</code> — into the
+same discovered mod.</li>
+<li><strong>Also scans for plugins not in <code>plugins.txt</code></strong> (disabled or unmanaged) by
+walking <code>Data/</code> for <code>.esp</code>, <code>.esm</code>, and <code>.esl</code> files, emitting them at lower
+confidence (<code>0.8</code>) so you can see plugins the load order does not yet track.</li>
+</ol>
+<p>Each discovered mod’s footprint is recorded <code>Data</code>-relative, which is how modde
+compares against MO2-style manifests when detecting stale duplicates. Plugin file
+extensions recognized are <code>esp</code>, <code>esm</code>, <code>esl</code>; companion archive extensions are
+<code>bsa</code> and <code>ba2</code> (Starfield ships <code>.ba2</code>).</p>
+<h2 id="conflict-classification"><a class="header" href="#conflict-classification">Conflict classification</a></h2>
+<p>Starfield uses the shared <code>BethesdaCollisionClassifier</code>. When two mods provide the
+same relative path, modde classifies the <strong>severity</strong> of the overlap by file type.
+It can also read inside <code>.bsa</code>/<code>.ba2</code> archives (via the archive index) to classify
+conflicts on archived contents, not just loose files.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Severity</th><th>Extensions</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Dangerous</strong></td><td><code>esp</code>, <code>esm</code>, <code>esl</code>, <code>pex</code>, <code>dll</code>, <code>psc</code></td></tr>
+<tr><td><strong>Config</strong></td><td><code>ini</code>, <code>cfg</code>, <code>json</code>, <code>toml</code>, <code>xml</code></td></tr>
+<tr><td><strong>Cosmetic</strong></td><td><code>dds</code>, <code>png</code>, <code>tga</code>, <code>jpg</code>, <code>nif</code>, <code>hkx</code>, <code>fuz</code>, <code>wav</code>, <code>xwm</code>, <code>swf</code>, <code>btr</code>, <code>bto</code>, <code>btt</code>, <code>bsa</code>, <code>ba2</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>“Dangerous” overlaps (plugins, script bytecode/source, native DLLs) are the ones
+that change game logic and most often need a real resolution; cosmetic texture and
+mesh overlaps are usually a matter of which look wins. The same extension set
+feeds the <strong>save-breaking</strong> fingerprint described below. For the full conflict
+workflow — how to inspect, hide files, and reorder — see the
+<a href="../guides/conflicts.html">Conflicts guide</a>.</p>
+<h2 id="save-tracking"><a class="header" href="#save-tracking">Save tracking</a></h2>
+<p>Save tracking for Starfield is <strong><code>Done</code></strong>. Unlike the older Bethesda titles, which
+parse a binary <code>.ess</code> header for the character name and save number, Starfield’s
+saves are <code>.sfs</code> files and are tracked with modde’s declarative pattern-based
+tracker.</p>
+<p>What the tracker captures:</p>
+<ul>
+<li>
+<p><strong>File type:</strong> <code>.sfs</code> files in the Saves directory (non-recursive).</p>
+</li>
+<li>
+<p><strong>Slot category</strong>, derived from the filename prefix:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Prefix</th><th>Category</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Autosave</code></td><td><code>auto</code></td></tr>
+<tr><td><code>Quicksave</code></td><td><code>quick</code></td></tr>
+<tr><td><code>Exitsave</code></td><td><code>exit</code></td></tr>
+<tr><td><code>Save</code></td><td><code>manual</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>Any <code>.sfs</code> that does not match a known prefix still falls back to <code>manual</code>, so
+no save is silently dropped.</p>
+</li>
+<li>
+<p><strong>Label:</strong> the file stem (the save’s filename without the <code>.sfs</code> extension).</p>
+</li>
+<li>
+<p><strong>Capture summary:</strong> grouped <strong>by category</strong>, so a capture reads like
+<code>capture: 6 saves (2 auto, 1 exit, 3 manual)</code> rather than a flat count.</p>
+</li>
+</ul>
+<p>These detected saves feed the same <strong>git-backed save vault</strong> as every other game:
+a per-game git repository with per-profile branches, automatic capture on profile
+switch and on game exit, history browsing, and restore. Each snapshot embeds a
+<strong>SHA-256 fingerprint</strong> of the profile’s enabled save-breaking mods (the
+<code>Dangerous</code>-classified extensions above), so restoring a save that was made under
+a different mod set warns you about which save-breaking mods were added or removed.
+The end-to-end save workflow — adopt, capture, watch, history, restore,
+fingerprint semantics — is documented in the <a href="../guides/saves.html">Save management guide</a>.</p>
+<h2 id="plugin--load-order-handling"><a class="header" href="#plugin--load-order-handling">Plugin &amp; load-order handling</a></h2>
+<p>Starfield has a plugin system (<code>has_plugin_system()</code> is true). modde reads and
+writes <code>plugins.txt</code> in the <code>*</code>-prefix enabled/disabled format. When modde writes
+the file it prepends a generated header marker and emits one line per plugin,
+prefixing enabled plugins with <code>*</code>:</p>
+<pre><code class="language-text"># This file is generated by modde. Do not edit manually.
+*Starfield.esm
+*BlueprintShips-Starfield.esm
+SomeDisabledMod.esp
+</code></pre>
+<p>The load order read from <code>plugins.txt</code> is authoritative for the scanner and is the
+order modde uses when resolving conflicts (later wins).</p>
+<h3 id="diagnostics"><a class="header" href="#diagnostics">Diagnostics</a></h3>
+<p>Starfield participates in the shared Bethesda diagnostics engine, which runs:</p>
+<ul>
+<li><strong>Missing masters</strong> (<code>Error</code>): flags an active plugin whose required master is
+not present in the load order — the game would crash on load. The suggested fix
+is to install and enable the mod that provides the missing master.</li>
+<li><strong>Orphaned overrides</strong> (<code>Info</code>): notes when the profile’s overrides directory
+contains files, since those take top priority over every mod.</li>
+<li><strong>Empty / store-presence</strong> checks from the base diagnostics engine.</li>
+</ul>
+<blockquote>
+<p>The <strong>Form 43</strong> (“Oldrim” plugin format) diagnostic is <strong>Skyrim SE/AE only</strong> —
+it does not apply to Starfield. Do not expect a Form-43 warning here.</p>
+</blockquote>
+<h2 id="installer-specifics"><a class="header" href="#installer-specifics">Installer specifics</a></h2>
+<ul>
+<li><strong>FOMOD:</strong> Starfield benefits from the same scripted-installer support as the
+rest of the engine. modde’s FOMOD support is provided by the <code>fomod-oxide</code>
+installer, so option-tree FOMOD packages (the common Nexus install format for
+Bethesda mods) are handled by the shared installer path. See the
+<a href="../guides/fomod.html">FOMOD guide</a> for how the option tree is presented.</li>
+<li><strong>Loose archives / plugins:</strong> Mods that are just <code>.ba2</code> archives and/or
+<code>.esp</code>/<code>.esm</code>/<code>.esl</code> plugins dropped into <code>Data/</code> are recognized directly by the
+scanner and bare-layout policy; no scripted installer is required.</li>
+<li>There is <strong>no REDmod, SMAPI, or <code>.pak</code> step</strong> for Starfield — those belong to
+other engines (Cyberpunk, Stardew Valley, and Unreal/Larian titles
+respectively). Starfield is a plugin + <code>.ba2</code> Creation Engine title.</li>
+</ul>
+<h2 id="gaming-tools-that-matter"><a class="header" href="#gaming-tools-that-matter">Gaming tools that matter</a></h2>
+<p>Starfield ships with <strong>no built-in OptiScaler profiles</strong> (<code>optiscaler_profiles</code>
+is empty in its registration), so unlike Stellar Blade it has no preconfigured
+OptiScaler/OptiPatcher setup. You can still manage the generic gaming tools
+through modde’s tool system:</p>
+<ul>
+<li><strong><code>proton</code></strong> — per-game Proton version, Wine prefix, environment variables, and
+DLL overrides. This is the most relevant tool for Starfield on Linux; several
+script-extender and ASI-loader mods need forced DLL overrides (see below).</li>
+<li><strong><code>mangohud</code></strong>, <strong><code>vkbasalt</code></strong>, <strong><code>gamemode</code></strong> — performance overlay, Vulkan
+post-processing, and the GameMode daemon.</li>
+<li><strong><code>reshade</code></strong> / <strong><code>optiscaler</code></strong> — file-patching tools that place DLLs and
+configs into the game directory; modde records what it patched so <code>tool revert</code>
+can cleanly remove them.</li>
+</ul>
+<p>Named <strong>executables</strong> (script extenders, xEdit/SF1Edit-style tools, ASI managers)
+are managed through modde’s Executables system with args, working directory,
+environment, Wine DLL overrides, a configurable output mod, and overwrite capture.
+See the <a href="../guides/tools.html">Tools &amp; overlays guide</a> for <code>modde tool</code> and
+<code>modde exec</code> usage.</p>
+<h2 id="linux--proton-notes--known-gotchas"><a class="header" href="#linux--proton-notes--known-gotchas">Linux / Proton notes &amp; known gotchas</a></h2>
+<p>These notes cover the game’s runtime on Linux and macOS, where Starfield runs
+through Proton/Wine. On Windows the game runs natively — there is no Wine prefix,
+and the Saves directory, <code>plugins.txt</code>, and INI files live at their native
+Windows locations. modde itself runs natively on all three platforms.</p>
+<ul>
+<li>
+<p><strong>Launch the game once before expecting save or load-order detection.</strong> Both the
+Saves directory and <code>plugins.txt</code> live inside <code>compatdata/1716740/pfx</code>, which
+Proton only creates after the first launch. Until then, save detection returns
+empty and the scanner falls back to scanning loose <code>Data/</code> plugins without an
+authoritative order.</p>
+</li>
+<li>
+<p><strong>DLL-based mods (script extenders, ASI loaders) usually need DLL overrides.</strong>
+Configure them through the <code>proton</code> tool rather than hand-editing the prefix:</p>
+<pre><code class="language-bash">modde tool configure proton --game starfield dll_override_mode=forced forced_dll_overrides=sfse_loader
+</code></pre>
+<p>Use whatever proxy/loader DLL name the specific mod requires.</p>
+</li>
+<li>
+<p><strong><code>StarfieldCustom.ini</code> may need creating.</strong> Many loose-file and archive-invalidation
+workflows expect a <code>StarfieldCustom.ini</code> in the My Games folder; modde manages
+both <code>StarfieldPrefs.ini</code> and <code>StarfieldCustom.ini</code> per profile, but the game
+itself does not always ship a <code>Custom</code> INI by default.</p>
+</li>
+<li>
+<p><strong>Steam Cloud-aware saves.</strong> modde preserves Steam’s cloud marker and parks
+inactive root saves under its own <code>.modde/</code> directory during profile switches,
+so cloud-synced Starfield saves are not clobbered. See the
+<a href="../guides/saves.html">Save management guide</a> for the Steam Cloud behavior.</p>
+</li>
+</ul>
+<h2 id="worked-example"><a class="header" href="#worked-example">Worked example</a></h2>
+<h3 id="home-manager-profile"><a class="header" href="#home-manager-profile">Home-Manager profile</a></h3>
+<p>Declare a Starfield profile with the home-manager module. You can declare it
+before the game is installed and let modde wait for the install:</p>
+<pre><code class="language-nix">{ inputs, ... }:
+{
+  imports = [ inputs.modde.homeManagerModules.modde ];
+
+  programs.modde = {
+    enable = true;
+
+    profiles.my-starfield = {
+      game = "starfield";
+      # Wait for Steam/Proton to create the install before deploying.
+      installMode = "await-game";
+      # Once Steam has installed the game, set the Data/-bearing install root:
+      # gameDir = "/path/to/SteamLibrary/steamapps/common/Starfield";
+    };
+  };
+}
+</code></pre>
+<p>After Steam has installed Starfield, set <code>gameDir</code> to the install root (the folder
+containing <code>Data/</code>) and rebuild; modde deploys the profile via its activation
+script.</p>
+<h3 id="cli"><a class="header" href="#cli">CLI</a></h3>
+<pre><code class="language-bash"># Deploy the Starfield profile, then launch through modde (captures saves on exit)
+modde play --game starfield --profile my-starfield
+
+# Or deploy without launching
+modde deploy --profile my-starfield --game starfield
+
+# Scan the install for plugins and loose .ba2 archives
+modde scan --game starfield
+
+# Adopt pre-existing saves into a profile (first capture in the vault)
+modde save adopt --game starfield --profile my-starfield
+
+# Manually capture .sfs saves with a message
+modde save capture --game starfield --profile my-starfield -m "before the Unity"
+
+# Watch for new saves when launching outside `modde play`
+modde save watch --game starfield --interval 60
+
+# Configure forced DLL overrides for a script-extender / ASI loader
+modde tool configure proton --game starfield dll_override_mode=forced forced_dll_overrides=sfse_loader
+
+# Run an external tool (e.g. a conflict cleaner) with overwrite capture
+modde tool run /path/to/sf-tool --game starfield -- --some-flag
+</code></pre>
+<h2 id="see-also"><a class="header" href="#see-also">See also</a></h2>
+<ul>
+<li><a href="supported-games.html">Supported games</a> — the canonical status table and Wabbajack mapping</li>
+<li><a href="../guides/deployment.html">Deployment &amp; VFS</a> — the symlink-farm deploy model used for <code>Data/</code></li>
+<li><a href="../guides/saves.html">Save management</a> — the git-backed save vault and fingerprinting</li>
+<li><a href="../guides/conflicts.html">Conflicts</a> — inspecting and resolving the conflicts modde classifies</li>
+<li><a href="../guides/fomod.html">FOMOD installers</a> — scripted-installer option trees</li>
+<li><a href="../guides/tools.html">Tools &amp; overlays</a> — Proton, OptiScaler, executables, and <code>modde tool</code></li>
+<li><a href="../guides/scanning.html">Scanning</a> — how <code>modde scan</code> discovers installed mods</li>
+<li><a href="../reference/parity.html">Parity audit</a> — what is <code>Done</code> vs <code>Partial</code></li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../games/fallout76.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../games/fallout-new-vegas.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../games/fallout76.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../games/fallout-new-vegas.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>
