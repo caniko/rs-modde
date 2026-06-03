@@ -605,25 +605,28 @@ flake: {
       message = "programs.modde.database: connection fields (url/host/port/name/user/passwordFile) are only valid when backend = \"postgres\".";
     }
   ];
-  # Activation snippet that exports the MODDE_DATABASE_* environment the binary
-  # reads at startup. The password stays in a file (never the Nix store).
-  databaseEnv = lib.optionalString postgresSelected (
-    ''
-      export MODDE_DATABASE_BACKEND="postgres"
-    ''
-    + lib.optionalString hasUrl ''export MODDE_DATABASE_URL=${lib.escapeShellArg db.url}''
-    + "\n"
-    + lib.optionalString (db.host != null) ''export MODDE_DATABASE_HOST=${lib.escapeShellArg db.host}''
-    + "\n"
-    + lib.optionalString (db.port != null) ''export MODDE_DATABASE_PORT=${lib.escapeShellArg (toString db.port)}''
-    + "\n"
-    + lib.optionalString (db.name != null) ''export MODDE_DATABASE_NAME=${lib.escapeShellArg db.name}''
-    + "\n"
-    + lib.optionalString (db.user != null) ''export MODDE_DATABASE_USER=${lib.escapeShellArg db.user}''
-    + "\n"
-    + lib.optionalString (db.passwordFile != null) ''export MODDE_DB_PASSWORD_FILE=${lib.escapeShellArg (toString db.passwordFile)}''
-    + "\n"
+  # The MODDE_DATABASE_* environment the binary reads at startup. modde resolves
+  # its backend as env → settings.toml → sqlite default, so these vars make the
+  # declarative `database` option authoritative at runtime. Computed once as an
+  # attrset and consumed in two places: `home.sessionVariables` (below) so the
+  # user's interactive and graphical sessions pick up the backend without any
+  # manual `modde config set-database`, and the activation script so deploy-time
+  # `modde` invocations hit the same database. The password is never placed in
+  # the Nix store — only the path to its file is exported (MODDE_DB_PASSWORD_FILE),
+  # and modde reads the secret from that file at runtime.
+  databaseEnvVars = lib.optionalAttrs postgresSelected (
+    {MODDE_DATABASE_BACKEND = "postgres";}
+    // lib.optionalAttrs hasUrl {MODDE_DATABASE_URL = db.url;}
+    // lib.optionalAttrs (db.host != null) {MODDE_DATABASE_HOST = db.host;}
+    // lib.optionalAttrs (db.port != null) {MODDE_DATABASE_PORT = toString db.port;}
+    // lib.optionalAttrs (db.name != null) {MODDE_DATABASE_NAME = db.name;}
+    // lib.optionalAttrs (db.user != null) {MODDE_DATABASE_USER = db.user;}
+    // lib.optionalAttrs (db.passwordFile != null) {MODDE_DB_PASSWORD_FILE = toString db.passwordFile;}
   );
+  # Same vars rendered as shell `export`s for the activation/deploy script.
+  databaseEnv =
+    lib.concatStringsSep "\n"
+    (lib.mapAttrsToList (name: value: "export ${name}=${lib.escapeShellArg value}") databaseEnvVars);
 in {
   options.programs.modde = {
     enable = lib.mkEnableOption "modde game mod manager";
@@ -710,6 +713,11 @@ in {
     assertions = profileAssertions ++ databaseAssertions;
 
     home.packages = [cfg.package];
+
+    # Make the selected backend authoritative for the user's runtime sessions
+    # (terminal launches and graphical-session apps), not just activation. Empty
+    # when backend = "sqlite", so it contributes nothing in the default case.
+    home.sessionVariables = databaseEnvVars;
 
     home.activation.modde-deploy = lib.hm.dag.entryAfter ["writeBoundary"] ''
       export PATH="${cfg.package}/bin:$PATH"
