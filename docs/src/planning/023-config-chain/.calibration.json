@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "plan": {
+    "id": "f3d8cec6-b6d0-4d24-8eb7-1764c10ede3f",
+    "name": "Plan: Fix and harden the modde configuration chain (core resolution → CLI → HM module → canix)",
+    "flavor": "codex",
+    "worktype": null,
+    "created_at": 1780510656,
+    "phase_count": 5,
+    "wave_count": 3,
+    "max_chain_depth": 3,
+    "repo_spread": 5,
+    "routing_dist": {
+      "medium": 5
+    },
+    "shape_hash": "28cd8593187b313349f7dbcaf6fcd062a2b8d93101acbe40cc2e082f8ac1e1c3"
+  },
+  "triggers": [
+    {
+      "name": "shared-file-contention",
+      "input_value": 1.0,
+      "threshold": 2.0,
+      "fired": false,
+      "section_added": null
+    },
+    {
+      "name": "external-repo-phases",
+      "input_value": 4.0,
+      "threshold": 1.0,
+      "fired": true,
+      "section_added": "External repo coordination"
+    },
+    {
+      "name": "convergence-point",
+      "input_value": 3.0,
+      "threshold": 3.0,
+      "fired": true,
+      "section_added": "Merge-readiness checklist"
+    },
+    {
+      "name": "ownership-boundary-spread",
+      "input_value": 5.0,
+      "threshold": 2.0,
+      "fired": true,
+      "section_added": "PR sequencing & cross-owner coordination"
+    },
+    {
+      "name": "risk-concentration",
+      "input_value": 0.0,
+      "threshold": 2.0,
+      "fired": false,
+      "section_added": null
+    },
+    {
+      "name": "risk-late-in-plan",
+      "input_value": 0.0,
+      "threshold": 1.0,
+      "fired": false,
+      "section_added": null
+    },
+    {
+      "name": "infrastructure-spof",
+      "input_value": 0.0,
+      "threshold": 1.0,
+      "fired": false,
+      "section_added": null
+    },
+    {
+      "name": "revendor-phase",
+      "input_value": 0.0,
+      "threshold": 1.0,
+      "fired": false,
+      "section_added": null
+    },
+    {
+      "name": "long-serial-chain",
+      "input_value": 3.0,
+      "threshold": 4.0,
+      "fired": false,
+      "section_added": null
+    },
+    {
+      "name": "mid-plan-rerouting",
+      "input_value": 5.0,
+      "threshold": 10.0,
+      "fired": false,
+      "section_added": null
+    },
+    {
+      "name": "trivial-phase-swamp",
+      "input_value": 5.0,
+      "threshold": 4.0,
+      "fired": true,
+      "section_added": "Cleanup batch"
+    },
+    {
+      "name": "no-integrated-verification",
+      "input_value": 1.0,
+      "threshold": 1.0,
+      "fired": true,
+      "section_added": null
+    },
+    {
+      "name": "routing-tier-inversion",
+      "input_value": 2.0,
+      "threshold": 1.0,
+      "fired": true,
+      "section_added": null
+    },
+    {
+      "name": "mechanical-streak",
+      "input_value": 0.0,
+      "threshold": 3.0,
+      "fired": false,
+      "section_added": null
+    },
+    {
+      "name": "hidden-prerequisite",
+      "input_value": 0.0,
+      "threshold": 1.0,
+      "fired": false,
+      "section_added": null
+    }
+  ],
+  "phases": [
+    {
+      "ordinal": 1,
+      "slug": "core-honor-discrete-env",
+      "routing_tier": "medium",
+      "files": [
+        "crates/modde-core/src/db/mod.rs` — `open_postgres` (188-230) + new",
+        "crates/modde-core/src/error.rs` — context wrapping for connect/password-file",
+        "crates/modde-core/src/settings.rs` — NAME↔dbname comment at line 55; no"
+      ]
+    },
+    {
+      "ordinal": 2,
+      "slug": "canix-publish-repin-dedicated-db",
+      "routing_tier": "medium",
+      "files": [
+        "canix `flake.nix`/`flake.lock`/`postgres.nix`/`can.nix` (+ rs-modde push)"
+      ]
+    },
+    {
+      "ordinal": 3,
+      "slug": "cli-show-honesty-and-doctor",
+      "routing_tier": "medium",
+      "files": [
+        "crates/modde-cli/src/commands/config.rs` — `handle_show` (resolver reuse +",
+        "crates/modde-cli/src/main.rs` — `ConfigAction` enum (+ `Test`, optional"
+      ]
+    },
+    {
+      "ordinal": 4,
+      "slug": "hm-module-assertions-and-eval-checks",
+      "routing_tier": "medium",
+      "files": [
+        "flake.nix` — the two eval-HM stub modules (548-559, 588-600), the rendering",
+        "nix/hm-module.nix` — `hasDiscrete` (591) + message (595); option descriptions"
+      ]
+    },
+    {
+      "ordinal": 5,
+      "slug": "README",
+      "routing_tier": "medium",
+      "files": [
+        ".forgejo/",
+        "docs/src/**",
+        "modde-cli tests",
+        "modde-core tests"
+      ]
+    }
+  ],
+  "meta_heuristics_fired": [
+    "threshold-proximity"
+  ],
+  "tags": {
+    "flavor": "codex",
+    "risk": "low",
+    "scope": "cross-org"
+  },
+  "verify": null
+}
