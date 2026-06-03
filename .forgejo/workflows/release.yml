@@ -503,10 +503,10 @@ jobs:
           cd tap; git config credential.helper "$credential_helper"; git config user.email 'ci@localhost'; git config user.name 'release bot'
           git remote set-head origin -a; DEFAULT_BRANCH="$(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's|^origin/||')"; git checkout "$DEFAULT_BRANCH"; cd ..
           nix run '.#rs-harbor' -- brew bump \
-            --name modde-cli \
+            --name modde \
             --version "$VERSION" \
             --description 'Cross-platform game mod manager' \
-            --homepage 'https://modde.rs' \
+            --homepage 'https://modde.tartanoglu.com' \
             --license GPL-3.0-only \
             --archive "darwin_arm=https://codeberg.org/caniko/rs-modde/releases/download/${VERSION}/modde-${VERSION}-aarch64-darwin.tar.gz,release/modde-${VERSION}-aarch64-darwin.tar.gz" \
             --archive "darwin_intel=https://codeberg.org/caniko/rs-modde/releases/download/${VERSION}/modde-${VERSION}-x86_64-darwin.tar.gz,release/modde-${VERSION}-x86_64-darwin.tar.gz" \
@@ -516,8 +516,8 @@ jobs:
             --binary modde-ui \
             --tap "$PWD/tap"
           cd tap
-          if [ -z "$(git status --porcelain -- Formula/modde-cli.rb)" ]; then echo 'tap unchanged'; exit 0; fi
-          git add Formula/modde-cli.rb; git commit -m "modde-cli ${VERSION}"; git push origin "HEAD:${DEFAULT_BRANCH}"
+          if [ -z "$(git status --porcelain -- Formula/modde.rb)" ]; then echo 'tap unchanged'; exit 0; fi
+          git add Formula/modde.rb; git commit -m "modde ${VERSION}"; git push origin "HEAD:${DEFAULT_BRANCH}"
       - name: Publish Scoop bucket
         env:
           SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
@@ -575,7 +575,7 @@ jobs:
             --choco-title 'modde' \
             --choco-authors 'Can H. Tartanoglu' \
             --choco-description 'Cross-platform game mod manager' \
-            --choco-project-url 'https://modde.rs' \
+            --choco-project-url 'https://modde.tartanoglu.com' \
             --choco-download-repo 'caniko/rs-modde' \
             --choco-archive-pattern 'modde-{version}-{arch}-windows.zip' \
             --push \

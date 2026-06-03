@@ -8,7 +8,7 @@ tagline = "A cross-platform game mod manager — install Wabbajack modlists and 
 subtitle = "Install Wabbajack modlists, Nexus Collections, and individual mods with a clean game directory on any OS — plus an optional declarative Nix/home-manager workflow."
 logo = "/logo.svg"
 primary_cta = { label = "Install", href = "#install" }
-secondary_cta = { label = "Docs", href = "https://modde.rs/docs/" }
+secondary_cta = { label = "Docs", href = "https://modde.tartanoglu.com/docs/" }
 
 [[extra.features]]
 title = "Cross-platform"
@@ -57,7 +57,7 @@ description = "Optional, for Nix users: modde is also a flake — a reproducible
 
 ## Install {#install}
 
-modde runs natively on Linux, macOS, and Windows. Every release ships two binaries — the `modde` command-line tool and the `modde-ui` desktop app. There's no single blessed method: pick whatever fits how you already manage software. For the full set of commands, verification steps, and per-platform notes, see the [installation guide](https://modde.rs/docs/getting-started/installation.html).
+modde runs natively on Linux, macOS, and Windows. Every release ships two binaries — the `modde` command-line tool and the `modde-ui` desktop app. There's no single blessed method: pick whatever fits how you already manage software. For the full set of commands, verification steps, and per-platform notes, see the [installation guide](https://modde.tartanoglu.com/docs/getting-started/installation.html).
 
 <div class="install-grid">
   <article class="install-card">
@@ -102,30 +102,29 @@ choco install modde</code></pre>
     <h3>Nix</h3>
     <p>If you use Nix, modde is also a flake — a reproducible install on any machine with flakes enabled:</p>
     <pre><code>nix run codeberg:caniko/rs-modde</code></pre>
-    <p>Through the home-manager module you can additionally declare your mod profiles — Wabbajack lists, Nexus Collections, and tool overlays — as code. See the <a href="https://modde.rs/docs/configuration/hm-module.html">home-manager module reference</a>.</p>
+    <p>Through the home-manager module you can additionally declare your mod profiles — Wabbajack lists, Nexus Collections, and tool overlays — as code. See the <a href="https://modde.tartanoglu.com/docs/configuration/hm-module.html">home-manager module reference</a>.</p>
   </article>
 </div>
 
 ## Screenshots {#screenshots}
 
-Drop future PNG or GIF assets into `website/static/screenshots/` and replace the placeholder cards below with real image tags. The comment anchors are intentional so assets can be added later without reworking the template.
+Screenshots are generated headlessly and reproducibly from the app itself with
+`modde dev screenshot --all --out website/static/screenshots` (the `screenshot`
+cargo feature). Regenerate them whenever the UI changes.
 
 <div class="screenshots-grid">
   <figure class="screenshot-slot">
-    <!-- Slot 1: website/static/screenshots/mod-list.png -->
-    <!-- <img src="/screenshots/mod-list.png" alt="Mod list view"> -->
-    <figcaption><code>/screenshots/mod-list.png</code> — mod list view placeholder</figcaption>
+    <img src="/screenshots/mod-list.png" alt="Browsing the active profile's mod list">
+    <figcaption>Mod list — the active profile's mods, grouped and ordered</figcaption>
   </figure>
 
   <figure class="screenshot-slot">
-    <!-- Slot 2: website/static/screenshots/download-queue.gif -->
-    <!-- <img src="/screenshots/download-queue.gif" alt="Download queue"> -->
-    <figcaption><code>/screenshots/download-queue.gif</code> — download queue placeholder</figcaption>
+    <img src="/screenshots/downloads.png" alt="Download queue">
+    <figcaption>Download queue — active, queued, complete, and failed downloads</figcaption>
   </figure>
 
   <figure class="screenshot-slot">
-    <!-- Slot 3: website/static/screenshots/fomod-wizard.png -->
-    <!-- <img src="/screenshots/fomod-wizard.png" alt="FOMOD wizard"> -->
-    <figcaption><code>/screenshots/fomod-wizard.png</code> — FOMOD wizard placeholder</figcaption>
+    <img src="/screenshots/fomod-wizard.png" alt="FOMOD installer wizard">
+    <figcaption>FOMOD wizard — stepping through a guided installer</figcaption>
   </figure>
 </div>

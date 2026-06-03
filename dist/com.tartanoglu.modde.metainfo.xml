@@ -17,16 +17,77 @@
     </p>
   </description>
   <launchable type="desktop-id">com.tartanoglu.modde.desktop</launchable>
-  <url type="homepage">https://codeberg.org/caniko/rs-modde</url>
+  <url type="homepage">https://modde.tartanoglu.com</url>
   <url type="bugtracker">https://codeberg.org/caniko/rs-modde/issues</url>
   <url type="vcs-browser">https://codeberg.org/caniko/rs-modde</url>
+  <url type="help">https://modde.tartanoglu.com/docs/</url>
+  <url type="contact">https://codeberg.org/caniko/rs-modde/issues</url>
+  <branding>
+    <color type="primary" scheme_preference="light">#B1130F</color>
+    <color type="primary" scheme_preference="dark">#ED3427</color>
+  </branding>
+  <keywords>
+    <keyword>mod</keyword>
+    <keyword>manager</keyword>
+    <keyword>nexus</keyword>
+    <keyword>wabbajack</keyword>
+    <keyword>skyrim</keyword>
+    <keyword>fallout</keyword>
+    <keyword>fomod</keyword>
+    <keyword>bain</keyword>
+    <keyword>game</keyword>
+  </keywords>
   <categories>
     <category>Game</category>
   </categories>
+  <screenshots>
+    <screenshot type="default">
+      <image type="source">https://modde.tartanoglu.com/screenshots/mod-list.png</image>
+      <caption>Browsing the active profile's mod list with conflict status</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://modde.tartanoglu.com/screenshots/downloads.png</image>
+      <caption>Downloading mods from Nexus Mods in the download queue</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://modde.tartanoglu.com/screenshots/fomod-wizard.png</image>
+      <caption>Stepping through a FOMOD installer with the guided wizard</caption>
+    </screenshot>
+  </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
-    <!-- Top entry mirrors CHANGELOG.md's most recent version + date -->
-    <release version="0.2.0" date="2026-05-19"/>
-    <release version="0.1.0" date="2026-04-13"/>
+    <!-- Top entry mirrors CHANGELOG.md's most recent dated version + date -->
+    <release version="0.3.0" date="2026-06-03">
+      <description>
+        <ul>
+          <li>New async SQLite-backed storage layer (with optional PostgreSQL) for profile and mod data</li>
+          <li>Profile, tool, and settings changes now save in the background without blocking the interface</li>
+          <li>Fixed Windows release builds and macOS cross-builds</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.2.1" date="2026-05-31">
+      <description>
+        <ul>
+          <li>Homebrew tap and rc/beta/alpha prerelease release channels</li>
+          <li>In-app update check with a non-modal GUI update banner</li>
+          <li>Optional Mastodon and Matrix release announcements</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.2.0" date="2026-05-19">
+      <description>
+        <ul>
+          <li>Wabbajack GameFileSourceDownloader support with local game-file verification</li>
+          <li>Home Manager Wabbajack profiles fetch, install, and deploy declarative modlists</li>
+          <li>Non-fatal await-game install mode for not-yet-installed games</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.1.0" date="2026-04-13">
+      <description>
+        <p>First public release: profile/VFS deployment, Nexus and Wabbajack installs, FOMOD wizard, and an Iced GUI.</p>
+      </description>
+    </release>
   </releases>
 </component>

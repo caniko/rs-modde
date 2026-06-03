@@ -2,8 +2,8 @@
 
 A cross-platform game mod manager written in Rust, running natively on Linux, macOS, and Windows. Provides mod management with virtual filesystem deployment, profile management, save versioning, and conflict detection.
 
-Project site: <https://modde.rs/>
-Documentation: <https://modde.rs/docs/>
+Project site: <https://modde.tartanoglu.com/>
+Documentation: <https://modde.tartanoglu.com/docs/>
 
 ## Supported games
 

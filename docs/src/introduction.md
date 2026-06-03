@@ -11,7 +11,7 @@ manager, a direct download, or Cargo — and if you happen to use Nix, modde is 
 flake, which gives you a reproducible install and the option to declare your mod
 profiles as code through a home-manager module.
 
-- **Project site:** <https://modde.rs/>
+- **Project site:** <https://modde.tartanoglu.com/>
 - **Source:** <https://codeberg.org/caniko/rs-modde>
 
 ## What modde does

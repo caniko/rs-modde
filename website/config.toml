@@ -2,7 +2,7 @@
 # Local dev: cd website && zola serve
 # Build: nix build .#website
 
-base_url = "https://modde.rs"
+base_url = "https://modde.tartanoglu.com"
 title = "modde"
 description = "NixOS-native game mod manager"
 default_language = "en"

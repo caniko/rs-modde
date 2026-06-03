@@ -39,8 +39,9 @@ echo ":: Copying site output..."
 # Clear existing content (except .git)
 find "${WORK_DIR}" -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
 
-# Copy built site into the worktree (dereference nix store symlinks)
-cp -rL "${SITE_PATH}/." "${WORK_DIR}/"
+# Copy built site into the worktree (dereference nix store symlinks) without
+# preserving read-only Nix store modes, so the cleanup trap can remove it.
+cp -rL --no-preserve=mode "${SITE_PATH}/." "${WORK_DIR}/"
 
 # Codeberg Pages requires a .nojekyll-equivalent or just serves static files directly
 # No special file needed for Codeberg, but ensure there's no .gitignore blocking things
@@ -56,5 +57,5 @@ fi
 git commit -m "${COMMIT_MSG}" --quiet
 git push "${REMOTE}" "HEAD:${BRANCH}" --force --quiet
 
-echo ":: Deployed to https://caniko.codeberg.page/rs-modde/"
-echo "   Docs at  https://caniko.codeberg.page/rs-modde/docs/"
+echo ":: Deployed to https://modde.tartanoglu.com/"
+echo "   Docs at  https://modde.tartanoglu.com/docs/"

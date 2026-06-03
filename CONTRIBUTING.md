@@ -157,7 +157,7 @@ See [docs/copr-release.md](docs/copr-release.md) for the Fedora COPR wiring (one
 - Keep the `## [Unreleased]` heading in `CHANGELOG.md` exactly as-is so simit can update it.
 - rs-modde does not run `simit init-ci --check` or `simit init-flake --check`.
 - Those checks would treat this repo's bespoke `atlas` workflows and rs-harbor-driven flake as drift.
-- The rationale, revisit conditions, and other non-obvious choices live in the [Architecture reference](https://modde.rs/docs/reference/architecture.html) (see its "Release, packaging, and tooling decisions" section).
+- The rationale, revisit conditions, and other non-obvious choices live in the [Architecture reference](https://modde.tartanoglu.com/docs/reference/architecture.html) (see its "Release, packaging, and tooling decisions" section).
 
 ### Distribution channels
 

@@ -6,7 +6,7 @@ Publisher: Caniko
 PublisherUrl: https://codeberg.org/caniko
 PublisherSupportUrl: https://codeberg.org/caniko/rs-modde/issues
 PackageName: modde
-PackageUrl: https://modde.rs
+PackageUrl: https://modde.tartanoglu.com
 License: GPL-3.0-only
 LicenseUrl: https://codeberg.org/caniko/rs-modde/src/branch/trunk/LICENSE
 ShortDescription: Cross-platform game mod manager.

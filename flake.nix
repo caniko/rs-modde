@@ -164,7 +164,7 @@
           cp -r ${website}/* $out/
           mkdir -p $out/docs
           cp -r ${docs}/* $out/docs/
-          printf '%s\n' modde.rs www.modde.rs > $out/.domains
+          printf '%s\n' modde.tartanoglu.com > $out/.domains
         '';
 
         nativeBuildInputs = with pkgs; [
@@ -433,7 +433,7 @@
               flatpakManifest = {
                 "app-id" = flatpakAppId;
                 runtime = "org.freedesktop.Platform";
-                "runtime-version" = "24.08";
+                "runtime-version" = "25.08";
                 sdk = "org.freedesktop.Sdk";
                 "sdk-extensions" = ["org.freedesktop.Sdk.Extension.rust-stable"];
                 command = "modde-ui";
@@ -488,7 +488,7 @@
                 name = "modde";
                 version = versionField;
                 description = "Cross-platform game mod manager";
-                homepage = "https://modde.rs";
+                homepage = "https://modde.tartanoglu.com";
                 license = "GPL-3.0-only";
                 platforms = {
                   darwin_arm = {
@@ -1465,11 +1465,12 @@
           zip_archive = "modde-{version}-x86_64-windows.zip";
         };
         homebrew = {
+          name = "modde";
           tap_url = "https://codeberg.org/caniko/homebrew-modde.git";
           download_repo = "caniko/rs-modde";
           binaries = ["modde" "modde-ui"];
           description = "Cross-platform game mod manager";
-          homepage = "https://modde.rs";
+          homepage = "https://modde.tartanoglu.com";
           license = "GPL-3.0-only";
           archive_pattern = "modde-{version}-{arch}-{os}.tar.gz";
         };
@@ -1477,7 +1478,7 @@
           name = "modde";
           download_repo = "caniko/rs-modde";
           description = "Cross-platform game mod manager";
-          project_url = "https://modde.rs";
+          project_url = "https://modde.tartanoglu.com";
           authors = "Can H. Tartanoglu";
           license_url = "https://codeberg.org/caniko/rs-modde/raw/branch/trunk/LICENSE";
           archive_pattern = "modde-{version}-{arch}-windows.zip";
@@ -1493,7 +1494,7 @@
           bucket_url = "https://codeberg.org/caniko/scoop-modde.git";
           download_repo = "caniko/rs-modde";
           description = "Cross-platform game mod manager";
-          homepage = "https://modde.rs";
+          homepage = "https://modde.tartanoglu.com";
           license = "GPL-3.0-only";
           archive_pattern = "modde-{version}-{arch}-windows.zip";
           binaries = ["modde" "modde-ui"];
