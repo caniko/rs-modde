@@ -429,6 +429,10 @@ fn test_initial_state() {
 fn render_path_sources_do_not_call_block_on() {
     let sources = [
         (
+            "app.rs",
+            include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/app.rs")),
+        ),
+        (
             "app/view.rs",
             include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/app/view.rs")),
         ),
@@ -440,39 +444,95 @@ fn render_path_sources_do_not_call_block_on() {
             "app/update.rs",
             include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/app/update.rs")),
         ),
+        (
+            "app/profile_ops.rs",
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/src/app/profile_ops.rs"
+            )),
+        ),
+        (
+            "app/tool_ops.rs",
+            include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/app/tool_ops.rs")),
+        ),
+        (
+            "app/tool_settings.rs",
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/src/app/tool_settings.rs"
+            )),
+        ),
     ];
-    let allowed_model_markers = [
-        "reload_profile_blocking",
-        "finish_pending_switch_blocking",
-        "load_profile_context_blocking",
-        "load_diagnostics_blocking",
+    let allowed_blocking_helpers = [
+        ("app.rs", "load_hidden_files_blocking"),
+        ("app.rs", "load_active_plugins_blocking"),
+        ("app/model.rs", "reload_profile_blocking"),
+        ("app/model.rs", "finish_pending_switch_blocking"),
+        ("app/model.rs", "load_diagnostics_blocking"),
+        ("app/update.rs", "deploy_profile_blocking"),
+        ("app/tool_ops.rs", "load_tools_state_blocking"),
+        ("app/tool_ops.rs", "build_tool_ui_entry_blocking"),
+        ("app/tool_ops.rs", "apply_tool_for_game_blocking"),
+        ("app/tool_ops.rs", "revert_tool_for_game_blocking"),
+        ("app/tool_ops.rs", "deactivate_optiscaler_for_game_blocking"),
+        ("app/tool_ops.rs", "run_saved_executable_for_game_blocking"),
+        ("app/tool_ops.rs", "run_executable_row_blocking"),
+        ("app/tool_settings.rs", "current_tool_config_blocking"),
+        (
+            "app/tool_settings.rs",
+            "save_tool_setting_for_game_blocking",
+        ),
+        ("app/tool_settings.rs", "toggle_tool_for_game_blocking"),
+        (
+            "app/tool_settings.rs",
+            "restore_tool_settings_for_game_blocking",
+        ),
+        ("app/tool_settings.rs", "adopt_optiscaler_for_game_blocking"),
+        (
+            "app/tool_settings.rs",
+            "load_tool_config_or_default_blocking",
+        ),
+        (
+            "app/tool_settings.rs",
+            "save_tool_config_with_reason_blocking",
+        ),
+        ("app/tool_settings.rs", "generate_tool_configs_blocking"),
     ];
 
     for (path, source) in sources {
-        let mut current_allowed_model_helper = false;
+        let mut current_function: Option<&str> = None;
         for (index, line) in source.lines().enumerate() {
             let trimmed = line.trim_start();
-            if path == "app/model.rs" && trimmed.starts_with("pub(super) fn ") {
-                current_allowed_model_helper = allowed_model_markers
-                    .iter()
-                    .any(|marker| trimmed.contains(marker));
-            } else if path == "app/model.rs" && trimmed.starts_with("fn ") {
-                current_allowed_model_helper = allowed_model_markers
-                    .iter()
-                    .any(|marker| trimmed.contains(marker));
-            } else if path == "app/model.rs" && trimmed.starts_with("pub(super) async fn ") {
-                current_allowed_model_helper = false;
+            for prefix in [
+                "pub(super) async fn ",
+                "pub(crate) async fn ",
+                "pub async fn ",
+                "async fn ",
+                "pub(super) fn ",
+                "pub(crate) fn ",
+                "pub fn ",
+                "fn ",
+            ] {
+                if let Some(rest) = trimmed.strip_prefix(prefix) {
+                    current_function = rest.split_once('(').map(|(name, _)| name);
+                    break;
+                }
             }
             if !line.contains("crate::app::block_on") {
                 continue;
             }
-            if path == "app/model.rs" && current_allowed_model_helper {
+            if current_function.is_some_and(|function| {
+                allowed_blocking_helpers
+                    .iter()
+                    .any(|(allowed_path, allowed_function)| {
+                        *allowed_path == path && *allowed_function == function
+                    })
+            }) {
                 continue;
             }
             if path == "app/update.rs"
                 && (line.contains("modde_core::db::ModdeDb::open()")
-                    || line.contains("ProfileManager::with_db(db.clone()).list()")
-                    || line.contains("pm.load(&profile_name, Some(&game_id))"))
+                    || line.contains("ProfileManager::with_db(db.clone()).list()"))
             {
                 continue;
             }
