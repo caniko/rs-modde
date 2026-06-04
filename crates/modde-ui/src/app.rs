@@ -26,13 +26,14 @@ mod update;
 mod view;
 
 /// Drive an async database future to completion from a synchronous blocking
-/// worker.
+/// bridge.
 ///
 /// modde's storage layer is async (`sqlx`), but some CPU/filesystem-heavy
-/// loaders intentionally run in `tokio::task::spawn_blocking` and need to call
-/// async DB APIs from that synchronous body. This shim provides that bridge
-/// without starting a nested Tokio runtime on iced's ambient executor. It also
-/// remains acceptable for the one-time startup DB open before the first render.
+/// loaders intentionally run in `tokio::task::spawn_blocking` because they
+/// also perform synchronous CPU/filesystem work. Those blocking bodies still
+/// need to call async DB APIs. This shim provides that bridge without starting
+/// a nested Tokio runtime on iced's ambient executor. It also remains
+/// acceptable for the one-time startup DB open before the first render.
 ///
 /// Do not call this on the iced render/update/view path. If the work is pure DB
 /// with owned inputs, make the loader `async` and `.await` the shared
@@ -275,7 +276,7 @@ pub struct Modde {
     pub diagnostics_generation: u64,
 }
 
-fn load_hidden_files(
+fn load_hidden_files_blocking(
     pm: &ProfileManager,
     profile: &modde_core::Profile,
 ) -> HashSet<(String, String)> {
@@ -290,7 +291,7 @@ fn load_hidden_files(
         .unwrap_or_default()
 }
 
-fn load_active_plugins(pm: &ProfileManager, profile: &modde_core::Profile) -> Vec<String> {
+fn load_active_plugins_blocking(pm: &ProfileManager, profile: &modde_core::Profile) -> Vec<String> {
     let mut plugins = profile
         .id
         .and_then(|profile_id| crate::app::block_on(pm.db().get_plugin_order(profile_id)).ok())

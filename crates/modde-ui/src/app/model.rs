@@ -9,11 +9,12 @@ use super::state::{
     DataTabConflicts, ProfileContextRequest, ProfileContextSnapshot, ProfileLoadOutcome,
     ToolLoadRequest,
 };
-use super::tool_ops::{load_executables_for_game, load_tools_state, load_tools_state_blocking};
+use super::tool_ops::{load_executables_for_game, load_tools_state};
 use super::{
     DiagnosticsComputed, Message, Modde, SettingsState, ToolLoadSnapshot, View,
     WabbajackInstallerState, build_conflict_rows, build_default_download_meta, detected_game_ids,
-    format_diagnostic_entry, load_active_plugins, load_hidden_files, settings_game_install_paths,
+    format_diagnostic_entry, load_active_plugins_blocking, load_hidden_files_blocking,
+    settings_game_install_paths,
 };
 
 impl Modde {
@@ -792,21 +793,10 @@ impl Modde {
     }
 }
 
-/// Off-thread loader for the profile + data-tab + tool context. Mirrors
-/// [`super::tool_ops::load_tools_state`]: an async wrapper around a synchronous
-/// body so every `sqlx` `block_on` runs on a blocking task, never on the iced
-/// executor. Folds the three reads that must stay mutually consistent
-/// (profile, data-tab conflicts, tools) into one job.
+/// Async loader for the profile + data-tab + tool context. Pure DB work is
+/// awaited directly; synchronous data-tab analysis and tool-state generation
+/// move into their own blocking bridges.
 pub(super) async fn load_profile_context(
-    db: modde_core::db::ModdeDb,
-    request: ProfileContextRequest,
-) -> Result<ProfileContextSnapshot, String> {
-    tokio::task::spawn_blocking(move || load_profile_context_blocking(db, request))
-        .await
-        .map_err(|err| err.to_string())?
-}
-
-fn load_profile_context_blocking(
     db: modde_core::db::ModdeDb,
     request: ProfileContextRequest,
 ) -> Result<ProfileContextSnapshot, String> {
@@ -815,17 +805,22 @@ fn load_profile_context_blocking(
 
     // Profile list (scoped to the game when one is selected, else all).
     let profiles = match selected_game_id.as_ref() {
-        Some(game_id) => crate::app::block_on(pm.list_for_game(game_id)).unwrap_or_default(),
-        None => crate::app::block_on(pm.list()).unwrap_or_default(),
+        Some(game_id) => pm.list_for_game(game_id).await.unwrap_or_default(),
+        None => pm.list().await.unwrap_or_default(),
     };
 
     // Active profile: recompute from the DB for game switches; otherwise trust
     // the caller-provided name.
     let active_profile = if request.recompute_active {
-        selected_game_id
-            .as_ref()
-            .and_then(|game_id| crate::app::block_on(pm.active(game_id)).ok().flatten())
-            .map(|info| info.profile.name)
+        match selected_game_id.as_ref() {
+            Some(game_id) => pm
+                .active(game_id)
+                .await
+                .ok()
+                .flatten()
+                .map(|info| info.profile.name),
+            None => None,
+        }
             .or_else(|| profiles.first().map(|profile| profile.name.clone()))
     } else {
         request.active_profile.clone()
@@ -833,9 +828,11 @@ fn load_profile_context_blocking(
 
     // Load the active profile.
     let profile_outcome = match active_profile.as_deref() {
-        Some(name) => match crate::app::block_on(pm.load(name, selected_game_id.as_ref())) {
+        Some(name) => match pm.load(name, selected_game_id.as_ref()).await {
             Ok(profile) => {
-                let experiment_depth = crate::app::block_on(pm.active(&profile.game_id))
+                let experiment_depth = pm
+                    .active(&profile.game_id)
+                    .await
                     .ok()
                     .flatten()
                     .map_or(0, |info| info.experiment_depth);
@@ -868,13 +865,15 @@ fn load_profile_context_blocking(
     // `reload_profile`, so the data-tab error was never visible on this path.
     // The standalone `load_data_tab_conflicts` (Data-tab open) still surfaces it.
     let (data_tab_conflicts, missing_store_mod_count) = match effective_profile {
-        Some(profile) => compute_data_tab_conflicts(&pm, profile).unwrap_or_default(),
+        Some(profile) => compute_data_tab_conflicts(db.clone(), profile.clone())
+            .await
+            .unwrap_or_default(),
         None => (Vec::new(), 0),
     };
 
     // Fold in the tool reload when a game is in scope.
     let tools = match request.tool_request {
-        Some(tool_request) => Some(load_tools_state_blocking(db, tool_request)?),
+        Some(tool_request) => Some(load_tools_state(db, tool_request).await?),
         None => None,
     };
 
@@ -908,14 +907,42 @@ fn compute_save_fingerprint(
 
 /// Compute data-tab conflict rows + missing-store count for a profile. Shared
 /// by [`load_profile_context`] and [`load_data_tab_conflicts`].
-fn compute_data_tab_conflicts(
-    pm: &ProfileManager,
+async fn load_hidden_files(
+    db: &modde_core::db::ModdeDb,
     profile: &modde_core::Profile,
+) -> std::collections::HashSet<(String, String)> {
+    match profile.id {
+        Some(profile_id) => db
+            .list_hidden_files(profile_id)
+            .await
+            .ok()
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|row| (row.mod_id, row.rel_path))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        None => std::collections::HashSet::new(),
+    }
+}
+
+async fn compute_data_tab_conflicts(
+    db: modde_core::db::ModdeDb,
+    profile: modde_core::Profile,
 ) -> Result<(Vec<(String, Vec<String>)>, usize), String> {
-    let hidden = load_hidden_files(pm, profile);
+    let hidden = load_hidden_files(&db, &profile).await;
+    tokio::task::spawn_blocking(move || compute_data_tab_conflicts_blocking(profile, hidden))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+fn compute_data_tab_conflicts_blocking(
+    profile: modde_core::Profile,
+    hidden: std::collections::HashSet<(String, String)>,
+) -> Result<(Vec<(String, Vec<String>)>, usize), String> {
     let classifier = modde_games::resolve_collision_classifier(profile.game_id.as_str());
     match modde_core::diagnostics::analyze_profile_state(
-        profile,
+        &profile,
         &modde_core::paths::store_dir(),
         &hidden,
         classifier.as_deref(),
@@ -934,17 +961,14 @@ pub(super) async fn load_data_tab_conflicts(
     db: modde_core::db::ModdeDb,
     profile: modde_core::Profile,
 ) -> Result<DataTabConflicts, String> {
-    tokio::task::spawn_blocking(move || {
-        let pm = ProfileManager::with_db(db);
-        compute_data_tab_conflicts(&pm, &profile).map(|(conflicts, missing_store_mod_count)| {
+    compute_data_tab_conflicts(db, profile)
+        .await
+        .map(|(conflicts, missing_store_mod_count)| {
             DataTabConflicts {
                 conflicts,
                 missing_store_mod_count,
             }
         })
-    })
-    .await
-    .map_err(|err| err.to_string())?
 }
 
 pub(super) async fn load_diagnostics(
@@ -961,8 +985,8 @@ fn load_diagnostics_blocking(
     profile: modde_core::Profile,
 ) -> Result<DiagnosticsComputed, String> {
     let pm = ProfileManager::with_db(db);
-    let hidden = load_hidden_files(&pm, &profile);
-    let active_plugins = load_active_plugins(&pm, &profile);
+    let hidden = load_hidden_files_blocking(&pm, &profile);
+    let active_plugins = load_active_plugins_blocking(&pm, &profile);
     let integrity = Modde::verify_staging_integrity(&ProfileManager::staging_dir(&profile.name));
     let engine = match profile.game_id.as_str() {
         "skyrim-se" | "skyrim-ae" | "fallout4" | "fallout76" => {
