@@ -688,53 +688,56 @@ pub(super) async fn adopt_optiscaler_for_game(
     context: Option<modde_games::tools::ToolGameContext>,
 ) -> Result<ToolSettingWriteResult, String> {
     tokio::task::spawn_blocking(move || {
-        let typed_game_id = GameId::from(game_id.as_str());
-        let tool = modde_games::tools::resolve_tool("optiscaler")
-            .ok_or_else(|| "OptiScaler tool is not registered".to_string())?;
-        let mut config =
-            load_tool_config_or_default_blocking(&db, &typed_game_id, tool, context.as_ref())?;
-        modde_games::tools::optiscaler::apply_game_defaults(&mut config, context.as_ref());
-        let managed = modde_games::tools::optiscaler::managed_paths_from_config(&config);
-        let state =
-            modde_games::tools::optiscaler::scan_optiscaler_install(&game_id, &game_dir, &managed)
-                .map_err(|err| err.to_string())?;
-        let paths = state
-            .recognized_files
-            .iter()
-            .map(|file| state.executable_dir.join(&file.rel_path))
-            .map(|path| {
-                path.strip_prefix(&game_dir)
-                    .unwrap_or(&path)
-                    .to_string_lossy()
-                    .replace('\\', "/")
-            })
-            .collect::<Vec<_>>();
-        let applied = modde_games::tools::AppliedFiles {
-            files: paths.iter().map(PathBuf::from).collect(),
-        };
-        config.enabled = true;
-        config.set(
-            "managed_manifest",
-            modde_games::tools::optiscaler::managed_manifest_json(&game_dir, &applied),
-        );
-        save_tool_config_with_reason_blocking(
-            &db,
-            &typed_game_id,
-            "optiscaler",
-            &config,
-            "ui:adopt",
-        )?;
-        crate::app::block_on(db.clear_applied_files(&typed_game_id, "optiscaler"))
-            .map_err(|err| err.to_string())?;
-        crate::app::block_on(db.save_applied_files(&typed_game_id, "optiscaler", &paths))
-            .map_err(|err| err.to_string())?;
-        Ok(ToolSettingWriteResult {
-            status_message: format!("Adopted OptiScaler ({} file(s))", paths.len()),
-            tool_option_catalog: None,
-        })
+        adopt_optiscaler_for_game_blocking(db, game_id, game_dir, context)
     })
     .await
     .map_err(|err| err.to_string())?
+}
+
+fn adopt_optiscaler_for_game_blocking(
+    db: modde_core::db::ModdeDb,
+    game_id: String,
+    game_dir: PathBuf,
+    context: Option<modde_games::tools::ToolGameContext>,
+) -> Result<ToolSettingWriteResult, String> {
+    let typed_game_id = GameId::from(game_id.as_str());
+    let tool = modde_games::tools::resolve_tool("optiscaler")
+        .ok_or_else(|| "OptiScaler tool is not registered".to_string())?;
+    let mut config =
+        load_tool_config_or_default_blocking(&db, &typed_game_id, tool, context.as_ref())?;
+    modde_games::tools::optiscaler::apply_game_defaults(&mut config, context.as_ref());
+    let managed = modde_games::tools::optiscaler::managed_paths_from_config(&config);
+    let state =
+        modde_games::tools::optiscaler::scan_optiscaler_install(&game_id, &game_dir, &managed)
+            .map_err(|err| err.to_string())?;
+    let paths = state
+        .recognized_files
+        .iter()
+        .map(|file| state.executable_dir.join(&file.rel_path))
+        .map(|path| {
+            path.strip_prefix(&game_dir)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/")
+        })
+        .collect::<Vec<_>>();
+    let applied = modde_games::tools::AppliedFiles {
+        files: paths.iter().map(PathBuf::from).collect(),
+    };
+    config.enabled = true;
+    config.set(
+        "managed_manifest",
+        modde_games::tools::optiscaler::managed_manifest_json(&game_dir, &applied),
+    );
+    save_tool_config_with_reason_blocking(&db, &typed_game_id, "optiscaler", &config, "ui:adopt")?;
+    crate::app::block_on(db.clear_applied_files(&typed_game_id, "optiscaler"))
+        .map_err(|err| err.to_string())?;
+    crate::app::block_on(db.save_applied_files(&typed_game_id, "optiscaler", &paths))
+        .map_err(|err| err.to_string())?;
+    Ok(ToolSettingWriteResult {
+        status_message: format!("Adopted OptiScaler ({} file(s))", paths.len()),
+        tool_option_catalog: None,
+    })
 }
 
 pub(super) async fn reset_optiscaler_config_for_game(

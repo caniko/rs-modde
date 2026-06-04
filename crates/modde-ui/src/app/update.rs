@@ -1236,32 +1236,8 @@ impl Modde {
                     let db = self.db.clone();
                     return Task::perform(
                         async move {
-                            tokio::task::spawn_blocking(move || -> Result<String, String> {
-                                let pm = ProfileManager::with_db(db);
-                                let profile =
-                                    crate::app::block_on(pm.load(&profile_name, Some(&game_id)))
-                                        .map_err(|e| e.to_string())?;
-                                let resolved = modde_core::resolver::resolve(&profile)
-                                    .map_err(|e| e.to_string())?;
-                                let game_plugin =
-                                    modde_games::resolve_game_plugin(game_id.as_str())
-                                        .ok_or_else(|| format!("unsupported game: {game_id}"))?;
-                                let install_path =
-                                    game_plugin.detect_install().ok_or_else(|| {
-                                        format!("could not detect install for {game_id}")
-                                    })?;
-                                let staging_dir = ProfileManager::staging_dir(&profile.name);
-                                game_plugin
-                                    .deploy_to_install(&staging_dir, &install_path)
-                                    .map_err(|e| e.to_string())?;
-                                game_plugin
-                                    .post_deploy(&install_path)
-                                    .map_err(|e| e.to_string())?;
-                                Ok(format!(
-                                    "Deployed {} mod(s) for {}",
-                                    resolved.order.len(),
-                                    game_id
-                                ))
+                            tokio::task::spawn_blocking(move || {
+                                deploy_profile_blocking(db, profile_name, game_id)
                             })
                             .await
                             .map_err(|e| e.to_string())?
@@ -3245,4 +3221,32 @@ impl Modde {
         }
         Task::none()
     }
+}
+
+fn deploy_profile_blocking(
+    db: modde_core::db::ModdeDb,
+    profile_name: String,
+    game_id: GameId,
+) -> Result<String, String> {
+    let pm = ProfileManager::with_db(db);
+    let profile = crate::app::block_on(pm.load(&profile_name, Some(&game_id)))
+        .map_err(|e| e.to_string())?;
+    let resolved = modde_core::resolver::resolve(&profile).map_err(|e| e.to_string())?;
+    let game_plugin = modde_games::resolve_game_plugin(game_id.as_str())
+        .ok_or_else(|| format!("unsupported game: {game_id}"))?;
+    let install_path = game_plugin
+        .detect_install()
+        .ok_or_else(|| format!("could not detect install for {game_id}"))?;
+    let staging_dir = ProfileManager::staging_dir(&profile.name);
+    game_plugin
+        .deploy_to_install(&staging_dir, &install_path)
+        .map_err(|e| e.to_string())?;
+    game_plugin
+        .post_deploy(&install_path)
+        .map_err(|e| e.to_string())?;
+    Ok(format!(
+        "Deployed {} mod(s) for {}",
+        resolved.order.len(),
+        game_id
+    ))
 }
