@@ -6,10 +6,11 @@ use modde_core::resolver::GameId;
 
 use super::state::ToolLoadRequest;
 use super::tool_settings::{
-    apply_derived_tool_settings, build_tool_derived_facts, current_tool_config,
+    apply_derived_tool_settings, build_tool_derived_facts, current_tool_config_async,
+    current_tool_config_blocking,
     format_tool_availability, normalize_tool_settings_for_specs, patch_tool_setting_options,
-    save_tool_settings, set_tool_options, sync_optiscaler_release_options, tool_apply_is_pending,
-    tool_apply_signature, tool_options,
+    save_tool_config_with_reason_async, set_tool_options, sync_optiscaler_release_options,
+    tool_apply_is_pending, tool_apply_signature, tool_options,
 };
 use super::{
     ExecutableDraft, ExecutableUiEntry, ToolApplyResult, ToolHistoryUiEntry, ToolLoadSnapshot,
@@ -43,7 +44,7 @@ pub(super) async fn install_selected_tool_release(
 ) -> Result<String, String> {
     let tool = modde_games::tools::resolve_tool(&tool_id)
         .ok_or_else(|| format!("Tool is not registered: {tool_id}"))?;
-    let config = current_tool_config(&db, &game_id, &tool_id)?;
+    let config = current_tool_config_async(&db, &game_id, &tool_id).await?;
     let selected_tag = config
         .get_str("release_tag")
         .unwrap_or("latest")
@@ -59,7 +60,14 @@ pub(super) async fn install_selected_tool_release(
         .install_release(&game_id, config, &selected_tag, &selected_asset)
         .await
         .map_err(|err| err.to_string())?;
-    save_tool_settings(&db, &game_id, &tool_id, &config)?;
+    save_tool_config_with_reason_async(
+        &db,
+        &GameId::from(game_id.as_str()),
+        &tool_id,
+        &config,
+        "ui:update",
+    )
+    .await?;
     Ok(format!(
         "Installed {} {}",
         tool.display_name(),
@@ -143,7 +151,7 @@ pub(super) fn load_tools_state_blocking(
         );
     }
     if !request.optiscaler_releases.is_empty()
-        && let Ok(mut config) = current_tool_config(&db, &request.game_id, "optiscaler")
+        && let Ok(mut config) = current_tool_config_blocking(&db, &request.game_id, "optiscaler")
     {
         sync_optiscaler_release_options(
             &mut option_catalog,
@@ -155,7 +163,7 @@ pub(super) fn load_tools_state_blocking(
     let entries = modde_games::tools::all_tools()
         .iter()
         .map(|tool| {
-            build_tool_ui_entry(
+            build_tool_ui_entry_blocking(
                 &db,
                 &request.game_id,
                 game_dir.as_deref(),
@@ -187,7 +195,7 @@ pub(super) fn load_tools_state_blocking(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn build_tool_ui_entry(
+pub(super) fn build_tool_ui_entry_blocking(
     db: &modde_core::db::ModdeDb,
     game_id: &str,
     game_dir: Option<&std::path::Path>,
@@ -371,6 +379,20 @@ pub(super) async fn apply_tool_for_game(
     tool_id: String,
     context: Option<modde_games::tools::ToolGameContext>,
 ) -> Result<ToolApplyResult, String> {
+    tokio::task::spawn_blocking(move || {
+        apply_tool_for_game_blocking(db, game_id, game_dir, tool_id, context)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+fn apply_tool_for_game_blocking(
+    db: modde_core::db::ModdeDb,
+    game_id: String,
+    game_dir: PathBuf,
+    tool_id: String,
+    context: Option<modde_games::tools::ToolGameContext>,
+) -> Result<ToolApplyResult, String> {
     let typed_game_id = GameId::from(game_id.as_str());
     let tool = modde_games::tools::resolve_tool(&tool_id)
         .ok_or_else(|| format!("Unknown tool: {tool_id}"))?;
@@ -446,6 +468,19 @@ pub(super) async fn revert_tool_for_game(
     game_dir: PathBuf,
     tool_id: String,
 ) -> Result<ToolRevertResult, String> {
+    tokio::task::spawn_blocking(move || {
+        revert_tool_for_game_blocking(db, game_id, game_dir, tool_id)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+fn revert_tool_for_game_blocking(
+    db: modde_core::db::ModdeDb,
+    game_id: String,
+    game_dir: PathBuf,
+    tool_id: String,
+) -> Result<ToolRevertResult, String> {
     let typed_game_id = GameId::from(game_id.as_str());
     let tool = modde_games::tools::resolve_tool(&tool_id)
         .ok_or_else(|| format!("Unknown tool: {tool_id}"))?;
@@ -469,6 +504,18 @@ pub(super) async fn revert_tool_for_game(
 }
 
 pub(super) async fn deactivate_optiscaler_for_game(
+    db: modde_core::db::ModdeDb,
+    game_id: String,
+    game_dir: PathBuf,
+) -> Result<ToolRevertResult, String> {
+    tokio::task::spawn_blocking(move || {
+        deactivate_optiscaler_for_game_blocking(db, game_id, game_dir)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+fn deactivate_optiscaler_for_game_blocking(
     db: modde_core::db::ModdeDb,
     game_id: String,
     game_dir: PathBuf,
@@ -547,19 +594,26 @@ pub(super) async fn run_saved_executable_for_game(
     profile_name: Option<String>,
 ) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
-        let row =
-            crate::app::block_on(db.load_executable_config(&GameId::from(game_id.as_str()), &name))
-                .map_err(|err| err.to_string())?
-                .ok_or_else(|| {
-                    format!("No executable named '{name}' is configured for {game_id}")
-                })?;
-        run_executable_row(db, row, profile_name)
+        run_saved_executable_for_game_blocking(db, game_id, name, profile_name)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
-pub(super) fn run_executable_row(
+fn run_saved_executable_for_game_blocking(
+    db: modde_core::db::ModdeDb,
+    game_id: String,
+    name: String,
+    profile_name: Option<String>,
+) -> Result<String, String> {
+    let row =
+        crate::app::block_on(db.load_executable_config(&GameId::from(game_id.as_str()), &name))
+            .map_err(|err| err.to_string())?
+            .ok_or_else(|| format!("No executable named '{name}' is configured for {game_id}"))?;
+    run_executable_row_blocking(db, row, profile_name)
+}
+
+pub(super) fn run_executable_row_blocking(
     db: modde_core::db::ModdeDb,
     row: modde_core::db::ExecutableConfigRow,
     profile_name: Option<String>,
