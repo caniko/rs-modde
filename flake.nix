@@ -546,7 +546,7 @@
           hmLib = lib.extend (_final: _prev: {
             hm.dag.entryAfter = _deps: text: text;
           });
-          evalHm = profiles:
+          evalHmConfig = moddeConfig:
             (hmLib.evalModules {
               specialArgs = {
                 inherit pkgs;
@@ -566,20 +566,27 @@
                       type = lib.types.attrsOf lib.types.str;
                       default = {};
                     };
+                    home.sessionVariables = lib.mkOption {
+                      type = lib.types.attrsOf lib.types.str;
+                      default = {};
+                    };
                   };
                 })
                 self.homeManagerModules.modde
                 {
-                  programs.modde = {
-                    enable = true;
-                    package = pkgs.writeShellScriptBin "modde" "exit 0";
-                    profiles = profiles;
-                  };
+                  programs.modde =
+                    {
+                      enable = true;
+                      package = pkgs.writeShellScriptBin "modde" "exit 0";
+                      profiles = {};
+                    }
+                    // moddeConfig;
                 }
               ];
             })
           .config;
-          hmModuleEvalExpr = profilesFile: ''
+          evalHm = profiles: evalHmConfig {inherit profiles;};
+          hmModuleEvalExpr = moddeConfigFile: ''
             let
               pkgs = import "${toString nixpkgs}" {
                 system = "x86_64-linux";
@@ -589,7 +596,7 @@
               hmLib = lib.extend (_final: _prev: {
                 hm.dag.entryAfter = _deps: text: text;
               });
-              evalHm = profiles:
+              evalHmConfig = moddeConfig:
                 (hmLib.evalModules {
                   specialArgs = { inherit pkgs; };
                   modules = [
@@ -607,32 +614,47 @@
                           type = lib.types.attrsOf lib.types.str;
                           default = {};
                         };
+                        home.sessionVariables = lib.mkOption {
+                          type = lib.types.attrsOf lib.types.str;
+                          default = {};
+                        };
                       };
                     })
                     (import ./nix/hm-module.nix {
                       packages."x86_64-linux".modde = pkgs.hello;
                     })
                     {
-                      programs.modde = {
-                        enable = true;
-                        package = pkgs.hello;
-                        profiles = profiles;
-                      };
+                      programs.modde =
+                        {
+                          enable = true;
+                          package = pkgs.hello;
+                          profiles = {};
+                        }
+                        // moddeConfig;
                     }
                   ];
                 }).config;
+              evalHm = profiles: evalHmConfig { inherit profiles; };
             in let
-              result = evalHm (builtins.fromJSON (builtins.readFile ${profilesFile}));
-            in builtins.deepSeq result.assertions (
-              builtins.deepSeq result.home.activation.modde-deploy true
-            )
+              result = evalHmConfig (builtins.fromJSON (builtins.readFile ${moddeConfigFile}));
+              failedAssertions = builtins.filter (assertion: !assertion.assertion) result.assertions;
+            in
+              if failedAssertions != []
+              then throw (builtins.head failedAssertions).message
+              else
+                builtins.deepSeq result.assertions (
+                  builtins.deepSeq result.home.sessionVariables (
+                    builtins.deepSeq result.home.activation.modde-deploy true
+                  )
+                )
           '';
           mkHmModuleFailureCheck = {
             name,
-            profiles,
             expected,
+            profiles ? {},
+            database ? {},
           }: let
-            profilesFile = pkgs.writeText "modde-hm-module-${name}.json" (builtins.toJSON profiles);
+            moddeConfigFile = pkgs.writeText "modde-hm-module-${name}.json" (builtins.toJSON {inherit profiles database;});
           in
             pkgs.runCommand "modde-hm-module-${name}" {nativeBuildInputs = [pkgs.nix pkgs.gnugrep pkgs.coreutils];} ''
               set -euo pipefail
@@ -644,7 +666,7 @@
               cp ${./nix/optiscaler-profiles.nix} nix/optiscaler-profiles.nix
               cp ${./nix/release-supporting-tools.nix} nix/release-supporting-tools.nix
               cat > expr.nix <<'EOF'
-              ${hmModuleEvalExpr profilesFile}
+              ${hmModuleEvalExpr moddeConfigFile}
               EOF
               if nix-instantiate --eval --show-trace expr.nix >stdout 2>stderr; then
                 echo "expected fixture ${name} to fail"
@@ -1031,6 +1053,28 @@
               duplicateManualHashAssertions
             then "false"
             else "true";
+          databaseUrlOnly = evalHmConfig {
+            database = {
+              backend = "postgres";
+              url = "postgres:///x";
+            };
+          };
+          databaseDiscrete = evalHmConfig {
+            database = {
+              backend = "postgres";
+              name = "modde";
+              host = "h";
+              port = 5432;
+              user = "u";
+            };
+          };
+          databaseNameOnly = evalHmConfig {
+            database = {
+              backend = "postgres";
+              name = "modde";
+            };
+          };
+          databaseSqliteDefault = evalHmConfig {};
         in {
           tool-schema-fresh = pkgs.runCommand "modde-tool-schema-fresh" {} ''
             ${modde}/bin/modde dev export-tool-schema --out "$TMPDIR/tool-schema.nix"
@@ -1151,6 +1195,90 @@
             }" = "false"
             touch "$out"
           '';
+          hm-module-database = pkgs.runCommand "modde-hm-module-database-check" {} ''
+            cat > url-session.json <<'EOF'
+            ${builtins.toJSON databaseUrlOnly.home.sessionVariables}
+            EOF
+            grep -q '"MODDE_DATABASE_BACKEND":"postgres"' url-session.json
+            grep -q '"MODDE_DATABASE_URL":"postgres:///x"' url-session.json
+            ! grep -q 'MODDE_DATABASE_NAME' url-session.json
+            ! grep -q 'MODDE_DATABASE_HOST' url-session.json
+            ! grep -q 'MODDE_DATABASE_PORT' url-session.json
+            ! grep -q 'MODDE_DATABASE_USER' url-session.json
+
+            cat > url-activation <<'EOF'
+            ${databaseUrlOnly.home.activation.modde-deploy}
+            EOF
+            grep -q "export MODDE_DATABASE_BACKEND=postgres" url-activation
+            grep -q "export MODDE_DATABASE_URL=postgres:///x" url-activation
+            ! grep -q 'MODDE_DATABASE_NAME' url-activation
+            ! grep -q 'MODDE_DATABASE_HOST' url-activation
+            ! grep -q 'MODDE_DATABASE_PORT' url-activation
+            ! grep -q 'MODDE_DATABASE_USER' url-activation
+
+            cat > discrete-session.json <<'EOF'
+            ${builtins.toJSON databaseDiscrete.home.sessionVariables}
+            EOF
+            grep -q '"MODDE_DATABASE_BACKEND":"postgres"' discrete-session.json
+            grep -q '"MODDE_DATABASE_NAME":"modde"' discrete-session.json
+            grep -q '"MODDE_DATABASE_HOST":"h"' discrete-session.json
+            grep -q '"MODDE_DATABASE_PORT":"5432"' discrete-session.json
+            grep -q '"MODDE_DATABASE_USER":"u"' discrete-session.json
+
+            cat > discrete-activation <<'EOF'
+            ${databaseDiscrete.home.activation.modde-deploy}
+            EOF
+            grep -q "export MODDE_DATABASE_BACKEND=postgres" discrete-activation
+            grep -q "export MODDE_DATABASE_NAME=modde" discrete-activation
+            grep -q "export MODDE_DATABASE_HOST=h" discrete-activation
+            grep -q "export MODDE_DATABASE_PORT=5432" discrete-activation
+            grep -q "export MODDE_DATABASE_USER=u" discrete-activation
+
+            cat > name-only-session.json <<'EOF'
+            ${builtins.toJSON databaseNameOnly.home.sessionVariables}
+            EOF
+            grep -q '"MODDE_DATABASE_BACKEND":"postgres"' name-only-session.json
+            grep -q '"MODDE_DATABASE_NAME":"modde"' name-only-session.json
+            ! grep -q 'MODDE_DATABASE_HOST' name-only-session.json
+            ! grep -q 'MODDE_DATABASE_PORT' name-only-session.json
+            ! grep -q 'MODDE_DATABASE_USER' name-only-session.json
+
+            cat > sqlite-session.json <<'EOF'
+            ${builtins.toJSON databaseSqliteDefault.home.sessionVariables}
+            EOF
+            test "$(cat sqlite-session.json)" = "{}"
+
+            cat > sqlite-activation <<'EOF'
+            ${databaseSqliteDefault.home.activation.modde-deploy}
+            EOF
+            ! grep -q 'MODDE_DATABASE_' sqlite-activation
+            touch "$out"
+          '';
+          hm-module-database-postgres-missing-name = mkHmModuleFailureCheck {
+            name = "database-postgres-missing-name";
+            expected = "backend = \"postgres\" requires either `url`, or at least `name`";
+            database.backend = "postgres";
+          };
+          hm-module-database-url-and-discrete = mkHmModuleFailureCheck {
+            name = "database-url-and-discrete";
+            expected = "set `url` OR the discrete `host`/`port`/`name`/`user` fields, not both";
+            database = {
+              backend = "postgres";
+              url = "postgres:///x";
+              name = "modde";
+              host = "h";
+              port = 5432;
+              user = "u";
+            };
+          };
+          hm-module-database-sqlite-connection-field = mkHmModuleFailureCheck {
+            name = "database-sqlite-connection-field";
+            expected = "connection fields (url/host/port/name/user/passwordFile) are only valid when backend = \"postgres\"";
+            database = {
+              backend = "sqlite";
+              name = "modde";
+            };
+          };
           hm-module-tools = pkgs.runCommand "modde-hm-module-tools-check" {} ''
             cat > tools <<'EOF'
             ${(evalHm {

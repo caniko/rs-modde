@@ -588,11 +588,11 @@ flake: {
   db = cfg.database;
   postgresSelected = db.backend == "postgres";
   hasUrl = db.url != null;
-  hasDiscrete = db.host != null && db.name != null && db.user != null;
+  hasDiscrete = db.name != null;
   databaseAssertions = [
     {
       assertion = !postgresSelected || hasUrl || hasDiscrete;
-      message = "programs.modde.database: backend = \"postgres\" requires either `url`, or all of `host`, `name`, and `user`.";
+      message = "programs.modde.database: backend = \"postgres\" requires either `url`, or at least `name` (host/port/user optional, default to the local socket).";
     }
     {
       assertion = !postgresSelected || !(hasUrl && hasDiscrete);
@@ -668,7 +668,10 @@ in {
         example = "postgres://modde@localhost/modde";
         description = ''
           Full PostgreSQL connection URL. Takes precedence over the discrete
-          host/port/name/user options. Do NOT embed the password here — use
+          host/port/name/user options. Use this form for connection details the
+          discrete fields cannot fully express, including socket directories
+          such as `postgres:///modde?host=/run/postgresql` and TLS parameters
+          such as `sslmode=require`. Do NOT embed the password here — use
           passwordFile instead so the secret never lands in the Nix store.
         '';
       };
@@ -676,7 +679,11 @@ in {
       host = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
-        description = "PostgreSQL host (used when url is not set).";
+        description = ''
+          PostgreSQL host (used when url is not set). The discrete fields target
+          the common TCP/socket-default case; use `url` for a socket directory
+          such as `/run/postgresql` or for TLS parameters such as `sslmode`.
+        '';
       };
 
       port = lib.mkOption {
