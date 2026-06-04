@@ -51,6 +51,48 @@ store.
 programs.modde.nexus.apiKeyFile = config.sops.secrets.nexus-api-key.path;
 ```
 
+### `programs.modde.database`
+
+Storage backend configuration for modde's profile, mod, tool, save, and snapshot
+state. The default is SQLite; PostgreSQL is configured by setting
+`backend = "postgres"` and providing either `url` or at least `name`.
+
+| Option         | Type                       | Default    | Description                                                         |
+| -------------- | -------------------------- | ---------- | ------------------------------------------------------------------- |
+| `backend`      | enum `sqlite` / `postgres` | `"sqlite"` | Storage backend                                                     |
+| `url`          | `null` or `str`            | `null`     | Full PostgreSQL connection URL; wins over discrete fields           |
+| `host`         | `null` or `str`            | `null`     | PostgreSQL host when `url` is not set                               |
+| `port`         | `null` or port             | `null`     | PostgreSQL port when `url` is not set                               |
+| `name`         | `null` or `str`            | `null`     | PostgreSQL database name when `url` is not set                      |
+| `user`         | `null` or `str`            | `null`     | PostgreSQL user when `url` is not set                               |
+| `passwordFile` | `null` or `path`           | `null`     | Path to a file containing the PostgreSQL password                   |
+
+The Home Manager option is named `name`; modde exports it as
+`MODDE_DATABASE_NAME`, and the settings file stores the same value as `dbname`.
+
+When PostgreSQL is selected, the module exports the selected backend and
+connection fields as `home.sessionVariables`:
+
+| HM option      | Runtime variable            |
+| -------------- | --------------------------- |
+| `backend`      | `MODDE_DATABASE_BACKEND`    |
+| `url`          | `MODDE_DATABASE_URL`        |
+| `host`         | `MODDE_DATABASE_HOST`       |
+| `port`         | `MODDE_DATABASE_PORT`       |
+| `name`         | `MODDE_DATABASE_NAME`       |
+| `user`         | `MODDE_DATABASE_USER`       |
+| `passwordFile` | `MODDE_DB_PASSWORD_FILE`    |
+
+Those variables are also exported inside the activation script before it invokes
+`modde`. New terminal and graphical sessions launched after activation see
+`home.sessionVariables`; already-running shells keep their existing environment.
+For an immediate imperative change outside Home Manager, use
+[`modde config set-database`](../reference/cli.md#modde-config).
+
+`passwordFile` configures only the path. The password contents are read by modde
+at runtime and are never written to `settings.toml` or embedded in the Nix store
+by this option.
+
 ### `programs.modde.profiles`
 
 An attribute set of mod profiles to manage. The attribute name is the profile
@@ -272,6 +314,9 @@ point straight at the offending option.
 | Tool release source                      | `release.path` is mutually exclusive with `release.url` + `release.hash`; exactly one source must be present |
 | Tool release url/hash pairing            | `release.url` and `release.hash` must be set together                                                        |
 | OptiScaler profile registered            | `tools.optiscaler.profile` may only be non-null if the profile's game has registered OptiScaler presets     |
+| PostgreSQL has connection source         | `database.backend = "postgres"` requires either `database.url` or at least `database.name`                   |
+| PostgreSQL URL/discrete exclusivity      | Set `database.url` or the discrete `database.host` / `port` / `name` / `user` fields, not both               |
+| SQLite has no PostgreSQL fields          | `database.url`, `host`, `port`, `name`, `user`, and `passwordFile` are only valid when `backend = "postgres"` |
 
 ## Tool settings reference
 

@@ -42,6 +42,13 @@ override above.
 | `MODDE_ZSTD_LEVEL`       | `9`         | zstd compression level for staging (clamped to the 1–22 range).                                              |
 | `MODDE_ARCHIVE_RETENTION`| `keep`      | Default source-archive retention after a Wabbajack archive batch integrates. Accepts `keep`, `prune-applied` (aliases `prune`/`delete`), or `auto`. The `--archive-retention` flag on `install wabbajack` overrides this. |
 | `MODDE_HEAP_PROFILE`     | —           | Same as the `--heap-profile` flag; only meaningful in a `heap-profile` build.                                 |
+| `MODDE_DATABASE_BACKEND`  | `sqlite`    | Database backend override. Accepts `sqlite`, `postgres`, `postgresql`, or `pg`.                              |
+| `MODDE_DATABASE_URL`      | —           | PostgreSQL connection URL. Wins over the discrete PostgreSQL fields.                                          |
+| `MODDE_DATABASE_HOST`     | —           | PostgreSQL host when no URL is set.                                                                          |
+| `MODDE_DATABASE_PORT`     | `5432`      | PostgreSQL port when no URL is set.                                                                          |
+| `MODDE_DATABASE_NAME`     | —           | PostgreSQL database name when no URL is set.                                                                 |
+| `MODDE_DATABASE_USER`     | backend default | PostgreSQL user when no URL is set.                                                                     |
+| `MODDE_DB_PASSWORD_FILE`  | —           | Path to a file containing the PostgreSQL password; the password contents are read at runtime.                 |
 
 ### Nexus API key resolution order
 
@@ -57,6 +64,86 @@ first source that yields a non-empty value:
 An OAuth token (if present and unexpired) takes precedence over the API-key
 chain. Under Home Manager, prefer `programs.modde.nexus.apiKeyFile`, which feeds
 `NEXUS_API_KEY_FILE`.
+
+---
+
+## `modde config`
+
+Inspect, validate, and update modde configuration. Database resolution uses the
+same precedence as runtime startup: environment variables first, then
+`settings.toml`, then SQLite defaults. For PostgreSQL, `MODDE_DATABASE_URL` or
+`database.url` wins over the discrete host/port/name/user fields.
+
+### `config show`
+
+Show the resolved database backend, source of each displayed field, and config
+file path. URL passwords are redacted before printing.
+
+```bash
+modde config show
+```
+
+For SQLite, the command prints the selected backend and local SQLite path. For
+PostgreSQL, it prints either the redacted URL plus resolved connection summary,
+or the resolved discrete fields, plus the configured password-file path if one
+is set.
+
+### `config set-database`
+
+Set the stored database backend and PostgreSQL connection fields in
+`settings.toml`.
+
+```bash
+modde config set-database --backend sqlite
+modde config set-database --backend postgres --url postgres://modde@localhost/modde \
+  --password-file /run/secrets/modde-postgres-password
+modde config set-database --backend postgres --host localhost --port 5432 \
+  --name modde --user modde --password-file /run/secrets/modde-postgres-password
+```
+
+| Flag                 | Description                                                       |
+| -------------------- | ----------------------------------------------------------------- |
+| `--backend <name>`   | Required. `sqlite` or `postgres`; aliases include `postgresql` and `pg` |
+| `--url <url>`        | Full PostgreSQL connection URL; overrides discrete fields at runtime |
+| `--host <host>`      | PostgreSQL host when no URL is set                                |
+| `--port <port>`      | PostgreSQL port when no URL is set                                |
+| `--name <name>`      | PostgreSQL database name when no URL is set                       |
+| `--user <user>`      | PostgreSQL user when no URL is set                                |
+| `--password-file <path>` | Path to the PostgreSQL password file; contents are not stored |
+| `--clear <field>`    | Clear a stored PostgreSQL field from `settings.toml`               |
+
+`--clear` accepts `url`, `host`, `port`, `dbname`, `user`, and
+`password-file`. Passing an empty string to a string/path field also clears that
+field. Setting `--backend sqlite` clears all stored PostgreSQL fields.
+
+When `backend = postgres`, the stored configuration must provide either `--url`
+or at least `--name`. URL and discrete fields are mutually exclusive in stored
+settings. Environment variables can still override the stored values at runtime.
+
+### `config reset-database`
+
+Reset stored database settings to SQLite and clear all stored PostgreSQL
+connection fields.
+
+```bash
+modde config reset-database
+```
+
+This updates `settings.toml`; it does not unset environment variables already
+present in the current process.
+
+### `config test`
+
+Open the resolved database, run a trivial probe query, and print `OK` on
+success.
+
+```bash
+modde config test
+```
+
+This command uses the same environment/settings/default resolution as normal
+startup, so it is the quickest way to validate a PostgreSQL URL, discrete
+connection fields, or `MODDE_DB_PASSWORD_FILE` path.
 
 ---
 
