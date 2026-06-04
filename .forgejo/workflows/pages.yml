@@ -13,15 +13,11 @@ concurrency:
 
 jobs:
   publish:
-    runs-on: atlas
+    runs-on: atlas-nix-trusted
+    env:
+      NIX_CONFIG: "experimental-features = nix-command flakes"
     steps:
       - uses: https://code.forgejo.org/actions/checkout@v4
-      - uses: https://github.com/cachix/install-nix-action@v27
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-            substituters = https://attic.candee.baby/canix https://cache.nixos.org
-            trusted-public-keys = canix:lPzPzKrmYqW5Rxa5r0uQWvCqD3S5nx0h2eCy7XD5JM8= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
 
       - name: Deploy Codeberg Pages
         env:
