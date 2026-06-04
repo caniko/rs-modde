@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-ed74f3b0.js";
+            window.path_to_searchindex_js = "../searchindex-99b45168.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-4ac01a02.js"></script>
@@ -235,6 +235,7 @@ erroring.</li>
 <tr><td><code>theme</code></td><td>string</td><td><code>""</code></td><td>UI theme name (e.g. <code>Nord</code>); empty means the built-in default</td></tr>
 <tr><td><code>selected_game</code></td><td>string (optional)</td><td>unset</td><td>The game last selected in the UI</td></tr>
 <tr><td><code>update_check.enabled</code></td><td>bool</td><td><code>true</code></td><td>Whether modde checks for newer releases on startup</td></tr>
+<tr><td><code>database</code></td><td>table</td><td>SQLite</td><td>Storage backend and optional PostgreSQL connection settings</td></tr>
 </tbody>
 </table>
 </div>
@@ -246,6 +247,46 @@ system keyring, or <code>NEXUS_API_KEY</code> / <code>NEXUS_API_KEY_FILE</code>.
 <p><code>game_paths</code> is an array of tables; each entry pairs a <code>game_id</code> with its install
 <code>path</code>. modde looks up a game’s path by <code>game_id</code>, and setting a path either adds
 a new entry or updates the existing one (no duplicates).</p>
+<h3 id="database-settings"><a class="header" href="#database-settings">Database settings</a></h3>
+<p>By default, modde stores profile, mod, tool, save, and snapshot state in the
+SQLite database at <code>&lt;modde_data&gt;/modde.db</code>. You do not need a <code>[database]</code> table
+for the default backend:</p>
+<pre><code class="language-toml">[database]
+backend = "sqlite"
+</code></pre>
+<p>To use PostgreSQL, set <code>backend = "postgres"</code> and provide either a full
+connection URL or the discrete connection fields. The settings-file database
+name key is <code>dbname</code>:</p>
+<pre><code class="language-toml">[database]
+backend = "postgres"
+url = "postgres://modde@localhost/modde"
+password_file = "/run/secrets/modde-postgres-password"
+</code></pre>
+<pre><code class="language-toml">[database]
+backend = "postgres"
+host = "localhost"
+port = 5432
+dbname = "modde"
+user = "modde"
+password_file = "/run/secrets/modde-postgres-password"
+</code></pre>
+<p><code>url</code> takes precedence over the discrete <code>host</code>, <code>port</code>, <code>dbname</code>, and <code>user</code>
+fields. Use the URL form for connection details that do not have dedicated
+settings fields, such as socket directories or TLS parameters. The password
+contents are not stored in <code>settings.toml</code>; <code>password_file</code> is only a path, and
+modde reads the trimmed file contents at runtime.</p>
+<p>Database configuration resolves in this order:</p>
+<ol>
+<li>Database environment variables.</li>
+<li>The <code>[database]</code> table in <code>settings.toml</code>.</li>
+<li>SQLite defaults.</li>
+</ol>
+<p>Within the PostgreSQL layer, <code>MODDE_DATABASE_URL</code> wins over
+<code>MODDE_DATABASE_HOST</code>, <code>MODDE_DATABASE_PORT</code>, <code>MODDE_DATABASE_NAME</code>, and
+<code>MODDE_DATABASE_USER</code>, just as <code>url</code> wins over the discrete settings fields.
+Environment variables also override their matching settings-file fields one by
+one. <code>MODDE_DB_PASSWORD_FILE</code> overrides <code>password_file</code> and, like the settings
+key, configures only the path to the password file.</p>
 <h3 id="example"><a class="header" href="#example">Example</a></h3>
 <pre><code class="language-toml">nexus_api_key = "legacy-key-if-you-must"
 download_dir = "/data/modde/downloads"
@@ -318,6 +359,13 @@ directory defaults to <code>&lt;modde_data&gt;/downloads/</code>; the <code>down
 <tr><td><code>NEXUS_API_KEY_FILE</code></td><td>Path to a file containing the Nexus API key — sops-nix / agenix friendly; set by the home-manager module</td></tr>
 <tr><td><code>MODDE_NO_UPDATE_CHECK</code></td><td>When set to <code>1</code>/<code>true</code>/<code>yes</code>/<code>on</code>, disables the startup update check regardless of <code>settings.toml</code></td></tr>
 <tr><td><code>MODDE_UPDATE_CHECK_URL</code></td><td>Override the release endpoint queried by the update check (defaults to the Codeberg releases API)</td></tr>
+<tr><td><code>MODDE_DATABASE_BACKEND</code></td><td>Override the storage backend. Accepts <code>sqlite</code>, <code>postgres</code>, <code>postgresql</code>, or <code>pg</code></td></tr>
+<tr><td><code>MODDE_DATABASE_URL</code></td><td>PostgreSQL connection URL; wins over discrete PostgreSQL connection fields</td></tr>
+<tr><td><code>MODDE_DATABASE_HOST</code></td><td>PostgreSQL host when no URL is set</td></tr>
+<tr><td><code>MODDE_DATABASE_PORT</code></td><td>PostgreSQL port when no URL is set</td></tr>
+<tr><td><code>MODDE_DATABASE_NAME</code></td><td>PostgreSQL database name when no URL is set</td></tr>
+<tr><td><code>MODDE_DATABASE_USER</code></td><td>PostgreSQL user when no URL is set</td></tr>
+<tr><td><code>MODDE_DB_PASSWORD_FILE</code></td><td>Path to a file containing the PostgreSQL password; the password contents are read at runtime</td></tr>
 <tr><td><code>XDG_CONFIG_HOME</code></td><td>Linux: relocates the config dir (and therefore <code>settings.toml</code> and <code>instances.toml</code>)</td></tr>
 <tr><td><code>XDG_DATA_HOME</code></td><td>Linux: relocates the data dir base</td></tr>
 <tr><td><code>XDG_CACHE_HOME</code></td><td>Linux: relocates the cache dir base</td></tr>
@@ -412,15 +460,18 @@ compatibility and ranked last.</li>
 <li>The <strong>home-manager module</strong> owns the <em>declarative</em> surface — profiles,
 Wabbajack lists, Nexus collections, and per-tool config — and drives the CLI on
 every rebuild. It exports <code>NEXUS_API_KEY_FILE</code> when you set
-<code>nexus.apiKeyFile</code>, but it does <strong>not</strong> write <code>settings.toml</code> keys like
-<code>theme</code>, <code>download_dir</code>, or <code>selected_game</code>.</li>
+<code>nexus.apiKeyFile</code>, and exports <code>MODDE_DATABASE_*</code> / <code>MODDE_DB_PASSWORD_FILE</code>
+session variables when <code>programs.modde.database.backend = "postgres"</code>, but it
+does <strong>not</strong> write <code>settings.toml</code> keys like <code>theme</code>, <code>download_dir</code>, or
+<code>selected_game</code>.</li>
 <li><strong><code>settings.toml</code></strong> owns the <em>imperative, user-facing</em> preferences (game paths,
 download dir, theme, selected game, update-check toggle). The CLI and GUI read
 and write it. For the Nexus key specifically it is the <strong>lowest-precedence</strong>
 source.</li>
 <li><strong>Environment variables</strong> override at runtime — <code>MODDE_DATA_DIR</code> for the data
 dir, <code>NEXUS_API_KEY</code> / <code>NEXUS_API_KEY_FILE</code> for the key, <code>MODDE_NO_UPDATE_CHECK</code>
-for the update check. They take effect regardless of <code>settings.toml</code>.</li>
+for the update check, and <code>MODDE_DATABASE_*</code> / <code>MODDE_DB_PASSWORD_FILE</code> for
+database selection. They take effect regardless of <code>settings.toml</code>.</li>
 <li>The <strong>system keyring</strong> is the recommended interactive store for the Nexus key
 (set it with <code>modde nexus auth</code>); it outranks <code>NEXUS_API_KEY_FILE</code> and the
 legacy <code>settings.toml</code> key, but is itself outranked by <code>NEXUS_API_KEY</code> and the

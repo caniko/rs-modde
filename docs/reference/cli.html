@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-ed74f3b0.js";
+            window.path_to_searchindex_js = "../searchindex-99b45168.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-4ac01a02.js"></script>
@@ -226,6 +226,13 @@ override above.</p>
 <tr><td><code>MODDE_ZSTD_LEVEL</code></td><td><code>9</code></td><td>zstd compression level for staging (clamped to the 1–22 range).</td></tr>
 <tr><td><code>MODDE_ARCHIVE_RETENTION</code></td><td><code>keep</code></td><td>Default source-archive retention after a Wabbajack archive batch integrates. Accepts <code>keep</code>, <code>prune-applied</code> (aliases <code>prune</code>/<code>delete</code>), or <code>auto</code>. The <code>--archive-retention</code> flag on <code>install wabbajack</code> overrides this.</td></tr>
 <tr><td><code>MODDE_HEAP_PROFILE</code></td><td>—</td><td>Same as the <code>--heap-profile</code> flag; only meaningful in a <code>heap-profile</code> build.</td></tr>
+<tr><td><code>MODDE_DATABASE_BACKEND</code></td><td><code>sqlite</code></td><td>Database backend override. Accepts <code>sqlite</code>, <code>postgres</code>, <code>postgresql</code>, or <code>pg</code>.</td></tr>
+<tr><td><code>MODDE_DATABASE_URL</code></td><td>—</td><td>PostgreSQL connection URL. Wins over the discrete PostgreSQL fields.</td></tr>
+<tr><td><code>MODDE_DATABASE_HOST</code></td><td>—</td><td>PostgreSQL host when no URL is set.</td></tr>
+<tr><td><code>MODDE_DATABASE_PORT</code></td><td><code>5432</code></td><td>PostgreSQL port when no URL is set.</td></tr>
+<tr><td><code>MODDE_DATABASE_NAME</code></td><td>—</td><td>PostgreSQL database name when no URL is set.</td></tr>
+<tr><td><code>MODDE_DATABASE_USER</code></td><td>backend default</td><td>PostgreSQL user when no URL is set.</td></tr>
+<tr><td><code>MODDE_DB_PASSWORD_FILE</code></td><td>—</td><td>Path to a file containing the PostgreSQL password; the password contents are read at runtime.</td></tr>
 </tbody>
 </table>
 </div>
@@ -242,6 +249,68 @@ first source that yields a non-empty value:</p>
 <p>An OAuth token (if present and unexpired) takes precedence over the API-key
 chain. Under Home Manager, prefer <code>programs.modde.nexus.apiKeyFile</code>, which feeds
 <code>NEXUS_API_KEY_FILE</code>.</p>
+<hr>
+<h2 id="modde-config"><a class="header" href="#modde-config"><code>modde config</code></a></h2>
+<p>Inspect, validate, and update modde configuration. Database resolution uses the
+same precedence as runtime startup: environment variables first, then
+<code>settings.toml</code>, then SQLite defaults. For PostgreSQL, <code>MODDE_DATABASE_URL</code> or
+<code>database.url</code> wins over the discrete host/port/name/user fields.</p>
+<h3 id="config-show"><a class="header" href="#config-show"><code>config show</code></a></h3>
+<p>Show the resolved database backend, source of each displayed field, and config
+file path. URL passwords are redacted before printing.</p>
+<pre><code class="language-bash">modde config show
+</code></pre>
+<p>For SQLite, the command prints the selected backend and local SQLite path. For
+PostgreSQL, it prints either the redacted URL plus resolved connection summary,
+or the resolved discrete fields, plus the configured password-file path if one
+is set.</p>
+<h3 id="config-set-database"><a class="header" href="#config-set-database"><code>config set-database</code></a></h3>
+<p>Set the stored database backend and PostgreSQL connection fields in
+<code>settings.toml</code>.</p>
+<pre><code class="language-bash">modde config set-database --backend sqlite
+modde config set-database --backend postgres --url postgres://modde@localhost/modde \
+  --password-file /run/secrets/modde-postgres-password
+modde config set-database --backend postgres --host localhost --port 5432 \
+  --name modde --user modde --password-file /run/secrets/modde-postgres-password
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--backend &lt;name&gt;</code></td><td>Required. <code>sqlite</code> or <code>postgres</code>; aliases include <code>postgresql</code> and <code>pg</code></td></tr>
+<tr><td><code>--url &lt;url&gt;</code></td><td>Full PostgreSQL connection URL; overrides discrete fields at runtime</td></tr>
+<tr><td><code>--host &lt;host&gt;</code></td><td>PostgreSQL host when no URL is set</td></tr>
+<tr><td><code>--port &lt;port&gt;</code></td><td>PostgreSQL port when no URL is set</td></tr>
+<tr><td><code>--name &lt;name&gt;</code></td><td>PostgreSQL database name when no URL is set</td></tr>
+<tr><td><code>--user &lt;user&gt;</code></td><td>PostgreSQL user when no URL is set</td></tr>
+<tr><td><code>--password-file &lt;path&gt;</code></td><td>Path to the PostgreSQL password file; contents are not stored</td></tr>
+<tr><td><code>--clear &lt;field&gt;</code></td><td>Clear a stored PostgreSQL field from <code>settings.toml</code></td></tr>
+</tbody>
+</table>
+</div>
+<p><code>--clear</code> accepts <code>url</code>, <code>host</code>, <code>port</code>, <code>dbname</code>, <code>user</code>, and
+<code>password-file</code>. Passing an empty string to a string/path field also clears that
+field. Setting <code>--backend sqlite</code> clears all stored PostgreSQL fields.</p>
+<p>When <code>backend = postgres</code>, the stored configuration must provide either <code>--url</code>
+or at least <code>--name</code>. URL and discrete fields are mutually exclusive in stored
+settings. Environment variables can still override the stored values at runtime.</p>
+<h3 id="config-reset-database"><a class="header" href="#config-reset-database"><code>config reset-database</code></a></h3>
+<p>Reset stored database settings to SQLite and clear all stored PostgreSQL
+connection fields.</p>
+<pre><code class="language-bash">modde config reset-database
+</code></pre>
+<p>This updates <code>settings.toml</code>; it does not unset environment variables already
+present in the current process.</p>
+<h3 id="config-test"><a class="header" href="#config-test"><code>config test</code></a></h3>
+<p>Open the resolved database, run a trivial probe query, and print <code>OK</code> on
+success.</p>
+<pre><code class="language-bash">modde config test
+</code></pre>
+<p>This command uses the same environment/settings/default resolution as normal
+startup, so it is the quickest way to validate a PostgreSQL URL, discrete
+connection fields, or <code>MODDE_DB_PASSWORD_FILE</code> path.</p>
 <hr>
 <h2 id="modde-profile"><a class="header" href="#modde-profile"><code>modde profile</code></a></h2>
 <p>Manage mod profiles.</p>

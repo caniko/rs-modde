@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-ed74f3b0.js";
+            window.path_to_searchindex_js = "../searchindex-99b45168.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-4ac01a02.js"></script>
@@ -224,6 +224,54 @@ store.</p>
 </ul>
 <pre><code class="language-nix">programs.modde.nexus.apiKeyFile = config.sops.secrets.nexus-api-key.path;
 </code></pre>
+<h3 id="programsmoddedatabase"><a class="header" href="#programsmoddedatabase"><code>programs.modde.database</code></a></h3>
+<p>Storage backend configuration for modde’s profile, mod, tool, save, and snapshot
+state. The default is SQLite; PostgreSQL is configured by setting
+<code>backend = "postgres"</code> and providing either <code>url</code> or at least <code>name</code>.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>backend</code></td><td>enum <code>sqlite</code> / <code>postgres</code></td><td><code>"sqlite"</code></td><td>Storage backend</td></tr>
+<tr><td><code>url</code></td><td><code>null</code> or <code>str</code></td><td><code>null</code></td><td>Full PostgreSQL connection URL; wins over discrete fields</td></tr>
+<tr><td><code>host</code></td><td><code>null</code> or <code>str</code></td><td><code>null</code></td><td>PostgreSQL host when <code>url</code> is not set</td></tr>
+<tr><td><code>port</code></td><td><code>null</code> or port</td><td><code>null</code></td><td>PostgreSQL port when <code>url</code> is not set</td></tr>
+<tr><td><code>name</code></td><td><code>null</code> or <code>str</code></td><td><code>null</code></td><td>PostgreSQL database name when <code>url</code> is not set</td></tr>
+<tr><td><code>user</code></td><td><code>null</code> or <code>str</code></td><td><code>null</code></td><td>PostgreSQL user when <code>url</code> is not set</td></tr>
+<tr><td><code>passwordFile</code></td><td><code>null</code> or <code>path</code></td><td><code>null</code></td><td>Path to a file containing the PostgreSQL password</td></tr>
+</tbody>
+</table>
+</div>
+<p>The Home Manager option is named <code>name</code>; modde exports it as
+<code>MODDE_DATABASE_NAME</code>, and the settings file stores the same value as <code>dbname</code>.</p>
+<p>When PostgreSQL is selected, the module exports the selected backend and
+connection fields as <code>home.sessionVariables</code>:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>HM option</th><th>Runtime variable</th></tr>
+</thead>
+<tbody>
+<tr><td><code>backend</code></td><td><code>MODDE_DATABASE_BACKEND</code></td></tr>
+<tr><td><code>url</code></td><td><code>MODDE_DATABASE_URL</code></td></tr>
+<tr><td><code>host</code></td><td><code>MODDE_DATABASE_HOST</code></td></tr>
+<tr><td><code>port</code></td><td><code>MODDE_DATABASE_PORT</code></td></tr>
+<tr><td><code>name</code></td><td><code>MODDE_DATABASE_NAME</code></td></tr>
+<tr><td><code>user</code></td><td><code>MODDE_DATABASE_USER</code></td></tr>
+<tr><td><code>passwordFile</code></td><td><code>MODDE_DB_PASSWORD_FILE</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>Those variables are also exported inside the activation script before it invokes
+<code>modde</code>. New terminal and graphical sessions launched after activation see
+<code>home.sessionVariables</code>; already-running shells keep their existing environment.
+For an immediate imperative change outside Home Manager, use
+<a href="../reference/cli.html#modde-config"><code>modde config set-database</code></a>.</p>
+<p><code>passwordFile</code> configures only the path. The password contents are read by modde
+at runtime and are never written to <code>settings.toml</code> or embedded in the Nix store
+by this option.</p>
 <h3 id="programsmoddeprofiles"><a class="header" href="#programsmoddeprofiles"><code>programs.modde.profiles</code></a></h3>
 <p>An attribute set of mod profiles to manage. The attribute name is the profile
 name modde uses for <code>--profile</code>. Each value is a <a href="#the-profile-submodule">profile submodule</a>.</p>
@@ -469,6 +517,9 @@ point straight at the offending option.</p>
 <tr><td>Tool release source</td><td><code>release.path</code> is mutually exclusive with <code>release.url</code> + <code>release.hash</code>; exactly one source must be present</td></tr>
 <tr><td>Tool release url/hash pairing</td><td><code>release.url</code> and <code>release.hash</code> must be set together</td></tr>
 <tr><td>OptiScaler profile registered</td><td><code>tools.optiscaler.profile</code> may only be non-null if the profile’s game has registered OptiScaler presets</td></tr>
+<tr><td>PostgreSQL has connection source</td><td><code>database.backend = "postgres"</code> requires either <code>database.url</code> or at least <code>database.name</code></td></tr>
+<tr><td>PostgreSQL URL/discrete exclusivity</td><td>Set <code>database.url</code> or the discrete <code>database.host</code> / <code>port</code> / <code>name</code> / <code>user</code> fields, not both</td></tr>
+<tr><td>SQLite has no PostgreSQL fields</td><td><code>database.url</code>, <code>host</code>, <code>port</code>, <code>name</code>, <code>user</code>, and <code>passwordFile</code> are only valid when <code>backend = "postgres"</code></td></tr>
 </tbody>
 </table>
 </div>

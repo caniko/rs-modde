@@ -31,7 +31,7 @@
   <p class="tagline">A cross-platform game mod manager — install Wabbajack modlists and Nexus Collections natively on Linux, macOS, and Windows.</p>
   <p class="subtitle">Install Wabbajack modlists, Nexus Collections, and individual mods with a clean game directory on any OS — plus an optional declarative Nix&#x2F;home-manager workflow.</p>
   <div class="hero-actions">
-    <a href="#install" class="btn btn-primary">Install</a>
+    <a href="#install" class="btn btn-primary">Install now</a>
     <a href="https:&#x2F;&#x2F;modde.tartanoglu.com&#x2F;docs&#x2F;" class="btn btn-secondary">Docs</a>
   </div>
 </section>
@@ -98,8 +98,53 @@
 </section>
 
 <section class="landing-content">
-  <h2 id="install">Install</h2>
+  <h2 id="install">Install now</h2>
 <p>modde runs natively on Linux, macOS, and Windows. Every release ships two binaries — the <code>modde</code> command-line tool and the <code>modde-ui</code> desktop app. There's no single blessed method: pick whatever fits how you already manage software. For the full set of commands, verification steps, and per-platform notes, see the <a rel="external" href="https://modde.tartanoglu.com/docs/getting-started/installation.html">installation guide</a>.</p>
+<div class="install-panel">
+  <div>
+    <h3>Pick your route</h3>
+    <p>The docs cover every channel, including verification and platform notes.</p>
+  </div>
+  <a class="btn btn-primary install-now" href="https://modde.tartanoglu.com/docs/getting-started/installation.html">Install now</a>
+</div>
+<div class="method-list" aria-label="Installation methods">
+  <a class="method-row" href="https://modde.tartanoglu.com/docs/getting-started/installation.html#nix">
+    <span>Nix flake</span>
+    <strong>nix run codeberg:caniko/rs-modde</strong>
+  </a>
+  <a class="method-row" href="https://modde.tartanoglu.com/docs/getting-started/installation.html#arch-linux-aur">
+    <span>Arch Linux</span>
+    <strong>AUR: modde-bin, modde, modde-git</strong>
+  </a>
+  <a class="method-row" href="https://modde.tartanoglu.com/docs/getting-started/installation.html#fedora--rhel-copr">
+    <span>Fedora / RHEL</span>
+    <strong>COPR packages</strong>
+  </a>
+  <a class="method-row" href="https://modde.tartanoglu.com/docs/getting-started/installation.html#debian--ubuntu-apt">
+    <span>Debian / Ubuntu</span>
+    <strong>APT repository</strong>
+  </a>
+  <a class="method-row" href="https://modde.tartanoglu.com/docs/getting-started/installation.html#flatpak">
+    <span>Linux desktop</span>
+    <strong>Flatpak and AppImage</strong>
+  </a>
+  <a class="method-row" href="https://modde.tartanoglu.com/docs/getting-started/installation.html#homebrew">
+    <span>macOS</span>
+    <strong>Homebrew or tarball</strong>
+  </a>
+  <a class="method-row" href="https://modde.tartanoglu.com/docs/getting-started/installation.html#windows">
+    <span>Windows</span>
+    <strong>winget, Scoop, Chocolatey, zip</strong>
+  </a>
+  <a class="method-row" href="https://modde.tartanoglu.com/docs/getting-started/installation.html#cargo">
+    <span>Rust users</span>
+    <strong>Cargo install</strong>
+  </a>
+  <a class="method-row" href="https://modde.tartanoglu.com/docs/getting-started/installation.html#build-from-source">
+    <span>Developers</span>
+    <strong>Build from source</strong>
+  </a>
+</div>
 <div class="install-grid">
   <article class="install-card">
     <h3>Linux</h3>

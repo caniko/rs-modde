@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-ed74f3b0.js";
+            window.path_to_searchindex_js = "searchindex-99b45168.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-4ac01a02.js"></script>
@@ -9304,6 +9304,54 @@ store.</p>
 </ul>
 <pre><code class="language-nix">programs.modde.nexus.apiKeyFile = config.sops.secrets.nexus-api-key.path;
 </code></pre>
+<h3 id="programsmoddedatabase"><a class="header" href="#programsmoddedatabase"><code>programs.modde.database</code></a></h3>
+<p>Storage backend configuration for modde’s profile, mod, tool, save, and snapshot
+state. The default is SQLite; PostgreSQL is configured by setting
+<code>backend = "postgres"</code> and providing either <code>url</code> or at least <code>name</code>.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>backend</code></td><td>enum <code>sqlite</code> / <code>postgres</code></td><td><code>"sqlite"</code></td><td>Storage backend</td></tr>
+<tr><td><code>url</code></td><td><code>null</code> or <code>str</code></td><td><code>null</code></td><td>Full PostgreSQL connection URL; wins over discrete fields</td></tr>
+<tr><td><code>host</code></td><td><code>null</code> or <code>str</code></td><td><code>null</code></td><td>PostgreSQL host when <code>url</code> is not set</td></tr>
+<tr><td><code>port</code></td><td><code>null</code> or port</td><td><code>null</code></td><td>PostgreSQL port when <code>url</code> is not set</td></tr>
+<tr><td><code>name</code></td><td><code>null</code> or <code>str</code></td><td><code>null</code></td><td>PostgreSQL database name when <code>url</code> is not set</td></tr>
+<tr><td><code>user</code></td><td><code>null</code> or <code>str</code></td><td><code>null</code></td><td>PostgreSQL user when <code>url</code> is not set</td></tr>
+<tr><td><code>passwordFile</code></td><td><code>null</code> or <code>path</code></td><td><code>null</code></td><td>Path to a file containing the PostgreSQL password</td></tr>
+</tbody>
+</table>
+</div>
+<p>The Home Manager option is named <code>name</code>; modde exports it as
+<code>MODDE_DATABASE_NAME</code>, and the settings file stores the same value as <code>dbname</code>.</p>
+<p>When PostgreSQL is selected, the module exports the selected backend and
+connection fields as <code>home.sessionVariables</code>:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>HM option</th><th>Runtime variable</th></tr>
+</thead>
+<tbody>
+<tr><td><code>backend</code></td><td><code>MODDE_DATABASE_BACKEND</code></td></tr>
+<tr><td><code>url</code></td><td><code>MODDE_DATABASE_URL</code></td></tr>
+<tr><td><code>host</code></td><td><code>MODDE_DATABASE_HOST</code></td></tr>
+<tr><td><code>port</code></td><td><code>MODDE_DATABASE_PORT</code></td></tr>
+<tr><td><code>name</code></td><td><code>MODDE_DATABASE_NAME</code></td></tr>
+<tr><td><code>user</code></td><td><code>MODDE_DATABASE_USER</code></td></tr>
+<tr><td><code>passwordFile</code></td><td><code>MODDE_DB_PASSWORD_FILE</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>Those variables are also exported inside the activation script before it invokes
+<code>modde</code>. New terminal and graphical sessions launched after activation see
+<code>home.sessionVariables</code>; already-running shells keep their existing environment.
+For an immediate imperative change outside Home Manager, use
+<a href="#modde-config"><code>modde config set-database</code></a>.</p>
+<p><code>passwordFile</code> configures only the path. The password contents are read by modde
+at runtime and are never written to <code>settings.toml</code> or embedded in the Nix store
+by this option.</p>
 <h3 id="programsmoddeprofiles"><a class="header" href="#programsmoddeprofiles"><code>programs.modde.profiles</code></a></h3>
 <p>An attribute set of mod profiles to manage. The attribute name is the profile
 name modde uses for <code>--profile</code>. Each value is a <a href="#the-profile-submodule">profile submodule</a>.</p>
@@ -9549,6 +9597,9 @@ point straight at the offending option.</p>
 <tr><td>Tool release source</td><td><code>release.path</code> is mutually exclusive with <code>release.url</code> + <code>release.hash</code>; exactly one source must be present</td></tr>
 <tr><td>Tool release url/hash pairing</td><td><code>release.url</code> and <code>release.hash</code> must be set together</td></tr>
 <tr><td>OptiScaler profile registered</td><td><code>tools.optiscaler.profile</code> may only be non-null if the profile’s game has registered OptiScaler presets</td></tr>
+<tr><td>PostgreSQL has connection source</td><td><code>database.backend = "postgres"</code> requires either <code>database.url</code> or at least <code>database.name</code></td></tr>
+<tr><td>PostgreSQL URL/discrete exclusivity</td><td>Set <code>database.url</code> or the discrete <code>database.host</code> / <code>port</code> / <code>name</code> / <code>user</code> fields, not both</td></tr>
+<tr><td>SQLite has no PostgreSQL fields</td><td><code>database.url</code>, <code>host</code>, <code>port</code>, <code>name</code>, <code>user</code>, and <code>passwordFile</code> are only valid when <code>backend = "postgres"</code></td></tr>
 </tbody>
 </table>
 </div>
@@ -9866,6 +9917,7 @@ erroring.</li>
 <tr><td><code>theme</code></td><td>string</td><td><code>""</code></td><td>UI theme name (e.g. <code>Nord</code>); empty means the built-in default</td></tr>
 <tr><td><code>selected_game</code></td><td>string (optional)</td><td>unset</td><td>The game last selected in the UI</td></tr>
 <tr><td><code>update_check.enabled</code></td><td>bool</td><td><code>true</code></td><td>Whether modde checks for newer releases on startup</td></tr>
+<tr><td><code>database</code></td><td>table</td><td>SQLite</td><td>Storage backend and optional PostgreSQL connection settings</td></tr>
 </tbody>
 </table>
 </div>
@@ -9877,6 +9929,46 @@ system keyring, or <code>NEXUS_API_KEY</code> / <code>NEXUS_API_KEY_FILE</code>.
 <p><code>game_paths</code> is an array of tables; each entry pairs a <code>game_id</code> with its install
 <code>path</code>. modde looks up a game’s path by <code>game_id</code>, and setting a path either adds
 a new entry or updates the existing one (no duplicates).</p>
+<h3 id="database-settings"><a class="header" href="#database-settings">Database settings</a></h3>
+<p>By default, modde stores profile, mod, tool, save, and snapshot state in the
+SQLite database at <code>&lt;modde_data&gt;/modde.db</code>. You do not need a <code>[database]</code> table
+for the default backend:</p>
+<pre><code class="language-toml">[database]
+backend = "sqlite"
+</code></pre>
+<p>To use PostgreSQL, set <code>backend = "postgres"</code> and provide either a full
+connection URL or the discrete connection fields. The settings-file database
+name key is <code>dbname</code>:</p>
+<pre><code class="language-toml">[database]
+backend = "postgres"
+url = "postgres://modde@localhost/modde"
+password_file = "/run/secrets/modde-postgres-password"
+</code></pre>
+<pre><code class="language-toml">[database]
+backend = "postgres"
+host = "localhost"
+port = 5432
+dbname = "modde"
+user = "modde"
+password_file = "/run/secrets/modde-postgres-password"
+</code></pre>
+<p><code>url</code> takes precedence over the discrete <code>host</code>, <code>port</code>, <code>dbname</code>, and <code>user</code>
+fields. Use the URL form for connection details that do not have dedicated
+settings fields, such as socket directories or TLS parameters. The password
+contents are not stored in <code>settings.toml</code>; <code>password_file</code> is only a path, and
+modde reads the trimmed file contents at runtime.</p>
+<p>Database configuration resolves in this order:</p>
+<ol>
+<li>Database environment variables.</li>
+<li>The <code>[database]</code> table in <code>settings.toml</code>.</li>
+<li>SQLite defaults.</li>
+</ol>
+<p>Within the PostgreSQL layer, <code>MODDE_DATABASE_URL</code> wins over
+<code>MODDE_DATABASE_HOST</code>, <code>MODDE_DATABASE_PORT</code>, <code>MODDE_DATABASE_NAME</code>, and
+<code>MODDE_DATABASE_USER</code>, just as <code>url</code> wins over the discrete settings fields.
+Environment variables also override their matching settings-file fields one by
+one. <code>MODDE_DB_PASSWORD_FILE</code> overrides <code>password_file</code> and, like the settings
+key, configures only the path to the password file.</p>
 <h3 id="example"><a class="header" href="#example">Example</a></h3>
 <pre><code class="language-toml">nexus_api_key = "legacy-key-if-you-must"
 download_dir = "/data/modde/downloads"
@@ -9949,6 +10041,13 @@ directory defaults to <code>&lt;modde_data&gt;/downloads/</code>; the <code>down
 <tr><td><code>NEXUS_API_KEY_FILE</code></td><td>Path to a file containing the Nexus API key — sops-nix / agenix friendly; set by the home-manager module</td></tr>
 <tr><td><code>MODDE_NO_UPDATE_CHECK</code></td><td>When set to <code>1</code>/<code>true</code>/<code>yes</code>/<code>on</code>, disables the startup update check regardless of <code>settings.toml</code></td></tr>
 <tr><td><code>MODDE_UPDATE_CHECK_URL</code></td><td>Override the release endpoint queried by the update check (defaults to the Codeberg releases API)</td></tr>
+<tr><td><code>MODDE_DATABASE_BACKEND</code></td><td>Override the storage backend. Accepts <code>sqlite</code>, <code>postgres</code>, <code>postgresql</code>, or <code>pg</code></td></tr>
+<tr><td><code>MODDE_DATABASE_URL</code></td><td>PostgreSQL connection URL; wins over discrete PostgreSQL connection fields</td></tr>
+<tr><td><code>MODDE_DATABASE_HOST</code></td><td>PostgreSQL host when no URL is set</td></tr>
+<tr><td><code>MODDE_DATABASE_PORT</code></td><td>PostgreSQL port when no URL is set</td></tr>
+<tr><td><code>MODDE_DATABASE_NAME</code></td><td>PostgreSQL database name when no URL is set</td></tr>
+<tr><td><code>MODDE_DATABASE_USER</code></td><td>PostgreSQL user when no URL is set</td></tr>
+<tr><td><code>MODDE_DB_PASSWORD_FILE</code></td><td>Path to a file containing the PostgreSQL password; the password contents are read at runtime</td></tr>
 <tr><td><code>XDG_CONFIG_HOME</code></td><td>Linux: relocates the config dir (and therefore <code>settings.toml</code> and <code>instances.toml</code>)</td></tr>
 <tr><td><code>XDG_DATA_HOME</code></td><td>Linux: relocates the data dir base</td></tr>
 <tr><td><code>XDG_CACHE_HOME</code></td><td>Linux: relocates the cache dir base</td></tr>
@@ -10043,15 +10142,18 @@ compatibility and ranked last.</li>
 <li>The <strong>home-manager module</strong> owns the <em>declarative</em> surface — profiles,
 Wabbajack lists, Nexus collections, and per-tool config — and drives the CLI on
 every rebuild. It exports <code>NEXUS_API_KEY_FILE</code> when you set
-<code>nexus.apiKeyFile</code>, but it does <strong>not</strong> write <code>settings.toml</code> keys like
-<code>theme</code>, <code>download_dir</code>, or <code>selected_game</code>.</li>
+<code>nexus.apiKeyFile</code>, and exports <code>MODDE_DATABASE_*</code> / <code>MODDE_DB_PASSWORD_FILE</code>
+session variables when <code>programs.modde.database.backend = "postgres"</code>, but it
+does <strong>not</strong> write <code>settings.toml</code> keys like <code>theme</code>, <code>download_dir</code>, or
+<code>selected_game</code>.</li>
 <li><strong><code>settings.toml</code></strong> owns the <em>imperative, user-facing</em> preferences (game paths,
 download dir, theme, selected game, update-check toggle). The CLI and GUI read
 and write it. For the Nexus key specifically it is the <strong>lowest-precedence</strong>
 source.</li>
 <li><strong>Environment variables</strong> override at runtime — <code>MODDE_DATA_DIR</code> for the data
 dir, <code>NEXUS_API_KEY</code> / <code>NEXUS_API_KEY_FILE</code> for the key, <code>MODDE_NO_UPDATE_CHECK</code>
-for the update check. They take effect regardless of <code>settings.toml</code>.</li>
+for the update check, and <code>MODDE_DATABASE_*</code> / <code>MODDE_DB_PASSWORD_FILE</code> for
+database selection. They take effect regardless of <code>settings.toml</code>.</li>
 <li>The <strong>system keyring</strong> is the recommended interactive store for the Nexus key
 (set it with <code>modde nexus auth</code>); it outranks <code>NEXUS_API_KEY_FILE</code> and the
 legacy <code>settings.toml</code> key, but is itself outranked by <code>NEXUS_API_KEY</code> and the
@@ -10116,6 +10218,13 @@ override above.</p>
 <tr><td><code>MODDE_ZSTD_LEVEL</code></td><td><code>9</code></td><td>zstd compression level for staging (clamped to the 1–22 range).</td></tr>
 <tr><td><code>MODDE_ARCHIVE_RETENTION</code></td><td><code>keep</code></td><td>Default source-archive retention after a Wabbajack archive batch integrates. Accepts <code>keep</code>, <code>prune-applied</code> (aliases <code>prune</code>/<code>delete</code>), or <code>auto</code>. The <code>--archive-retention</code> flag on <code>install wabbajack</code> overrides this.</td></tr>
 <tr><td><code>MODDE_HEAP_PROFILE</code></td><td>—</td><td>Same as the <code>--heap-profile</code> flag; only meaningful in a <code>heap-profile</code> build.</td></tr>
+<tr><td><code>MODDE_DATABASE_BACKEND</code></td><td><code>sqlite</code></td><td>Database backend override. Accepts <code>sqlite</code>, <code>postgres</code>, <code>postgresql</code>, or <code>pg</code>.</td></tr>
+<tr><td><code>MODDE_DATABASE_URL</code></td><td>—</td><td>PostgreSQL connection URL. Wins over the discrete PostgreSQL fields.</td></tr>
+<tr><td><code>MODDE_DATABASE_HOST</code></td><td>—</td><td>PostgreSQL host when no URL is set.</td></tr>
+<tr><td><code>MODDE_DATABASE_PORT</code></td><td><code>5432</code></td><td>PostgreSQL port when no URL is set.</td></tr>
+<tr><td><code>MODDE_DATABASE_NAME</code></td><td>—</td><td>PostgreSQL database name when no URL is set.</td></tr>
+<tr><td><code>MODDE_DATABASE_USER</code></td><td>backend default</td><td>PostgreSQL user when no URL is set.</td></tr>
+<tr><td><code>MODDE_DB_PASSWORD_FILE</code></td><td>—</td><td>Path to a file containing the PostgreSQL password; the password contents are read at runtime.</td></tr>
 </tbody>
 </table>
 </div>
@@ -10132,6 +10241,68 @@ first source that yields a non-empty value:</p>
 <p>An OAuth token (if present and unexpired) takes precedence over the API-key
 chain. Under Home Manager, prefer <code>programs.modde.nexus.apiKeyFile</code>, which feeds
 <code>NEXUS_API_KEY_FILE</code>.</p>
+<hr>
+<h2 id="modde-config"><a class="header" href="#modde-config"><code>modde config</code></a></h2>
+<p>Inspect, validate, and update modde configuration. Database resolution uses the
+same precedence as runtime startup: environment variables first, then
+<code>settings.toml</code>, then SQLite defaults. For PostgreSQL, <code>MODDE_DATABASE_URL</code> or
+<code>database.url</code> wins over the discrete host/port/name/user fields.</p>
+<h3 id="config-show"><a class="header" href="#config-show"><code>config show</code></a></h3>
+<p>Show the resolved database backend, source of each displayed field, and config
+file path. URL passwords are redacted before printing.</p>
+<pre><code class="language-bash">modde config show
+</code></pre>
+<p>For SQLite, the command prints the selected backend and local SQLite path. For
+PostgreSQL, it prints either the redacted URL plus resolved connection summary,
+or the resolved discrete fields, plus the configured password-file path if one
+is set.</p>
+<h3 id="config-set-database"><a class="header" href="#config-set-database"><code>config set-database</code></a></h3>
+<p>Set the stored database backend and PostgreSQL connection fields in
+<code>settings.toml</code>.</p>
+<pre><code class="language-bash">modde config set-database --backend sqlite
+modde config set-database --backend postgres --url postgres://modde@localhost/modde \
+  --password-file /run/secrets/modde-postgres-password
+modde config set-database --backend postgres --host localhost --port 5432 \
+  --name modde --user modde --password-file /run/secrets/modde-postgres-password
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--backend &lt;name&gt;</code></td><td>Required. <code>sqlite</code> or <code>postgres</code>; aliases include <code>postgresql</code> and <code>pg</code></td></tr>
+<tr><td><code>--url &lt;url&gt;</code></td><td>Full PostgreSQL connection URL; overrides discrete fields at runtime</td></tr>
+<tr><td><code>--host &lt;host&gt;</code></td><td>PostgreSQL host when no URL is set</td></tr>
+<tr><td><code>--port &lt;port&gt;</code></td><td>PostgreSQL port when no URL is set</td></tr>
+<tr><td><code>--name &lt;name&gt;</code></td><td>PostgreSQL database name when no URL is set</td></tr>
+<tr><td><code>--user &lt;user&gt;</code></td><td>PostgreSQL user when no URL is set</td></tr>
+<tr><td><code>--password-file &lt;path&gt;</code></td><td>Path to the PostgreSQL password file; contents are not stored</td></tr>
+<tr><td><code>--clear &lt;field&gt;</code></td><td>Clear a stored PostgreSQL field from <code>settings.toml</code></td></tr>
+</tbody>
+</table>
+</div>
+<p><code>--clear</code> accepts <code>url</code>, <code>host</code>, <code>port</code>, <code>dbname</code>, <code>user</code>, and
+<code>password-file</code>. Passing an empty string to a string/path field also clears that
+field. Setting <code>--backend sqlite</code> clears all stored PostgreSQL fields.</p>
+<p>When <code>backend = postgres</code>, the stored configuration must provide either <code>--url</code>
+or at least <code>--name</code>. URL and discrete fields are mutually exclusive in stored
+settings. Environment variables can still override the stored values at runtime.</p>
+<h3 id="config-reset-database"><a class="header" href="#config-reset-database"><code>config reset-database</code></a></h3>
+<p>Reset stored database settings to SQLite and clear all stored PostgreSQL
+connection fields.</p>
+<pre><code class="language-bash">modde config reset-database
+</code></pre>
+<p>This updates <code>settings.toml</code>; it does not unset environment variables already
+present in the current process.</p>
+<h3 id="config-test"><a class="header" href="#config-test"><code>config test</code></a></h3>
+<p>Open the resolved database, run a trivial probe query, and print <code>OK</code> on
+success.</p>
+<pre><code class="language-bash">modde config test
+</code></pre>
+<p>This command uses the same environment/settings/default resolution as normal
+startup, so it is the quickest way to validate a PostgreSQL URL, discrete
+connection fields, or <code>MODDE_DB_PASSWORD_FILE</code> path.</p>
 <hr>
 <h2 id="modde-profile"><a class="header" href="#modde-profile"><code>modde profile</code></a></h2>
 <p>Manage mod profiles.</p>
