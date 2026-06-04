@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-99b45168.js";
+            window.path_to_searchindex_js = "../searchindex-9e8c0bc0.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-4ac01a02.js"></script>
+        <script src="../toc-d56b4786.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -660,7 +660,7 @@ versions are cut whenever they make sense per SemVer — there is no 1.0 milesto
 <p><strong>xtask is a thin per-project binary over a shared library.</strong> Reusable build-tooling logic
 lives in <code>harbor-xtask</code> (in rs-harbor); modde ships a thin <code>modde-xtask</code> binary, invoked as
 <code>cargo xtask</code>, that wires the project-specific bindings — the RPM spec path (<code>modde.spec</code>),
-the COPR vendor tarball, the Zola roots (<code>docs/site</code> and <code>website</code>), the Nix package names
+the COPR vendor tarball, the docs bindings, the Nix package names
 (<code>modde</code> / <code>site</code> / <code>modde-windows</code> / <code>appimage-*</code> / <code>flatpak-manifest</code>), and
 <code>cargo xtask gui</code>. The shared rs-harbor CLI deliberately does <strong>not</strong> grow top-level
 <code>release</code> / <code>copr</code> / <code>docs</code> subcommands, because that would couple it to downstream project
@@ -671,7 +671,7 @@ committed back to trunk.</p>
 because they model things the generic generators do not: the <code>.#flatpak-manifest</code>,
 <code>.#appimage-*</code>, <code>.#modde-windows</code>, and <code>.#docs</code> builds; the Attic closure push; the
 coverage gate (<code>cargo xtask coverage --ci</code>); cross-compilation (Windows, aarch64-linux,
-macOS x86_64/aarch64 via osxcross); the Zola <code>website</code> / <code>docs</code> outputs; and the
+macOS x86_64/aarch64 via osxcross); the Rust-generated website and mdBook docs outputs; and the
 self-hosted <code>atlas</code> runner. Running <code>--check</code> would flag all of that intentional
 customization as drift. This is revisited only if simit becomes configurable enough to
 express those jobs, or rs-harbor publishes a helper that preserves them.</p>
@@ -717,7 +717,7 @@ home-manager module. The authoritative per-channel commands live in the
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../reference/parity.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../reference/presentation-site.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -731,7 +731,7 @@ home-manager module. The authoritative per-channel commands live in the
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../reference/parity.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../reference/presentation-site.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
