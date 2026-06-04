@@ -53,6 +53,7 @@ Settings loading is **forgiving by design**:
 | `theme`                | string                     | `""`    | UI theme name (e.g. `Nord`); empty means the built-in default     |
 | `selected_game`        | string (optional)          | unset   | The game last selected in the UI                                  |
 | `update_check.enabled` | bool                       | `true`  | Whether modde checks for newer releases on startup                |
+| `database`             | table                      | SQLite  | Storage backend and optional PostgreSQL connection settings       |
 
 `nexus_api_key` is serialized only when non-empty, so a clean settings file does
 not contain it. It is the **legacy** key source — modde keeps reading it for
@@ -63,6 +64,57 @@ system keyring, or `NEXUS_API_KEY` / `NEXUS_API_KEY_FILE`.
 `game_paths` is an array of tables; each entry pairs a `game_id` with its install
 `path`. modde looks up a game's path by `game_id`, and setting a path either adds
 a new entry or updates the existing one (no duplicates).
+
+### Database settings
+
+By default, modde stores profile, mod, tool, save, and snapshot state in the
+SQLite database at `<modde_data>/modde.db`. You do not need a `[database]` table
+for the default backend:
+
+```toml
+[database]
+backend = "sqlite"
+```
+
+To use PostgreSQL, set `backend = "postgres"` and provide either a full
+connection URL or the discrete connection fields. The settings-file database
+name key is `dbname`:
+
+```toml
+[database]
+backend = "postgres"
+url = "postgres://modde@localhost/modde"
+password_file = "/run/secrets/modde-postgres-password"
+```
+
+```toml
+[database]
+backend = "postgres"
+host = "localhost"
+port = 5432
+dbname = "modde"
+user = "modde"
+password_file = "/run/secrets/modde-postgres-password"
+```
+
+`url` takes precedence over the discrete `host`, `port`, `dbname`, and `user`
+fields. Use the URL form for connection details that do not have dedicated
+settings fields, such as socket directories or TLS parameters. The password
+contents are not stored in `settings.toml`; `password_file` is only a path, and
+modde reads the trimmed file contents at runtime.
+
+Database configuration resolves in this order:
+
+1. Database environment variables.
+2. The `[database]` table in `settings.toml`.
+3. SQLite defaults.
+
+Within the PostgreSQL layer, `MODDE_DATABASE_URL` wins over
+`MODDE_DATABASE_HOST`, `MODDE_DATABASE_PORT`, `MODDE_DATABASE_NAME`, and
+`MODDE_DATABASE_USER`, just as `url` wins over the discrete settings fields.
+Environment variables also override their matching settings-file fields one by
+one. `MODDE_DB_PASSWORD_FILE` overrides `password_file` and, like the settings
+key, configures only the path to the password file.
 
 ### Example
 
@@ -132,6 +184,13 @@ modde honors the following environment variables:
 | `NEXUS_API_KEY_FILE`         | Path to a file containing the Nexus API key — sops-nix / agenix friendly; set by the home-manager module |
 | `MODDE_NO_UPDATE_CHECK`      | When set to `1`/`true`/`yes`/`on`, disables the startup update check regardless of `settings.toml`  |
 | `MODDE_UPDATE_CHECK_URL`     | Override the release endpoint queried by the update check (defaults to the Codeberg releases API)   |
+| `MODDE_DATABASE_BACKEND`     | Override the storage backend. Accepts `sqlite`, `postgres`, `postgresql`, or `pg`                    |
+| `MODDE_DATABASE_URL`         | PostgreSQL connection URL; wins over discrete PostgreSQL connection fields                           |
+| `MODDE_DATABASE_HOST`        | PostgreSQL host when no URL is set                                                                  |
+| `MODDE_DATABASE_PORT`        | PostgreSQL port when no URL is set                                                                  |
+| `MODDE_DATABASE_NAME`        | PostgreSQL database name when no URL is set                                                         |
+| `MODDE_DATABASE_USER`        | PostgreSQL user when no URL is set                                                                  |
+| `MODDE_DB_PASSWORD_FILE`     | Path to a file containing the PostgreSQL password; the password contents are read at runtime         |
 | `XDG_CONFIG_HOME`            | Linux: relocates the config dir (and therefore `settings.toml` and `instances.toml`)                |
 | `XDG_DATA_HOME`              | Linux: relocates the data dir base                                                                  |
 | `XDG_CACHE_HOME`             | Linux: relocates the cache dir base                                                                 |
@@ -235,15 +294,18 @@ The layers do not conflict so much as compose:
 - The **home-manager module** owns the *declarative* surface — profiles,
   Wabbajack lists, Nexus collections, and per-tool config — and drives the CLI on
   every rebuild. It exports `NEXUS_API_KEY_FILE` when you set
-  `nexus.apiKeyFile`, but it does **not** write `settings.toml` keys like
-  `theme`, `download_dir`, or `selected_game`.
+  `nexus.apiKeyFile`, and exports `MODDE_DATABASE_*` / `MODDE_DB_PASSWORD_FILE`
+  session variables when `programs.modde.database.backend = "postgres"`, but it
+  does **not** write `settings.toml` keys like `theme`, `download_dir`, or
+  `selected_game`.
 - **`settings.toml`** owns the *imperative, user-facing* preferences (game paths,
   download dir, theme, selected game, update-check toggle). The CLI and GUI read
   and write it. For the Nexus key specifically it is the **lowest-precedence**
   source.
 - **Environment variables** override at runtime — `MODDE_DATA_DIR` for the data
   dir, `NEXUS_API_KEY` / `NEXUS_API_KEY_FILE` for the key, `MODDE_NO_UPDATE_CHECK`
-  for the update check. They take effect regardless of `settings.toml`.
+  for the update check, and `MODDE_DATABASE_*` / `MODDE_DB_PASSWORD_FILE` for
+  database selection. They take effect regardless of `settings.toml`.
 - The **system keyring** is the recommended interactive store for the Nexus key
   (set it with `modde nexus auth`); it outranks `NEXUS_API_KEY_FILE` and the
   legacy `settings.toml` key, but is itself outranked by `NEXUS_API_KEY` and the
