@@ -222,9 +222,18 @@
           NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
         };
 
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        nativePackageArgs =
+          commonArgs
+          // {
+            # Switch-time package builds should compile only the shipped
+            # binaries. Full target/test coverage lives in checks.
+            cargoExtraArgs = "--locked --package modde-cli --package modde-ui --bins";
+            doCheck = false;
+          };
 
-        modde = craneLib.buildPackage (commonArgs
+        cargoArtifacts = craneLib.buildDepsOnly nativePackageArgs;
+
+        modde = craneLib.buildPackage (nativePackageArgs
           // {
             inherit cargoArtifacts;
 
