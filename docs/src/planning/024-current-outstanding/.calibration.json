@@ -1,19 +1,20 @@
 {
   "schema_version": 1,
   "plan": {
-    "id": "f3d8cec6-b6d0-4d24-8eb7-1764c10ede3f",
-    "name": "Plan: Fix and harden the modde configuration chain (core resolution → CLI → HM module → canix)",
+    "id": "a01c44a8-1cdd-4744-ab5e-d4bdca2588b9",
+    "name": "Plan: current outstanding planning work",
     "flavor": "codex",
     "worktype": null,
-    "created_at": 1780510656,
-    "phase_count": 5,
-    "wave_count": 3,
-    "max_chain_depth": 3,
+    "created_at": 1780568434,
+    "phase_count": 4,
+    "wave_count": 2,
+    "max_chain_depth": 2,
     "repo_spread": 5,
     "routing_dist": {
-      "medium": 5
+      "high": 2,
+      "medium": 2
     },
-    "shape_hash": "28cd8593187b313349f7dbcaf6fcd062a2b8d93101acbe40cc2e082f8ac1e1c3"
+    "shape_hash": "38b08939f8e5e5587f73c816f38280fb5071018fa6ffc0ad3f2c4f282c306236"
   },
   "triggers": [
     {
@@ -74,35 +75,35 @@
     },
     {
       "name": "long-serial-chain",
-      "input_value": 3.0,
+      "input_value": 2.0,
       "threshold": 4.0,
       "fired": false,
       "section_added": null
     },
     {
       "name": "mid-plan-rerouting",
-      "input_value": 5.0,
+      "input_value": 4.0,
       "threshold": 10.0,
       "fired": false,
       "section_added": null
     },
     {
       "name": "trivial-phase-swamp",
-      "input_value": 5.0,
+      "input_value": 1.0,
       "threshold": 4.0,
-      "fired": true,
-      "section_added": "Cleanup batch"
+      "fired": false,
+      "section_added": null
     },
     {
       "name": "no-integrated-verification",
-      "input_value": 1.0,
+      "input_value": 0.0,
       "threshold": 1.0,
-      "fired": true,
+      "fired": false,
       "section_added": null
     },
     {
       "name": "routing-tier-inversion",
-      "input_value": 2.0,
+      "input_value": 1.0,
       "threshold": 1.0,
       "fired": true,
       "section_added": null
@@ -125,49 +126,47 @@
   "phases": [
     {
       "ordinal": 1,
-      "slug": "core-honor-discrete-env",
+      "slug": "document-database-configuration",
       "routing_tier": "medium",
       "files": [
-        "crates/modde-core/src/db/mod.rs` — `open_postgres` (188-230) + new",
-        "crates/modde-core/src/error.rs` — context wrapping for connect/password-file",
-        "crates/modde-core/src/settings.rs` — NAME↔dbname comment at line 55; no"
+        "docs/src/SUMMARY.md` only if a new page is created.",
+        "docs/src/configuration/hm-module.md",
+        "docs/src/configuration/settings-file.md",
+        "docs/src/reference/cli.md"
       ]
     },
     {
       "ordinal": 2,
-      "slug": "canix-publish-repin-dedicated-db",
-      "routing_tier": "medium",
+      "slug": "finish-ui-async-db-cleanup",
+      "routing_tier": "high",
       "files": [
-        "canix `flake.nix`/`flake.lock`/`postgres.nix`/`can.nix` (+ rs-modde push)"
+        "crates/modde-ui/src/app.rs",
+        "crates/modde-ui/src/app/model.rs",
+        "crates/modde-ui/src/app/profile_ops.rs",
+        "crates/modde-ui/src/app/tests.rs",
+        "crates/modde-ui/src/app/tool_ops.rs",
+        "crates/modde-ui/src/app/tool_settings.rs"
       ]
     },
     {
       "ordinal": 3,
-      "slug": "cli-show-honesty-and-doctor",
+      "slug": "verify-canix-modde-database-split",
       "routing_tier": "medium",
       "files": [
-        "crates/modde-cli/src/commands/config.rs` — `handle_show` (resolver reuse +",
-        "crates/modde-cli/src/main.rs` — `ConfigAction` enum (+ `Test`, optional"
+        "Ideally none if the source state and live state already match.",
+        "If source is incomplete: `/data/nvme0/can/Projects/canix/flake.nix`,"
       ]
     },
     {
       "ordinal": 4,
-      "slug": "hm-module-assertions-and-eval-checks",
-      "routing_tier": "medium",
+      "slug": "reconcile-release-tag-state",
+      "routing_tier": "high",
       "files": [
-        "flake.nix` — the two eval-HM stub modules (548-559, 588-600), the rendering",
-        "nix/hm-module.nix` — `hasDiscrete` (591) + message (595); option descriptions"
-      ]
-    },
-    {
-      "ordinal": 5,
-      "slug": "README",
-      "routing_tier": "medium",
-      "files": [
-        ".forgejo/",
-        "docs/src/**",
-        "modde-cli tests",
-        "modde-core tests"
+        "CHANGELOG.md",
+        "Cargo.toml` only if the version decision changes.",
+        "Generated release files only through the project generator, if needed.",
+        "Tags and Codeberg release state.",
+        "crates/*/CHANGELOG.md"
       ]
     }
   ],
@@ -176,7 +175,7 @@
   ],
   "tags": {
     "flavor": "codex",
-    "risk": "low",
+    "risk": "mixed",
     "scope": "cross-org"
   },
   "verify": null
