@@ -48,6 +48,8 @@ cp -rL --no-preserve=mode "${SITE_PATH}/." "${WORK_DIR}/"
 
 echo ":: Committing and pushing..."
 cd "${WORK_DIR}"
+git config user.name "${GIT_AUTHOR_NAME:-forgejo-actions}"
+git config user.email "${GIT_AUTHOR_EMAIL:-forgejo-actions@noreply.codeberg.org}"
 git add --all
 if git diff --cached --quiet; then
   echo "   No changes to deploy."
