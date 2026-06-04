@@ -28,6 +28,9 @@ if git ls-remote --exit-code "${REMOTE}" "refs/heads/${BRANCH}" >/dev/null 2>&1;
   # Clone just the pages branch (shallow, single-branch)
   git clone --depth 1 --branch "${BRANCH}" --single-branch \
     "$(git remote get-url "${REMOTE}")" "${WORK_DIR}" --quiet
+  if [ "${REMOTE}" != "origin" ]; then
+    git -C "${WORK_DIR}" remote rename origin "${REMOTE}"
+  fi
 else
   # Create a fresh orphan branch
   git init "${WORK_DIR}" --quiet
