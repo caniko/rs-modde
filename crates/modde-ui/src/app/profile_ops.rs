@@ -42,16 +42,14 @@ pub(super) async fn fork_profile(
     new_name: String,
     game_id: GameId,
 ) -> Result<ProfileWriteOutcome, String> {
-    tokio::task::spawn_blocking(move || {
-        crate::app::block_on(ProfileManager::with_db(db).fork(&source, &new_name, &game_id))
-            .map_err(|err| err.to_string())?;
-        Ok(ProfileWriteOutcome {
-            status_message: Some(format!("Profile forked as '{new_name}'")),
-            reload: true,
-        })
+    ProfileManager::with_db(db)
+        .fork(&source, &new_name, &game_id)
+        .await
+        .map_err(|err| err.to_string())?;
+    Ok(ProfileWriteOutcome {
+        status_message: Some(format!("Profile forked as '{new_name}'")),
+        reload: true,
     })
-    .await
-    .map_err(|err| err.to_string())?
 }
 
 pub(super) async fn reorder_mod(
@@ -228,41 +226,39 @@ pub(super) async fn run_experiment_write(
     save_dir: Option<PathBuf>,
     current_depth: usize,
 ) -> Result<ExperimentWriteOutcome, String> {
-    tokio::task::spawn_blocking(move || {
-        let pm = ProfileManager::with_db(db);
-        let save_dir = save_dir.as_deref();
-        match kind {
-            ExperimentWriteKind::Try => {
-                let profile_name =
-                    profile_name.ok_or_else(|| "No active profile selected".to_string())?;
-                crate::app::block_on(pm.try_profile(&profile_name, &game_id, save_dir))
-                    .map_err(|err| err.to_string())?;
-                let next_depth = current_depth.saturating_add(1);
-                Ok(ExperimentWriteOutcome {
-                    previous_profile: None,
-                    status_message: format!("Experiment started (depth {next_depth})"),
-                    reload: true,
-                })
-            }
-            ExperimentWriteKind::Rollback => {
-                let previous_profile = crate::app::block_on(pm.rollback(&game_id, save_dir))
-                    .map_err(|err| err.to_string())?;
-                Ok(ExperimentWriteOutcome {
-                    status_message: format!("Rolled back to '{previous_profile}'"),
-                    previous_profile: Some(previous_profile),
-                    reload: true,
-                })
-            }
-            ExperimentWriteKind::Commit => {
-                crate::app::block_on(pm.commit(&game_id)).map_err(|err| err.to_string())?;
-                Ok(ExperimentWriteOutcome {
-                    previous_profile: None,
-                    status_message: "Experiment committed".to_string(),
-                    reload: true,
-                })
-            }
+    let pm = ProfileManager::with_db(db);
+    match kind {
+        ExperimentWriteKind::Try => {
+            let profile_name =
+                profile_name.ok_or_else(|| "No active profile selected".to_string())?;
+            pm.try_profile(&profile_name, &game_id, save_dir.as_deref())
+                .await
+                .map_err(|err| err.to_string())?;
+            let next_depth = current_depth.saturating_add(1);
+            Ok(ExperimentWriteOutcome {
+                previous_profile: None,
+                status_message: format!("Experiment started (depth {next_depth})"),
+                reload: true,
+            })
         }
-    })
-    .await
-    .map_err(|err| err.to_string())?
+        ExperimentWriteKind::Rollback => {
+            let previous_profile = pm
+                .rollback(&game_id, save_dir.as_deref())
+                .await
+                .map_err(|err| err.to_string())?;
+            Ok(ExperimentWriteOutcome {
+                status_message: format!("Rolled back to '{previous_profile}'"),
+                previous_profile: Some(previous_profile),
+                reload: true,
+            })
+        }
+        ExperimentWriteKind::Commit => {
+            pm.commit(&game_id).await.map_err(|err| err.to_string())?;
+            Ok(ExperimentWriteOutcome {
+                previous_profile: None,
+                status_message: "Experiment committed".to_string(),
+                reload: true,
+            })
+        }
+    }
 }

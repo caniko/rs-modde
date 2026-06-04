@@ -378,7 +378,7 @@ pub(super) fn sync_optiscaler_release_options(
     selected
 }
 
-pub(super) fn current_tool_config(
+pub(super) fn current_tool_config_blocking(
     db: &modde_core::db::ModdeDb,
     game_id: &str,
     tool_id: &str,
@@ -402,31 +402,29 @@ pub(super) fn current_tool_config(
     Ok(config)
 }
 
-pub(super) fn save_tool_settings(
+pub(super) async fn current_tool_config_async(
     db: &modde_core::db::ModdeDb,
     game_id: &str,
     tool_id: &str,
-    config: &modde_games::tools::ToolConfig,
-) -> Result<(), String> {
-    save_tool_settings_with_reason(db, game_id, tool_id, config, "ui:update")
-}
-
-pub(super) fn save_tool_settings_with_reason(
-    db: &modde_core::db::ModdeDb,
-    game_id: &str,
-    tool_id: &str,
-    config: &modde_games::tools::ToolConfig,
-    reason: &str,
-) -> Result<(), String> {
-    let settings_json = serde_json::to_string(&config.settings).map_err(|err| err.to_string())?;
-    crate::app::block_on(db.save_tool_config_with_reason(
-        &GameId::from(game_id),
-        tool_id,
-        config.enabled,
-        &settings_json,
-        reason,
-    ))
-    .map_err(|err| err.to_string())
+) -> Result<modde_games::tools::ToolConfig, String> {
+    let tool = modde_games::tools::resolve_tool(tool_id)
+        .ok_or_else(|| format!("Tool is not registered: {tool_id}"))?;
+    let Some(row) = db
+        .load_tool_config(&GameId::from(game_id), tool_id)
+        .await
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(tool.default_config());
+    };
+    let mut config = modde_games::tools::ToolConfig {
+        tool_id: row.tool_id,
+        enabled: row.enabled,
+        settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+    };
+    if tool_id == "optiscaler" {
+        let _ = modde_games::tools::optiscaler::normalize_optiscaler_release_config(&mut config);
+    }
+    Ok(config)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -470,7 +468,8 @@ fn save_tool_setting_for_game_blocking(
     let tool = modde_games::tools::resolve_tool(&tool_id)
         .ok_or_else(|| format!("Unknown tool: {tool_id}"))?;
     let typed_game_id = GameId::from(game_id.as_str());
-    let mut config = load_tool_config_or_default(&db, &typed_game_id, tool, context.as_ref())?;
+    let mut config =
+        load_tool_config_or_default_blocking(&db, &typed_game_id, tool, context.as_ref())?;
     if tool_id == "optiscaler" {
         let _ = modde_games::tools::optiscaler::normalize_optiscaler_release_config(&mut config);
     }
@@ -521,7 +520,7 @@ fn save_tool_setting_for_game_blocking(
         }
         sync_optiscaler_release_options(&mut option_catalog, &optiscaler_releases, &mut config);
     }
-    save_tool_config_with_reason(
+    save_tool_config_with_reason_blocking(
         &db,
         &typed_game_id,
         &tool_id,
@@ -529,7 +528,7 @@ fn save_tool_setting_for_game_blocking(
         &format!("ui:set:{key}"),
     )?;
     if config.enabled {
-        generate_tool_configs(&typed_game_id, &db)?;
+        generate_tool_configs_blocking(&typed_game_id, &db)?;
     }
     Ok(ToolSettingWriteResult {
         status_message: format!("Updated {} setting", tool.display_name()),
@@ -545,38 +544,48 @@ pub(super) async fn toggle_tool_for_game(
     context: Option<modde_games::tools::ToolGameContext>,
 ) -> Result<ToolSettingWriteResult, String> {
     tokio::task::spawn_blocking(move || {
-        let tool = modde_games::tools::resolve_tool(&tool_id)
-            .ok_or_else(|| format!("Unknown tool: {tool_id}"))?;
-        let typed_game_id = GameId::from(game_id.as_str());
-        let settings_json = crate::app::block_on(db.load_tool_config(&typed_game_id, &tool_id))
-            .map_err(|err| err.to_string())?
-            .map_or_else(
-                || {
-                    serde_json::to_string(&tool.default_config_for(context.as_ref()).settings)
-                        .unwrap_or_else(|_| "{}".to_string())
-                },
-                |row| row.settings_json,
-            );
-        crate::app::block_on(db.save_tool_config_with_reason(
-            &typed_game_id,
-            &tool_id,
-            enabled,
-            &settings_json,
-            if enabled { "ui:enable" } else { "ui:disable" },
-        ))
-        .map_err(|err| err.to_string())?;
-        generate_tool_configs(&typed_game_id, &db)?;
-        Ok(ToolSettingWriteResult {
-            status_message: format!(
-                "{} {}",
-                tool.display_name(),
-                if enabled { "enabled" } else { "disabled" }
-            ),
-            tool_option_catalog: None,
-        })
+        toggle_tool_for_game_blocking(db, game_id, tool_id, enabled, context)
     })
     .await
     .map_err(|err| err.to_string())?
+}
+
+fn toggle_tool_for_game_blocking(
+    db: modde_core::db::ModdeDb,
+    game_id: String,
+    tool_id: String,
+    enabled: bool,
+    context: Option<modde_games::tools::ToolGameContext>,
+) -> Result<ToolSettingWriteResult, String> {
+    let tool = modde_games::tools::resolve_tool(&tool_id)
+        .ok_or_else(|| format!("Unknown tool: {tool_id}"))?;
+    let typed_game_id = GameId::from(game_id.as_str());
+    let settings_json = crate::app::block_on(db.load_tool_config(&typed_game_id, &tool_id))
+        .map_err(|err| err.to_string())?
+        .map_or_else(
+            || {
+                serde_json::to_string(&tool.default_config_for(context.as_ref()).settings)
+                    .unwrap_or_else(|_| "{}".to_string())
+            },
+            |row| row.settings_json,
+        );
+    crate::app::block_on(db.save_tool_config_with_reason(
+        &typed_game_id,
+        &tool_id,
+        enabled,
+        &settings_json,
+        if enabled { "ui:enable" } else { "ui:disable" },
+    ))
+    .map_err(|err| err.to_string())?;
+    generate_tool_configs_blocking(&typed_game_id, &db)?;
+    Ok(ToolSettingWriteResult {
+        status_message: format!(
+            "{} {}",
+            tool.display_name(),
+            if enabled { "enabled" } else { "disabled" }
+        ),
+        tool_option_catalog: None,
+    })
 }
 
 pub(super) async fn restore_tool_settings_for_game(
@@ -586,19 +595,28 @@ pub(super) async fn restore_tool_settings_for_game(
     node_id: String,
 ) -> Result<ToolSettingWriteResult, String> {
     tokio::task::spawn_blocking(move || {
-        let typed_game_id = GameId::from(game_id.as_str());
-        crate::app::block_on(db.restore_tool_setting_node(&typed_game_id, &tool_id, &node_id))
-            .map_err(|err| err.to_string())?;
-        generate_tool_configs(&typed_game_id, &db)?;
-        let display_name = modde_games::tools::resolve_tool(&tool_id)
-            .map_or_else(|| tool_id.clone(), |tool| tool.display_name().to_string());
-        Ok(ToolSettingWriteResult {
-            status_message: format!("Restored {display_name} settings version"),
-            tool_option_catalog: None,
-        })
+        restore_tool_settings_for_game_blocking(db, game_id, tool_id, node_id)
     })
     .await
     .map_err(|err| err.to_string())?
+}
+
+fn restore_tool_settings_for_game_blocking(
+    db: modde_core::db::ModdeDb,
+    game_id: String,
+    tool_id: String,
+    node_id: String,
+) -> Result<ToolSettingWriteResult, String> {
+    let typed_game_id = GameId::from(game_id.as_str());
+    crate::app::block_on(db.restore_tool_setting_node(&typed_game_id, &tool_id, &node_id))
+        .map_err(|err| err.to_string())?;
+    generate_tool_configs_blocking(&typed_game_id, &db)?;
+    let display_name = modde_games::tools::resolve_tool(&tool_id)
+        .map_or_else(|| tool_id.clone(), |tool| tool.display_name().to_string());
+    Ok(ToolSettingWriteResult {
+        status_message: format!("Restored {display_name} settings version"),
+        tool_option_catalog: None,
+    })
 }
 
 pub(super) async fn save_optiscaler_release_selection_for_game(
@@ -673,7 +691,8 @@ pub(super) async fn adopt_optiscaler_for_game(
         let typed_game_id = GameId::from(game_id.as_str());
         let tool = modde_games::tools::resolve_tool("optiscaler")
             .ok_or_else(|| "OptiScaler tool is not registered".to_string())?;
-        let mut config = load_tool_config_or_default(&db, &typed_game_id, tool, context.as_ref())?;
+        let mut config =
+            load_tool_config_or_default_blocking(&db, &typed_game_id, tool, context.as_ref())?;
         modde_games::tools::optiscaler::apply_game_defaults(&mut config, context.as_ref());
         let managed = modde_games::tools::optiscaler::managed_paths_from_config(&config);
         let state =
@@ -698,7 +717,13 @@ pub(super) async fn adopt_optiscaler_for_game(
             "managed_manifest",
             modde_games::tools::optiscaler::managed_manifest_json(&game_dir, &applied),
         );
-        save_tool_config_with_reason(&db, &typed_game_id, "optiscaler", &config, "ui:adopt")?;
+        save_tool_config_with_reason_blocking(
+            &db,
+            &typed_game_id,
+            "optiscaler",
+            &config,
+            "ui:adopt",
+        )?;
         crate::app::block_on(db.clear_applied_files(&typed_game_id, "optiscaler"))
             .map_err(|err| err.to_string())?;
         crate::app::block_on(db.save_applied_files(&typed_game_id, "optiscaler", &paths))
@@ -732,7 +757,7 @@ pub(super) async fn reset_optiscaler_config_for_game(
     })
 }
 
-fn load_tool_config_or_default(
+fn load_tool_config_or_default_blocking(
     db: &modde_core::db::ModdeDb,
     game_id: &GameId,
     tool: &'static dyn modde_games::tools::GameTool,
@@ -770,7 +795,7 @@ async fn load_tool_config_or_default_async(
     ))
 }
 
-fn save_tool_config_with_reason(
+fn save_tool_config_with_reason_blocking(
     db: &modde_core::db::ModdeDb,
     game_id: &GameId,
     tool_id: &str,
@@ -788,7 +813,7 @@ fn save_tool_config_with_reason(
     .map_err(|err| err.to_string())
 }
 
-async fn save_tool_config_with_reason_async(
+pub(super) async fn save_tool_config_with_reason_async(
     db: &modde_core::db::ModdeDb,
     game_id: &GameId,
     tool_id: &str,
@@ -801,7 +826,10 @@ async fn save_tool_config_with_reason_async(
         .map_err(|err| err.to_string())
 }
 
-fn generate_tool_configs(game_id: &GameId, db: &modde_core::db::ModdeDb) -> Result<(), String> {
+fn generate_tool_configs_blocking(
+    game_id: &GameId,
+    db: &modde_core::db::ModdeDb,
+) -> Result<(), String> {
     crate::app::block_on(modde_games::launcher::generate_tool_configs(game_id, db))
         .map_err(|err| err.to_string())
 }
