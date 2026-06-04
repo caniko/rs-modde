@@ -351,6 +351,8 @@ impl From<ScreenArg> for modde_ui::screenshot::Screen {
 enum ConfigAction {
     /// Show the resolved configuration (database backend and its source)
     Show,
+    /// Open the resolved database and run a connection probe
+    Test,
     /// Set the database backend and `PostgreSQL` connection parameters
     SetDatabase {
         /// Backend to use: `sqlite` (default) or `postgres`
@@ -371,7 +373,12 @@ enum ConfigAction {
         /// Path to a file containing the `PostgreSQL` password
         #[arg(long)]
         password_file: Option<PathBuf>,
+        /// Clear a stored database field from settings.toml
+        #[arg(long = "clear")]
+        clear: Vec<commands::config::ClearDatabaseField>,
     },
+    /// Reset the stored database backend to `SQLite` and clear `PostgreSQL` fields
+    ResetDatabase,
 }
 
 #[derive(Subcommand)]
@@ -1450,6 +1457,7 @@ fn run_command(cli: Cli) -> Result<()> {
         Commands::Config { action } => {
             return match action {
                 ConfigAction::Show => commands::config::handle_show(),
+                ConfigAction::Test => db_sync!(commands::config::handle_test()),
                 ConfigAction::SetDatabase {
                     backend,
                     url,
@@ -1458,6 +1466,7 @@ fn run_command(cli: Cli) -> Result<()> {
                     dbname,
                     user,
                     password_file,
+                    clear,
                 } => commands::config::handle_set_database(
                     &backend,
                     url,
@@ -1466,7 +1475,9 @@ fn run_command(cli: Cli) -> Result<()> {
                     dbname,
                     user,
                     password_file,
+                    &clear,
                 ),
+                ConfigAction::ResetDatabase => commands::config::handle_reset_database(),
             };
         }
         Commands::Profile { action } => db_sync!(commands::profile::handle(action)),
@@ -1859,16 +1870,19 @@ fn run_command(cli: Cli) -> Result<()> {
 /// return `false` to avoid spamming GUIs with no-op refreshes.
 fn command_mutates_state(cmd: &Commands) -> bool {
     match cmd {
-        // Pure read paths. (`config set-database` writes settings.toml, not
-        // profile/store/DB state, and the GUI reads settings independently.)
+        // Pure read paths.
         Commands::Dev { .. }
-        | Commands::Config { .. }
         | Commands::Detect
         | Commands::Diagnostics { .. }
         | Commands::Export { .. }
         | Commands::Verify { .. }
         | Commands::Collisions { .. }
         | Commands::Gui => false,
+
+        Commands::Config { action } => matches!(
+            action,
+            ConfigAction::SetDatabase { .. } | ConfigAction::ResetDatabase
+        ),
 
         Commands::Game { action } => {
             matches!(

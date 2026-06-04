@@ -107,6 +107,7 @@ pretty_assertions = "1"
 insta = "1"
 assert_cmd = "2"
 wiremock = "0.6"
+serial_test = "3"
 
 # Benchmarks + property-based tests
 criterion = { version = "0.7", features = ["html_reports"] }

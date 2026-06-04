@@ -134,6 +134,86 @@ pub struct ModdeDb {
     db: Db,
 }
 
+/// Build resolved `PostgreSQL` connection options from settings plus env.
+///
+/// The injected `env` accessor keeps this pure and deterministic for callers
+/// such as `config show` and unit tests. `MODDE_DATABASE_URL` wins over all
+/// discrete fields; otherwise each discrete env var wins over its setting.
+#[cfg(feature = "postgres")]
+pub fn build_pg_options(
+    settings: &DatabaseSettings,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Result<sqlx::postgres::PgConnectOptions> {
+    use sqlx::postgres::PgConnectOptions;
+
+    let url = env("MODDE_DATABASE_URL").or_else(|| settings.url.clone());
+    if let Some(url) = url {
+        return Ok(PgConnectOptions::from_str(&url)?);
+    }
+
+    let mut opts = PgConnectOptions::new();
+
+    if let Some(host) = env("MODDE_DATABASE_HOST").or_else(|| settings.host.clone()) {
+        opts = opts.host(&host);
+    }
+
+    let port = match env("MODDE_DATABASE_PORT") {
+        Some(raw) => Some(raw.parse::<u16>().map_err(|e| {
+            CoreError::Other(
+                format!("invalid MODDE_DATABASE_PORT value '{raw}': expected 0-65535 ({e})").into(),
+            )
+        })?),
+        None => settings.port,
+    };
+    if let Some(port) = port {
+        opts = opts.port(port);
+    }
+
+    // Home Manager exports MODDE_DATABASE_NAME; the settings field remains
+    // `dbname` to match PostgreSQL terminology and existing TOML shape.
+    let dbname = env("MODDE_DATABASE_NAME")
+        .or_else(|| settings.dbname.clone())
+        .ok_or_else(|| {
+            CoreError::Other("postgres backend selected but no database name configured".into())
+        })?;
+    opts = opts.database(&dbname);
+
+    if let Some(user) = env("MODDE_DATABASE_USER").or_else(|| settings.user.clone()) {
+        opts = opts.username(&user);
+    }
+
+    Ok(opts)
+}
+
+#[cfg(feature = "postgres")]
+pub fn describe_pg_options(opts: &sqlx::postgres::PgConnectOptions) -> String {
+    let endpoint = opts
+        .get_socket()
+        .map(|socket| format!("socket={}", socket.display()))
+        .unwrap_or_else(|| format!("host={}", opts.get_host()));
+    let database = opts.get_database().unwrap_or("<unset>");
+
+    format!(
+        "{endpoint}, port={}, dbname={database}, user={}",
+        opts.get_port(),
+        opts.get_username()
+    )
+}
+
+#[cfg(feature = "postgres")]
+fn read_pg_password_file(path: &Path) -> Result<String> {
+    let pw = std::fs::read_to_string(path).map_err(|e| {
+        CoreError::Other(
+            format!(
+                "failed to read MODDE_DB_PASSWORD_FILE/database.password_file {}: {e}",
+                path.display()
+            )
+            .into(),
+        )
+    })?;
+    Ok(pw.trim().to_string())
+}
+
 impl ModdeDb {
     /// Open the database selected by configuration (settings + environment),
     /// creating/migrating it as needed. Defaults to `SQLite` at the XDG path.
@@ -185,44 +265,34 @@ impl ModdeDb {
         })
     }
 
+    /// Run the lightest backend-agnostic query available to prove the open
+    /// connection can execute SQL.
+    pub async fn ping(&self) -> Result<()> {
+        self.db
+            .fetch_one("SELECT 1", &vals![], |r| r.i64(0))
+            .await?;
+        Ok(())
+    }
+
     #[cfg(feature = "postgres")]
     async fn open_postgres(settings: &DatabaseSettings) -> Result<Self> {
-        use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+        use sqlx::postgres::PgPoolOptions;
 
-        let url = std::env::var("MODDE_DATABASE_URL")
-            .ok()
-            .or_else(|| settings.url.clone());
-
-        let mut opts = if let Some(url) = url {
-            PgConnectOptions::from_str(&url)?
-        } else {
-            let mut o = PgConnectOptions::new();
-            if let Some(host) = &settings.host {
-                o = o.host(host);
-            }
-            if let Some(port) = settings.port {
-                o = o.port(port);
-            }
-            let dbname = settings.dbname.as_deref().ok_or_else(|| {
-                CoreError::Other("postgres backend selected but no database name configured".into())
-            })?;
-            o = o.database(dbname);
-            if let Some(user) = &settings.user {
-                o = o.username(user);
-            }
-            o
-        };
+        let mut opts = build_pg_options(settings, &|key| std::env::var(key).ok())?;
 
         let pw_path = std::env::var("MODDE_DB_PASSWORD_FILE")
             .ok()
             .map(PathBuf::from)
             .or_else(|| settings.password_file.clone());
         if let Some(path) = pw_path {
-            let pw = std::fs::read_to_string(&path)?;
-            opts = opts.password(pw.trim());
+            let pw = read_pg_password_file(&path)?;
+            opts = opts.password(&pw);
         }
 
-        let pool = PgPoolOptions::new().connect_with(opts).await?;
+        let summary = describe_pg_options(&opts);
+        let pool = PgPoolOptions::new().connect_with(opts).await.map_err(|e| {
+            CoreError::Other(format!("failed to connect to postgres ({summary}): {e}").into())
+        })?;
         migrate::migrate_postgres(&pool).await?;
         Ok(Self {
             db: Db::Postgres(pool),

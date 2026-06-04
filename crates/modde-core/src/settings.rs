@@ -35,10 +35,11 @@ pub struct AppSettings {
 ///
 /// Every field is `#[serde(default)]`, so existing config files round-trip and
 /// default to `SQLite`. Environment variables override these at startup
-/// (`MODDE_DATABASE_BACKEND`, `MODDE_DATABASE_URL`, `MODDE_DB_PASSWORD_FILE`) so
-/// the Home Manager module can configure the backend declaratively without
-/// rewriting `settings.toml`. The `PostgreSQL` password is never stored here — it
-/// is read at runtime from `password_file`.
+/// (`MODDE_DATABASE_BACKEND`, `MODDE_DATABASE_URL`, the discrete
+/// `MODDE_DATABASE_HOST`/`PORT`/`NAME`/`USER` fields, and
+/// `MODDE_DB_PASSWORD_FILE`) so the Home Manager module can configure the
+/// backend declaratively without rewriting `settings.toml`. The `PostgreSQL`
+/// password is never stored here — it is read at runtime from `password_file`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DatabaseSettings {
     #[serde(default)]
@@ -51,6 +52,8 @@ pub struct DatabaseSettings {
     pub host: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub port: Option<u16>,
+    /// Database name. The matching environment variable is
+    /// `MODDE_DATABASE_NAME`, not `MODDE_DATABASE_DBNAME`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dbname: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -299,6 +302,70 @@ mod tests {
         assert_eq!(s.nexus_api_key, "mykey");
         assert!(s.game_paths.is_empty());
         assert!(s.selected_game.is_none());
+    }
+
+    #[test]
+    fn missing_database_table_defaults_to_sqlite() {
+        let settings: AppSettings = toml::from_str(
+            r#"
+            nexus_api_key = "legacy-key"
+            selected_game = "skyrim-se"
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(settings.database.backend, DbBackend::Sqlite);
+        assert!(settings.database.url.is_none());
+        assert!(settings.database.host.is_none());
+        assert!(settings.database.port.is_none());
+        assert!(settings.database.dbname.is_none());
+        assert!(settings.database.user.is_none());
+        assert!(settings.database.password_file.is_none());
+    }
+
+    #[test]
+    fn db_backend_parse_accepts_aliases_and_round_trips() {
+        assert_eq!(DbBackend::parse("SQLite"), Some(DbBackend::Sqlite));
+        assert_eq!(DbBackend::parse("POSTGRES"), Some(DbBackend::Postgres));
+        assert_eq!(DbBackend::parse(" pg "), Some(DbBackend::Postgres));
+        assert_eq!(DbBackend::parse("postgresql"), Some(DbBackend::Postgres));
+        assert_eq!(DbBackend::parse("mysql"), None);
+
+        for backend in [DbBackend::Sqlite, DbBackend::Postgres] {
+            assert_eq!(DbBackend::parse(backend.as_str()), Some(backend));
+        }
+    }
+
+    #[test]
+    fn database_settings_round_trip_preserves_set_fields_and_skips_none() {
+        let settings = DatabaseSettings {
+            backend: DbBackend::Postgres,
+            url: None,
+            host: Some("db.example.test".to_string()),
+            port: Some(15432),
+            dbname: Some("modde".to_string()),
+            user: Some("modde_user".to_string()),
+            password_file: Some(PathBuf::from("/run/secrets/modde-db-password")),
+        };
+
+        let toml = toml::to_string(&settings).unwrap();
+
+        assert!(toml.contains("backend = \"postgres\""));
+        assert!(toml.contains("host = \"db.example.test\""));
+        assert!(toml.contains("port = 15432"));
+        assert!(toml.contains("dbname = \"modde\""));
+        assert!(toml.contains("user = \"modde_user\""));
+        assert!(toml.contains("password_file = \"/run/secrets/modde-db-password\""));
+        assert!(!toml.contains("url ="));
+
+        let loaded: DatabaseSettings = toml::from_str(&toml).unwrap();
+        assert_eq!(loaded.backend, settings.backend);
+        assert_eq!(loaded.url, settings.url);
+        assert_eq!(loaded.host, settings.host);
+        assert_eq!(loaded.port, settings.port);
+        assert_eq!(loaded.dbname, settings.dbname);
+        assert_eq!(loaded.user, settings.user);
+        assert_eq!(loaded.password_file, settings.password_file);
     }
 
     #[test]

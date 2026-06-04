@@ -68,6 +68,7 @@ tempfile = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 criterion = { workspace = true }
 proptest = { workspace = true }
+serial_test = { workspace = true }
 
 [[bench]]
 name = "vfs_deploy"
