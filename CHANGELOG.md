@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-07
+
+### Fixed
+
+- **Release ops**: Updated the committed minisign public key to match the
+  Codeberg release signing secret so checksum signing passes preflight.
+
 ## [0.3.0] - 2026-06-03
 
 ### Added
@@ -89,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Diagnostics**: Form 43 detection, missing master detection, shadowed mod detection, load order validation
 - **Nix**: Flake with binary, docs, and website outputs; home-manager module for declarative configuration
 
-[Unreleased]: https://codeberg.org/caniko/rs-modde/compare/0.3.0...HEAD
+[Unreleased]: https://codeberg.org/caniko/rs-modde/compare/0.3.1...HEAD
+[0.3.1]: https://codeberg.org/caniko/rs-modde/compare/0.3.0...0.3.1
 [0.3.0]: https://codeberg.org/caniko/rs-modde/compare/0.2.1...0.3.0
 [0.2.1]: https://codeberg.org/caniko/rs-modde/compare/0.2.0...0.2.1
