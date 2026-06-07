@@ -49,6 +49,8 @@ jobs:
       NIX_CONFIG: |
         experimental-features = nix-command flakes
         accept-flake-config = true
+        substituters = https://attic.candee.baby/canix https://cache.nixos.org
+        trusted-public-keys = canix:lPzPzKrmYqW5Rxa5r0uQWvCqD3S5nx0h2eCy7XD5JM8= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
       XDG_CACHE_HOME: "/tmp/.cache"
     steps:
       - uses: https://code.forgejo.org/actions/checkout@v4
@@ -86,6 +88,27 @@ jobs:
           validated_sha="$(git -C "$tag_worktree" rev-parse HEAD)"
           git checkout --detach "$validated_sha"
           { printf 'VERSION=%s\n' "$VERSION"; printf 'IS_PRERELEASE=%s\n' "$IS_PRERELEASE"; } > release-env
+      - name: Check release credentials
+        env:
+          CODEBERG_TOKEN: ${{ secrets.codeberg_token }}
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          . ./release-env
+          test -n "${CODEBERG_TOKEN:-}"
+          test -s keys/minisign.pub
+          test -n "${MINISIGN_SECRET_KEY:-}"
+          test -n "${MINISIGN_PASSWORD:-}"
+          umask 077
+          minisign_key="$(mktemp)"; minisign_probe="$(mktemp)"; minisign_sig="${minisign_probe}.minisig"
+          trap 'rm -f "$minisign_key" "$minisign_probe" "$minisign_sig"' EXIT
+          printf '%s' "$MINISIGN_SECRET_KEY" > "$minisign_key"
+          printf 'simit release credentials probe\n' > "$minisign_probe"
+          printf '%s\n' "$MINISIGN_PASSWORD" | \
+            nix shell nixpkgs#minisign -c minisign -S -s "$minisign_key" -m "$minisign_probe" -x "$minisign_sig"
+          nix shell nixpkgs#minisign -c minisign -V -m "$minisign_probe" -x "$minisign_sig" -p keys/minisign.pub
+          test -r "${ATTIC_TOKENS_DIR:?}/rs-modde"
       - name: Rewrite modde.spec Version
         run: |
           . ./release-env
@@ -98,7 +121,7 @@ jobs:
         run: |
           set -euo pipefail
           . ./release-env
-          git archive --format=tar.gz --prefix=rs-modde/ -o "rs-modde-v${VERSION}.tar.gz" HEAD
+          git archive --format=tar.gz --prefix=rs-modde/ -o "rs-modde-${VERSION}.tar.gz" HEAD
           nix shell nixpkgs#rpm nixpkgs#cargo nixpkgs#rustc -c bash <<'SCRIPT'
           set -euo pipefail
           tar xf rs-modde-*.tar.gz
@@ -233,8 +256,8 @@ jobs:
           else
             echo '::warning::WINDOWS_SIGNING_PFX/PASS unset; publishing unsigned Windows EXEs.'
           fi
-          tar czf "release/modde-${VERSION}-x86_64-windows.tar.gz" -C release/windows-x86_64 .
-          nix shell nixpkgs#zip -c bash -c "cd release/windows-x86_64 && zip -q \"$OLDPWD/release/modde-${VERSION}-x86_64-windows.zip\" ./*"
+          tar czf "release/modde-${VERSION}-x86_64-windows.tar.gz" -C release/windows-x86_64 modde.exe modde-ui.exe
+          nix shell nixpkgs#zip -c bash -c "cd release/windows-x86_64 && zip -q \"$OLDPWD/release/modde-${VERSION}-x86_64-windows.zip\" modde.exe modde-ui.exe"
           cp release/windows-x86_64/modde.exe "release/modde-${VERSION}-x86_64-windows.exe"
           cp release/windows-x86_64/modde-ui.exe "release/modde-ui-${VERSION}-x86_64-windows.exe"
       - name: Generate release checksums
