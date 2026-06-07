@@ -1,13 +1,13 @@
 %global crate modde
 
 Name:           modde
-Version:        0.3.2
+Version:        0.3.3
 Release:        1%{?dist}
 Summary:        Cross-platform game mod manager
 
 License:        GPL-3.0-only
 URL:            https://codeberg.org/caniko/rs-modde
-Source0:        %{url}/archive/v%{version}.tar.gz#/rs-modde-v%{version}.tar.gz
+Source0:        %{url}/archive/v%{version}.tar.gz#/rs-modde-%{version}.tar.gz
 Source1:        vendor.tar.gz
 
 BuildRequires:  rust >= 1.85
