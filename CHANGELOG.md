@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-06-07
+
+### Fixed
+
+- **Release ops**: Allow the workspace's `GPL-3.0-only` license expression in
+  the release supply-chain policy.
+
 ## [0.3.1] - 2026-06-07
 
 ### Fixed
@@ -96,7 +103,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Diagnostics**: Form 43 detection, missing master detection, shadowed mod detection, load order validation
 - **Nix**: Flake with binary, docs, and website outputs; home-manager module for declarative configuration
 
-[Unreleased]: https://codeberg.org/caniko/rs-modde/compare/0.3.1...HEAD
+[Unreleased]: https://codeberg.org/caniko/rs-modde/compare/0.3.2...HEAD
+[0.3.2]: https://codeberg.org/caniko/rs-modde/compare/0.3.1...0.3.2
 [0.3.1]: https://codeberg.org/caniko/rs-modde/compare/0.3.0...0.3.1
 [0.3.0]: https://codeberg.org/caniko/rs-modde/compare/0.2.1...0.3.0
 [0.2.1]: https://codeberg.org/caniko/rs-modde/compare/0.2.0...0.2.1
