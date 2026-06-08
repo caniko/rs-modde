@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-06-08
+
+### Fixed
+
+- **Release ops**: Regenerated the release workflow so unsigned Windows archive
+  packaging does not rely on `OLDPWD` under strict shell mode, and regenerated
+  CI workflows so release tags do not queue per-crate checks ahead of the
+  artifact publisher.
+
 ## [0.3.7] - 2026-06-08
 
 ### Fixed

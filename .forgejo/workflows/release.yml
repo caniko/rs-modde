@@ -273,7 +273,8 @@ jobs:
             echo '::warning::WINDOWS_SIGNING_PFX/PASS unset; publishing unsigned Windows EXEs.'
           fi
           tar czf "release/modde-${VERSION}-x86_64-windows.tar.gz" -C release/windows-x86_64 modde.exe modde-ui.exe
-          nix shell nixpkgs#zip -c bash -c "cd release/windows-x86_64 && zip -q \"$OLDPWD/release/modde-${VERSION}-x86_64-windows.zip\" modde.exe modde-ui.exe"
+          zip_out="$PWD/release/modde-${VERSION}-x86_64-windows.zip"
+          nix shell nixpkgs#zip -c bash -c 'cd "$1" && shift && zip -q "$1" "$@"' _ release/windows-x86_64 "$zip_out" modde.exe modde-ui.exe
           cp release/windows-x86_64/modde.exe "release/modde-${VERSION}-x86_64-windows.exe"
           cp release/windows-x86_64/modde-ui.exe "release/modde-ui-${VERSION}-x86_64-windows.exe"
       - name: Generate release checksums

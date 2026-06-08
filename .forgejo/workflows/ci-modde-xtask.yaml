@@ -4,6 +4,7 @@ name: CI
 on:
   push:
     branches: ["**"]
+    tags-ignore: ["**"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
