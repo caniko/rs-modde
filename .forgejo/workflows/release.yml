@@ -211,21 +211,29 @@ jobs:
           mkdir -p release
           nix shell nixpkgs#debootstrap nixpkgs#cargo nixpkgs#rustc -c bash <<'SCRIPT'
           set -euo pipefail
+          if [ "$(id -u)" -eq 0 ]; then
+            priv() { "$@"; }
+          elif command -v sudo >/dev/null 2>&1; then
+            priv() { sudo "$@"; }
+          else
+            echo "::error::Building Debian release packages requires root privileges or sudo in the release runner image" >&2
+            exit 1
+          fi
           root="$(mktemp -d)"
           cargo_bin="$(readlink -f "$(command -v cargo)")"; cargo_dir="$(dirname "$cargo_bin")"
-          cleanup() { set +e; sudo umount "$root/work" 2>/dev/null; sudo umount "$root/nix/store" 2>/dev/null; sudo rm -rf "$root"; }
+          cleanup() { set +e; priv umount "$root/work" 2>/dev/null; priv umount "$root/nix/store" 2>/dev/null; priv rm -rf "$root"; }
           trap cleanup EXIT
-          sudo debootstrap --variant=minbase bookworm "$root" http://deb.debian.org/debian
-          sudo mkdir -p "$root/work" "$root/nix/store"
-          sudo mount --bind /nix/store "$root/nix/store"
-          sudo mount --bind "$PWD" "$root/work"
-          sudo chroot "$root" apt-get update
-          sudo chroot "$root" apt-get install -y --no-install-recommends \
+          priv debootstrap --variant=minbase bookworm "$root" http://deb.debian.org/debian
+          priv mkdir -p "$root/work" "$root/nix/store"
+          priv mount --bind /nix/store "$root/nix/store"
+          priv mount --bind "$PWD" "$root/work"
+          priv chroot "$root" apt-get update
+          priv chroot "$root" apt-get install -y --no-install-recommends \
             ca-certificates gcc libdbus-1-dev libsqlite3-dev libssl-dev libvulkan-dev libwayland-dev libxkbcommon-dev pkg-config
-          sudo chroot "$root" env PATH="${cargo_dir}:/usr/sbin:/usr/bin:/bin" CARGO_HOME=/tmp/cargo-home CARGO_TARGET_DIR=/tmp/cargo-tools-target "$cargo_bin" install cargo-deb --locked --version 2.5.0
-          sudo chroot "$root" env PATH="/tmp/cargo-home/bin:${cargo_dir}:/usr/sbin:/usr/bin:/bin" HOME=/tmp CARGO_HOME=/tmp/cargo-home SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt CC=/usr/bin/gcc PKG_CONFIG=/usr/bin/pkg-config "$cargo_bin" deb -p modde-cli --output "/work/release/modde_${VERSION}_amd64.deb"
-          sudo chroot "$root" env PATH="/tmp/cargo-home/bin:${cargo_dir}:/usr/sbin:/usr/bin:/bin" HOME=/tmp CARGO_HOME=/tmp/cargo-home SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt CC=/usr/bin/gcc PKG_CONFIG=/usr/bin/pkg-config "$cargo_bin" deb -p modde-ui --output "/work/release/modde-ui_${VERSION}_amd64.deb"
-          sudo chown "$(id -u):$(id -g)" release/*.deb
+          priv chroot "$root" env PATH="${cargo_dir}:/usr/sbin:/usr/bin:/bin" CARGO_HOME=/tmp/cargo-home CARGO_TARGET_DIR=/tmp/cargo-tools-target "$cargo_bin" install cargo-deb --locked --version 2.5.0
+          priv chroot "$root" env PATH="/tmp/cargo-home/bin:${cargo_dir}:/usr/sbin:/usr/bin:/bin" HOME=/tmp CARGO_HOME=/tmp/cargo-home SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt CC=/usr/bin/gcc PKG_CONFIG=/usr/bin/pkg-config "$cargo_bin" deb -p modde-cli --output "/work/release/modde_${VERSION}_amd64.deb"
+          priv chroot "$root" env PATH="/tmp/cargo-home/bin:${cargo_dir}:/usr/sbin:/usr/bin:/bin" HOME=/tmp CARGO_HOME=/tmp/cargo-home SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt CC=/usr/bin/gcc PKG_CONFIG=/usr/bin/pkg-config "$cargo_bin" deb -p modde-ui --output "/work/release/modde-ui_${VERSION}_amd64.deb"
+          priv chown "$(id -u):$(id -g)" release/*.deb
           SCRIPT
       - name: Sign Windows Authenticode artifacts
         env:

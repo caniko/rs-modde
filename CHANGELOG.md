@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-06-08
+
+### Fixed
+
+- **Release ops**: Regenerated the release workflow with a Debian packaging
+  step that works on rootful trusted runners without requiring `sudo`, so
+  `.deb` asset creation can reach Codeberg release publication.
+
 ## [0.3.5] - 2026-06-08
 
 ### Fixed
