@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-06-08
+
+### Fixed
+
+- **Release ops**: Regenerated the release workflow so unsupported Debian
+  package chroot setup warns and continues, allowing Codeberg release assets to
+  publish before optional `.deb`/APT artifacts.
+
 ## [0.3.6] - 2026-06-08
 
 ### Fixed
