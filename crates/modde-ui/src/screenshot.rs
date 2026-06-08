@@ -93,7 +93,7 @@ pub struct ShotOptions {
     pub width: f32,
     /// Logical height of the window, in points.
     pub height: f32,
-    /// HiDPI scale factor. `2.0` produces crisp output.
+    /// `HiDPI` scale factor. `2.0` produces crisp output.
     pub scale: f32,
     /// modde theme name (e.g. `"Dark"`, `"Light"`, `"Dracula"`).
     pub theme: String,
@@ -207,11 +207,11 @@ pub fn capture(screen: Screen, opts: &ShotOptions) -> anyhow::Result<image::Rgba
 /// directory cannot be created, or if the PNG cannot be encoded/written.
 pub fn capture_to_png(screen: Screen, opts: &ShotOptions, out: &Path) -> anyhow::Result<()> {
     let image = capture(screen, opts)?;
-    if let Some(parent) = out.parent() {
-        if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("creating screenshot output dir {}", parent.display()))?;
-        }
+    if let Some(parent) = out.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating screenshot output dir {}", parent.display()))?;
     }
     image
         .save(out)

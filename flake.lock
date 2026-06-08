@@ -352,17 +352,17 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1780735085,
-        "narHash": "sha256-uJTn/kMZsJoLsuRDFVYVApajbQxucT5UScIr+3pb7Y8=",
+        "lastModified": 1780888642,
+        "narHash": "sha256-kcLKjGb+QVW+3GxMnkYHXz/yJSytZh1k7lk2RM28LOo=",
         "ref": "refs/heads/trunk",
-        "rev": "af473e61ab17a47ee981fb94a1cbe68dc549b035",
-        "revCount": 81,
+        "rev": "c89342d8e2e6d92335187a5d6aaa0cef782ab74b",
+        "revCount": 83,
         "type": "git",
         "url": "https://codeberg.org/caniko/simit.git"
       },
       "original": {
         "ref": "refs/heads/trunk",
-        "rev": "af473e61ab17a47ee981fb94a1cbe68dc549b035",
+        "rev": "c89342d8e2e6d92335187a5d6aaa0cef782ab74b",
         "type": "git",
         "url": "https://codeberg.org/caniko/simit.git"
       }

@@ -315,7 +315,7 @@ enum DevAction {
         /// Logical window height in points.
         #[arg(long, default_value_t = 800.0)]
         height: f32,
-        /// HiDPI scale factor (2.0 = crisp).
+        /// `HiDPI` scale factor (2.0 = crisp).
         #[arg(long, default_value_t = 2.0)]
         scale: f32,
         /// modde theme name (Dark, Light, Dracula, Nord, ...).

@@ -5,9 +5,6 @@
 name: Publish Crate
 
 on:
-  push:
-    tags:
-      - "*.*.*"
   workflow_dispatch:
     inputs:
       force_publish:

@@ -1869,15 +1869,15 @@ fn isolated_data_dir() {
 
 fn reset_isolated_db() {
     isolated_data_dir();
-    let db_path = modde_core::paths::db_path();
-    // Best-effort removal: the async sqlx pool from a previous test may still be
-    // closing its WAL-mode connections on the shared runtime, so the -wal/-shm
-    // sidecar files can be checkpointed away (or briefly recreated) concurrently
-    // with this reset. Their absence is exactly the clean state we want, so we
-    // ignore NotFound (and any benign race) rather than asserting removal.
-    let _ = std::fs::remove_file(&db_path);
-    let _ = std::fs::remove_file(db_path.with_extension("db-wal"));
-    let _ = std::fs::remove_file(db_path.with_extension("db-shm"));
+    let pm = crate::app::block_on(ProfileManager::open()).expect("open isolated DB for reset");
+    crate::app::block_on(pm.db().clear_ui_test_state()).expect("clear UI test state during reset");
+    let profiles = crate::app::block_on(pm.list()).expect("list isolated profiles for reset");
+    for profile in profiles {
+        crate::app::block_on(pm.db().clear_active_profile(&profile.game_id))
+            .expect("clear active profile during reset");
+        crate::app::block_on(pm.db().delete_profile(&profile.name, &profile.game_id))
+            .expect("delete profile during reset");
+    }
 }
 
 fn optiscaler_release(

@@ -108,7 +108,6 @@ jobs:
           printf '%s\n' "$MINISIGN_PASSWORD" | \
             nix shell nixpkgs#minisign -c minisign -S -s "$minisign_key" -m "$minisign_probe" -x "$minisign_sig"
           nix shell nixpkgs#minisign -c minisign -V -m "$minisign_probe" -x "$minisign_sig" -p keys/minisign.pub
-          test -r "${ATTIC_TOKENS_DIR:?}/rs-modde"
       - name: Rewrite modde.spec Version
         run: |
           . ./release-env
@@ -313,23 +312,6 @@ jobs:
           mkdir -p release
           if [ "${FORCE_PUBLISH:-false}" = "true" ]; then echo "smoke bypassed" | tee release/smoke-report.txt; exit 0; fi
           nix run .#release-smoke -- "$VERSION" release
-      - name: Push Nix closures to Attic
-        run: |
-          set -euo pipefail
-          test -r "$ATTIC_TOKENS_DIR/rs-modde"
-          nix path-info -r \
-            linux-result \
-            aarch64-linux-result \
-            windows-result \
-            darwin-x86-result \
-            darwin-arm-result \
-            appimage-ui-result \
-            appimage-cli-result \
-            flatpak-result \
-            > attic-paths.txt
-          nix profile install nixpkgs#attic-client
-          attic login canix https://attic.candee.baby "$(cat "$ATTIC_TOKENS_DIR/rs-modde")"
-          attic push canix $(cat attic-paths.txt)
       - name: Publish Codeberg release
         env:
           CODEBERG_TOKEN: ${{ secrets.codeberg_token }}
@@ -355,6 +337,28 @@ jobs:
             curl -sS --fail -H "Authorization: token ${CODEBERG_TOKEN}" -H 'Content-Type: application/octet-stream' --data-binary "@${file}" "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases/${release_id}/assets?name=${name}" > /dev/null
           done
           SCRIPT
+      - name: Push Nix closures to Attic
+        run: |
+          set -euo pipefail
+          attic_token_dir="${ATTIC_TOKENS_DIR:-}"
+          attic_token="${attic_token_dir}/rs-modde"
+          if [ -z "$attic_token_dir" ] || [ ! -r "$attic_token" ]; then
+            echo "::warning::Attic token ${ATTIC_TOKENS_DIR:-<unset>}/rs-modde is not readable; skipping optional Nix closure cache push."
+            exit 0
+          fi
+          nix path-info -r \
+            linux-result \
+            aarch64-linux-result \
+            windows-result \
+            darwin-x86-result \
+            darwin-arm-result \
+            appimage-ui-result \
+            appimage-cli-result \
+            flatpak-result \
+            > attic-paths.txt
+          nix profile install nixpkgs#attic-client
+          attic login canix https://attic.candee.baby "$(cat "$attic_token")"
+          attic push canix $(cat attic-paths.txt)
       - name: Publish APT repository
         env:
           APT_REPO_GPG_KEY: ${{ secrets.modde_apt_repo_gpg_key }}

@@ -1747,6 +1747,27 @@ impl ModdeDb {
             .await?;
         Ok(affected > 0)
     }
+
+    /// Clear cross-crate UI test state stored outside profiles.
+    ///
+    /// The UI integration tests share one isolated on-disk database because
+    /// the data directory override is process-global. This keeps test cleanup
+    /// in the database layer, where table ownership and ordering are explicit.
+    #[doc(hidden)]
+    pub async fn clear_ui_test_state(&self) -> Result<()> {
+        for table in [
+            "tool_setting_edges",
+            "tool_setting_nodes",
+            "tool_applied_files",
+            "game_tools",
+            "executable_configs",
+        ] {
+            self.db
+                .execute(&format!("DELETE FROM {table}"), &vals![])
+                .await?;
+        }
+        Ok(())
+    }
 }
 
 fn map_enabled_mod(r: &dyn DbRow) -> Result<EnabledMod> {

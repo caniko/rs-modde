@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-06-08
+
+### Fixed
+
+- **Release ops**: Made Codeberg release asset publication run before optional Attic cache pushes so missing runner cache tokens cannot block downloadable release files.
+
 ## [0.3.4] - 2026-06-07
 
 ### Fixed
