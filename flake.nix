@@ -26,12 +26,28 @@
     };
 
     simit = {
-      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=9f535159dee9af273a985ef56cbf7c971e448a8c";
+      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=cb24c7695e65d84411d8673f1840ab249a4e4a73";
       inputs.rs-harbor.follows = "rs-harbor";
       inputs.nixpkgs.follows = "rs-harbor/nixpkgs";
       inputs.rust-overlay.follows = "rs-harbor/rust-overlay";
       inputs.crane.follows = "rs-harbor/crane";
       inputs.flake-utils.follows = "rs-harbor/flake-utils";
+    };
+
+  plinth = {
+    url = "git+file:/data/nvme0/can/Projects/solo/plinth";
+    inputs.nixpkgs.follows = "nixpkgs";
+    inputs.rust-overlay.follows = "rust-overlay";
+    inputs.crane.follows = "crane";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+
+    visual-rubric = {
+      url = "git+file:/data/nvme0/can/Projects/visual-rubric";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.crane.follows = "crane";
+      inputs.flake-utils.follows = "flake-utils";
     };
 
     home-manager = {
@@ -46,6 +62,8 @@
     rs-harbor,
     rs-harbor-macos-sdk-pin,
     simit,
+    plinth,
+    visual-rubric,
     rust-overlay,
     flake-utils,
     nix-appimage,
@@ -72,6 +90,29 @@
         cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         moddeVersion = cargoToml.workspace.package.version or cargoToml.package.version;
         simitPackage = simit.packages.${system}.default;
+        plinthProject = plinth.packages.${system}.plinth-project;
+        visualRubric = visual-rubric.packages.${system}.default;
+        plinthProjectLocal = pkgs.writeShellApplication {
+          name = "plinth-project";
+          runtimeInputs = [toolchain.rustToolchain];
+          text = ''
+            exec cargo run --quiet \
+              --manifest-path /data/nvme0/can/Projects/solo/plinth/Cargo.toml \
+              --package plinth-project \
+              --bin plinth-project \
+              -- "$@"
+          '';
+        };
+        visualRubricLocal = pkgs.writeShellApplication {
+          name = "visual-rubric";
+          runtimeInputs = [toolchain.rustToolchain];
+          text = ''
+            exec cargo run --quiet \
+              --manifest-path /data/nvme0/can/Projects/visual-rubric/Cargo.toml \
+              --bin visual-rubric \
+              -- "$@"
+          '';
+        };
         simitCli = pkgs.writeShellApplication {
           name = "simit";
           text = ''
@@ -133,33 +174,33 @@
           '';
         };
 
-        # Presentation website built with Zola (custom templates)
+        # Presentation website built by the typed Rust/Leptos static generator.
         website = pkgs.stdenv.mkDerivation {
           pname = "modde-website";
           version = moddeVersion;
           src = lib.fileset.toSource {
             root = ./.;
             fileset = lib.fileset.unions [
-              ./website
+              ./website/static
+              ./website/plinth-project.toml
               ./docs/capability-matrix.toml
             ];
           };
-          nativeBuildInputs = [pkgs.zola];
+          nativeBuildInputs = [plinthProject];
           phases = ["buildPhase" "installPhase"];
           buildPhase = ''
-            cp -r --no-preserve=mode $src/website site
-            mkdir -p site/data
-            cp $src/docs/capability-matrix.toml site/data/capability-matrix.toml
-            cd site
-            zola build
+            plinth-project render \
+              --config $src/website/plinth-project.toml \
+              --out public
           '';
           installPhase = ''
             cp -r public $out
+            cp $out/style.css $out/style-20260604.css
           '';
         };
 
         # Combined site: website at root, docs at /docs/
-        site = pkgs.runCommand "modde-site" {} ''
+        site = pkgs.runCommand "modde-project-site" {} ''
           mkdir -p $out
           cp -r ${website}/* $out/
           mkdir -p $out/docs
@@ -195,7 +236,8 @@
             ./docs/capability-matrix.toml
             ./docs/src/reference/parity.md
             ./docs/src/games/supported-games.md
-            ./website/templates/comparison.html
+            ./website/static
+            ./website/plinth-project.toml
           ];
         };
 
@@ -1410,10 +1452,13 @@
               cargo-llvm-cov
               toolchain.rustToolchain
               simitCli
+              plinthProjectLocal
+              visualRubricLocal
+              plinthProject
+              visualRubric
               just
               _7zz
               unrar
-              zola
               mdbook
             ]
             ++ nativeBuildInputs
@@ -1503,7 +1548,6 @@
           target_branch = "trunk";
         };
         release.artifacts = {
-          runner = "atlas-nix-trusted";
           version_attr = "modde";
           substituters = ["https://attic.candee.baby/canix" "https://cache.nixos.org"];
           trusted_public_keys = ["canix:lPzPzKrmYqW5Rxa5r0uQWvCqD3S5nx0h2eCy7XD5JM8=" "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="];

@@ -1,0 +1,310 @@
+[site]
+title = "modde"
+description = "Cross-platform game mod manager for Linux, macOS, and Windows."
+base_url = "/"
+footer_note = "modde is open-source software licensed under GPL-3.0."
+primary_person = "caniko"
+
+[[people]]
+id = "caniko"
+name = "Caniko"
+url = "https://codeberg.org/caniko"
+role = "Maintainer"
+
+[[people.links]]
+label = "Codeberg"
+href = "https://codeberg.org/caniko"
+kind = "person"
+
+[[people.links]]
+label = "rs-modde source"
+href = "https://codeberg.org/caniko/rs-modde"
+kind = "source"
+
+[[nav]]
+label = "Install"
+href = "/#install"
+
+[[nav]]
+label = "Supported games"
+href = "/#supported-games"
+
+[[nav]]
+label = "Documentation"
+href = "/docs/"
+
+[[nav]]
+label = "vs MO2"
+href = "/comparison/"
+
+[[nav]]
+label = "Source"
+href = "https://codeberg.org/caniko/rs-modde"
+
+[[footer_links]]
+label = "Docs"
+href = "/docs/"
+
+[[footer_links]]
+label = "Repo"
+href = "https://codeberg.org/caniko/rs-modde"
+
+[[footer_links]]
+label = "CHANGELOG"
+href = "https://codeberg.org/caniko/rs-modde/src/branch/trunk/CHANGELOG.md"
+
+[[footer_links]]
+label = "Issues"
+href = "https://codeberg.org/caniko/rs-modde/issues"
+
+[[assets]]
+source = "static/logo.svg"
+target = "logo.svg"
+
+[[assets]]
+source = "static/logo.png"
+target = "logo.png"
+
+[[assets]]
+source = "static/screenshots/mod-list.png"
+target = "screenshots/mod-list.png"
+
+[[assets]]
+source = "static/screenshots/downloads.png"
+target = "screenshots/downloads.png"
+
+[[assets]]
+source = "static/screenshots/fomod-wizard.png"
+target = "screenshots/fomod-wizard.png"
+
+[[pages]]
+slug = "index"
+title = "modde"
+description = "Cross-platform game mod manager for Linux, macOS, and Windows."
+
+[[pages.sections]]
+type = "hero"
+logo_src = "/logo.svg"
+title = "modde"
+tagline = "A cross-platform game mod manager"
+subtitle = "Install Wabbajack modlists, Nexus Collections, and individual mods with a clean game directory on Linux, macOS, and Windows."
+person = "caniko"
+
+[[pages.sections.ctas]]
+label = "Install"
+href = "#install"
+primary = true
+
+[[pages.sections.ctas]]
+label = "Docs"
+href = "/docs/"
+
+[[pages.sections]]
+type = "feature_grid"
+
+[[pages.sections.features]]
+title = "Cross-platform"
+description = "First-class on Linux, macOS, and Windows. The CLI and desktop app run natively on every platform."
+
+[[pages.sections.features]]
+title = "Wabbajack on any OS"
+description = "Parse and install .wabbajack modlists natively without a Windows VM."
+
+[[pages.sections.features]]
+title = "Nexus integration"
+description = "Browse, search, and download from Nexus Mods; pin Nexus Collections by version."
+
+[[pages.sections.features]]
+title = "VFS deployment"
+description = "A virtual filesystem keeps your game directory pristine while mods overlay cleanly."
+
+[[pages.sections.features]]
+title = "Conflict detection"
+description = "Graph-based mod conflict analysis makes file collisions visible before deploy."
+
+[[pages.sections.features]]
+title = "Save vaults"
+description = "Git-backed save snapshots with history, restore, and compatibility warnings."
+
+[[pages.sections.features]]
+title = "Profile experiments"
+description = "Try mod changes non-destructively, then rollback or commit when done."
+
+[[pages.sections.features]]
+title = "Declarative with Nix"
+description = "Optional Home Manager integration declares reproducible mod profiles as code."
+
+[[pages.sections]]
+type = "person_mention"
+id = "maintainer"
+heading = "Maintainer"
+intro = "modde is maintained as an open-source project by Caniko."
+person = "caniko"
+
+[[pages.sections]]
+type = "install"
+id = "install"
+heading = "Install"
+intro = "Pick the route that matches how you already manage software. Each card shows one default path; the full guide covers verification and alternatives."
+guide_href = "/docs/getting-started/installation.html"
+
+[[pages.sections.primary_routes]]
+label = "Linux desktop"
+audience = "GUI users"
+href = "/docs/getting-started/installation.html#flatpak"
+command = "flatpak install flathub com.tartanoglu.modde"
+recommended = true
+
+[[pages.sections.primary_routes]]
+label = "Linux native packages"
+audience = "Distro packages"
+href = "/docs/getting-started/installation.html#linux"
+command = "yay -S modde-bin"
+
+[[pages.sections.primary_routes]]
+label = "macOS"
+audience = "Homebrew"
+href = "/docs/getting-started/installation.html#homebrew"
+command = "brew install modde"
+
+[[pages.sections.primary_routes]]
+label = "Windows"
+audience = "Package manager"
+href = "/docs/getting-started/installation.html#winget"
+command = "winget install Caniko.Modde"
+
+[[pages.sections.secondary_routes]]
+label = "Nix / Home Manager"
+audience = "Declarative"
+href = "/docs/getting-started/installation.html#nix"
+command = "nix run codeberg:caniko/rs-modde"
+
+[[pages.sections.secondary_routes]]
+label = "Cargo CLI"
+audience = "Rust users"
+href = "/docs/getting-started/installation.html#cargo"
+command = "cargo install modde-cli"
+
+[[pages.sections.secondary_routes]]
+label = "Build from source"
+audience = "Developers"
+href = "/docs/getting-started/installation.html#build-from-source"
+command = "git clone https://codeberg.org/caniko/rs-modde"
+
+[[pages.sections]]
+type = "screenshot_grid"
+id = "screenshots"
+heading = "Screenshots"
+intro = "Screenshots are generated headlessly and reproducibly from the app itself."
+
+[[pages.sections.screenshots]]
+src = "/screenshots/mod-list.png"
+alt = "Browsing the active profile's mod list"
+caption = "Mod list - the active profile's mods, grouped and ordered"
+
+[[pages.sections.screenshots]]
+src = "/screenshots/downloads.png"
+alt = "Download queue"
+caption = "Download queue - active, queued, complete, and failed downloads"
+
+[[pages.sections.screenshots]]
+src = "/screenshots/fomod-wizard.png"
+alt = "FOMOD installer wizard"
+caption = "FOMOD wizard - stepping through a guided installer"
+
+[[pages.sections]]
+type = "capability_matrix"
+id = "supported-games"
+heading = "Supported Games"
+intro_html = "Generated from the canonical <a href=\"https://codeberg.org/caniko/rs-modde/src/branch/trunk/docs/capability-matrix.toml\"><code>docs/capability-matrix.toml</code></a> source file."
+source = "../docs/capability-matrix.toml"
+
+[[pages]]
+slug = "comparison"
+title = "modde vs MO2"
+description = "How modde compares to Mod Organizer 2."
+
+[[pages.sections]]
+type = "hero"
+title = "modde vs MO2"
+tagline = "Truth-first comparison"
+subtitle = "What is fully shipped today, what is still partial, and which MO2 gaps remain."
+
+[[pages.sections.ctas]]
+label = "Install"
+href = "/#install"
+primary = true
+
+[[pages.sections.ctas]]
+label = "Docs"
+href = "/docs/"
+
+[[pages.sections]]
+type = "feature_grid"
+id = "modde-only"
+
+[[pages.sections.features]]
+title = "Git-backed save vaults"
+description = "Full history, branching, and restore for game saves."
+highlight = true
+
+[[pages.sections.features]]
+title = "Save fingerprinting"
+description = "Warns before loading a save incompatible with your current mod setup."
+highlight = true
+
+[[pages.sections.features]]
+title = "Experiment stack"
+description = "Try profile changes non-destructively and commit or roll back."
+highlight = true
+
+[[pages.sections.features]]
+title = "Declarative FOMOD configs"
+description = "TOML, JSON, and Nix configs for reproducible installers."
+highlight = true
+
+[[pages.sections.features]]
+title = "Wabbajack installation"
+description = "Install complete Wabbajack modlists natively on Linux."
+highlight = true
+
+[[pages.sections.features]]
+title = "NixOS-native"
+description = "Declarative profiles in Home Manager with no Wine manager required."
+highlight = true
+
+[[pages.sections]]
+type = "comparison"
+id = "shipped-today"
+heading = "Shipped today"
+intro = "The areas that are actually trustworthy today."
+
+[[pages.sections.rows]]
+area = "Profiles + save vaults"
+status = "Done"
+notes = "Profile switching, experiments, git-backed save history, and fingerprints are shipped."
+
+[[pages.sections.rows]]
+area = "VFS deployment"
+status = "Done"
+notes = "Symlink-farm deployment, rollback, and conflict resolution are strong differentiators on Linux."
+
+[[pages.sections.rows]]
+area = "Nexus / Wabbajack / Collections"
+status = "Done"
+notes = "These are the first-class install flows today."
+
+[[pages.sections.rows]]
+area = "Data Files / Diagnostics / Tools / Downloads views"
+status = "Partial"
+notes = "Reachable and data-backed, but not yet MO2-complete."
+
+[[pages.sections.rows]]
+area = "BAIN and non-Nexus source breadth"
+status = "Partial"
+notes = "Core plumbing exists, but UX and positioning are still incomplete."
+
+[[pages.sections.rows]]
+area = "Generic / user-defined games"
+status = "Partial"
+notes = "Arbitrary titles can be registered, without bespoke scanner or save tracker depth."

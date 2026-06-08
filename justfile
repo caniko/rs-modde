@@ -6,6 +6,16 @@ check-tool-schema-fresh:
     diff -u nix/tool-schema.nix /tmp/modde-tool-schema.nix
 
 website-serve:
-    mkdir -p website/data
-    cp docs/capability-matrix.toml website/data/capability-matrix.toml
-    cd website && zola serve
+    plinth-project serve --config website/plinth-project.toml --out website/public
+
+website-audit *ARGS:
+    plinth-project audit install --config website/plinth-project.toml --out website/public {{ARGS}}
+    just website-assert-person-links
+
+website-assert-person-links:
+    test -f website/public/index.html
+    rg -F -q 'application/ld+json' website/public/index.html
+    rg -F -q 'hero-byline' website/public/index.html
+    rg -F -q 'person-attribution' website/public/index.html
+    rg -F -q 'Caniko' website/public/index.html
+    rg -F -q 'person-mention' website/public/index.html

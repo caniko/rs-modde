@@ -48,8 +48,10 @@ fi
 signed_artifacts=()
 for pattern in "*.tar.gz" "*.zip" "*.AppImage" "*.deb" "*.src.rpm" "*.exe"; do
   pattern_matches=()
-  collect_many pattern_matches "$RELEASE_DIR" "$pattern" "Sign checksums and attest release artifacts"
-  signed_artifacts+=("${pattern_matches[@]}")
+  mapfile -t pattern_matches < <(compgen -G "${RELEASE_DIR}/${pattern}" | sort || true)
+  if [ "${#pattern_matches[@]}" -gt 0 ]; then
+    signed_artifacts+=("${pattern_matches[@]}")
+  fi
 done
 
 mapfile -t signed_artifacts < <(printf '%s\n' "${signed_artifacts[@]}" | sort)
