@@ -49,8 +49,6 @@ jobs:
       NIX_CONFIG: |
         experimental-features = nix-command flakes
         accept-flake-config = true
-        substituters = https://attic.candee.baby/canix https://cache.nixos.org
-        trusted-public-keys = canix:lPzPzKrmYqW5Rxa5r0uQWvCqD3S5nx0h2eCy7XD5JM8= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
       XDG_CACHE_HOME: "/tmp/.cache"
     steps:
       - uses: https://code.forgejo.org/actions/checkout@v4
