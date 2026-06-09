@@ -1,0 +1,38 @@
+---
+name: debug-ci
+
+'on':
+  push:
+    branches: ["debug-ci"]
+  workflow_dispatch:
+
+jobs:
+  shell-basics:
+    runs-on: atlas-nix-trusted
+    steps:
+      - run: echo "step 1: shell works"
+      - run: id
+      - run: env | sort
+      - run: pwd
+      - run: ls -la /workspace || true
+      - run: ls -la $HOME
+
+  nix-access:
+    runs-on: atlas-nix-trusted
+    steps:
+      - run: nix --version
+      - run: nix eval nixpkgs#hello.name
+      - run: echo "NIX_REMOTE=$NIX_REMOTE"
+      - run: nix store ping
+
+  checkout-node:
+    runs-on: atlas-nix-trusted
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@v4
+
+  workspace-node:
+    runs-on: atlas-nix-trusted
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@v4
+      - run: ls -la
+      - run: nix --version
