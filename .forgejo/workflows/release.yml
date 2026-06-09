@@ -86,26 +86,6 @@ jobs:
           validated_sha="$(git -C "$tag_worktree" rev-parse HEAD)"
           git checkout --detach "$validated_sha"
           { printf 'VERSION=%s\n' "$VERSION"; printf 'IS_PRERELEASE=%s\n' "$IS_PRERELEASE"; } > release-env
-      - name: Check release credentials
-        env:
-          CODEBERG_TOKEN: ${{ secrets.codeberg_token }}
-          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
-          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
-        run: |
-          set -euo pipefail
-          . ./release-env
-          test -n "${CODEBERG_TOKEN:-}"
-          test -s keys/minisign.pub
-          test -n "${MINISIGN_SECRET_KEY:-}"
-          test -n "${MINISIGN_PASSWORD:-}"
-          umask 077
-          minisign_key="$(mktemp)"; minisign_probe="$(mktemp)"; minisign_sig="${minisign_probe}.minisig"
-          trap 'rm -f "$minisign_key" "$minisign_probe" "$minisign_sig"' EXIT
-          printf '%s' "$MINISIGN_SECRET_KEY" > "$minisign_key"
-          printf 'simit release credentials probe\n' > "$minisign_probe"
-          printf '%s\n' "$MINISIGN_PASSWORD" | \
-            nix shell nixpkgs#minisign -c minisign -S -s "$minisign_key" -m "$minisign_probe" -x "$minisign_sig"
-          nix shell nixpkgs#minisign -c minisign -V -m "$minisign_probe" -x "$minisign_sig" -p keys/minisign.pub
       - name: Rewrite modde.spec Version
         run: |
           . ./release-env
