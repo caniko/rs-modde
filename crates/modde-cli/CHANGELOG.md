@@ -5,8 +5,6 @@ changelog is the authoritative release history.
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-06-03
-
 ### Added
 
 - `modde config show` and `modde config set-database` for inspecting and

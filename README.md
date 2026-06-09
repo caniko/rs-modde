@@ -310,9 +310,12 @@ Windows CLI/GUI artifacts.
 
 ## Website and docs
 
-The presentation site (`website/`) is a [Zola](https://www.getzola.org/) static
-site; the documentation (`docs/`) is an [mdBook](https://rust-lang.github.io/mdBook/).
-The combined `site` output places the website at the root and the docs under `/docs/`.
+The project site is generated from `website/plinth-project.toml` by the
+Plinth `plinth-project` tool; the documentation (`docs/`) is an
+[mdBook](https://rust-lang.github.io/mdBook/). The combined `site` output places
+the website at the root and the docs under `/docs/`.
+The public custom domain is `https://modde.tartanoglu.com/`; the Codeberg
+Pages branch must contain a `.domains` file with exactly `modde.tartanoglu.com`.
 
 ```bash
 nix build .#website
@@ -323,9 +326,19 @@ nix build .#site
 For local editing:
 
 ```bash
-cd website && zola serve   # presentation site
-cd docs && mdbook serve     # documentation
+just website-serve       # render, serve, and open the project site
+plinth-project serve --config website/plinth-project.toml --out website/public --watch --no-open
+cd docs && mdbook serve  # documentation
 ```
+
+`plinth-project serve --watch` rerenders and reloads browser tabs when the site
+config, capability matrix, or static assets change. Rust generator or renderer
+edits still require restarting the command.
+
+Publish with `nix run .#deploy-pages`. Because this site uses a custom domain,
+keep the legacy Codeberg Pages model: build `.#site`, force-push the generated
+output to the `pages` branch, include `.domains`, and point DNS at
+`rs-modde.caniko.codeberg.page`.
 
 ## Contributing
 

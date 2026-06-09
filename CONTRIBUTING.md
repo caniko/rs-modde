@@ -207,6 +207,44 @@ Channel notes worth remembering across releases:
   published Codeberg release asset for them yet; do not advertise them as
   shipped.
 
+### Website and Codeberg Pages
+
+The modde website is published at `https://modde.tartanoglu.com/` from the
+generated `site` flake output. The presentation site lives in `website/`, the
+mdBook docs live in `docs/`, and the combined output puts docs under `/docs/`.
+
+When creating or changing any website for this project family, follow the current
+Codeberg Pages split:
+
+- For a `*.codeberg.page` URL, use the new git-pages flow or Forgejo Actions
+  publishing for that repository.
+- For a custom domain, use Codeberg's legacy Pages flow until git-pages supports
+  custom domains: publish static output to a `pages` branch and include a plain
+  `.domains` file listing the custom domain.
+- For `modde.tartanoglu.com`, `nix build .#site` must produce `.domains` with
+  exactly `modde.tartanoglu.com`, and `.forgejo/workflows/pages.yml` publishes
+  that output with `nix run .#deploy-pages`.
+- Declare DNS in canix, not by hand in the Cloudflare UI. Codeberg Pages custom
+  domains use an unproxied CNAME, currently `modde -> rs-modde.caniko.codeberg.page`
+  in `/data/nvme0/can/Projects/canix/root/hosts/thething/server/cloudflare/zones/tartanoglu.nix`.
+- After DNS changes, run the canix DNS checks and plan/apply from
+  `/data/nvme0/can/Projects/canix`:
+  `nix build --no-link .#checks.x86_64-linux.dns-cloudflare-ddns-proxied-expression`,
+  `nix build --no-link .#checks.x86_64-linux.dns-ddns-covered-by-excludes`,
+  `nix build --no-link .#checks.x86_64-linux.dns-excludes-trace-to-ddns`,
+  then `XDG_RUNTIME_DIR=/run/user/$(id -u) nix run .#dns-plan-local -- --doit`.
+
+Validate a Pages deployment with:
+
+```sh
+nix build .#site
+grep -qx 'modde.tartanoglu.com' result/.domains
+nix run .#deploy-pages
+git ls-remote --heads origin pages
+curl -fsSI https://modde.tartanoglu.com/
+curl -fsSI https://modde.tartanoglu.com/docs/
+```
+
 ### Hotfix release
 
 Hotfixes ship from the last good release tag, not from `trunk`, when `trunk`

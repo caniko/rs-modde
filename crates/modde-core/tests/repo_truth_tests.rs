@@ -92,7 +92,7 @@ fn public_docs_match_capability_matrix_for_critical_statuses() {
     // the canonical matrix.
     let coverage = read_repo_file("docs/src/reference/parity.md");
     let supported_games = read_repo_file("docs/src/games/supported-games.md");
-    let comparison = read_repo_file("website/templates/comparison.html");
+    let comparison = read_repo_file("website/plinth-project.toml");
 
     let starfield = matrix.games.get("starfield").unwrap();
     assert_contains(
@@ -139,12 +139,12 @@ fn public_docs_match_capability_matrix_for_critical_statuses() {
 
     assert_contains(
         &comparison,
-        "<tr><td>Data Files / Diagnostics / Tools / Downloads views</td><td><span class=\"badge mid\">Partial</span></td>",
+        "area = \"Data Files / Diagnostics / Tools / Downloads views\"\nstatus = \"Partial\"",
         "website comparison table",
     );
     assert_contains(
         &comparison,
-        "<tr><td>Starfield save tracking</td><td><span class=\"badge high\">Done</span></td>",
+        "type = \"capability_matrix\"",
         "website comparison table",
     );
 }

@@ -627,3 +627,4 @@ jobs:
             --push \
             --push-source "$CHOCO_PUSH_SOURCE" \
             --api-key-env CHOCOLATEY_API_KEY
+

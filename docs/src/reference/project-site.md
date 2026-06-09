@@ -91,9 +91,10 @@ or pass `--browser PATH`. Use `--fake-ai` for plumbing tests without model
 credentials, or `--skip-ai` when only deterministic report data and screenshots
 are needed.
 
-The AI rubric is advisory. Browser capture and deterministic site diagnostics
-are hard failures; model failures are recorded in the report so design iteration
-can continue locally.
+The AI rubric is a local development loop, not a Forgejo CI gate. Browser
+capture and deterministic site diagnostics are hard failures for the local audit;
+model failures are recorded in the report so design iteration can continue
+without turning the runner into a credentialed AI environment.
 
 ## Reusable contract
 

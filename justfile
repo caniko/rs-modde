@@ -9,7 +9,7 @@ website-serve:
     plinth-project serve --config website/plinth-project.toml --out website/public
 
 website-audit *ARGS:
-    plinth-project audit install --config website/plinth-project.toml --out website/public {{ARGS}}
+    plinth-project audit install --config website/plinth-project.toml --out website/public --rubric-bin "${VISUAL_RUBRIC_BIN:-visual-rubric}" {{ARGS}}
     just website-assert-person-links
 
 website-assert-person-links:

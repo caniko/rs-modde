@@ -142,14 +142,13 @@ pub fn capture(screen: Screen, opts: &ShotOptions) -> anyhow::Result<image::Rgba
         Font::DEFAULT => Font::with_name("Fira Sans"),
         font => font,
     };
-    let mut renderer = iced_test::futures::futures::executor::block_on(
-        iced_test::renderer::Renderer::new(
+    let mut renderer =
+        iced_test::futures::futures::executor::block_on(iced_test::renderer::Renderer::new(
             default_font,
             settings.default_text_size,
             Some("tiny-skia"),
-        ),
-    )
-    .ok_or_else(|| anyhow!("failed to create headless tiny-skia renderer"))?;
+        ))
+        .ok_or_else(|| anyhow!("failed to create headless tiny-skia renderer"))?;
 
     let logical_size = Size::new(opts.width, opts.height);
 
@@ -164,7 +163,9 @@ pub fn capture(screen: Screen, opts: &ShotOptions) -> anyhow::Result<image::Rgba
     // 3. Pump a redraw so layout + text shaping settle before drawing.
     let mut messages = Vec::new();
     let _ = ui.update(
-        &[Event::Window(window::Event::RedrawRequested(Instant::now()))],
+        &[Event::Window(
+            window::Event::RedrawRequested(Instant::now()),
+        )],
         mouse::Cursor::Unavailable,
         &mut renderer,
         &mut clipboard::Null,
@@ -491,7 +492,9 @@ fn populate_downloads(app: &mut Modde) {
 fn enqueue_demo(app: &mut Modde, key: &str, name: &str) -> usize {
     app.download_queue.enqueue(
         key.to_string(),
-        PathBuf::from(format!("/home/demo/.local/share/modde/downloads/{key}.download")),
+        PathBuf::from(format!(
+            "/home/demo/.local/share/modde/downloads/{key}.download"
+        )),
         None,
         modde_sources::meta::DownloadMeta {
             url: format!("https://example.invalid/{key}"),

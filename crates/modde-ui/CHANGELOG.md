@@ -5,8 +5,6 @@ changelog is the authoritative release history.
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-06-03
-
 ### Added
 
 - Async profile and tool write operations backed by the shared database handle.

@@ -1,0 +1,14 @@
+---
+name: test-runner
+
+'on':
+  push:
+    branches: ["trigger-runner-test"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: atlas-nix-trusted
+    steps:
+      - run: echo "Runner works"
+      - run: nix --version

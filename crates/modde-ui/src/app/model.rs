@@ -821,7 +821,7 @@ pub(super) async fn load_profile_context(
                 .map(|info| info.profile.name),
             None => None,
         }
-            .or_else(|| profiles.first().map(|profile| profile.name.clone()))
+        .or_else(|| profiles.first().map(|profile| profile.name.clone()))
     } else {
         request.active_profile.clone()
     };
@@ -963,11 +963,9 @@ pub(super) async fn load_data_tab_conflicts(
 ) -> Result<DataTabConflicts, String> {
     compute_data_tab_conflicts(db, profile)
         .await
-        .map(|(conflicts, missing_store_mod_count)| {
-            DataTabConflicts {
-                conflicts,
-                missing_store_mod_count,
-            }
+        .map(|(conflicts, missing_store_mod_count)| DataTabConflicts {
+            conflicts,
+            missing_store_mod_count,
         })
 }
 

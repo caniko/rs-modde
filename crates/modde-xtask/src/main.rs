@@ -58,7 +58,7 @@ enum Cmd {
     /// Nix build/develop helpers.
     #[command(subcommand)]
     Nix(NixCmd),
-    /// Serve a docs site (Zola).
+    /// Serve a docs site.
     Docs {
         #[arg(default_value = "docs")]
         site: String,
@@ -148,10 +148,7 @@ fn project() -> ProjectConfig {
             srpm_dir: root.join("srpms"),
             vendor_tarball: root.join("vendor.tar.gz"),
         }),
-        docs: vec![
-            DocsSite::zola("docs", root.join("docs/site")),
-            DocsSite::zola("site", root.join("website")),
-        ],
+        docs: vec![DocsSite::zola("docs", root.join("docs/site"))],
         nix_packages: vec![
             NixPackage {
                 name: "modde".into(),

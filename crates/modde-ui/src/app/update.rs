@@ -3229,8 +3229,8 @@ fn deploy_profile_blocking(
     game_id: GameId,
 ) -> Result<String, String> {
     let pm = ProfileManager::with_db(db);
-    let profile = crate::app::block_on(pm.load(&profile_name, Some(&game_id)))
-        .map_err(|e| e.to_string())?;
+    let profile =
+        crate::app::block_on(pm.load(&profile_name, Some(&game_id))).map_err(|e| e.to_string())?;
     let resolved = modde_core::resolver::resolve(&profile).map_err(|e| e.to_string())?;
     let game_plugin = modde_games::resolve_game_plugin(game_id.as_str())
         .ok_or_else(|| format!("unsupported game: {game_id}"))?;
