@@ -10,12 +10,16 @@ jobs:
   shell-basics:
     runs-on: atlas-nix-trusted
     steps:
-      - run: echo "step 1: shell works"
+      - run: echo "==== SHELL STEP ===="
       - run: id
-      - run: env | sort
-      - run: pwd
-      - run: ls -la /workspace || true
-      - run: ls -la $HOME
+      - run: echo "HOME=$HOME PWD=$PWD"
+      - run: ls -la /workspace || echo "/workspace not found"
+      - run: echo "==== NODE CHECK ===="
+      - run: which node || echo "node not in PATH"
+      - run: node --version || echo "node not executable"
+      - run: echo "==== NET CHECK ===="
+      - run: curl -sI https://code.forgejo.org 2>&1 | head -5 || echo "code.forgejo.org unreachable"
+      - run: curl -sI https://codeberg.org 2>&1 | head -5 || echo "codeberg unreachable"
 
   nix-access:
     runs-on: atlas-nix-trusted
@@ -25,12 +29,12 @@ jobs:
       - run: echo "NIX_REMOTE=$NIX_REMOTE"
       - run: nix store ping
 
-  checkout-node:
+  uses-only:
     runs-on: atlas-nix-trusted
     steps:
       - uses: https://code.forgejo.org/actions/checkout@v4
 
-  workspace-node:
+  uses-then-run:
     runs-on: atlas-nix-trusted
     steps:
       - uses: https://code.forgejo.org/actions/checkout@v4
