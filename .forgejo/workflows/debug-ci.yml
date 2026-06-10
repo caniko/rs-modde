@@ -24,10 +24,22 @@ jobs:
   nix-access:
     runs-on: atlas-nix-trusted
     steps:
-      - run: nix --version
-      - run: nix eval nixpkgs#hello.name
+      - run: |
+          echo "=== nix step 1 ===" && nix --version && echo "=== nix step 1 OK ==="
+      - run: |
+          echo "=== nix step 2 ===" && nix eval nixpkgs#hello.name && echo "=== nix step 2 OK ==="
       - run: echo "NIX_REMOTE=$NIX_REMOTE"
-      - run: nix store ping
+      - run: |
+          echo "=== nix step 4 ===" && nix store ping && echo "=== nix step 4 OK ==="
+
+  nix-version-only:
+    runs-on: atlas-nix-trusted
+    steps:
+      - run: echo "path=$PATH"
+      - run: which nix
+      - run: nix --version
+      - run: ls -la $(which nix)
+      - run: env | grep NIX
 
   uses-only:
     runs-on: atlas-nix-trusted
