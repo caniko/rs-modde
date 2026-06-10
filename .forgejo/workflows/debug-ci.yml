@@ -38,8 +38,14 @@ jobs:
       - run: echo "path=$PATH"
       - run: which nix
       - run: nix --version
-      - run: ls -la $(which nix)
+      - run: |
+          echo "=== daemon socket ==="
+          ls -la /nix/var/nix/daemon-socket/socket 2>&1 || echo "socket not found at default path"
+          find /nix/var/nix -name socket 2>/dev/null || echo "no socket found under /nix/var/nix"
       - run: env | grep NIX
+      - run: |
+          echo "=== nix store ping ==="
+          nix store ping 2>&1 || echo "nix store ping failed"
 
   uses-only:
     runs-on: atlas-nix-trusted
