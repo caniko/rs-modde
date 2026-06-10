@@ -21,31 +21,22 @@ jobs:
       - run: curl -sI https://code.forgejo.org 2>&1 | head -5 || echo "code.forgejo.org unreachable"
       - run: curl -sI https://codeberg.org 2>&1 | head -5 || echo "codeberg unreachable"
 
-  nix-access:
+  nix-eval-basic:
     runs-on: atlas-nix-trusted
     steps:
-      - run: |
-          echo "=== nix step 1 ===" && nix --version && echo "=== nix step 1 OK ==="
-      - run: |
-          echo "=== nix step 2 ===" && nix eval nixpkgs#hello.name && echo "=== nix step 2 OK ==="
-      - run: echo "NIX_REMOTE=$NIX_REMOTE"
-      - run: |
-          echo "=== nix step 4 ===" && nix store ping && echo "=== nix step 4 OK ==="
-
-  nix-version-only:
-    runs-on: atlas-nix-trusted
-    steps:
-      - run: echo "path=$PATH"
-      - run: which nix
       - run: nix --version
-      - run: |
-          echo "=== daemon socket ==="
-          ls -la /nix/var/nix/daemon-socket/socket 2>&1 || echo "socket not found at default path"
-          find /nix/var/nix -name socket 2>/dev/null || echo "no socket found under /nix/var/nix"
-      - run: env | grep NIX
-      - run: |
-          echo "=== nix store ping ==="
-          nix store ping 2>&1 || echo "nix store ping failed"
+      - run: nix eval --expr '1+1'
+      - run: echo "NIX_REMOTE=$NIX_REMOTE"
+      - run: nix store ping
+      - run: nix registry list | head -10 || echo "no registry"
+      - run: nix eval nixpkgs#hello.name 2>&1 || echo "FAILED: nixpkgs resolution"
+
+  nix-no-daemon:
+    runs-on: atlas
+    steps:
+      - run: nix --version
+      - run: nix eval --expr '1+1'
+      - run: echo "NIX_REMOTE=$NIX_REMOTE"
 
   uses-only:
     runs-on: atlas-nix-trusted
