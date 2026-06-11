@@ -6,6 +6,7 @@ use smallvec::SmallVec;
 use crate::resolver::GameId;
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum CoreError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),

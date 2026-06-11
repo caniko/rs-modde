@@ -579,7 +579,9 @@ fn nul_terminated_string(bytes: &[u8]) -> Result<String> {
         .iter()
         .position(|byte| *byte == 0)
         .unwrap_or(bytes.len());
-    String::from_utf8(bytes[..end].to_vec()).context("invalid UTF-8 string in plugin header")
+    std::str::from_utf8(&bytes[..end])
+        .map(str::to_owned)
+        .context("invalid UTF-8 string in plugin header")
 }
 
 fn peek_signature(cursor: &mut Cursor<&[u8]>) -> Result<[u8; 4]> {
