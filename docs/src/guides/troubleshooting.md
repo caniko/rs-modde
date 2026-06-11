@@ -30,6 +30,7 @@ below.
 | `modde tool apply` says "No files to apply" | [Tool apply / revert failures](#tool-apply-revert-failures) | [Tools](tools.md) |
 | `modde tool revert` says "No applied files to revert" | [Tool apply / revert failures](#tool-apply-revert-failures) | [Tools](tools.md) |
 | OptiScaler: game crashes on first boot | [OptiScaler first-boot crash](#optiscaler-first-boot-crash) | [Tools](tools.md) |
+| Crash Logger SSE / Trainwreck log needs install-state context | [Crash-log correlation](#crash-log-correlation) | [Conflicts](conflicts.md) |
 | Save vault wants "adoption" | [Save vault issues](#save-vault-issues) | [Saves](saves.md) |
 | `save restore` warns about fingerprint mismatch | [Save vault issues](#save-vault-issues) | [Saves](saves.md) |
 | Can't reorder mods (profile locked) | [Profile is locked](#profile-is-locked) | [Profiles](profiles.md) |
@@ -205,6 +206,28 @@ modde nexus auth
 download links. You'll see an error if you try to download without Premium. For
 declarative (sops-nix / Home-Manager) key wiring, see
 [Nexus → Using sops-nix](nexus.md#using-sops-nix-declarative).
+
+## Crash-log correlation
+
+**Symptom:** You have a Crash Logger SSE or Trainwreck log and need to know
+which installed mod, plugin, DLL, or asset it points at in the current modde
+profile.
+
+**Cause:** Web analyzers and MO2/Vortex integrations can parse the log, but
+they do not have modde's local install database, profile experiment stack, or
+managed file manifest. modde's crash command is a correlation tool: it maps
+evidence mentioned by the log to the active profile. It does not claim a root
+cause unless the log itself makes that explicit.
+
+**Fix:**
+
+```bash
+modde doctor crash /path/to/crash-2026-06-11-10-38-45.log --game skyrim-se
+```
+
+Use `--profile <name>` to analyze against a non-active profile and `--json` for
+the structured report. Raw logs and reports are stored locally in the modde
+database for history; nothing is uploaded.
 
 ## Deployment fails
 

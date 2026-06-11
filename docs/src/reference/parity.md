@@ -24,6 +24,8 @@ The guardrail test `crates/modde-core/tests/repo_truth_tests.rs` fails the build
 | Nexus install pipeline | `Done` | API-key auth, browse/search (REST + GraphQL), update checks, `nxm://`, single-mod installs, and Collections are shipped. |
 | FOMOD | `Done` | Interactive wizard plus declarative TOML/JSON/Nix config generation and non-interactive application are shipped. |
 | Executable management | `Done` | Named executables with arguments, working directory, environment, Wine DLL overrides, and a configurable output (overwrite) mod, plus overwrite capture on run — in both the CLI (`modde exec` / `modde tool add-executable`) and the UI. See [Executables & external tools](../guides/executables.md). |
+| Patcher pipelines | `Partial` | CLI and Home Manager can configure required deployment-time Synthesis/command stages, import generated output mods, and redeploy. GUI editing and Rust-native patchers are future work. See [Patcher pipelines](../guides/patcher-pipelines.md). |
+| Hot-deploy | `Partial` | Experimental Cyberpunk-first path-level VFS patching for cosmetic-only mod toggles. It updates the live symlink deployment without promising that the running game reloads every touched asset immediately. |
 | Starfield save tracking | `Done` | Starfield `.sfs` files flow through the shared save-tracker path. |
 | Instance switching | `Partial` | CLI/runtime instance selection changes the active data root, but there is no MO2-style portable/global UX yet. |
 | Diagnostics | `Partial` | The CLI and UI share a real diagnostics engine fed by resolved conflicts and plugin order, but there is no MO2-style "problems" button with guided fixes. |

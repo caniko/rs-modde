@@ -189,7 +189,7 @@ modde collisions --profile first-run --all --suggest-hides
 For a broader health check (missing masters, Form 43 plugins, and more), run:
 
 ```bash
-modde diagnostics --game skyrim-se --profile first-run
+modde doctor profile --game skyrim-se --profile first-run
 ```
 
 For Bethesda games you can also sort plugin order with the LOOT masterlist

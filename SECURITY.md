@@ -26,6 +26,26 @@ modde handles:
 
 Security-relevant areas include API key storage, archive extraction (zip-slip prevention), and symlink handling (path traversal prevention).
 
+## Verifying Shared Modlists
+
+Portable `modde.lock` files are signed with Ed25519 detached signatures over the
+canonical JSON payload. Verify a shared lock before importing it:
+
+```sh
+modde lock verify modde.lock --profile my-skyrim --game skyrim-se
+```
+
+Generate a signing key with:
+
+```sh
+modde lock keygen --public modde-lock.pub.json --secret modde-lock.secret.json
+```
+
+Keep `modde-lock.secret.json` private. Publish the public key through an
+independent channel, and treat a changed public key as a key-rotation event.
+`modde lock import` refuses unsigned or tampered locks; it does not invent
+missing archives or source hashes.
+
 ## Verifying Releases
 
 Every release is built from a GPG-signed Git tag. Release CI verifies the tag

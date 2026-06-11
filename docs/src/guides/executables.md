@@ -5,6 +5,9 @@
 modde manages **named executable launch targets** — the modding tools you run *against* a game install, such as xEdit, BodySlide, Nemesis, FNIS, the Creation Kit, or LOOT. Each target stores a name, an executable path, default arguments, a working directory, environment variables, optional Wine DLL overrides, and an output mod. When you run a target, modde snapshots the mod directory, runs the tool, and **captures any new files** the tool wrote into an output mod so they survive future deploys.
 
 This feature is shipped end to end and user-reachable from both the CLI and the GUI, so it is marked **Done** in the [capability matrix](../reference/parity.md). It is distinct from [Tools & Overlays](tools.md), which manages the fixed set of six gaming overlays (MangoHud, OptiScaler, Proton, …).
+It is also distinct from [Patcher pipelines](patcher-pipelines.md): executables
+are user-invoked tools with overwrite capture, while patcher stages are
+profile-scoped deployment steps that run automatically during `modde deploy`.
 
 Configurations are stored in modde's database (the `executable_configs` table), keyed uniquely by `(game_id, name)`. Saving a target with an existing name overwrites it, so **add doubles as edit**.
 

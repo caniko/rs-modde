@@ -245,11 +245,11 @@ modde backup restore-plugins --profile my-skyrim --game skyrim-se
 
 ## Diagnostics
 
-`modde diagnostics` runs a rule engine over the fully analysed profile — resolved
+`modde doctor profile` runs a rule engine over the fully analysed profile — resolved
 load order, the archive-aware conflict map, and the collision report together:
 
 ```bash
-modde diagnostics --game skyrim-se --profile my-skyrim
+modde doctor profile --game skyrim-se --profile my-skyrim
 ```
 
 Each finding carries a severity (`ERROR`, `WARN`, `INFO`), a title and detail, the

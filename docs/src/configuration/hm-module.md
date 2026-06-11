@@ -248,6 +248,57 @@ below. The reserved keys `_game_id` and `optiscaler_profile` are ignored if set
 directly in `settings` (the module prints a warning and uses the dedicated
 `profile` option instead).
 
+### `profiles.<name>.patchers`
+
+Profile-scoped patcher stages configured before activation deploy. `modde
+deploy` owns execution, so the same required-stage behavior applies from both
+Home Manager and the CLI.
+
+- **Type:** attrs of patcher submodules, keyed by stage name
+- **Default:** `{}`
+
+Common options:
+
+| Option      | Type                         | Default | Description                          |
+| ----------- | ---------------------------- | ------- | ------------------------------------ |
+| `type`      | `synthesis-cli` or `command` | —       | Stage implementation                 |
+| `order`     | `int`                        | —       | Execution order                      |
+| `enable`    | `bool`                       | `true`  | Whether the stage runs during deploy |
+| `outputMod` | `str`                        | —       | Generated output mod                 |
+| `strict`    | `bool`                       | `true`  | Forward-compatible; v1 requires true |
+
+Synthesis stages additionally require these `settings`:
+
+| Option              | Type            | Description                         |
+| ------------------- | --------------- | ----------------------------------- |
+| `executable`        | `path` or `str` | Synthesis CLI executable            |
+| `pipelineSettings`  | `path` or `str` | Synthesis `PipelineSettings.json`   |
+| `synthesisProfile`  | `str`           | Synthesis profile nickname or GUID  |
+
+Command stages use these `settings`:
+
+| Option        | Type                   | Default | Description                     |
+| ------------- | ---------------------- | ------- | ------------------------------- |
+| `executable`  | `path` or `str`        | —       | Command executable              |
+| `args`        | list of `str`          | `[]`    | Arguments passed to the command |
+| `environment` | attrs of `str`         | `{}`    | Extra environment variables     |
+| `workingDir`  | `null`, `path`, `str`  | `null`  | Optional working directory      |
+
+```nix
+patchers = {
+  synthesis = {
+    type = "synthesis-cli";
+    order = 10;
+    outputMod = "synthesis-output";
+    settings = {
+      executable = "/tools/Synthesis/Synthesis.CLI.exe";
+      pipelineSettings = "/tools/Synthesis/PipelineSettings.json";
+      synthesisProfile = "my-skyrim";
+    };
+  };
+};
+```
+
 #### `tools.<id>.release`
 
 Pins a downloaded release asset for a release-backed tool. Today **only

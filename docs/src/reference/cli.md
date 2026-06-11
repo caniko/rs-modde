@@ -318,6 +318,28 @@ modde deploy [--profile <name>] [--game <id>]
 
 ---
 
+## `modde patcher`
+
+Configure profile-scoped patcher stages that run during deploy. See the
+[patcher pipelines guide](../guides/patcher-pipelines.md).
+
+```bash
+modde patcher list [--profile <name>] [--game <id>]
+modde patcher add-synthesis <name> --profile <name> --game <id> \
+  --executable <path> --pipeline-settings <path> \
+  --synthesis-profile <id> --output-mod <mod> --order <n>
+modde patcher add-command <name> --profile <name> --game <id> \
+  --executable <path> [--working-dir <path>] [--arg <arg>]... \
+  [--env KEY=VALUE]... --output-mod <mod> --order <n>
+modde patcher run [--profile <name>] [--game <id>]
+modde patcher enable|disable|remove <name> [--profile <name>] [--game <id>]
+```
+
+Enabled stages are required. Missing executables, settings files, invalid
+Synthesis profiles, or non-zero exits fail deploy.
+
+---
+
 ## `modde rollback`
 
 Rollback to the previous deployment.
@@ -1203,12 +1225,28 @@ modde collisions [--profile <name>] [--game <id>] [--all] [--suggest-hides]
 
 ---
 
-## `modde diagnostics`
+## `modde doctor`
 
-Run diagnostic checks for common modding issues.
+Diagnose profiles and crash logs using modde's local database. `doctor profile`
+and `doctor crash` are deterministic; `doctor explain` sends the grounded context
+to an OpenAI-compatible model and rejects hypotheses that do not cite modde
+evidence IDs.
+
+```bash
+modde doctor profile --game <id> [--profile <name>] [--json]
+modde doctor crash <log-path> --game <id> [--profile <name>] [--format auto|crash-logger-sse|trainwreck|generic] [--json]
+modde doctor explain <log-path> --game <id> [--profile <name>] [--provider local|remote] [--json]
+```
+
+`--provider local` uses the configured llama.cpp/OpenAI-compatible local server.
+`--provider remote` is explicit opt-in and requires a configured remote endpoint,
+model, and API key environment variable.
+
+Deprecated aliases retained for compatibility:
 
 ```bash
 modde diagnostics --game <id> [--profile <name>]
+modde crash analyze <log-path> --game <id> [--profile <name>]
 ```
 
 ---

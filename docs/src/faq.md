@@ -122,13 +122,20 @@ layout is documented in [Data, instances & backups](guides/data-management.md).
 
 ## Is there any telemetry?
 
-**Opt-in, and currently a no-op stub — nothing is sent.** Telemetry is gated
-behind a non-default `remote-telemetry` build feature; default builds (including
-the Nix flake and `cargo install modde-cli`) do not include it at all. Even in a
-build that does, no data is collected or transmitted unless you explicitly
-configure a telemetry endpoint and token via environment variables. With no
-endpoint configured, the code path is inert. There is no analytics in a normal
-modde install.
+**Opt-in only. Normal builds send nothing.** Remote code is gated behind the
+non-default `remote-telemetry` feature; default builds do not include it. Even
+with that feature, no data is transmitted unless you explicitly configure the
+relevant endpoint and opt-in environment variables.
+
+Crash telemetry and compatibility reporting are separate. Crash telemetry uses
+`RS_MODDE_TELEMETRY_ENDPOINT` plus `RS_MODDE_TELEMETRY_TOKEN` for modde process
+crash capture. Compatibility oracle reporting uses
+`MODDE_COMPAT_ORACLE_OPT_IN=1` plus `MODDE_COMPAT_ORACLE_ENDPOINT`, and uploads
+only derived hashes from local crash correlation: game id, coarse platform,
+hashed mod identities, hashed pair keys, hashed mod set, and hashed crash
+signature. It does not upload raw crash logs, paths, profile names, display
+names, plugin names, Nexus tokens, usernames, or install IDs. The oracle service
+returns only thresholded aggregate statistics.
 
 ## See also
 

@@ -204,6 +204,31 @@ though **A** itself is unpinned. Each variant carries enough structure (the
 offending id, the `LockReason`) for the UI or CLI to explain *why* without
 string-matching an error message.
 
+## Portable `modde.lock` exports
+
+`modde.lock` is a signed JSON snapshot of one profile's reproducible state:
+profile provenance, mod priority order, Nexus/Wabbajack source identities,
+tracked staged files with content hashes, plugin order, hidden files, patcher
+configuration and outputs, and managed tool output files.
+
+```bash
+modde lock export --profile my-skyrim --game skyrim-se --output modde.lock
+modde lock keygen --public modde-lock.pub.json --secret modde-lock.secret.json
+modde lock sign modde.lock --secret-key modde-lock.secret.json
+modde lock verify modde.lock --profile my-skyrim --game skyrim-se
+```
+
+Export is strict by default. If a mod was installed before modde recorded source
+archive hashes or staged file manifests, export fails and prints the missing
+artifact, why it is required, how to regenerate it, and the validation command.
+Use `--allow-incomplete` only for a diagnostic lock that explicitly sets
+`reproducible = false`; incomplete locks are not byte-for-byte replay promises.
+
+`modde lock import` verifies signatures and imports profile metadata, but v1
+does not silently download or fabricate missing archives. Re-run the normal
+Nexus/Wabbajack install flows to materialize files from the source identities in
+the lock.
+
 ## Experiment stack
 
 The experiment stack lets you try profile changes non-destructively, like git

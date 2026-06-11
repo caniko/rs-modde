@@ -19,6 +19,22 @@ builds the CLI only. After installing, jump to the [Quick start](quick-start.md)
 
 ## Linux
 
+Linux releases are gated by package family rather than by every downstream
+distribution name. A channel is published only after its artifact exists and its
+release smoke check passes.
+
+| Family | Primary channel | Covered distributions |
+| ------ | --------------- | --------------------- |
+| Debian | [apt](#debian--ubuntu-apt) / `.deb` | Debian, Ubuntu, Linux Mint, Pop!_OS |
+| RPM | [COPR](#fedora--rhel-copr) / SRPM | Fedora, RHEL, Rocky Linux, AlmaLinux, Bazzite, Nobara |
+| Arch | [AUR](#arch-linux-aur) | Arch, Manjaro, EndeavourOS, CachyOS |
+| Nix | [flake](#nix) / Home Manager | Nix and NixOS |
+| Universal | [Flatpak](#flatpak), [AppImage](#appimage), [tarball](#linux-direct-download) | Desktop, immutable, and gaming-focused Linux systems |
+
+Linux `x86_64` is the baseline for distro packages. Linux `aarch64` is currently
+released through the generic tarball and Nix paths unless a distro-specific
+channel adds its own `arm64` or equivalent build.
+
 ### Arch Linux (AUR)
 
 Three packages are published to the AUR; install one with your preferred helper
@@ -62,6 +78,10 @@ The repository is signed with a dedicated key (fingerprint
 tag-signing key and the minisign release key. See
 [`SECURITY.md`](https://codeberg.org/caniko/rs-modde/src/branch/trunk/SECURITY.md)
 for the signing-key policy and rotation procedure.
+
+The apt public key is a required release input. If `dist/apt/key.gpg.asc` is not
+present in a release candidate, the apt channel stays blocked until the release
+maintainer exports and validates the dedicated repository key.
 
 ### Flatpak
 

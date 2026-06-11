@@ -123,6 +123,10 @@ title = "Conflict detection"
 description = "Graph-based mod conflict analysis makes file collisions visible before deploy."
 
 [[pages.sections.features]]
+title = "Crash-log correlation"
+description = "Local Crash Logger SSE and Trainwreck logs can be mapped back to the managed profile, versions, installed files, and load order."
+
+[[pages.sections.features]]
 title = "Save vaults"
 description = "Git-backed save snapshots with history, restore, and compatibility warnings."
 

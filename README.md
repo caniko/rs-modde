@@ -46,6 +46,7 @@ The canonical status baseline for these claims lives in `docs/capability-matrix.
 - **Installers**: FOMOD is shipped end to end (interactive wizard plus declarative TOML/JSON/Nix configs); BAIN detection/execution exists but still requires the user-input selection flow
 - **Gaming tools & executables**: MangoHud, vkBasalt, GameMode, ReShade, OptiScaler, and Proton are configured and patched from both the CLI and UI; named external executables (xEdit, BodySlide, Nemesis, …) run with overwrite capture via `modde exec` / `modde tool add-executable`
 - **Diagnostics**: CLI and UI diagnostics use real plugin order plus resolved conflicts instead of placeholder inputs
+- **Crash-log correlation**: Import local Crash Logger SSE or Trainwreck logs and correlate mentioned plugins, DLLs, and assets with modde's managed profile, versions, install timestamps, and load order
 - **Reachable advanced views**: Downloads, Data Files, Diagnostics, Tools, and Executables are connected in the UI; some remain `Partial` rather than MO2-complete (see [parity audit](docs/src/reference/parity.md))
 
 ## Architecture
@@ -85,6 +86,11 @@ modde save watch --game skyrim-se  # auto-capture on changes
 # Analyze conflicts
 modde collisions --profile my-skyrim --game skyrim-se
 
+# Diagnose profile state and explain a local crash log with cited evidence
+modde doctor profile --game skyrim-se --profile my-skyrim
+modde doctor crash /path/to/crash-2026-06-11-10-38-45.log --game skyrim-se
+modde doctor explain /path/to/crash-2026-06-11-10-38-45.log --game skyrim-se --provider local
+
 # Check for updates
 modde update check --profile my-skyrim --game skyrim-se --period 1w
 
@@ -103,6 +109,12 @@ exhaustive list lives in the
 [installation guide](docs/src/getting-started/installation.md).
 
 ### Linux
+
+Linux support is released by package family: Debian/Ubuntu/Mint/Pop!_OS through
+apt and `.deb`, Fedora/RHEL/Rocky/Alma/Bazzite/Nobara through COPR/SRPM, Arch
+derivatives through AUR, Nix/NixOS through the flake and Home Manager module, and
+Flatpak/AppImage/tarballs as universal fallback channels. Each channel is
+published only after its artifact and smoke gate pass.
 
 ```bash
 # Arch (AUR) — modde-bin (prebuilt), modde (source), or modde-git (dev branch)
@@ -222,16 +234,27 @@ inputs.modde.url = "codeberg:caniko/rs-modde";
 
 ### Telemetry
 
-modde has a `remote-telemetry` Cargo feature in `modde-cli`. It is **opt-in** (off by default in published builds) and currently a **no-op stub** - the feature compiles a `detritus` client, but no live endpoint is configured. Nothing is sent anywhere today.
+modde has a `remote-telemetry` Cargo feature in `modde-cli`. It is **opt-in**
+and off by default in published builds. Normal builds send nothing.
 
-When/if a telemetry backend is stood up, this README and the CHANGELOG will document:
+When built with `remote-telemetry`, two independent remote paths can exist:
 
-- exactly what is collected,
-- the opt-in flag,
-- the endpoint URL,
-- the data retention policy.
+- Crash telemetry through `RS_MODDE_TELEMETRY_ENDPOINT` and
+  `RS_MODDE_TELEMETRY_TOKEN`, used only for modde process crash capture.
+- Compatibility oracle reporting through `MODDE_COMPAT_ORACLE_OPT_IN=1` and
+  `MODDE_COMPAT_ORACLE_ENDPOINT`, used only after local crash-log correlation.
 
-Until then: assume modde sends nothing. If you want to confirm, `cargo tree -e features` will show whether `remote-telemetry` is active in your build (it isn't, unless you explicitly enabled it).
+The compatibility oracle uploads only derived fields: schema version, client
+version, game id, coarse platform, salt epoch, hashed mod identities, hashed
+mod-pair keys, a hashed mod set, and a hashed crash signature. It never uploads
+raw crash logs, paths, profile names, display names, plugin names, Nexus tokens,
+usernames, or install IDs. Failed uploads are queued under the local telemetry
+directory and retried later. The backend suppresses query results below the
+minimum cohort threshold before returning aggregate crash-rate statistics.
+
+Until you explicitly build the feature and set the relevant opt-in environment
+variables, assume modde sends nothing. To confirm feature state, inspect
+`cargo tree -e features` from a Nix development shell.
 
 ## Home-Manager Module
 

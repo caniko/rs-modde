@@ -115,6 +115,10 @@ game can apply its own deploy strategy (for example, UE4 titles route paks into
 `Content/Paks/~mods/`). After deployment modde runs the game's `post_deploy`
 hook and configures Wine DLL overrides (`WINEDLLOVERRIDES`) for any proxy DLLs
 the mods deploy, such as `version.dll` for CET or `winmm.dll` for ASI loaders.
+If the profile has enabled [patcher pipeline](patcher-pipelines.md) stages,
+modde then runs each stage, imports its generated files into the configured
+output mod, keeps that output mod late in the profile, and redeploys before the
+next stage.
 
 ### Symlinks: absolute, not relative
 
@@ -148,6 +152,26 @@ modde deploy --profile my-skyrim --game skyrim-se
 ```bash
 modde play --game skyrim-se
 ```
+
+### Experimental hot-deploy
+
+Cyberpunk 2077 has an experimental cosmetic-only hot-deploy path:
+
+```bash
+modde hot-deploy --profile my-cyberpunk --game cyberpunk2077 --mod body-textures --enable
+modde hot-deploy --profile my-cyberpunk --game cyberpunk2077 --mod body-textures --disable --dry-run
+```
+
+Hot-deploy patches the existing profile staging tree and the live symlink
+deployment without rebuilding the full profile. It is intentionally narrower
+than `modde deploy`: Wabbajack profiles, unsupported games, missing store
+directories, unknown mods, mixed-content mods, and patches touching config,
+script, DLL, or unknown-severity files are refused. If a patch fails, recover
+with the printed `modde deploy --profile <name> --game <game>` command.
+
+This is a live filesystem patch, not a guarantee that the running game reloads
+every asset immediately. UE/Penumbra-style runtime reload support remains a
+per-game research path.
 
 ### Automatic deployment
 

@@ -123,6 +123,14 @@ status = "Partial"
 label = "Executable management"
 status = "Done"
 
+[features.patcher_pipelines]
+label = "Patcher pipelines"
+status = "Partial"
+
+[features.hot_deploy]
+label = "Hot-deploy"
+status = "Partial"
+
 [features.mod_info_dialog]
 label = "Mod information dialog"
 status = "Partial"

@@ -48,6 +48,7 @@
 - [Save management](./guides/saves.md)
 - [Tools & overlays](./guides/tools.md)
 - [Executables & external tools](./guides/executables.md)
+- [Patcher pipelines](./guides/patcher-pipelines.md)
 
 # Maintenance
 
@@ -61,17 +62,10 @@
 
 # Reference
 
+- [Contributing](./contributing.md)
 - [CLI reference](./reference/cli.md)
 - [Architecture](./reference/architecture.md)
 - [Project site design](./reference/project-site.md)
 - [MO2 parity & capability audit](./reference/parity.md)
 - [Glossary](./reference/glossary.md)
 - [FAQ](./faq.md)
-
-# Planning
-
-- [Plan 025: simit release automation](./planning/025-simit-release-automation/README.md)
-  - [Phase 01: Complete simit release workflow generation](./planning/025-simit-release-automation/01-complete-simit-release-generator.md)
-  - [Phase 02: Validate and publish the fixed simit](./planning/025-simit-release-automation/02-validate-and-publish-simit.md)
-  - [Phase 03: Adopt fixed simit in rs-modde](./planning/025-simit-release-automation/03-adopt-fixed-simit-in-rs-modde.md)
-  - [Phase 04: Backfill and verify Codeberg release assets](./planning/025-simit-release-automation/04-backfill-and-verify-release-assets.md)
