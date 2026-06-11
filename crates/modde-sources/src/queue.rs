@@ -49,6 +49,39 @@ pub struct DownloadQueue {
     next_id: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MetaStatus<'a> {
+    Queued,
+    Downloading,
+    Paused,
+    Complete,
+    Failed(&'a str),
+}
+
+impl<'a> MetaStatus<'a> {
+    fn parse(raw: &'a str) -> Self {
+        match raw {
+            "complete" => Self::Complete,
+            "paused" => Self::Paused,
+            "downloading" => Self::Downloading,
+            "queued" => Self::Queued,
+            _ => raw
+                .strip_prefix("failed: ")
+                .map_or(Self::Queued, Self::Failed),
+        }
+    }
+
+    fn as_str(self) -> &'a str {
+        match self {
+            Self::Queued => "queued",
+            Self::Downloading => "downloading",
+            Self::Paused => "paused",
+            Self::Complete => "complete",
+            Self::Failed(error) => error,
+        }
+    }
+}
+
 impl DownloadQueue {
     /// Create a new queue with the given concurrency limit.
     #[must_use]
@@ -239,13 +272,13 @@ fn sync_meta_from_state(task: &mut DownloadTask) {
     task.meta.expected_hash = task.expected_hash.or(task.meta.expected_hash);
     match &task.state {
         DownloadState::Queued => {
-            task.meta.status = "queued".to_string();
+            task.meta.status = MetaStatus::Queued.as_str().to_string();
         }
         DownloadState::Active {
             bytes_downloaded,
             total_bytes,
         } => {
-            task.meta.status = "downloading".to_string();
+            task.meta.status = MetaStatus::Downloading.as_str().to_string();
             task.meta.bytes_downloaded = *bytes_downloaded;
             task.meta.total_bytes = *total_bytes;
         }
@@ -253,12 +286,12 @@ fn sync_meta_from_state(task: &mut DownloadTask) {
             bytes_downloaded,
             total_bytes,
         } => {
-            task.meta.status = "paused".to_string();
+            task.meta.status = MetaStatus::Paused.as_str().to_string();
             task.meta.bytes_downloaded = *bytes_downloaded;
             task.meta.total_bytes = *total_bytes;
         }
         DownloadState::Complete { hash, .. } => {
-            task.meta.status = "complete".to_string();
+            task.meta.status = MetaStatus::Complete.as_str().to_string();
             task.meta.expected_hash = Some(*hash);
             if let Ok(metadata) = std::fs::metadata(&task.dest) {
                 task.meta.bytes_downloaded = metadata.len();
@@ -272,24 +305,20 @@ fn sync_meta_from_state(task: &mut DownloadTask) {
 }
 
 fn state_from_meta(meta: &DownloadMeta, dest: &Path) -> DownloadState {
-    if meta.status == "complete" && dest.exists() {
-        return DownloadState::Complete {
+    match MetaStatus::parse(&meta.status) {
+        MetaStatus::Complete if dest.exists() => DownloadState::Complete {
             path: dest.to_path_buf(),
             hash: meta.expected_hash.unwrap_or_default(),
-        };
-    }
-    if meta.status == "paused" || meta.status == "downloading" {
-        return DownloadState::Paused {
+        },
+        MetaStatus::Paused | MetaStatus::Downloading => DownloadState::Paused {
             bytes_downloaded: meta.bytes_downloaded,
             total_bytes: meta.total_bytes,
-        };
-    }
-    if let Some(error) = meta.status.strip_prefix("failed: ") {
-        return DownloadState::Failed {
+        },
+        MetaStatus::Failed(error) => DownloadState::Failed {
             error: error.to_string(),
-        };
+        },
+        MetaStatus::Queued | MetaStatus::Complete => DownloadState::Queued,
     }
-    DownloadState::Queued
 }
 
 fn download_path_from_meta_path(path: &Path) -> Option<PathBuf> {
@@ -430,6 +459,34 @@ mod tests {
                 bytes_downloaded: 7,
                 total_bytes: Some(100)
             }
+        ));
+    }
+
+    #[test]
+    fn test_sidecar_status_parsing_fail_closed() {
+        let dir = tempfile::tempdir().unwrap();
+        let failed_dest = dir.path().join("failed.zip");
+        let unknown_dest = dir.path().join("unknown.zip");
+        std::fs::write(&failed_dest, b"partial").unwrap();
+        std::fs::write(&unknown_dest, b"partial").unwrap();
+
+        let mut failed = test_meta();
+        failed.status = "failed: network timeout".into();
+        failed.save(&meta_path(&failed_dest)).unwrap();
+
+        let mut unknown = test_meta();
+        unknown.status = "mystery".into();
+        unknown.save(&meta_path(&unknown_dest)).unwrap();
+
+        let restored = DownloadQueue::load_from_sidecars(dir.path(), 2).unwrap();
+
+        assert!(matches!(
+            restored.get(0).unwrap().state,
+            DownloadState::Failed { ref error } if error == "network timeout"
+        ));
+        assert!(matches!(
+            restored.get(1).unwrap().state,
+            DownloadState::Queued
         ));
     }
 }
