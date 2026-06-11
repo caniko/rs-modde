@@ -39,9 +39,10 @@ pub use registry::{
     EngineFamily, GameRegistration, LauncherIds, all_games, resolve_game, supported_game_ids,
 };
 pub use traits::{
-    DeployTarget, DeployTargetKind, DiscoveredFile, DiscoveredMod, GamePlugin, ModClassifyConfig,
-    ModSafety, ModScanner, ModSource, SaveTracker, ScanContext, classify_mod_by_content, slug,
-    walk_files_relative,
+    DeployTarget, DeployTargetKind, DiscoveredFile, DiscoveredMod, GamePlugin, HotDeployCapability,
+    HotDeploySupport, ModClassifyConfig, ModSafety, ModScanner, ModSource, SaveDependencyAnalyzer,
+    SaveDependencyFinding, SaveDependencyKind, SaveRemovalGateReport, SaveTracker, ScanContext,
+    classify_mod_by_content, slug, walk_files_relative,
 };
 
 /// Build an [`modde_core::installer::InstallProbe`] that delegates to a
@@ -139,6 +140,14 @@ pub fn resolve_collision_classifier(
 #[must_use]
 pub fn resolve_save_tracker(game_id: &str) -> Option<&'static dyn SaveTracker> {
     registry::resolve_game(game_id).and_then(|game| game.save_tracker)
+}
+
+/// Resolve a `game_id` to its save dependency analyzer, if one exists.
+#[must_use]
+pub fn resolve_save_dependency_analyzer(
+    game_id: &str,
+) -> Option<&'static dyn SaveDependencyAnalyzer> {
+    registry::resolve_game(game_id).and_then(|game| game.save_dependency_analyzer)
 }
 
 /// Return whether a game participates in modde's per-profile save layer.

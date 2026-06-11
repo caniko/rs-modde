@@ -276,8 +276,10 @@ pub(super) fn format_launcher_configuration_progress(
     }
     if let Some(wrapper) = &report.launch_wrapper {
         parts.push(format!(
-            "Generated launch wrapper ({} DLL restores, {} tool env vars)",
-            wrapper.restore_count, wrapper.tool_env_var_count
+            "Generated launch wrapper {} ({} DLL restores, {} tool env vars)",
+            wrapper.path.display(),
+            wrapper.restore_count,
+            wrapper.tool_env_var_count
         ));
     }
     if let Some(registration) = &report.wrapper_registration {

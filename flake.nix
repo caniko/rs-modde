@@ -251,8 +251,15 @@
             cargoExtraArgs = "--locked --package modde-cli --package modde-ui --bins";
             doCheck = false;
           };
+        oraclePackageArgs =
+          commonArgs
+          // {
+            cargoExtraArgs = "--locked --package modde-oracle --bins";
+            doCheck = false;
+          };
 
         cargoArtifacts = craneLib.buildDepsOnly nativePackageArgs;
+        oracleCargoArtifacts = craneLib.buildDepsOnly oraclePackageArgs;
 
         modde = craneLib.buildPackage (nativePackageArgs
           // {
@@ -270,6 +277,16 @@
               description = "Cross-platform game mod manager";
               license = with licenses; [gpl3Only];
               platforms = platforms.linux ++ platforms.darwin;
+            };
+          });
+        modde-oracle = craneLib.buildPackage (oraclePackageArgs
+          // {
+            cargoArtifacts = oracleCargoArtifacts;
+
+            meta = with pkgs.lib; {
+              description = "Opt-in empirical mod compatibility oracle service for modde";
+              license = with licenses; [gpl3Only];
+              platforms = platforms.linux;
             };
           });
 
@@ -391,7 +408,7 @@
               export CFLAGS_${windowsTargetSuffix}="-I$PWD/.mingw-case-headers ''${CFLAGS_${windowsTargetSuffix}:-}"
               export CXXFLAGS_${windowsTargetSuffix}="-I$PWD/.mingw-case-headers ''${CXXFLAGS_${windowsTargetSuffix}:-}"
             '';
-            cargoBuildExtraArgs = "--workspace";
+            cargoBuildExtraArgs = "--workspace --features windows-integrations";
             doCheck = false;
           };
         windowsCargoArtifacts = craneLib.buildDepsOnly windowsArgs;
@@ -434,7 +451,7 @@
       in {
         packages =
           {
-            inherit modde docs website site;
+            inherit modde modde-oracle docs website site;
             default = modde;
             rs-harbor = rs-harbor.packages.${system}.rs-harbor;
 
@@ -562,6 +579,30 @@
             inherit modde-darwin-x86_64;
             inherit modde-windows;
           };
+
+        formatter = pkgs.writeShellApplication {
+          name = "modde-format";
+          runtimeInputs = [pkgs.alejandra];
+          text = ''
+            args=("$@")
+            has_path=false
+            for arg in "''${args[@]}"; do
+              case "$arg" in
+                -*) ;;
+                *) has_path=true ;;
+              esac
+            done
+
+            if [ "''${has_path}" = false ]; then
+              args=(flake.nix nix)
+              if [ "$#" -gt 0 ]; then
+                args=("$@" "''${args[@]}")
+              fi
+            fi
+
+            exec alejandra "''${args[@]}"
+          '';
+        };
 
         checks = let
           hmLib = lib.extend (_final: _prev: {
@@ -891,6 +932,66 @@
           .home
           .activation
           .modde-deploy;
+          activationPatchers =
+            (evalHm {
+              main = {
+                game = "skyrim-se";
+                patchers = {
+                  synthesis = {
+                    type = "synthesis-cli";
+                    order = 10;
+                    outputMod = "generated-synthesis";
+                    settings = {
+                      executable = "/tools/Synthesis.CLI.exe";
+                      pipelineSettings = "/configs/PipelineSettings.json";
+                      synthesisProfile = "default";
+                    };
+                  };
+                  command = {
+                    type = "command";
+                    enable = false;
+                    order = 20;
+                    outputMod = "generated-command";
+                    settings = {
+                      executable = "/tools/custom-patcher";
+                      args = ["--fast" "--headless"];
+                      environment = {
+                        MODE = "ci";
+                      };
+                      workingDir = "/work";
+                    };
+                  };
+                };
+              };
+            })
+          .home
+          .activation
+          .modde-deploy;
+          patcherStrictAssertions =
+            (evalHm {
+              invalid = {
+                game = "skyrim-se";
+                patchers.bad = {
+                  type = "command";
+                  order = 1;
+                  outputMod = "generated";
+                  strict = false;
+                  settings.executable = "/tools/custom-patcher";
+                };
+              };
+            })
+          .assertions;
+          patcherStrictFails =
+            if
+              lib.any (
+                assertion:
+                  !assertion.assertion
+                  && assertion.message
+                  == "programs.modde.profiles.invalid.patchers.bad: strict must be true in v1."
+              )
+              patcherStrictAssertions
+            then "false"
+            else "true";
           mangohudReleaseAssertions =
             (evalHm {
               invalid = {
@@ -1189,6 +1290,19 @@
             EOF
             grep -q "modde tool configure optiscaler --game stellar-blade -- 'optiscaler_profile=community-dxgi'" optiscaler-profile
 
+            cat > patchers <<'EOF'
+            ${activationPatchers}
+            EOF
+            grep -q "modde patcher add-synthesis synthesis --profile main --game skyrim-se" patchers
+            grep -q -- "--pipeline-settings /configs/PipelineSettings.json" patchers
+            grep -q -- "--synthesis-profile default" patchers
+            grep -q -- "--order 10" patchers
+            grep -q "modde patcher add-command command --profile main --game skyrim-se" patchers
+            grep -q -- "--working-dir /work" patchers
+            grep -q -- "--arg --fast" patchers
+            grep -q -- "--env MODE=ci" patchers
+            grep -q "modde patcher disable command --profile main --game skyrim-se" patchers
+
             test "${mutualExclusionFails}" = "false"
             test "${
               if unknownToolEval.success
@@ -1197,6 +1311,7 @@
             }" = "false"
             test "${readableManualWithoutHashFails}" = "false"
             test "${duplicateManualHashFails}" = "false"
+            test "${patcherStrictFails}" = "false"
             test "${mangohudReleaseFails}" = "false"
             test "${releasePathAndUrlFails}" = "false"
             test "${
@@ -1514,6 +1629,71 @@
       });
   in
     {
+      linuxDistributionSupport = {
+        policy = "major-distro-families";
+        cargo_features = {
+          default = ["rar" "postgres"];
+          lean_linux = [];
+        };
+        channels = {
+          apt = {
+            enabled = true;
+            families = ["debian" "ubuntu" "linux-mint" "pop-os"];
+            architectures = ["amd64"];
+            artifacts = ["*.deb"];
+            smoke = "smoke-deb";
+            publish_gate = "stable-tags-only";
+          };
+          copr = {
+            enabled = true;
+            families = ["fedora" "rhel" "rocky" "alma" "bazzite" "nobara"];
+            architectures = ["x86_64"];
+            artifacts = ["*.src.rpm"];
+            smoke = "smoke-srpm";
+            publish_gate = "stable-tags-only";
+          };
+          aur = {
+            enabled = true;
+            families = ["arch" "manjaro" "endeavouros" "cachyos"];
+            architectures = ["x86_64"];
+            artifacts = ["modde-{version}-x86_64-linux.tar.gz" "rs-modde-{version}.tar.gz"];
+            publish_gate = "stable-tags-only";
+          };
+          nix = {
+            enabled = true;
+            families = ["nix" "nixos"];
+            architectures = ["x86_64-linux" "aarch64-linux"];
+            artifacts = ["nix flake package" "home-manager module"];
+            smoke = "nix flake check";
+            publish_gate = "flake-evaluation";
+          };
+          flatpak = {
+            enabled = true;
+            families = ["freedesktop" "immutable-linux" "gaming-linux"];
+            architectures = ["x86_64"];
+            artifacts = ["com.tartanoglu.modde.json" "cargo-sources.json"];
+            smoke = "smoke-flatpak";
+            publish_gate = "stable-tags-only";
+          };
+          appimage = {
+            enabled = true;
+            families = ["portable-linux"];
+            architectures = ["x86_64"];
+            artifacts = ["modde-{version}-x86_64.AppImage" "modde-ui-{version}-x86_64.AppImage"];
+            smoke = "smoke-appimage";
+            publish_gate = "release-artifact";
+          };
+          tarball = {
+            enabled = true;
+            families = ["generic-linux"];
+            architectures = ["x86_64-linux" "aarch64-linux"];
+            artifacts = ["modde-{version}-x86_64-linux.tar.gz" "modde-{version}-aarch64-linux.tar.gz"];
+            smoke = "smoke-linux-tarball";
+            publish_gate = "release-artifact";
+          };
+        };
+        out_of_scope = ["opensuse-obs" "snap" "alpine-musl"];
+      };
       homeManagerModules.modde = import ./nix/hm-module.nix self;
       lib = {
         inherit mkOutputs;
@@ -1523,6 +1703,7 @@
         release.codeberg = {
           repo = "caniko/rs-modde";
           target_branch = "trunk";
+          token_secret = "CODEBERG_TOKEN";
         };
         release.artifacts = {
           version_attr = "modde";
@@ -1692,6 +1873,9 @@
           build_requires = ["rust >= 1.85" "cargo" "gcc" "pkg-config" "openssl-devel" "dbus-devel" "wayland-devel" "libxkbcommon-devel" "vulkan-loader-devel"];
           binaries = ["modde" "modde-ui"];
           project = "caniko/rs-modde";
+          login_secret = "COPR_LOGIN";
+          username_secret = "COPR_USERNAME";
+          token_secret = "COPR_TOKEN";
         };
         apt = {
           repo_url = "ssh://git@codeberg.org/caniko/apt-modde.git";
@@ -1699,10 +1883,10 @@
           # cargo-target=deb-name (cargo-deb names the file after [metadata.deb].name)
           packages = ["modde-cli=modde" "modde-ui=modde-ui"];
           build_deps = ["ca-certificates" "gcc" "libdbus-1-dev" "libsqlite3-dev" "libssl-dev" "libvulkan-dev" "libwayland-dev" "libxkbcommon-dev" "pkg-config"];
-          gpg_key_secret = "modde_apt_repo_gpg_key";
-          gpg_key_id_secret = "modde_apt_repo_gpg_key_id";
-          gpg_passphrase_secret = "modde_apt_repo_gpg_passphrase";
-          ssh_key_secret = "modde_apt_repo_ssh_key";
+          gpg_key_secret = "MODDE_APT_REPO_GPG_KEY";
+          gpg_key_id_secret = "MODDE_APT_REPO_GPG_KEY_ID";
+          gpg_passphrase_secret = "MODDE_APT_REPO_GPG_PASSPHRASE";
+          ssh_key_secret = "MODDE_APT_REPO_SSH_KEY";
         };
       };
     }

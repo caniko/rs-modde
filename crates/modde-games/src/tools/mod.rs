@@ -4,12 +4,16 @@
 //! [`GameTool`] trait. Tools are registered via [`all_tools`] and resolved by ID
 //! via [`resolve_tool`], following the same pattern as [`crate::resolve_game_plugin`].
 
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 pub mod gamemode;
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 pub mod mangohud;
 pub mod optiscaler;
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 pub mod proton;
 pub mod release;
 pub mod reshade;
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 pub mod vkbasalt;
 
 use std::future::Future;
@@ -606,7 +610,8 @@ pub trait GameTool: Send + Sync {
 
 // ── Registry ───────────────────────────────────────────────────────────────
 
-/// All registered tools.
+/// All registered tools for Linux integration builds.
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 static ALL_TOOLS: [&dyn GameTool; 6] = [
     &mangohud::MANGOHUD,
     &vkbasalt::VKBASALT,
@@ -615,6 +620,22 @@ static ALL_TOOLS: [&dyn GameTool; 6] = [
     &optiscaler::OPTISCALER,
     &proton::PROTON,
 ];
+
+/// All registered tools for Windows integration builds.
+#[cfg(all(target_os = "windows", feature = "windows-integrations"))]
+static ALL_TOOLS: [&dyn GameTool; 2] = [&reshade::RESHADE, &optiscaler::OPTISCALER];
+
+/// macOS has no implemented per-game tool integration yet.
+#[cfg(all(target_os = "macos", feature = "macos-integrations"))]
+static ALL_TOOLS: [&dyn GameTool; 0] = [];
+
+/// Fail closed when a platform integration feature is not enabled.
+#[cfg(not(any(
+    all(target_os = "linux", feature = "linux-integrations"),
+    all(target_os = "windows", feature = "windows-integrations"),
+    all(target_os = "macos", feature = "macos-integrations"),
+)))]
+static ALL_TOOLS: [&dyn GameTool; 0] = [];
 
 #[must_use]
 pub fn all_tools() -> &'static [&'static dyn GameTool] {
@@ -641,6 +662,7 @@ pub fn tool_config_dir(game_id: &str) -> PathBuf {
 ///
 /// Uses the `which` crate for cross-platform support (handles Windows
 /// `%PATHEXT%` extensions like `.exe`, `.cmd`, `.bat` automatically).
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 pub(crate) fn which(binary: &str) -> Option<PathBuf> {
     which::which(binary).ok()
 }
@@ -703,6 +725,41 @@ mod tests {
     }
 
     #[test]
+    #[cfg(all(target_os = "linux", feature = "linux-integrations"))]
+    fn tool_registry_linux_includes_linux_and_proton_tools() {
+        let ids: Vec<_> = super::all_tools()
+            .iter()
+            .map(|tool| tool.tool_id())
+            .collect();
+        assert_eq!(
+            ids,
+            vec![
+                "mangohud",
+                "vkbasalt",
+                "gamemode",
+                "reshade",
+                "optiscaler",
+                "proton"
+            ]
+        );
+    }
+
+    #[test]
+    #[cfg(all(target_os = "windows", feature = "windows-integrations"))]
+    fn tool_registry_windows_hides_linux_only_tools() {
+        let ids: Vec<_> = super::all_tools()
+            .iter()
+            .map(|tool| tool.tool_id())
+            .collect();
+        assert_eq!(ids, vec!["reshade", "optiscaler"]);
+        assert!(super::resolve_tool("mangohud").is_none());
+        assert!(super::resolve_tool("vkbasalt").is_none());
+        assert!(super::resolve_tool("gamemode").is_none());
+        assert!(super::resolve_tool("proton").is_none());
+    }
+
+    #[test]
+    #[cfg(all(target_os = "linux", feature = "linux-integrations"))]
     fn proton_is_registered() {
         let tool = super::resolve_tool("proton").expect("proton tool should resolve");
         assert_eq!(tool.display_name(), "Proton");

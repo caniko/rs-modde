@@ -684,7 +684,10 @@ fn data_tab_reports_missing_store_mods_when_empty() {
 
 #[test]
 fn diagnostics_idle_click_run_emits_message() {
-    let mut ui = simulator(modde_ui::views::diagnostics::view(&DiagnosticsState::Idle));
+    let mut ui = simulator(modde_ui::views::diagnostics::view(
+        &DiagnosticsState::Idle,
+        "",
+    ));
     ui.find("Diagnostics").expect("should show title");
     ui.click("Run Diagnostics")
         .expect("should click Run Diagnostics");
@@ -716,9 +719,10 @@ fn diagnostics_complete_shows_summary_and_findings() {
             ok_count: 42,
             broken_symlinks: vec![PathBuf::from("/game/broken_link.esp")],
         },
+        crash_report: None,
     });
 
-    let mut ui = simulator(modde_ui::views::diagnostics::view(&state));
+    let mut ui = simulator(modde_ui::views::diagnostics::view(&state, ""));
     ui.find("test-profile (skyrim-se) - 1 error(s), 1 warning(s), 0 info(s), 1 broken symlink(s)")
         .expect("should show diagnostics summary");
     ui.find("Integrity: 42 staged file(s) OK, 1 broken symlink(s)")

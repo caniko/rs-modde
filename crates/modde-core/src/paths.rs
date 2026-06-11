@@ -108,6 +108,12 @@ pub fn downloads_dir() -> PathBuf {
     modde_data_dir().join("downloads")
 }
 
+/// Root of generated patcher outputs: `<modde_data>/generated/`.
+#[must_use]
+pub fn generated_dir() -> PathBuf {
+    modde_data_dir().join("generated")
+}
+
 /// Stock game snapshots: `<modde_data>/stock/`.
 #[must_use]
 pub fn stock_dir() -> PathBuf {

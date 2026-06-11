@@ -5,7 +5,9 @@
 //! to present a "pick your game" experience without manual path entry.
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus, Stdio};
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
+use std::process::Stdio;
+use std::process::{Command, ExitStatus};
 use std::sync::{LazyLock, RwLock};
 
 use anyhow::{Context, Result};
@@ -65,6 +67,15 @@ impl LauncherSource {
     /// Returns `Ok(Some(ExitStatus))` if we could wait for the game process to exit
     /// (Heroic), or `Ok(None)` for fire-and-forget launchers (Steam).
     pub fn launch(&self) -> Result<Option<ExitStatus>> {
+        self.launch_with_env(&[])
+    }
+
+    /// Launch the game with extra environment variables where the launcher
+    /// supports an observable child process.
+    ///
+    /// Steam URI launches remain fire-and-forget; callers that require reliable
+    /// post-run ingestion should treat `Ok(None)` as pending.
+    pub fn launch_with_env(&self, env_vars: &[(String, String)]) -> Result<Option<ExitStatus>> {
         match self {
             LauncherSource::Steam { app_id, .. } => {
                 let url = format!("steam://rungameid/{app_id}");
@@ -82,6 +93,9 @@ impl LauncherSource {
                 let mut cmd = Command::new(&bin);
                 for arg in &base_args {
                     cmd.arg(arg);
+                }
+                for (key, value) in env_vars {
+                    cmd.env(key, value);
                 }
                 let status = cmd
                     .args(["--no-gui", "--launch", app_id])
@@ -111,7 +125,7 @@ impl std::fmt::Display for LauncherSource {
 /// Returns `(binary, base_args)` — e.g. `("flatpak", ["run", "com.heroicgameslauncher.hgl"])`
 /// or `("heroic", [])`.
 fn heroic_command() -> Option<(String, Vec<String>)> {
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "linux-integrations"))]
     {
         // Check flatpak first (common on NixOS / immutable distros)
         if Command::new("flatpak")
@@ -136,7 +150,7 @@ fn heroic_command() -> Option<(String, Vec<String>)> {
         None
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", feature = "macos-integrations"))]
     {
         let app_path = "/Applications/Heroic.app/Contents/MacOS/Heroic";
         if std::path::Path::new(app_path).exists() {
@@ -148,7 +162,7 @@ fn heroic_command() -> Option<(String, Vec<String>)> {
         None
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "windows-integrations"))]
     {
         if let Some(exe) = modde_core::paths::heroic_exe_path() {
             return Some((exe.to_string_lossy().to_string(), vec![]));
@@ -156,6 +170,15 @@ fn heroic_command() -> Option<(String, Vec<String>)> {
         if let Ok(path) = which::which("heroic") {
             return Some((path.to_string_lossy().to_string(), vec![]));
         }
+        None
+    }
+
+    #[cfg(not(any(
+        all(target_os = "linux", feature = "linux-integrations"),
+        all(target_os = "macos", feature = "macos-integrations"),
+        all(target_os = "windows", feature = "windows-integrations"),
+    )))]
+    {
         None
     }
 }

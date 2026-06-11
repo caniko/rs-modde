@@ -81,6 +81,12 @@ fn capability_matrix_captures_the_expected_baseline() {
         .get("mod_info_dialog")
         .expect("Mod information dialog entry should exist");
     assert_eq!(mod_info.status, "Partial");
+
+    let hot_deploy = matrix
+        .features
+        .get("hot_deploy")
+        .expect("Hot-deploy entry should exist");
+    assert_eq!(hot_deploy.status, "Partial");
 }
 
 #[test]
@@ -121,6 +127,7 @@ fn public_docs_match_capability_matrix_for_critical_statuses() {
         "downloads_ui",
         "tool_management",
         "executable_management",
+        "hot_deploy",
         "mod_info_dialog",
         "bain",
         "generic_game_support",

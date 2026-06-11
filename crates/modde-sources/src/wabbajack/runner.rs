@@ -115,6 +115,13 @@ pub async fn install_wabbajack(
 
     let manifest = parse_wabbajack_manifest(&options.path)?;
     let modlist_name = manifest.name.clone();
+    let manifest_hash = compute_manifest_hash(&manifest);
+    let transaction = crate::resolution::preflight_wabbajack_transaction(&manifest, &manifest_hash)
+        .context("Wabbajack dependency transaction is not solvable")?;
+    info!(
+        artifacts = transaction.artifacts.len(),
+        "Wabbajack dependency transaction solved"
+    );
     let game_id = GameId::from(
         modde_games::normalize_wabbajack_game(&manifest.game)
             .map_or_else(|| manifest.game.to_lowercase(), String::from),
@@ -136,7 +143,6 @@ pub async fn install_wabbajack(
     .context("failed to prepare Wabbajack staging layout")?;
     info!(?prepare_status, staging = %staging.display(), "prepared Wabbajack staging");
 
-    let manifest_hash = compute_manifest_hash(&manifest);
     let client = build_http_client()?;
     let mut installer = WabbajackInstaller::new(
         manifest.clone(),
@@ -338,7 +344,7 @@ pub async fn configure_wine_overrides(
     }
 
     let launcher = modde_games::launcher::detect_launcher(game_dir);
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "linux-integrations"))]
     {
         report.wine_overrides = modde_games::launcher::apply_wine_overrides(&launcher, &overrides)?;
     }
@@ -368,6 +374,9 @@ pub async fn configure_wine_overrides(
 }
 
 pub async fn deploy_mo2_to_game(staging: &Path, game_dir: &Path, force: bool) -> Result<()> {
+    #[cfg(not(unix))]
+    let _ = force;
+
     let mods_dir = staging.join("mods");
     if !mods_dir.exists() {
         info!("no mods/ directory in staging, skipping deployment");

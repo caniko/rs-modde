@@ -1,4 +1,5 @@
 use modde_games::GamePlugin;
+use modde_games::HotDeploySupport;
 use modde_games::cyberpunk::Cyberpunk2077;
 use modde_games::cyberpunk::manifest::RedModManifest;
 
@@ -24,6 +25,14 @@ fn test_cyberpunk_mod_directory() {
     let install = std::path::Path::new("/fake/game/install");
     let mod_dir = game.mod_directory(install);
     assert_eq!(mod_dir, install.join("mods"));
+}
+
+#[test]
+fn test_cyberpunk_hot_deploy_is_experimental() {
+    let game = Cyberpunk2077;
+    let capability = game.hot_deploy_capability();
+    assert_eq!(capability.support, HotDeploySupport::Experimental);
+    assert!(capability.cosmetic_only);
 }
 
 // ── RedModManifest::parse with valid JSON ────────────────────────────
@@ -233,4 +242,46 @@ fn test_cyberpunk_deploy_creates_target_dir() {
     game.deploy(staging.path(), &target).unwrap();
     assert!(target.exists());
     assert!(target.join("amod").exists());
+}
+
+#[test]
+fn test_cyberpunk_hot_deploy_patches_staging_and_refreshes_root_symlink() {
+    let install = tempfile::tempdir().unwrap();
+    let staging = tempfile::tempdir().unwrap();
+    let source = tempfile::tempdir().unwrap();
+
+    let source_file = source.path().join("body.archive");
+    std::fs::write(&source_file, b"archive").unwrap();
+
+    let stale_root = install.path().join("mods/archive");
+    std::fs::create_dir_all(&stale_root).unwrap();
+    std::fs::write(stale_root.join("stale.txt"), b"stale").unwrap();
+
+    let patch = modde_core::hot_deploy::HotDeployPatch {
+        changes: vec![modde_core::hot_deploy::HotDeployChange {
+            rel_path: "archive/pc/mod/body.archive".to_string(),
+            before: None,
+            after: Some(source_file),
+        }],
+    };
+
+    let game = Cyberpunk2077;
+    game.apply_hot_deploy_patch(&patch, staging.path(), install.path())
+        .unwrap();
+
+    let staged = staging.path().join("archive/pc/mod/body.archive");
+    assert!(staged.symlink_metadata().unwrap().file_type().is_symlink());
+
+    let deployed_root = install.path().join("mods/archive");
+    assert!(
+        deployed_root
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(
+        std::fs::read(deployed_root.join("pc/mod/body.archive")).unwrap(),
+        b"archive"
+    );
 }

@@ -28,6 +28,66 @@ pub struct AppSettings {
     /// `settings.toml` files, which therefore keep using `SQLite` unchanged.
     #[serde(default)]
     pub database: DatabaseSettings,
+    #[serde(default)]
+    pub doctor: DoctorSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DoctorSettings {
+    #[serde(default)]
+    pub llm: DoctorLlmSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DoctorLlmSettings {
+    #[serde(default = "default_local_llm_endpoint")]
+    pub local_endpoint: String,
+    #[serde(default = "default_local_llm_model")]
+    pub local_model: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_endpoint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_model: Option<String>,
+    #[serde(default = "default_remote_api_key_env")]
+    pub remote_api_key_env: String,
+    #[serde(default = "default_doctor_timeout_seconds")]
+    pub timeout_seconds: u64,
+    #[serde(default = "default_doctor_max_context_bytes")]
+    pub max_context_bytes: usize,
+}
+
+impl Default for DoctorLlmSettings {
+    fn default() -> Self {
+        Self {
+            local_endpoint: default_local_llm_endpoint(),
+            local_model: default_local_llm_model(),
+            remote_endpoint: None,
+            remote_model: None,
+            remote_api_key_env: default_remote_api_key_env(),
+            timeout_seconds: default_doctor_timeout_seconds(),
+            max_context_bytes: default_doctor_max_context_bytes(),
+        }
+    }
+}
+
+fn default_local_llm_endpoint() -> String {
+    "http://127.0.0.1:8080/v1".to_string()
+}
+
+fn default_local_llm_model() -> String {
+    "local-model".to_string()
+}
+
+fn default_remote_api_key_env() -> String {
+    "MODDE_DOCTOR_REMOTE_API_KEY".to_string()
+}
+
+const fn default_doctor_timeout_seconds() -> u64 {
+    120
+}
+
+const fn default_doctor_max_context_bytes() -> usize {
+    96 * 1024
 }
 
 /// Which database backend modde stores its state in, plus the `PostgreSQL`

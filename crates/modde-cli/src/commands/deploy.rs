@@ -15,6 +15,14 @@ use modde_core::vfs::SymlinkFarm;
 use super::load_profile_or_default;
 
 pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Result<()> {
+    handle_inner(profile_name, game_id, true).await
+}
+
+pub(crate) async fn handle_inner(
+    profile_name: Option<String>,
+    game_id: Option<String>,
+    run_patchers: bool,
+) -> Result<()> {
     let pm = ProfileManager::open()
         .await
         .context("failed to open profile database")?;
@@ -72,6 +80,14 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
             .await
             .context("Wine DLL override configuration failed")?;
 
+        let patcher_count = if run_patchers {
+            super::patcher::run_enabled_for_deploy(&pm, &profile, game_plugin, &install_dir)
+                .await
+                .context("patcher pipeline failed")?
+        } else {
+            0
+        };
+
         println!("Deployed Wabbajack profile: {name}");
         println!(
             "  Game: {} ({})",
@@ -79,6 +95,9 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
             profile.game_id
         );
         println!("  Install dir: {}", install_dir.display());
+        if patcher_count > 0 {
+            println!("  Patcher stages: {patcher_count}");
+        }
         return Ok(());
     }
 
@@ -246,6 +265,13 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     }
 
     let alt_routed = deploy_alt_target_mods(&profile, game_plugin, &install_dir, &store).await?;
+    let patcher_count = if run_patchers {
+        super::patcher::run_enabled_for_deploy(&pm, &profile, game_plugin, &install_dir)
+            .await
+            .context("patcher pipeline failed")?
+    } else {
+        0
+    };
 
     println!("Deployed profile: {name}");
     println!(
@@ -259,6 +285,9 @@ pub async fn handle(profile_name: Option<String>, game_id: Option<String>) -> Re
     println!("  Conflicts resolved: {conflict_count}");
     if alt_routed > 0 {
         println!("  Alt-target files: {alt_routed}");
+    }
+    if patcher_count > 0 {
+        println!("  Patcher stages: {patcher_count}");
     }
 
     Ok(())

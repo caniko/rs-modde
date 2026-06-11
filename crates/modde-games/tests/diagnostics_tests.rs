@@ -128,6 +128,39 @@ fn build_test_plugin(version: f32, masters: &[&str], record_flags: u32) -> Vec<u
     data
 }
 
+fn build_record(sig: &[u8; 4], form_id: u32, subrecords: Vec<u8>) -> Vec<u8> {
+    let mut data = Vec::new();
+    data.extend_from_slice(sig);
+    data.extend_from_slice(&(subrecords.len() as u32).to_le_bytes());
+    data.extend_from_slice(&0u32.to_le_bytes());
+    data.extend_from_slice(&form_id.to_le_bytes());
+    data.extend_from_slice(&0u32.to_le_bytes());
+    data.extend_from_slice(&44u16.to_le_bytes());
+    data.extend_from_slice(&0u16.to_le_bytes());
+    data.extend_from_slice(&subrecords);
+    data
+}
+
+fn build_formid_subrecord(sig: &[u8; 4], form_id: u32) -> Vec<u8> {
+    let mut data = Vec::new();
+    data.extend_from_slice(sig);
+    data.extend_from_slice(&4u16.to_le_bytes());
+    data.extend_from_slice(&form_id.to_le_bytes());
+    data
+}
+
+fn build_test_plugin_with_records(
+    masters: &[&str],
+    record_flags: u32,
+    records: Vec<Vec<u8>>,
+) -> Vec<u8> {
+    let mut data = build_test_plugin(1.70, masters, record_flags);
+    for record in records {
+        data.extend(record);
+    }
+    data
+}
+
 #[test]
 fn test_form43_and_missing_master() {
     use modde_games::bethesda::diagnostics::{Form43Rule, MissingMasterRule};
@@ -186,6 +219,135 @@ fn test_form43_and_missing_master() {
     );
     assert_eq!(master_diags[0].severity, Severity::Error);
     assert!(master_diags[0].title.contains("MissingMod.esp"));
+}
+
+#[test]
+fn test_record_reference_rule_reports_unresolved_formid() {
+    use modde_games::bethesda::diagnostics::RecordReferenceRule;
+
+    let staging = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let overrides = tempfile::tempdir().unwrap();
+
+    std::fs::write(
+        staging.path().join("Skyrim.esm"),
+        build_test_plugin(1.70, &[], 0x0000_0001),
+    )
+    .unwrap();
+    let broken_ref = build_record(
+        b"REFR",
+        0x0100_0800,
+        build_formid_subrecord(b"NAME", 0x0000_1234),
+    );
+    std::fs::write(
+        staging.path().join("Broken.esp"),
+        build_test_plugin_with_records(&["Skyrim.esm"], 0, vec![broken_ref]),
+    )
+    .unwrap();
+
+    let profile = make_profile(
+        "skyrim-se",
+        vec![enabled_mod("Skyrim.esm"), enabled_mod("Broken.esp")],
+        overrides.path().to_path_buf(),
+    );
+    let conflict_map = ConflictMap::default();
+    let active_plugins = vec!["Skyrim.esm".to_string(), "Broken.esp".to_string()];
+    let ctx = DiagContext {
+        game_id: "skyrim-se",
+        profile: &profile,
+        active_plugins: &active_plugins,
+        conflict_map: &conflict_map,
+        collision_report: None,
+        store_dir: store.path(),
+        staging_dir: staging.path(),
+    };
+
+    let diags = RecordReferenceRule.check(&ctx);
+    assert_eq!(diags.len(), 1);
+    assert_eq!(diags[0].severity, Severity::Error);
+    assert!(diags[0].title.contains("00001234"));
+    assert!(diags[0].detail.contains("Broken.esp"));
+    assert!(diags[0].detail.contains("REFR"));
+    assert!(diags[0].detail.contains("Skyrim.esm"));
+}
+
+#[test]
+fn test_bethesda_engine_includes_record_reference_rule() {
+    use modde_games::bethesda::diagnostics::bethesda_diagnostics;
+
+    let staging = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let overrides = tempfile::tempdir().unwrap();
+
+    std::fs::write(
+        staging.path().join("Skyrim.esm"),
+        build_test_plugin(1.70, &[], 0x0000_0001),
+    )
+    .unwrap();
+    let broken_ref = build_record(
+        b"REFR",
+        0x0100_0800,
+        build_formid_subrecord(b"NAME", 0x0000_4321),
+    );
+    std::fs::write(
+        staging.path().join("Broken.esp"),
+        build_test_plugin_with_records(&["Skyrim.esm"], 0, vec![broken_ref]),
+    )
+    .unwrap();
+
+    let profile = make_profile(
+        "skyrim-se",
+        vec![enabled_mod("Skyrim.esm"), enabled_mod("Broken.esp")],
+        overrides.path().to_path_buf(),
+    );
+    let conflict_map = ConflictMap::default();
+    let active_plugins = vec!["Skyrim.esm".to_string(), "Broken.esp".to_string()];
+    let ctx = DiagContext {
+        game_id: "skyrim-se",
+        profile: &profile,
+        active_plugins: &active_plugins,
+        conflict_map: &conflict_map,
+        collision_report: None,
+        store_dir: store.path(),
+        staging_dir: staging.path(),
+    };
+
+    let diagnostics = bethesda_diagnostics().run_all(&ctx);
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diag| diag.title.contains("00004321")),
+        "expected unresolved FormID diagnostic, got {diagnostics:?}"
+    );
+}
+
+#[test]
+fn test_record_reference_rule_has_no_findings_without_plugins_for_ce_games() {
+    use modde_games::bethesda::diagnostics::RecordReferenceRule;
+
+    for game_id in [
+        "skyrim-se",
+        "skyrim-ae",
+        "fallout4",
+        "fallout76",
+        "starfield",
+    ] {
+        let staging = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let overrides = tempfile::tempdir().unwrap();
+        let profile = make_profile(game_id, vec![], overrides.path().to_path_buf());
+        let conflict_map = ConflictMap::default();
+        let ctx = DiagContext {
+            game_id,
+            profile: &profile,
+            active_plugins: &[],
+            conflict_map: &conflict_map,
+            collision_report: None,
+            store_dir: store.path(),
+            staging_dir: staging.path(),
+        };
+        assert!(RecordReferenceRule.check(&ctx).is_empty(), "{game_id}");
+    }
 }
 
 #[test]

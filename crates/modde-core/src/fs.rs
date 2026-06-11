@@ -1,4 +1,5 @@
-use std::path::{Path, PathBuf};
+use std::ffi::OsStr;
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result};
 
@@ -106,6 +107,42 @@ pub async fn symlink_async(original: &Path, link: &Path) -> std::io::Result<()> 
     }
 }
 
+/// Resolve `relative` under `root`, reusing existing target-tree casing when
+/// a path component matches ASCII-case-insensitively.
+pub fn case_match_path(root: &Path, relative: &Path) -> std::io::Result<PathBuf> {
+    let mut resolved = root.to_path_buf();
+
+    for component in relative.components() {
+        match component {
+            Component::Normal(name) => {
+                resolved = case_match_child(&resolved, name)?;
+            }
+            Component::CurDir => {}
+            other => resolved.push(other.as_os_str()),
+        }
+    }
+
+    Ok(resolved)
+}
+
+fn case_match_child(parent: &Path, name: &OsStr) -> std::io::Result<PathBuf> {
+    if parent.is_dir() {
+        let requested = name.to_string_lossy();
+        for entry in std::fs::read_dir(parent)? {
+            let entry = entry?;
+            if entry
+                .file_name()
+                .to_string_lossy()
+                .eq_ignore_ascii_case(&requested)
+            {
+                return Ok(entry.path());
+            }
+        }
+    }
+
+    Ok(parent.join(name))
+}
+
 /// Deploy symlinks from `src` into `dst` recursively (creating directories as needed).
 pub fn deploy_symlinks(src: &Path, dst: &Path) -> Result<()> {
     if !dst.exists() {
@@ -116,7 +153,8 @@ pub fn deploy_symlinks(src: &Path, dst: &Path) -> Result<()> {
     {
         let entry = entry?;
         let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
+        let dst_path = case_match_path(dst, Path::new(&entry.file_name()))
+            .with_context(|| format!("failed to case-match path in {}", dst.display()))?;
 
         if src_path.is_dir() {
             std::fs::create_dir_all(&dst_path)?;
@@ -227,5 +265,81 @@ mod tests {
         );
         assert_eq!(std::fs::read_to_string(dst.join("a.txt")).unwrap(), "a");
         assert_eq!(std::fs::read_to_string(dst.join("sub/b.txt")).unwrap(), "b");
+    }
+
+    #[test]
+    fn deploy_symlinks_reuses_existing_parent_directory_casing() {
+        let tmp = TempDir::new().unwrap();
+        let src = tmp.path().join("src");
+        let dst = tmp.path().join("dst");
+        std::fs::create_dir_all(src.join("Textures")).unwrap();
+        std::fs::create_dir_all(dst.join("textures")).unwrap();
+        std::fs::write(src.join("Textures/sky.dds"), "sky").unwrap();
+
+        deploy_symlinks(&src, &dst).unwrap();
+
+        assert!(dst.join("textures/sky.dds").exists());
+        assert!(!dst.join("Textures").exists());
+    }
+
+    #[test]
+    fn deploy_symlinks_reuses_existing_file_casing_and_replaces() {
+        let tmp = TempDir::new().unwrap();
+        let src = tmp.path().join("src");
+        let dst = tmp.path().join("dst");
+        std::fs::create_dir_all(src.join("Textures")).unwrap();
+        std::fs::create_dir_all(dst.join("textures")).unwrap();
+        std::fs::write(src.join("Textures/SKY.DDS"), "new sky").unwrap();
+        std::fs::write(dst.join("textures/sky.dds"), "old sky").unwrap();
+
+        deploy_symlinks(&src, &dst).unwrap();
+
+        let deployed = dst.join("textures/sky.dds");
+        assert!(
+            deployed
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(std::fs::read_to_string(deployed).unwrap(), "new sky");
+        assert!(!dst.join("Textures/SKY.DDS").exists());
+    }
+
+    #[test]
+    fn deploy_symlinks_uses_staged_casing_when_no_target_match_exists() {
+        let tmp = TempDir::new().unwrap();
+        let src = tmp.path().join("src");
+        let dst = tmp.path().join("dst");
+        std::fs::create_dir_all(src.join("Textures")).unwrap();
+        std::fs::write(src.join("Textures/SKY.DDS"), "sky").unwrap();
+
+        deploy_symlinks(&src, &dst).unwrap();
+
+        assert!(dst.join("Textures/SKY.DDS").exists());
+    }
+
+    #[test]
+    fn deploy_symlinks_matches_nested_components_independently() {
+        let tmp = TempDir::new().unwrap();
+        let src = tmp.path().join("src");
+        let dst = tmp.path().join("dst");
+        std::fs::create_dir_all(src.join("data/textures/landscape")).unwrap();
+        std::fs::create_dir_all(dst.join("Data/Textures/LANDSCAPE")).unwrap();
+        std::fs::write(src.join("data/textures/landscape/DIRT.DDS"), "dirt").unwrap();
+        std::fs::write(dst.join("Data/Textures/LANDSCAPE/dirt.dds"), "old").unwrap();
+
+        deploy_symlinks(&src, &dst).unwrap();
+
+        let deployed = dst.join("Data/Textures/LANDSCAPE/dirt.dds");
+        assert!(
+            deployed
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(std::fs::read_to_string(deployed).unwrap(), "dirt");
+        assert!(!dst.join("data").exists());
     }
 }

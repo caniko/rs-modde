@@ -152,6 +152,36 @@ pub(super) async fn remove_mod_from_profile(
             reload: false,
         });
     }
+    let removed_id = profile.mods[index].mod_id.clone();
+    if let Some(analyzer) = modde_games::resolve_save_dependency_analyzer(profile.game_id.as_str())
+    {
+        let mut save_roots = Vec::new();
+        if let Some(plugin) = modde_games::resolve_game_plugin(profile.game_id.as_str())
+            && plugin.supports_save_profiles()
+            && let Some(save_dir) = plugin.save_directory()
+        {
+            save_roots.push(save_dir);
+        }
+        let vault_dir = modde_core::paths::save_vault_dir(&profile.game_id);
+        if vault_dir.exists() {
+            save_roots.push(vault_dir);
+        }
+        let mod_dir = ProfileManager::staging_dir(&profile.name).join(&removed_id);
+        let report = analyzer
+            .analyze_mod_removal(&removed_id, &mod_dir, &save_roots)
+            .map_err(|err| format!("Save removal gate failed: {err}"))?;
+        if report.is_blocked() {
+            let saves = report
+                .blocking_findings
+                .iter()
+                .map(|finding| finding.save_path.display().to_string())
+                .collect::<std::collections::BTreeSet<_>>()
+                .len();
+            return Err(format!(
+                "Removal blocked: {saves} save(s) depend on {removed_id}. Fork the profile before removing this mod."
+            ));
+        }
+    }
     let removed = profile.mods.remove(index);
     pm.create_or_update(&profile)
         .await

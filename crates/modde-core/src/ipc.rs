@@ -7,12 +7,13 @@
 //!
 //! ## Mechanism
 //!
-//! Each GUI process binds a Unix domain socket at a *per-process* path
-//! ([`gui_socket_path`]: `$XDG_RUNTIME_DIR/modde-${euid}-${pid}.sock`).
-//! The CLI calls [`notify_refresh`], which enumerates the directory for
-//! every socket matching the current user's prefix and pushes a one-line
-//! payload to each. Sockets that don't accept (peer crashed without
-//! unlinking, kernel returned ECONNREFUSED) are GC'd in the same pass.
+//! Each GUI process registers a per-process listener. On Unix this is a
+//! Unix-domain socket at [`gui_socket_path`]. On Windows builds with the
+//! `windows-integrations` feature this is a named pipe, with a marker file
+//! at [`gui_socket_path`] so the CLI can enumerate listeners. The CLI calls
+//! [`notify_refresh`], which enumerates the listener directory and pushes a
+//! one-line payload to every matching listener. Entries that don't accept are
+//! GC'd in the same pass.
 //!
 //! There is no protocol: the existence of any byte-stream connection is
 //! the signal. Each GUI re-reads the DB on receipt.
@@ -31,12 +32,19 @@
 //! - CLI op, no GUI: one `read_dir` + zero connects (no socket files).
 //! - CLI op, N GUIs: one `read_dir` + N short Unix-socket round trips.
 
+#[cfg(any(unix, all(windows, feature = "windows-integrations")))]
+use std::io::Write as _;
+#[cfg(unix)]
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 #[cfg(unix)]
-use std::{io::Write as _, os::unix::net::UnixStream, time::Duration};
+use std::time::Duration;
 
-#[cfg(unix)]
+#[cfg(any(unix, all(windows, feature = "windows-integrations")))]
 const REFRESH_PAYLOAD: &[u8] = b"refresh\n";
+#[cfg(all(windows, feature = "windows-integrations"))]
+const SOCKET_EXTENSION: &str = "pipe";
+#[cfg(not(all(windows, feature = "windows-integrations")))]
 const SOCKET_EXTENSION: &str = "sock";
 /// Connect/write timeout for the CLI side. Kept short so a stale
 /// socket file (GUI crashed without unlinking) can't hang the CLI.
@@ -47,6 +55,13 @@ const CONNECT_TIMEOUT: Duration = Duration::from_millis(50);
 /// systemd-managed per-user tmpfs, cleaned at logout); falls back to
 /// `/tmp`. Callers should not assume the directory is private.
 #[must_use]
+#[cfg(all(windows, feature = "windows-integrations"))]
+pub fn socket_dir() -> PathBuf {
+    std::env::temp_dir().join("modde-ipc")
+}
+
+#[must_use]
+#[cfg(not(all(windows, feature = "windows-integrations")))]
 pub fn socket_dir() -> PathBuf {
     std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
@@ -71,12 +86,27 @@ fn socket_prefix() -> String {
     format!("modde-{}-", euid())
 }
 
-/// Path each GUI process binds. Includes the pid so multiple GUIs run
-/// side-by-side without colliding.
+/// Path each GUI process binds or registers. Includes the pid so multiple GUIs
+/// run side-by-side without colliding.
+///
+/// On Windows with `windows-integrations`, this is a marker file containing the
+/// named-pipe path returned by [`gui_pipe_name`].
 #[must_use]
 pub fn gui_socket_path() -> PathBuf {
     let pid = std::process::id();
     socket_dir().join(format!("{}{pid}.{SOCKET_EXTENSION}", socket_prefix()))
+}
+
+/// Windows named-pipe path used by the current GUI process.
+#[cfg(all(windows, feature = "windows-integrations"))]
+#[must_use]
+pub fn gui_pipe_name() -> String {
+    pipe_name_for_pid(std::process::id())
+}
+
+#[cfg(all(windows, feature = "windows-integrations"))]
+fn pipe_name_for_pid(pid: u32) -> String {
+    format!(r"\\.\pipe\{}{}", socket_prefix(), pid)
 }
 
 /// Best-effort cleanup: unlink the socket file the current process
@@ -95,11 +125,11 @@ pub fn cleanup_socket(path: &Path) {
 /// ENOENT are unlinked: this keeps `$XDG_RUNTIME_DIR` from accumulating
 /// dead socket files when GUIs crash.
 pub fn notify_refresh() -> usize {
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, all(windows, feature = "windows-integrations"))))]
     {
         0
     }
-    #[cfg(unix)]
+    #[cfg(any(unix, all(windows, feature = "windows-integrations")))]
     {
         notify_refresh_in(&socket_dir())
     }
@@ -109,12 +139,12 @@ pub fn notify_refresh() -> usize {
 /// tests that don't want to mutate `XDG_RUNTIME_DIR`, and for
 /// instance-isolated CLI invocations that pass a custom data dir.
 pub fn notify_refresh_in(dir: &Path) -> usize {
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, all(windows, feature = "windows-integrations"))))]
     {
         let _ = dir;
         0
     }
-    #[cfg(unix)]
+    #[cfg(any(unix, all(windows, feature = "windows-integrations")))]
     {
         let prefix = socket_prefix();
         let suffix = format!(".{SOCKET_EXTENSION}");
@@ -147,7 +177,7 @@ pub fn notify_refresh_in(dir: &Path) -> usize {
 /// [`notify_refresh`] for a single explicit socket path. Exposed for
 /// tests. Returns `true` iff the payload was written successfully.
 pub fn notify_refresh_at(path: &Path) -> bool {
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, all(windows, feature = "windows-integrations"))))]
     {
         let _ = path;
         false
@@ -159,6 +189,20 @@ pub fn notify_refresh_at(path: &Path) -> bool {
         };
         let _ = stream.set_write_timeout(Some(CONNECT_TIMEOUT));
         stream.write_all(REFRESH_PAYLOAD).is_ok()
+    }
+    #[cfg(all(windows, feature = "windows-integrations"))]
+    {
+        let Ok(pipe_name) = std::fs::read_to_string(path) else {
+            return false;
+        };
+        let pipe_name = pipe_name.trim();
+        if pipe_name.is_empty() {
+            return false;
+        }
+        let Ok(mut pipe) = std::fs::OpenOptions::new().write(true).open(pipe_name) else {
+            return false;
+        };
+        pipe.write_all(REFRESH_PAYLOAD).is_ok()
     }
 }
 
@@ -338,5 +382,30 @@ mod tests {
         assert!(name.ends_with(".sock"), "expected .sock suffix in {name}");
         let pid = std::process::id().to_string();
         assert!(name.contains(&pid), "expected pid {pid} in {name}");
+    }
+}
+
+#[cfg(all(test, windows, feature = "windows-integrations"))]
+mod windows_tests {
+    use super::*;
+
+    #[test]
+    fn windows_listener_marker_uses_pipe_extension() {
+        let marker = gui_socket_path();
+        assert_eq!(
+            marker.extension().and_then(|ext| ext.to_str()),
+            Some("pipe")
+        );
+    }
+
+    #[test]
+    fn windows_pipe_name_uses_named_pipe_namespace() {
+        assert!(gui_pipe_name().starts_with(r"\\.\pipe\modde-"));
+    }
+
+    #[test]
+    fn notify_at_returns_false_for_missing_marker() {
+        let marker = socket_dir().join("missing.pipe");
+        assert!(!notify_refresh_at(&marker));
     }
 }

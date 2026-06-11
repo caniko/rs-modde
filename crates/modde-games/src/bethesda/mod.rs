@@ -14,6 +14,8 @@ pub mod ini_tweaks;
 pub mod loot;
 pub mod plugin_header;
 pub mod plugins_txt;
+pub mod records;
+pub mod save_analysis;
 pub mod saves;
 pub mod scanner;
 

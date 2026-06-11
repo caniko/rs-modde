@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use smallvec::SmallVec;
 
 /// Content types a game can have.
@@ -114,6 +114,70 @@ pub enum ModSafety {
     Unknown,
 }
 
+/// The type of save-record dependency found while checking whether a mod can
+/// be removed from an existing playthrough.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SaveDependencyKind {
+    PluginRecord,
+    PapyrusScript,
+    ActiveScript,
+    UnattachedInstance,
+    UndefinedElement,
+    ParseIncomplete,
+}
+
+impl SaveDependencyKind {
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            SaveDependencyKind::PluginRecord => "plugin record",
+            SaveDependencyKind::PapyrusScript => "Papyrus script",
+            SaveDependencyKind::ActiveScript => "active script",
+            SaveDependencyKind::UnattachedInstance => "unattached instance",
+            SaveDependencyKind::UndefinedElement => "undefined element",
+            SaveDependencyKind::ParseIncomplete => "parse incomplete",
+        }
+    }
+}
+
+/// A single reason a save depends on the mod being removed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SaveDependencyFinding {
+    pub save_path: PathBuf,
+    pub profile: Option<String>,
+    pub dependency_kind: SaveDependencyKind,
+    pub symbol: String,
+    pub source_file: Option<String>,
+    pub confidence: f32,
+}
+
+/// Aggregated report returned to CLI and UI removal gates.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SaveRemovalGateReport {
+    pub mod_id: String,
+    pub safety: ModSafety,
+    pub analyzed_saves: usize,
+    pub blocking_findings: Vec<SaveDependencyFinding>,
+    pub warnings: Vec<String>,
+}
+
+impl SaveRemovalGateReport {
+    #[must_use]
+    pub fn is_blocked(&self) -> bool {
+        !self.blocking_findings.is_empty()
+    }
+}
+
+/// Read-only analyzer used before removing mods from active playthroughs.
+pub trait SaveDependencyAnalyzer: Send + Sync {
+    fn analyze_mod_removal(
+        &self,
+        mod_id: &str,
+        mod_dir: &Path,
+        save_roots: &[PathBuf],
+    ) -> Result<SaveRemovalGateReport>;
+}
+
 impl ModSafety {
     /// Returns `true` if this mod should be included in save fingerprints.
     #[must_use]
@@ -158,6 +222,43 @@ pub struct DeployTarget {
     pub kind: DeployTargetKind,
 }
 
+/// Runtime VFS patch support advertised by a game plugin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HotDeploySupport {
+    Unsupported,
+    Experimental,
+}
+
+/// Describes whether a game can accept a narrow live-deploy patch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HotDeployCapability {
+    pub support: HotDeploySupport,
+    pub cosmetic_only: bool,
+}
+
+impl HotDeployCapability {
+    #[must_use]
+    pub const fn unsupported() -> Self {
+        Self {
+            support: HotDeploySupport::Unsupported,
+            cosmetic_only: true,
+        }
+    }
+
+    #[must_use]
+    pub const fn experimental_cosmetic_only() -> Self {
+        Self {
+            support: HotDeploySupport::Experimental,
+            cosmetic_only: true,
+        }
+    }
+
+    #[must_use]
+    pub const fn is_supported(self) -> bool {
+        !matches!(self.support, HotDeploySupport::Unsupported)
+    }
+}
+
 /// Trait implemented by each supported game.
 pub trait GamePlugin: Send + Sync {
     /// Unique game identifier (e.g. "skyrim-se").
@@ -199,6 +300,22 @@ pub trait GamePlugin: Send + Sync {
     fn deploy_to_install(&self, staging: &Path, install: &Path) -> Result<()> {
         let target = self.mod_root(install)?;
         self.deploy(staging, &target)
+    }
+
+    /// Whether this game supports experimental path-level live VFS patching.
+    fn hot_deploy_capability(&self) -> HotDeployCapability {
+        HotDeployCapability::unsupported()
+    }
+
+    /// Apply an already validated hot-deploy patch to the profile staging tree
+    /// and the live game deployment target.
+    fn apply_hot_deploy_patch(
+        &self,
+        _patch: &modde_core::hot_deploy::HotDeployPatch,
+        _staging: &Path,
+        _install: &Path,
+    ) -> Result<()> {
+        bail!("hot-deploy is not supported for {}", self.display_name())
     }
 
     /// Run any post-deployment steps (e.g. `REDmod` deploy).

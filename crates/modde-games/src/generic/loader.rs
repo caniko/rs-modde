@@ -10,7 +10,7 @@ use tracing::warn;
 
 use crate::generic::GenericGame;
 use crate::registry::{EngineFamily, GameRegistration, LauncherIds, SUPPORTED_GAME_IDS};
-use crate::traits::GamePlugin;
+use crate::traits::{GamePlugin, HotDeploySupport};
 
 use super::leak::str as leak_str;
 use super::spec::GameSpec;
@@ -99,7 +99,9 @@ pub fn load_user_games() -> Vec<GameRegistration> {
             plugin,
             scanner: None,
             save_tracker: None,
+            save_dependency_analyzer: None,
             collision_classifier: Some(crate::registry::generic_collision_classifier),
+            hot_deploy: HotDeploySupport::Unsupported,
             optiscaler_profiles: &[],
         });
     }

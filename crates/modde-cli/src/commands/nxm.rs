@@ -139,7 +139,7 @@ pub fn install_handler() -> Result<PathBuf> {
     install_handler_platform()
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 fn install_handler_platform() -> Result<PathBuf> {
     let desktop_entry = r"[Desktop Entry]
 Type=Application
@@ -185,7 +185,7 @@ Categories=Game;
     Ok(desktop_path)
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "macos-integrations"))]
 fn install_handler_platform() -> Result<PathBuf> {
     let exe_path = std::env::current_exe().context("failed to determine modde binary path")?;
     let home = modde_core::paths::home_dir();
@@ -246,7 +246,7 @@ fn install_handler_platform() -> Result<PathBuf> {
     Ok(app_path)
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "windows-integrations"))]
 fn install_handler_platform() -> Result<PathBuf> {
     use winreg::RegKey;
     use winreg::enums::*;
@@ -272,6 +272,15 @@ fn install_handler_platform() -> Result<PathBuf> {
     println!("You can now click 'Download with Mod Manager' on Nexus Mods.");
 
     Ok(exe_path)
+}
+
+#[cfg(not(any(
+    all(target_os = "linux", feature = "linux-integrations"),
+    all(target_os = "macos", feature = "macos-integrations"),
+    all(target_os = "windows", feature = "windows-integrations"),
+)))]
+fn install_handler_platform() -> Result<PathBuf> {
+    anyhow::bail!("nxm:// protocol handler installation is not enabled for this platform build");
 }
 
 #[cfg(test)]

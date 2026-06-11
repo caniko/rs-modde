@@ -12,7 +12,7 @@ use tracing_subscriber::prelude::*;
 
 mod commands;
 #[cfg(feature = "remote-telemetry")]
-mod telemetry;
+pub(crate) mod telemetry;
 
 #[derive(Parser)]
 #[command(name = "modde", version, about = "NixOS-native game mod manager")]
@@ -46,6 +46,11 @@ enum Commands {
         #[command(subcommand)]
         action: ProfileAction,
     },
+    /// Export, sign, verify, and import portable modde.lock files
+    Lock {
+        #[command(subcommand)]
+        action: LockAction,
+    },
     /// Inspect and set modde configuration (including the database backend)
     Config {
         #[command(subcommand)]
@@ -67,12 +72,35 @@ enum Commands {
         #[arg(long)]
         no_capture: bool,
     },
+    /// Capture and compare local performance telemetry
+    Perf {
+        #[command(subcommand)]
+        action: PerfAction,
+    },
     /// Deploy mods for the active or specified profile
     Deploy {
         #[arg(long)]
         profile: Option<String>,
         #[arg(long)]
         game: Option<String>,
+    },
+    /// Patch one cosmetic mod into the live VFS without a full redeploy
+    HotDeploy {
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+        #[arg(long = "mod")]
+        mod_id: String,
+        #[arg(long)]
+        enable: bool,
+        #[arg(long)]
+        disable: bool,
+        #[arg(long)]
+        dry_run: bool,
+        /// Apply even if the game process appears to be running.
+        #[arg(long)]
+        force: bool,
     },
     /// Rollback to the previous deployment
     Rollback {
@@ -127,6 +155,11 @@ enum Commands {
     Loot {
         #[command(subcommand)]
         action: LootAction,
+    },
+    /// Configure and run profile-scoped patcher pipeline stages
+    Patcher {
+        #[command(subcommand)]
+        action: PatcherAction,
     },
     /// Run external tools with overwrite capture
     Tool {
@@ -183,12 +216,29 @@ enum Commands {
         #[arg(long)]
         suggest_hides: bool,
     },
-    /// Run diagnostics to detect common modding issues
+    /// Diagnose profiles and crash logs with grounded evidence
+    Doctor {
+        #[command(subcommand)]
+        action: DoctorAction,
+    },
+    /// Deprecated alias: use `modde doctor profile`
+    #[command(hide = true)]
     Diagnostics {
         #[arg(long)]
         game: String,
         #[arg(long)]
         profile: Option<String>,
+    },
+    /// Deprecated alias: use `modde doctor crash`
+    #[command(hide = true)]
+    Crash {
+        #[command(subcommand)]
+        action: CrashAction,
+    },
+    /// Binary-search enabled mods to isolate a crash or performance regression
+    Bisect {
+        #[command(subcommand)]
+        action: BisectAction,
     },
     /// Export mod list to CSV
     Export {
@@ -283,6 +333,149 @@ enum ExecAction {
         #[arg(last = true)]
         args: Vec<String>,
     },
+}
+
+#[derive(Subcommand)]
+pub enum LockAction {
+    /// Export one profile to a portable JSON lockfile.
+    Export {
+        #[arg(long)]
+        profile: String,
+        #[arg(long)]
+        game: String,
+        #[arg(long, default_value = "modde.lock")]
+        output: PathBuf,
+        /// Emit a diagnostic lock even when required provenance is missing.
+        #[arg(long)]
+        allow_incomplete: bool,
+    },
+    /// Verify lock signatures and tracked files against local disk.
+    Verify {
+        path: PathBuf,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+    },
+    /// Append an Ed25519 signature to a lockfile.
+    Sign {
+        path: PathBuf,
+        #[arg(long)]
+        secret_key: PathBuf,
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Generate an Ed25519 key pair for lock signing.
+    Keygen {
+        #[arg(long)]
+        public: PathBuf,
+        #[arg(long)]
+        secret: PathBuf,
+    },
+    /// Validate and import lock metadata into a profile.
+    Import {
+        path: PathBuf,
+        #[arg(long)]
+        profile: String,
+        #[arg(long)]
+        game: String,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        apply: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum CrashAction {
+    /// Parse and correlate a local crash log with a profile's installed mods.
+    Analyze {
+        log_path: Option<PathBuf>,
+        #[arg(long)]
+        game: String,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long, value_enum, default_value_t = commands::crash::CrashFormatArg::Auto)]
+        format: commands::crash::CrashFormatArg,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum DoctorAction {
+    /// Diagnose common profile problems from modde's local database.
+    Profile {
+        #[arg(long)]
+        game: String,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Parse and correlate a local crash log with a profile's installed mods.
+    Crash {
+        log_path: Option<PathBuf>,
+        #[arg(long)]
+        game: String,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long, value_enum, default_value_t = commands::crash::CrashFormatArg::Auto)]
+        format: commands::crash::CrashFormatArg,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Ask an OpenAI-compatible LLM for grounded, cited hypotheses.
+    Explain {
+        log_path: PathBuf,
+        #[arg(long)]
+        game: String,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long, value_enum, default_value_t = commands::doctor::DoctorProviderArg::Local)]
+        provider: commands::doctor::DoctorProviderArg,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum BisectAction {
+    /// Start a resumable bisect session for a bad source profile
+    Start {
+        #[arg(long)]
+        game: String,
+        #[arg(long)]
+        profile: String,
+        #[arg(long, value_enum)]
+        oracle: commands::bisect::BisectOracleArg,
+        #[arg(long)]
+        baseline_run: Option<String>,
+        #[arg(long)]
+        crash_dir: Option<PathBuf>,
+        #[arg(long)]
+        force_save_risk: bool,
+        #[arg(long)]
+        keep_profiles: bool,
+    },
+    /// Create/deploy/launch the next candidate profile
+    Run { session_id: String },
+    /// Relaunch the current pending candidate profile
+    Retry { session_id: String },
+    /// Mark the pending candidate result for manual or fire-and-forget runs
+    Mark {
+        session_id: String,
+        #[arg(value_enum)]
+        result: commands::bisect::BisectResultArg,
+        #[arg(long)]
+        notes: Option<String>,
+    },
+    /// Show bisect session progress
+    Status { session_id: String },
+    /// Show detailed step history and observed signals
+    History { session_id: String },
+    /// Abort a bisect session and clean candidate profiles unless kept
+    Abort { session_id: String },
 }
 
 #[derive(Subcommand)]
@@ -643,6 +836,12 @@ enum ModAction {
         /// one.
         #[arg(long)]
         profile: Option<String>,
+        /// Report save-game contamination risk without removing the mod.
+        #[arg(long)]
+        dry_run: bool,
+        /// Remove even when active or vaulted saves depend on this mod.
+        #[arg(long)]
+        force_contaminate: bool,
     },
     /// Print the skill dossier path and inline prompt for a mod whose
     /// install type could not be detected. Handy for piping into
@@ -892,6 +1091,102 @@ enum LootAction {
 }
 
 #[derive(Subcommand)]
+enum PatcherAction {
+    /// List patcher stages for a profile.
+    List {
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+    },
+    /// Add or update a Synthesis CLI stage.
+    AddSynthesis {
+        name: String,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+        #[arg(long)]
+        executable: PathBuf,
+        #[arg(long)]
+        pipeline_settings: PathBuf,
+        #[arg(long)]
+        synthesis_profile: String,
+        #[arg(long)]
+        output_mod: String,
+        #[arg(long)]
+        order: i64,
+    },
+    /// Add or update a generic command stage.
+    AddCommand {
+        name: String,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+        #[arg(long)]
+        executable: PathBuf,
+        #[arg(long)]
+        working_dir: Option<PathBuf>,
+        #[arg(long = "arg", allow_hyphen_values = true)]
+        args: Vec<String>,
+        #[arg(long = "env")]
+        environment: Vec<String>,
+        #[arg(long)]
+        output_mod: String,
+        #[arg(long, default_value_t = -1)]
+        order: i64,
+    },
+    /// Remove a patcher stage.
+    Remove {
+        name: String,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+    },
+    /// Enable a patcher stage.
+    Enable {
+        name: String,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+    },
+    /// Disable a patcher stage.
+    Disable {
+        name: String,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+    },
+    /// Replace patcher stage order with the supplied stage names.
+    Reorder {
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+        names: Vec<String>,
+    },
+    /// Validate enabled patcher stages without running them.
+    Validate {
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+    },
+    /// Run one stage by name, or all enabled stages when no name is supplied.
+    Run {
+        name: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        game: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
 enum ToolAction {
     /// Run an external tool with overwrite capture
     Run {
@@ -1029,6 +1324,57 @@ enum ToolAction {
         asset: String,
         /// Local path to the already-downloaded asset
         path: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum PerfAction {
+    /// Launch a profile with per-run MangoHud CSV capture
+    Run {
+        /// Profile to activate and benchmark (uses active profile if omitted)
+        profile: Option<String>,
+        #[arg(long)]
+        game: String,
+        /// MangoHud log duration in seconds
+        #[arg(long, default_value_t = 300)]
+        duration: u64,
+        /// Optional human label for the run
+        #[arg(long)]
+        label: Option<String>,
+        /// Seconds of startup samples to skip when computing summary statistics
+        #[arg(long, default_value_t = 30.0)]
+        warmup_seconds: f64,
+        /// Skip mod deployment before launch
+        #[arg(long)]
+        no_deploy: bool,
+    },
+    /// Ingest a MangoHud CSV for a pending run
+    Ingest {
+        #[arg(long = "run")]
+        run_id: String,
+        #[arg(long)]
+        csv: PathBuf,
+        /// Seconds of startup samples to skip when computing summary statistics
+        #[arg(long, default_value_t = 30.0)]
+        warmup_seconds: f64,
+    },
+    /// List captured runs for a game
+    List {
+        #[arg(long)]
+        game: String,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+    },
+    /// Show one captured run
+    Show { run_id: String },
+    /// Compare two captured runs
+    Compare {
+        #[arg(long)]
+        baseline: String,
+        #[arg(long)]
+        candidate: String,
     },
 }
 
@@ -1501,8 +1847,55 @@ fn run_command(cli: Cli) -> Result<()> {
             ));
         }
         Commands::Diagnostics { game, profile } => {
-            db_sync!(commands::diagnostics::handle(&game, profile));
+            eprintln!("warning: `modde diagnostics` is deprecated; use `modde doctor profile`");
+            db_sync!(commands::doctor::handle_profile(game, profile, false));
         }
+        Commands::Crash {
+            action:
+                CrashAction::Analyze {
+                    log_path,
+                    game,
+                    profile,
+                    format,
+                    json,
+                },
+        } => {
+            eprintln!("warning: `modde crash analyze` is deprecated; use `modde doctor crash`");
+            db_sync!(commands::doctor::handle_crash(
+                log_path, game, profile, format, json
+            ));
+        }
+        Commands::Doctor { action } => match action {
+            DoctorAction::Profile {
+                game,
+                profile,
+                json,
+            } => {
+                db_sync!(commands::doctor::handle_profile(game, profile, json));
+            }
+            DoctorAction::Crash {
+                log_path,
+                game,
+                profile,
+                format,
+                json,
+            } => {
+                db_sync!(commands::doctor::handle_crash(
+                    log_path, game, profile, format, json
+                ));
+            }
+            DoctorAction::Explain {
+                log_path,
+                game,
+                profile,
+                provider,
+                json,
+            } => {
+                db_sync!(commands::doctor::handle_explain(
+                    log_path, game, profile, provider, json
+                ));
+            }
+        },
         Commands::Export {
             profile,
             game,
@@ -1641,7 +2034,7 @@ fn run_command(cli: Cli) -> Result<()> {
         Commands::Skill { action } => {
             return commands::skill::handle(action);
         }
-        Commands::Wabbajack { .. } => {}
+        Commands::Wabbajack { .. } | Commands::Lock { .. } => {}
         _ => {}
     }
 
@@ -1654,7 +2047,108 @@ fn run_command(cli: Cli) -> Result<()> {
                 no_switch,
                 no_capture,
             } => commands::play::handle(profile, game, no_deploy, no_switch, no_capture).await?,
+            Commands::Perf { action } => match action {
+                PerfAction::Run {
+                    profile,
+                    game,
+                    duration,
+                    label,
+                    warmup_seconds,
+                    no_deploy,
+                } => {
+                    commands::perf::handle_run(
+                        profile,
+                        game,
+                        duration,
+                        label,
+                        warmup_seconds,
+                        no_deploy,
+                    )
+                    .await?;
+                }
+                PerfAction::Ingest {
+                    run_id,
+                    csv,
+                    warmup_seconds,
+                } => {
+                    commands::perf::handle_ingest(run_id, csv, warmup_seconds).await?;
+                }
+                PerfAction::List {
+                    game,
+                    profile,
+                    limit,
+                } => {
+                    commands::perf::handle_list(game, profile, limit).await?;
+                }
+                PerfAction::Show { run_id } => {
+                    commands::perf::handle_show(run_id).await?;
+                }
+                PerfAction::Compare {
+                    baseline,
+                    candidate,
+                } => {
+                    commands::perf::handle_compare(baseline, candidate).await?;
+                }
+            },
+            Commands::Bisect { action } => match action {
+                BisectAction::Start {
+                    game,
+                    profile,
+                    oracle,
+                    baseline_run,
+                    crash_dir,
+                    force_save_risk,
+                    keep_profiles,
+                } => {
+                    commands::bisect::handle_start(
+                        game,
+                        profile,
+                        oracle,
+                        baseline_run,
+                        crash_dir,
+                        force_save_risk,
+                        keep_profiles,
+                    )
+                    .await?;
+                }
+                BisectAction::Run { session_id } => {
+                    commands::bisect::handle_run(session_id).await?;
+                }
+                BisectAction::Retry { session_id } => {
+                    commands::bisect::handle_retry(session_id).await?;
+                }
+                BisectAction::Mark {
+                    session_id,
+                    result,
+                    notes,
+                } => {
+                    commands::bisect::handle_mark(session_id, result, notes).await?;
+                }
+                BisectAction::Status { session_id } => {
+                    commands::bisect::handle_status(session_id).await?;
+                }
+                BisectAction::History { session_id } => {
+                    commands::bisect::handle_history(session_id).await?;
+                }
+                BisectAction::Abort { session_id } => {
+                    commands::bisect::handle_abort(session_id).await?;
+                }
+            },
             Commands::Deploy { profile, game } => commands::deploy::handle(profile, game).await?,
+            Commands::HotDeploy {
+                profile,
+                game,
+                mod_id,
+                enable,
+                disable,
+                dry_run,
+                force,
+            } => {
+                commands::hot_deploy::handle(
+                    profile, game, mod_id, enable, disable, dry_run, force,
+                )
+                .await?;
+            }
             Commands::Collisions {
                 profile,
                 game,
@@ -1666,8 +2160,14 @@ fn run_command(cli: Cli) -> Result<()> {
             }
             Commands::Install { source } => commands::install::handle(source).await?,
             Commands::Mod { action } => match action {
-                ModAction::Remove { mod_id, profile } => {
-                    commands::uninstall::handle(mod_id, profile).await?;
+                ModAction::Remove {
+                    mod_id,
+                    profile,
+                    dry_run,
+                    force_contaminate,
+                } => {
+                    commands::uninstall::handle(mod_id, profile, dry_run, force_contaminate)
+                        .await?;
                 }
                 ModAction::Diagnose { mod_id } => {
                     commands::uninstall::handle_diagnose(mod_id).await?;
@@ -1818,6 +2318,91 @@ fn run_command(cli: Cli) -> Result<()> {
                     )
                 }
             },
+            Commands::Patcher { action } => match action {
+                PatcherAction::List { profile, game } => {
+                    commands::patcher::handle_list(profile, game).await?;
+                }
+                PatcherAction::AddSynthesis {
+                    name,
+                    profile,
+                    game,
+                    executable,
+                    pipeline_settings,
+                    synthesis_profile,
+                    output_mod,
+                    order,
+                } => {
+                    commands::patcher::handle_add_synthesis(
+                        &name,
+                        profile,
+                        game,
+                        executable,
+                        pipeline_settings,
+                        synthesis_profile,
+                        output_mod,
+                        order,
+                    )
+                    .await?;
+                }
+                PatcherAction::AddCommand {
+                    name,
+                    profile,
+                    game,
+                    executable,
+                    working_dir,
+                    args,
+                    environment,
+                    output_mod,
+                    order,
+                } => {
+                    commands::patcher::handle_add_command(
+                        &name,
+                        profile,
+                        game,
+                        executable,
+                        working_dir,
+                        args,
+                        environment,
+                        output_mod,
+                        order,
+                    )
+                    .await?;
+                }
+                PatcherAction::Remove {
+                    name,
+                    profile,
+                    game,
+                } => commands::patcher::handle_remove(&name, profile, game).await?,
+                PatcherAction::Enable {
+                    name,
+                    profile,
+                    game,
+                } => commands::patcher::handle_set_enabled(&name, profile, game, true).await?,
+                PatcherAction::Disable {
+                    name,
+                    profile,
+                    game,
+                } => commands::patcher::handle_set_enabled(&name, profile, game, false).await?,
+                PatcherAction::Reorder {
+                    profile,
+                    game,
+                    names,
+                } => commands::patcher::handle_reorder(profile, game, names).await?,
+                PatcherAction::Validate { profile, game } => {
+                    commands::patcher::handle_validate(profile, game).await?;
+                }
+                PatcherAction::Run {
+                    name,
+                    profile,
+                    game,
+                } => {
+                    if let Some(name) = name {
+                        commands::patcher::handle_run_stage(&name, profile, game).await?;
+                    } else {
+                        commands::patcher::handle_run(profile, game).await?;
+                    }
+                }
+            },
             Commands::Nxm { action } => match action {
                 NxmAction::Handle { uri, profile } => commands::nxm::handle(uri, profile).await?,
                 NxmAction::Install => {
@@ -1839,6 +2424,7 @@ fn run_command(cli: Cli) -> Result<()> {
                 }
             },
             Commands::Wabbajack { action } => commands::wabbajack::handle(action).await?,
+            Commands::Lock { action } => commands::lockfile::handle(action).await?,
             // Already handled above
             Commands::Profile { .. }
             | Commands::Config { .. }
@@ -1850,6 +2436,8 @@ fn run_command(cli: Cli) -> Result<()> {
             | Commands::Instance { .. }
             | Commands::Backup { .. }
             | Commands::Diagnostics { .. }
+            | Commands::Crash { .. }
+            | Commands::Doctor { .. }
             | Commands::Export { .. }
             | Commands::Fomod { .. }
             | Commands::Loot { .. }
@@ -1874,7 +2462,18 @@ fn command_mutates_state(cmd: &Commands) -> bool {
         Commands::Dev { .. }
         | Commands::Detect
         | Commands::Diagnostics { .. }
+        | Commands::Doctor {
+            action: DoctorAction::Profile { .. },
+        }
         | Commands::Export { .. }
+        | Commands::Lock {
+            action:
+                LockAction::Export { .. }
+                | LockAction::Verify { .. }
+                | LockAction::Sign { .. }
+                | LockAction::Keygen { .. }
+                | LockAction::Import { dry_run: true, .. },
+        }
         | Commands::Verify { .. }
         | Commands::Collisions { .. }
         | Commands::Gui => false,
@@ -1897,12 +2496,21 @@ fn command_mutates_state(cmd: &Commands) -> bool {
         // `update check` is read-only; `update apply` mutates.
         Commands::Update { action } => matches!(action, UpdateAction::Apply { .. }),
 
+        Commands::Perf { action } => {
+            matches!(action, PerfAction::Run { .. } | PerfAction::Ingest { .. })
+        }
+
         // `instance list` is read-only; create/switch flip the active
         // data dir.
         Commands::Instance { action } => !matches!(action, InstanceAction::List),
 
         // Loot validate just reports, sort rewrites the load order.
         Commands::Loot { action } => matches!(action, LootAction::Sort { .. }),
+
+        Commands::Patcher { action } => !matches!(
+            action,
+            PatcherAction::List { .. } | PatcherAction::Validate { .. }
+        ),
 
         // Tool subcommands: queries are read-only, everything else
         // mutates per-game tool config rows.
@@ -1927,6 +2535,10 @@ fn command_mutates_state(cmd: &Commands) -> bool {
         // The status arm doesn't mutate, but the GUI surfaces auth
         // state — a refresh is harmless and cheap. Notify on either.
         Commands::Nexus { .. } => true,
+        Commands::Crash { .. } => true,
+        Commands::Doctor {
+            action: DoctorAction::Crash { .. } | DoctorAction::Explain { .. },
+        } => true,
 
         // `mod diagnose` only prints the dossier; remove mutates.
         Commands::Mod { action } => matches!(action, ModAction::Remove { .. }),
@@ -1951,11 +2563,15 @@ fn command_mutates_state(cmd: &Commands) -> bool {
         // Stock snapshots affect deploy decisions; treat as mutating.
         Commands::Stock { .. } => true,
 
+        Commands::HotDeploy { dry_run, .. } => !dry_run,
+
         // Backup capture/restore mutates the data dir.
         Commands::Backup { .. } => true,
 
         // Everything below is unambiguously mutating.
         Commands::Profile { .. }
+        | Commands::Lock { .. }
+        | Commands::Bisect { .. }
         | Commands::Scan { .. }
         | Commands::Import
         | Commands::Fomod { .. }
@@ -1972,6 +2588,7 @@ fn command_runs_lazy_product_update_check(cmd: &Commands) -> bool {
         Commands::Gui
             | Commands::Config { .. }
             | Commands::Dev { .. }
+            | Commands::Lock { .. }
             | Commands::Update {
                 action: UpdateAction::Check { .. }
             }
@@ -2110,6 +2727,24 @@ mod mutation_classification_tests {
         }
     }
 
+    fn patcher_list() -> Commands {
+        Commands::Patcher {
+            action: PatcherAction::List {
+                profile: None,
+                game: None,
+            },
+        }
+    }
+
+    fn patcher_validate() -> Commands {
+        Commands::Patcher {
+            action: PatcherAction::Validate {
+                profile: None,
+                game: None,
+            },
+        }
+    }
+
     fn tool_apply() -> Commands {
         Commands::Tool {
             action: ToolAction::Apply {
@@ -2124,6 +2759,8 @@ mod mutation_classification_tests {
             action: ModAction::Remove {
                 mod_id: "x".into(),
                 profile: None,
+                dry_run: false,
+                force_contaminate: false,
             },
         }
     }
@@ -2291,6 +2928,16 @@ mod mutation_classification_tests {
     }
 
     #[test]
+    fn patcher_list_is_read_only() {
+        assert!(!command_mutates_state(&patcher_list()));
+    }
+
+    #[test]
+    fn patcher_validate_is_read_only() {
+        assert!(!command_mutates_state(&patcher_validate()));
+    }
+
+    #[test]
     fn mod_diagnose_is_read_only() {
         assert!(!command_mutates_state(&mod_diagnose()));
     }
@@ -2389,6 +3036,23 @@ mod mutation_classification_tests {
     }
 
     #[test]
+    fn patcher_add_command_is_mutating() {
+        assert!(command_mutates_state(&Commands::Patcher {
+            action: PatcherAction::AddCommand {
+                name: "stage".into(),
+                profile: None,
+                game: None,
+                executable: PathBuf::from("/bin/true"),
+                working_dir: None,
+                args: Vec::new(),
+                environment: Vec::new(),
+                output_mod: "generated".into(),
+                order: 1,
+            },
+        }));
+    }
+
+    #[test]
     fn mod_remove_is_mutating() {
         assert!(command_mutates_state(&mod_remove()));
     }
@@ -2423,6 +3087,32 @@ mod mutation_classification_tests {
         assert!(command_mutates_state(&Commands::Deploy {
             profile: None,
             game: None,
+        }));
+    }
+
+    #[test]
+    fn hot_deploy_dry_run_is_read_only() {
+        assert!(!command_mutates_state(&Commands::HotDeploy {
+            profile: None,
+            game: Some("cyberpunk2077".into()),
+            mod_id: "cosmetic".into(),
+            enable: true,
+            disable: false,
+            dry_run: true,
+            force: false,
+        }));
+    }
+
+    #[test]
+    fn hot_deploy_apply_is_mutating() {
+        assert!(command_mutates_state(&Commands::HotDeploy {
+            profile: None,
+            game: Some("cyberpunk2077".into()),
+            mod_id: "cosmetic".into(),
+            enable: true,
+            disable: false,
+            dry_run: false,
+            force: false,
         }));
     }
 

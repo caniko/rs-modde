@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use tracing::{info, warn};
 
 use crate::error::{CoreError, Result};
-use crate::fs::symlink_async;
+use crate::fs::{case_match_path, symlink_async};
 use crate::paths;
 use crate::resolver::{ModId, ResolvedLoadOrder};
 
@@ -55,7 +55,7 @@ impl SymlinkFarm<Built> {
     ) -> Result<Self> {
         let staging_dir = paths::profiles_dir().join(profile_name).join("staging");
 
-        let mut links: HashMap<String, PathBuf> = HashMap::new();
+        let mut folded_links: HashMap<String, (String, PathBuf)> = HashMap::new();
 
         // Process mods in load order; later mods override earlier for the same path
         for mod_id in &resolved.order {
@@ -67,7 +67,12 @@ impl SymlinkFarm<Built> {
                     {
                         continue;
                     }
-                    links.insert(rel_path.clone(), source.clone());
+                    insert_case_folded_link(
+                        &mut folded_links,
+                        rel_path,
+                        source,
+                        Some(mod_id.as_str()),
+                    );
                 }
             }
         }
@@ -75,9 +80,10 @@ impl SymlinkFarm<Built> {
         // Profile-level overrides win over all mods
         if let Some(overrides) = overrides {
             for (rel_path, source) in overrides {
-                links.insert(rel_path.clone(), source.clone());
+                insert_case_folded_link(&mut folded_links, rel_path, source, None);
             }
         }
+        let links = folded_links.into_values().collect();
 
         Ok(Self {
             staging_dir,
@@ -116,6 +122,28 @@ impl SymlinkFarm<Built> {
     }
 }
 
+fn insert_case_folded_link(
+    links: &mut HashMap<String, (String, PathBuf)>,
+    rel_path: &str,
+    source: &Path,
+    mod_id: Option<&str>,
+) {
+    let folded = rel_path.to_ascii_lowercase();
+    if let Some((previous_path, previous_source)) =
+        links.insert(folded, (rel_path.to_string(), source.to_path_buf()))
+        && previous_path != rel_path
+    {
+        warn!(
+            previous_path,
+            replacement_path = rel_path,
+            previous_source = %previous_source.display(),
+            replacement_source = %source.display(),
+            mod_id = mod_id.unwrap_or("<profile-overrides>"),
+            "case-only VFS path collision resolved by load-order precedence"
+        );
+    }
+}
+
 impl SymlinkFarm<Materialized> {
     /// Deploy the materialized staging directory into the game's mod directory.
     ///
@@ -127,7 +155,7 @@ impl SymlinkFarm<Materialized> {
 
         for rel_path in self.links.keys() {
             let src = self.staging_dir.join(rel_path);
-            let dst = target.join(rel_path);
+            let dst = case_match_path(target, Path::new(rel_path))?;
 
             if let Some(parent) = dst.parent() {
                 tokio::fs::create_dir_all(parent).await?;
@@ -238,6 +266,28 @@ mod tests {
         assert_eq!(farm.links.len(), 1);
         // mod_b is later, so it wins
         assert_eq!(farm.links.get("meshes/body.nif").unwrap(), &source_b);
+    }
+
+    #[test]
+    fn test_build_case_only_collision_uses_load_order_winner() {
+        let resolved = make_resolved(vec!["mod_a", "mod_b"]);
+        let source_a = PathBuf::from("/store/mod_a/Textures/Foo.dds");
+        let source_b = PathBuf::from("/store/mod_b/textures/foo.dds");
+
+        let mut mod_files: HashMap<ModId, Vec<(String, PathBuf)>> = HashMap::new();
+        mod_files.insert(
+            "mod_a".into(),
+            vec![("Textures/Foo.dds".into(), source_a.clone())],
+        );
+        mod_files.insert(
+            "mod_b".into(),
+            vec![("textures/foo.dds".into(), source_b.clone())],
+        );
+
+        let farm = SymlinkFarm::build("test_profile", &resolved, &mod_files, None, None).unwrap();
+        assert_eq!(farm.links.len(), 1);
+        assert_eq!(farm.links.get("textures/foo.dds").unwrap(), &source_b);
+        assert!(!farm.links.contains_key("Textures/Foo.dds"));
     }
 
     #[test]
@@ -557,6 +607,42 @@ mod tests {
                 .file_type()
                 .is_symlink()
         );
+    }
+
+    #[tokio::test]
+    async fn test_deploy_matches_existing_target_tree_casing() {
+        let tmp = TempDir::new().unwrap();
+        let staging_dir = tmp.path().join("staging");
+        let target_dir = tmp.path().join("game/mods");
+
+        std::fs::create_dir_all(target_dir.join("textures")).unwrap();
+        std::fs::write(target_dir.join("textures/sky.dds"), "old").unwrap();
+
+        let source_file = tmp.path().join("source.dds");
+        std::fs::write(&source_file, "new").unwrap();
+
+        let mut links = HashMap::new();
+        links.insert("Textures/SKY.DDS".to_string(), source_file.clone());
+
+        let farm = test_farm(staging_dir.clone(), links);
+        let farm = farm.materialize().await.unwrap();
+
+        farm.deploy_to(&target_dir).await.unwrap();
+
+        let deployed = target_dir.join("textures/sky.dds");
+        assert!(
+            deployed
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(
+            std::fs::read_link(&deployed).unwrap(),
+            staging_dir.join("Textures/SKY.DDS")
+        );
+        assert_eq!(std::fs::read_to_string(&deployed).unwrap(), "new");
+        assert!(!target_dir.join("Textures/SKY.DDS").exists());
     }
 
     // ========================================================================

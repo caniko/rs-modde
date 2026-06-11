@@ -1,5 +1,5 @@
 use crate::views::selectable_text::text;
-use iced::widget::{button, column, container, row, scrollable};
+use iced::widget::{button, column, container, row, scrollable, text_input};
 use iced::{Alignment, Element, Length, color};
 use std::path::PathBuf;
 
@@ -27,6 +27,7 @@ pub struct DiagnosticsReport {
     pub game_id: String,
     pub entries: Vec<DiagnosticEntry>,
     pub integrity: IntegritySummary,
+    pub crash_report: Option<modde_core::crash::CrashCorrelationReport>,
 }
 
 /// Severity levels for diagnostics.
@@ -48,7 +49,7 @@ pub enum DiagnosticsState {
 }
 
 /// Render the diagnostics view.
-pub fn view(state: &DiagnosticsState) -> Element<'_, Message> {
+pub fn view<'a>(state: &'a DiagnosticsState, crash_log_path: &'a str) -> Element<'a, Message> {
     let running = matches!(state, DiagnosticsState::Running);
 
     let title_bar = row![
@@ -69,6 +70,19 @@ pub fn view(state: &DiagnosticsState) -> Element<'_, Message> {
             "Diagnostics are already running.",
         ),
     ]
+    .align_y(Alignment::Center);
+
+    let crash_controls = row![
+        text_input("Crash log path", crash_log_path)
+            .on_input(Message::CrashLogPathChanged)
+            .on_submit(Message::AnalyzeCrashLog)
+            .width(Length::Fill),
+        button(text("Analyze Crash Log").size(14))
+            .style(button::secondary)
+            .padding([6, 14])
+            .on_press(Message::AnalyzeCrashLog),
+    ]
+    .spacing(8)
     .align_y(Alignment::Center);
 
     let content: Element<Message> = match state {
@@ -98,6 +112,7 @@ pub fn view(state: &DiagnosticsState) -> Element<'_, Message> {
             let broken_count = report.integrity.broken_symlinks.len();
             if report.entries.is_empty() && broken_count == 0 {
                 let content = column![
+                    crash_controls,
                     text(format!(
                         "Profile: {} ({})",
                         report.profile_name, report.game_id
@@ -195,8 +210,12 @@ pub fn view(state: &DiagnosticsState) -> Element<'_, Message> {
                     .spacing(6)
                 };
 
+                let crash_rows = crash_report_rows(report);
+
                 column![
+                    crash_controls,
                     summary,
+                    crash_rows,
                     integrity,
                     scrollable(rows.padding(8)).height(Length::Fill),
                 ]
@@ -211,5 +230,42 @@ pub fn view(state: &DiagnosticsState) -> Element<'_, Message> {
         .padding(16)
         .width(Length::Fill)
         .height(Length::Fill)
+        .into()
+}
+
+fn crash_report_rows(report: &DiagnosticsReport) -> Element<'_, Message> {
+    let Some(crash_report) = &report.crash_report else {
+        return container(text("No crash log analyzed for this diagnostics run.").size(13))
+            .padding(8)
+            .width(Length::Fill)
+            .into();
+    };
+    if crash_report.suspects.is_empty() {
+        return container(text("Crash log analyzed: no installed mod correlation found.").size(13))
+            .padding(8)
+            .width(Length::Fill)
+            .into();
+    }
+    let rows = crash_report.suspects.iter().take(5).fold(
+        column![text("Crash log correlation").size(14)].spacing(4),
+        |col, suspect| {
+            let name = suspect
+                .display_name
+                .as_deref()
+                .or(suspect.mod_id.as_deref())
+                .or(suspect.plugin_name.as_deref())
+                .unwrap_or("unmatched crash evidence");
+            let evidence = suspect
+                .evidence
+                .first()
+                .map(|e| format!("{} in {}", e.token, e.section))
+                .unwrap_or_else(|| "mentioned by crash log".to_string());
+            col.push(text(format!("{:?}: {name} - {evidence}", suspect.confidence)).size(13))
+        },
+    );
+    container(rows)
+        .padding(8)
+        .width(Length::Fill)
+        .style(container::rounded_box)
         .into()
 }

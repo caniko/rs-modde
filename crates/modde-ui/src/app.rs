@@ -251,6 +251,7 @@ pub struct Modde {
     /// State for the Browse Nexus view (Phase 6 of the installer pipeline).
     pub browse_nexus: crate::views::browse_nexus::NexusBrowseState,
     pub diagnostics_state: crate::views::diagnostics::DiagnosticsState,
+    pub crash_log_path_draft: String,
     pub tool_state: ToolState,
     /// Filter mode (AND/OR) for the mod list filter toolbar.
     pub filter_mode: FilterMode,
@@ -736,6 +737,8 @@ pub enum Message {
 
     // Diagnostics
     RunDiagnostics,
+    CrashLogPathChanged(String),
+    AnalyzeCrashLog,
     DiagnosticsComputed {
         generation: u64,
         result: Result<DiagnosticsComputed, String>,
@@ -947,27 +950,86 @@ fn external_refresh_stream() -> impl iced::futures::Stream<Item = Message> {
     })
 }
 
-#[cfg(not(unix))]
+#[cfg(all(windows, feature = "windows-integrations"))]
+fn external_refresh_stream() -> impl iced::futures::Stream<Item = Message> {
+    use iced::futures::SinkExt as _;
+    use tokio::io::AsyncReadExt as _;
+    use tokio::net::windows::named_pipe::ServerOptions;
+
+    iced::stream::channel(8, async move |mut output| {
+        let marker_path = modde_core::ipc::gui_socket_path();
+        if let Some(parent) = marker_path.parent()
+            && let Err(e) = std::fs::create_dir_all(parent)
+        {
+            tracing::warn!(
+                error = %e,
+                path = %parent.display(),
+                "could not create Windows refresh marker directory; CLI → GUI live updates disabled"
+            );
+            return;
+        }
+
+        let pipe_name = modde_core::ipc::gui_pipe_name();
+        if let Err(e) = std::fs::write(&marker_path, &pipe_name) {
+            tracing::warn!(
+                error = %e,
+                marker = %marker_path.display(),
+                "could not write Windows refresh marker; CLI → GUI live updates disabled"
+            );
+            return;
+        }
+
+        let _guard = SocketGuard::new(marker_path.clone());
+        tracing::info!(pipe = %pipe_name, marker = %marker_path.display(), "listening for CLI refresh signals");
+
+        loop {
+            let mut server = match ServerOptions::new().create(&pipe_name) {
+                Ok(server) => server,
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        pipe = %pipe_name,
+                        "could not create Windows refresh pipe; CLI → GUI live updates disabled"
+                    );
+                    return;
+                }
+            };
+
+            if let Err(e) = server.connect().await {
+                tracing::warn!(error = %e, "Windows refresh pipe accept failed; restarting listen loop");
+                continue;
+            }
+
+            let mut buf = [0u8; 64];
+            let _ = server.read(&mut buf).await;
+            if output.send(Message::ExternalRefresh).await.is_err() {
+                break;
+            }
+        }
+    })
+}
+
+#[cfg(not(any(unix, all(windows, feature = "windows-integrations"))))]
 fn external_refresh_stream() -> impl iced::futures::Stream<Item = Message> {
     iced::stream::channel(1, |_output| async move {
         std::future::pending::<()>().await;
     })
 }
 
-/// Drop guard that unlinks a Unix socket when the listening task ends.
-#[cfg(unix)]
+/// Drop guard that unlinks a listener socket/marker when the listening task ends.
+#[cfg(any(unix, all(windows, feature = "windows-integrations")))]
 struct SocketGuard {
     path: std::path::PathBuf,
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, all(windows, feature = "windows-integrations")))]
 impl SocketGuard {
     fn new(path: std::path::PathBuf) -> Self {
         Self { path }
     }
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, all(windows, feature = "windows-integrations")))]
 impl Drop for SocketGuard {
     fn drop(&mut self) {
         modde_core::ipc::cleanup_socket(&self.path);

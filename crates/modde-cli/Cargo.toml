@@ -57,8 +57,26 @@ assets = [
 ]
 
 [features]
-default = ["rar"]
+default = ["rar", "linux-integrations", "macos-integrations"]
 rar = ["modde-sources/rar"]
+linux-integrations = [
+  "modde-core/linux-integrations",
+  "modde-games/linux-integrations",
+  "modde-sources/linux-integrations",
+  "modde-ui/linux-integrations",
+]
+macos-integrations = [
+  "modde-core/macos-integrations",
+  "modde-games/macos-integrations",
+  "modde-sources/macos-integrations",
+  "modde-ui/macos-integrations",
+]
+windows-integrations = [
+  "modde-core/windows-integrations",
+  "modde-games/windows-integrations",
+  "modde-sources/windows-integrations",
+  "modde-ui/windows-integrations",
+]
 heap-profile = []
 # Hidden `modde dev screenshot` command for headless GUI asset capture.
 # Non-default; enables the modde-ui headless screenshot backend.
@@ -67,7 +85,9 @@ remote-telemetry = [
   "dep:detritus",
   "dep:detritus-protocol",
   "dep:dirs",
+  "dep:modde-oracle-api",
   "dep:secrecy",
+  "dep:sha2",
   "dep:uuid",
 ]
 
@@ -80,6 +100,7 @@ modde-core = { workspace = true }
 modde-sources = { workspace = true }
 modde-games = { workspace = true }
 modde-ui = { workspace = true }
+modde-oracle-api = { workspace = true, optional = true }
 clap = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
@@ -89,6 +110,7 @@ detritus = { workspace = true, optional = true }
 detritus-protocol = { workspace = true, optional = true }
 dirs = { workspace = true, optional = true }
 secrecy = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
 serde_json = { workspace = true }
 toml = { workspace = true }

@@ -18,7 +18,7 @@ use crate::error::Result;
 
 /// Current schema version. Bump this and add a migration step (`SQLite` ladder +
 /// Postgres end-state DDL) when the schema changes.
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 10;
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 16;
 
 // ── SQLite schema constants (verbatim from the original rusqlite layer) ──────
 
@@ -214,6 +214,164 @@ CREATE INDEX IF NOT EXISTS idx_tool_setting_edges_child
     ON tool_setting_edges(child_node_id);
 ";
 
+const SCHEMA_V11: &str = "
+CREATE TABLE IF NOT EXISTS profile_patcher_stages (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id    INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    stage_kind    TEXT NOT NULL,
+    enabled       INTEGER NOT NULL DEFAULT 1,
+    sort_index    INTEGER NOT NULL,
+    settings_json TEXT NOT NULL,
+    output_mod    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(profile_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_patcher_stages_profile
+    ON profile_patcher_stages(profile_id, sort_index);
+";
+
+const SCHEMA_V12: &str = "
+CREATE TABLE IF NOT EXISTS crash_logs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id         TEXT NOT NULL,
+    profile_id      INTEGER REFERENCES profiles(id) ON DELETE SET NULL,
+    profile_name    TEXT,
+    source_path     TEXT NOT NULL,
+    logger_format   TEXT NOT NULL,
+    imported_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    raw_sha256      TEXT NOT NULL,
+    raw_log         TEXT NOT NULL,
+    signature_json  TEXT NOT NULL,
+    report_json     TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_crash_logs_game_profile
+    ON crash_logs(game_id, profile_id, imported_at);
+CREATE INDEX IF NOT EXISTS idx_crash_logs_sha
+    ON crash_logs(raw_sha256);
+";
+
+const SCHEMA_V13: &str = "
+CREATE TABLE IF NOT EXISTS performance_runs (
+    run_id                      TEXT PRIMARY KEY,
+    game_id                     TEXT NOT NULL,
+    profile_id                  INTEGER REFERENCES profiles(id) ON DELETE SET NULL,
+    profile_name                TEXT NOT NULL,
+    mod_set_hash                TEXT NOT NULL,
+    mod_snapshot                TEXT NOT NULL,
+    experiment_depth            INTEGER NOT NULL DEFAULT 0,
+    label                       TEXT,
+    status                      TEXT NOT NULL DEFAULT 'pending',
+    started_at                  TEXT NOT NULL DEFAULT (datetime('now')),
+    finished_at                 TEXT,
+    mangohud_csv_path           TEXT,
+    exit_status                 INTEGER,
+    sample_count                INTEGER,
+    duration_seconds            REAL,
+    median_fps                  REAL,
+    average_fps                 REAL,
+    one_percent_low_fps         REAL,
+    point_one_percent_low_fps   REAL,
+    median_frame_time_ms        REAL,
+    p95_frame_time_ms           REAL,
+    p99_frame_time_ms           REAL
+);
+
+CREATE TABLE IF NOT EXISTS performance_samples (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id              TEXT NOT NULL REFERENCES performance_runs(run_id) ON DELETE CASCADE,
+    elapsed_seconds     REAL,
+    fps                 REAL NOT NULL,
+    frame_time_ms       REAL,
+    cpu_load            REAL,
+    gpu_load            REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_performance_runs_game_profile
+    ON performance_runs(game_id, profile_name, started_at);
+CREATE INDEX IF NOT EXISTS idx_performance_samples_run
+    ON performance_samples(run_id);
+";
+
+const SCHEMA_V14: &str = "
+CREATE TABLE IF NOT EXISTS profile_patcher_stage_outputs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id  INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    stage_name  TEXT NOT NULL,
+    rel_path    TEXT NOT NULL,
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(profile_id, stage_name, rel_path)
+);
+
+CREATE INDEX IF NOT EXISTS idx_patcher_stage_outputs_profile
+    ON profile_patcher_stage_outputs(profile_id, stage_name);
+";
+
+const SCHEMA_V15: &str = "
+CREATE TABLE IF NOT EXISTS bisect_sessions (
+    session_id                 TEXT PRIMARY KEY,
+    game_id                    TEXT NOT NULL,
+    source_profile_id          INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    source_profile_name        TEXT NOT NULL,
+    oracle_json                TEXT NOT NULL,
+    status                     TEXT NOT NULL,
+    suspect_mod_ids_json       TEXT NOT NULL,
+    known_good_mod_ids_json    TEXT NOT NULL DEFAULT '[]',
+    known_bad_mod_ids_json     TEXT NOT NULL DEFAULT '[]',
+    current_step_id            INTEGER,
+    current_candidate_profile  TEXT,
+    save_safety                TEXT NOT NULL,
+    keep_profiles              INTEGER NOT NULL DEFAULT 0,
+    created_at                 TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at                 TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS bisect_steps (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id            TEXT NOT NULL REFERENCES bisect_sessions(session_id) ON DELETE CASCADE,
+    step_index            INTEGER NOT NULL,
+    candidate_profile     TEXT NOT NULL,
+    candidate_mod_ids_json TEXT NOT NULL,
+    enabled_mod_ids_json  TEXT NOT NULL,
+    disabled_mod_ids_json TEXT NOT NULL,
+    result                TEXT,
+    observed_signal       TEXT,
+    notes                 TEXT,
+    launched_at           TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(session_id, step_index)
+);
+
+CREATE TABLE IF NOT EXISTS profile_state_snapshots (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id      INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    game_id         TEXT NOT NULL,
+    profile_name    TEXT NOT NULL,
+    snapshot_json   TEXT NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_bisect_sessions_game_status
+    ON bisect_sessions(game_id, status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_bisect_steps_session
+    ON bisect_steps(session_id, step_index);
+";
+
+const SCHEMA_V16: &str = "
+CREATE TABLE IF NOT EXISTS profile_state_snapshots (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id      INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    game_id         TEXT NOT NULL,
+    profile_name    TEXT NOT NULL,
+    snapshot_json   TEXT NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_profile_state_snapshots_profile
+    ON profile_state_snapshots(profile_id, created_at);
+";
+
 // ── SQLite migration ladder ─────────────────────────────────────────────────
 
 async fn sqlite_user_version(pool: &sqlx::SqlitePool) -> Result<i64> {
@@ -350,6 +508,60 @@ pub(crate) async fn migrate_sqlite(pool: &sqlx::SqlitePool) -> Result<()> {
             from = version.max(9),
             to = 10,
             "database schema migrated to V10"
+        );
+    }
+
+    if version < 11 {
+        sqlx::raw_sql(SCHEMA_V11).execute(pool).await?;
+        info!(
+            from = version.max(10),
+            to = 11,
+            "database schema migrated to V11"
+        );
+    }
+
+    if version < 12 {
+        sqlx::raw_sql(SCHEMA_V12).execute(pool).await?;
+        info!(
+            from = version.max(11),
+            to = 12,
+            "database schema migrated to V12"
+        );
+    }
+
+    if version < 13 {
+        sqlx::raw_sql(SCHEMA_V13).execute(pool).await?;
+        info!(
+            from = version.max(12),
+            to = 13,
+            "database schema migrated to V13"
+        );
+    }
+
+    if version < 14 {
+        sqlx::raw_sql(SCHEMA_V14).execute(pool).await?;
+        info!(
+            from = version.max(13),
+            to = 14,
+            "database schema migrated to V14"
+        );
+    }
+
+    if version < 15 {
+        sqlx::raw_sql(SCHEMA_V15).execute(pool).await?;
+        info!(
+            from = version.max(14),
+            to = 15,
+            "database schema migrated to V15"
+        );
+    }
+
+    if version < 16 {
+        sqlx::raw_sql(SCHEMA_V16).execute(pool).await?;
+        info!(
+            from = version.max(15),
+            to = 16,
+            "database schema migrated to V16"
         );
     }
 
@@ -531,6 +743,99 @@ CREATE TABLE IF NOT EXISTS tool_setting_edges (
     UNIQUE(parent_node_id, child_node_id)
 );
 
+CREATE TABLE IF NOT EXISTS profile_patcher_stages (
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    profile_id    BIGINT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    stage_kind    TEXT NOT NULL,
+    enabled       BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_index    BIGINT NOT NULL,
+    settings_json TEXT NOT NULL,
+    output_mod    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS')),
+    UNIQUE(profile_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS performance_runs (
+    run_id                      TEXT PRIMARY KEY,
+    game_id                     TEXT NOT NULL,
+    profile_id                  BIGINT REFERENCES profiles(id) ON DELETE SET NULL,
+    profile_name                TEXT NOT NULL,
+    mod_set_hash                TEXT NOT NULL,
+    mod_snapshot                TEXT NOT NULL,
+    experiment_depth            BIGINT NOT NULL DEFAULT 0,
+    label                       TEXT,
+    status                      TEXT NOT NULL DEFAULT 'pending',
+    started_at                  TEXT NOT NULL DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS')),
+    finished_at                 TEXT,
+    mangohud_csv_path           TEXT,
+    exit_status                 BIGINT,
+    sample_count                BIGINT,
+    duration_seconds            DOUBLE PRECISION,
+    median_fps                  DOUBLE PRECISION,
+    average_fps                 DOUBLE PRECISION,
+    one_percent_low_fps         DOUBLE PRECISION,
+    point_one_percent_low_fps   DOUBLE PRECISION,
+    median_frame_time_ms        DOUBLE PRECISION,
+    p95_frame_time_ms           DOUBLE PRECISION,
+    p99_frame_time_ms           DOUBLE PRECISION
+);
+
+CREATE TABLE IF NOT EXISTS performance_samples (
+    id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    run_id              TEXT NOT NULL REFERENCES performance_runs(run_id) ON DELETE CASCADE,
+    elapsed_seconds     DOUBLE PRECISION,
+    fps                 DOUBLE PRECISION NOT NULL,
+    frame_time_ms       DOUBLE PRECISION,
+    cpu_load            DOUBLE PRECISION,
+    gpu_load            DOUBLE PRECISION
+);
+
+CREATE TABLE IF NOT EXISTS profile_patcher_stage_outputs (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    profile_id  BIGINT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    stage_name  TEXT NOT NULL,
+    mod_id      TEXT NOT NULL,
+    rel_path    TEXT NOT NULL,
+    size        BIGINT NOT NULL,
+    sha256      TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS')),
+    UNIQUE(profile_id, stage_name, rel_path)
+);
+
+CREATE TABLE IF NOT EXISTS bisect_sessions (
+    session_id                 TEXT PRIMARY KEY,
+    game_id                    TEXT NOT NULL,
+    source_profile_id          BIGINT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    source_profile_name        TEXT NOT NULL,
+    oracle_json                TEXT NOT NULL,
+    status                     TEXT NOT NULL,
+    suspect_mod_ids_json       TEXT NOT NULL,
+    known_good_mod_ids_json    TEXT NOT NULL DEFAULT '[]',
+    known_bad_mod_ids_json     TEXT NOT NULL DEFAULT '[]',
+    current_step_id            BIGINT,
+    current_candidate_profile  TEXT,
+    save_safety                TEXT NOT NULL,
+    keep_profiles              BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at                 TEXT NOT NULL DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS')),
+    updated_at                 TEXT NOT NULL DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS'))
+);
+
+CREATE TABLE IF NOT EXISTS bisect_steps (
+    id                     BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id             TEXT NOT NULL REFERENCES bisect_sessions(session_id) ON DELETE CASCADE,
+    step_index             BIGINT NOT NULL,
+    candidate_profile      TEXT NOT NULL,
+    candidate_mod_ids_json TEXT NOT NULL,
+    enabled_mod_ids_json   TEXT NOT NULL,
+    disabled_mod_ids_json  TEXT NOT NULL,
+    result                 TEXT,
+    observed_signal        TEXT,
+    notes                  TEXT,
+    launched_at            TEXT NOT NULL DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS')),
+    UNIQUE(session_id, step_index)
+);
+
 CREATE INDEX IF NOT EXISTS idx_profiles_game ON profiles(game_id);
 CREATE INDEX IF NOT EXISTS idx_mods_profile ON profile_mods(profile_id);
 CREATE INDEX IF NOT EXISTS idx_rules_profile ON load_order_rules(profile_id);
@@ -546,6 +851,15 @@ CREATE INDEX IF NOT EXISTS idx_imf_merge_group ON installed_mod_files(merge_grou
 CREATE INDEX IF NOT EXISTS idx_executable_configs_game ON executable_configs(game_id);
 CREATE INDEX IF NOT EXISTS idx_tool_setting_nodes_tool ON tool_setting_nodes(game_id, tool_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_tool_setting_edges_child ON tool_setting_edges(child_node_id);
+CREATE INDEX IF NOT EXISTS idx_patcher_stages_profile ON profile_patcher_stages(profile_id, sort_index);
+CREATE INDEX IF NOT EXISTS idx_patcher_stage_outputs_profile ON profile_patcher_stage_outputs(profile_id, stage_name);
+CREATE INDEX IF NOT EXISTS idx_crash_logs_game_profile ON crash_logs(game_id, profile_id, imported_at);
+CREATE INDEX IF NOT EXISTS idx_crash_logs_sha ON crash_logs(raw_sha256);
+CREATE INDEX IF NOT EXISTS idx_performance_runs_game_profile ON performance_runs(game_id, profile_name, started_at);
+CREATE INDEX IF NOT EXISTS idx_performance_samples_run ON performance_samples(run_id);
+CREATE INDEX IF NOT EXISTS idx_bisect_sessions_game_status ON bisect_sessions(game_id, status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_bisect_steps_session ON bisect_steps(session_id, step_index);
+CREATE INDEX IF NOT EXISTS idx_profile_state_snapshots_profile ON profile_state_snapshots(profile_id, created_at);
 ";
 
 /// Create/upgrade the `PostgreSQL` schema. Forward-only and fully idempotent
@@ -565,6 +879,7 @@ pub(crate) async fn migrate_postgres(pool: &sqlx::PgPool) -> Result<()> {
         .transpose()?;
 
     if current.unwrap_or(0) >= CURRENT_SCHEMA_VERSION {
+        sqlx::raw_sql(SCHEMA_PG).execute(pool).await?;
         return Ok(());
     }
 

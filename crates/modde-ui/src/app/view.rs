@@ -89,7 +89,9 @@ impl Modde {
             View::DataTab => {
                 crate::views::data_tab::view(&self.data_tab_state, &self.data_tab_conflicts)
             }
-            View::Diagnostics => crate::views::diagnostics::view(&self.diagnostics_state),
+            View::Diagnostics => {
+                crate::views::diagnostics::view(&self.diagnostics_state, &self.crash_log_path_draft)
+            }
             View::Tools => crate::views::tools::view(&self.tool_state),
             View::Executables => crate::views::executables::view(&self.tool_state),
         };

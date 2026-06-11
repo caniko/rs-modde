@@ -68,6 +68,7 @@ fn test_app() -> Modde {
         data_tab_state: Default::default(),
         data_tab_conflicts: Vec::new(),
         diagnostics_state: Default::default(),
+        crash_log_path_draft: String::new(),
         tool_state: Default::default(),
         browse_nexus: Default::default(),
         filter_mode: FilterMode::default(),

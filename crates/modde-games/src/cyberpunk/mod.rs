@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 use smallvec::SmallVec;
 
 use crate::policies::{BareLayoutPolicy, ContentPolicy, DllOverridePolicy, StagingDllSearch};
-use crate::traits::{ContentCategory, GamePlugin, ModSafety};
+use crate::traits::{ContentCategory, GamePlugin, HotDeployCapability, ModSafety};
 
 /// [`GamePlugin`] for Cyberpunk 2077 (`REDengine` 4).
 pub struct Cyberpunk2077;
@@ -123,6 +123,43 @@ impl GamePlugin for Cyberpunk2077 {
             }
             modde_core::fs::symlink(&entry.path(), &dst)?;
         }
+        Ok(())
+    }
+
+    fn hot_deploy_capability(&self) -> HotDeployCapability {
+        HotDeployCapability::experimental_cosmetic_only()
+    }
+
+    fn apply_hot_deploy_patch(
+        &self,
+        patch: &modde_core::hot_deploy::HotDeployPatch,
+        staging: &Path,
+        install: &Path,
+    ) -> Result<()> {
+        modde_core::hot_deploy::apply_patch_to_staging(staging, patch)?;
+
+        let target = self.mod_directory(install);
+        std::fs::create_dir_all(&target)
+            .with_context(|| format!("failed to create {}", target.display()))?;
+
+        for root in patch.touched_roots() {
+            let src = staging.join(&root);
+            let dst = target.join(&root);
+
+            if dst.symlink_metadata().is_ok() {
+                modde_core::hot_deploy::remove_path(&dst)?;
+            }
+
+            if src.symlink_metadata().is_ok() {
+                modde_core::fs::symlink(&src, &dst).with_context(|| {
+                    format!(
+                        "failed to refresh Cyberpunk hot-deploy root {}",
+                        dst.display()
+                    )
+                })?;
+            }
+        }
+
         Ok(())
     }
 

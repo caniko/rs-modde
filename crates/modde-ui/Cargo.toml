@@ -71,6 +71,9 @@ workspace = true
 # carry zero extra weight. Pulls iced_test (the dual-backend tiny-skia renderer)
 # in as a normal dependency only when enabled.
 screenshot = ["dep:iced_test"]
+linux-integrations = ["modde-core/linux-integrations", "modde-games/linux-integrations"]
+macos-integrations = ["modde-core/macos-integrations", "modde-games/macos-integrations"]
+windows-integrations = ["modde-core/windows-integrations", "modde-games/windows-integrations"]
 
 [dependencies]
 modde-core = { workspace = true }

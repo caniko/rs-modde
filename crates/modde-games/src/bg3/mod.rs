@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use modde_core::installer::InstallMethod;
 
 use crate::policies::{BareLayoutPolicy, ContentPolicy};
-use crate::traits::{ContentCategory, GamePlugin, ModSafety};
+use crate::traits::{ContentCategory, GamePlugin, HotDeployCapability, ModSafety};
 
 /// [`GamePlugin`] for Baldur's Gate 3 (Larian's Divinity engine).
 pub struct LarianBg3Game;
@@ -206,6 +206,35 @@ impl GamePlugin for LarianBg3Game {
             write_modsettings(&modsettings_path_from_install(install), &mods)?;
         }
         Ok(())
+    }
+
+    fn hot_deploy_capability(&self) -> HotDeployCapability {
+        HotDeployCapability::experimental_cosmetic_only()
+    }
+
+    fn apply_hot_deploy_patch(
+        &self,
+        patch: &modde_core::hot_deploy::HotDeployPatch,
+        staging: &Path,
+        install: &Path,
+    ) -> Result<()> {
+        modde_core::hot_deploy::apply_patch_to_staging(staging, patch)?;
+        let target = self.mod_directory(install);
+        std::fs::create_dir_all(&target)
+            .with_context(|| format!("failed to create {}", target.display()))?;
+        for root in patch.touched_roots() {
+            let src = staging.join(&root);
+            let dst = target.join(&root);
+            if dst.symlink_metadata().is_ok() {
+                modde_core::hot_deploy::remove_path(&dst)?;
+            }
+            if src.symlink_metadata().is_ok() {
+                modde_core::fs::symlink(&src, &dst).with_context(|| {
+                    format!("failed to refresh BG3 hot-deploy root {}", dst.display())
+                })?;
+            }
+        }
+        self.post_deploy(install)
     }
 
     fn analyze_mod_archive(&self, extracted_dir: &Path) -> Option<InstallMethod> {

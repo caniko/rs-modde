@@ -13,11 +13,17 @@ use modde_core::ModdeDb;
 use modde_core::installer::dossiers_dir;
 use modde_core::paths;
 use modde_core::profile::ProfileManager;
-use modde_core::resolver::ModId;
+use modde_core::resolver::{GameId, ModId};
+use modde_games::{ModSafety, SaveDependencyKind, SaveRemovalGateReport};
 
 /// Remove `mod_id` from `profile_name`. If `profile_name` is `None`,
 /// the unambiguous default profile is used.
-pub async fn handle(mod_id: String, profile_name: Option<String>) -> Result<()> {
+pub async fn handle(
+    mod_id: String,
+    profile_name: Option<String>,
+    dry_run: bool,
+    force_contaminate: bool,
+) -> Result<()> {
     let pm = ProfileManager::open()
         .await
         .context("failed to open profile database")?;
@@ -36,6 +42,33 @@ pub async fn handle(mod_id: String, profile_name: Option<String>) -> Result<()> 
             profile.name,
             lock.reason
         );
+    }
+
+    if let Some(report) =
+        analyze_save_removal_gate(&profile.name, profile.game_id.as_str(), &mod_id)
+            .context("failed to analyze save-game removal safety")?
+    {
+        print_gate_report(&report, dry_run || report.is_blocked() || force_contaminate);
+        if dry_run {
+            return Ok(());
+        }
+        if report.is_blocked() && !force_contaminate {
+            bail!(
+                "refusing to remove '{mod_id}' because saved playthroughs depend on it. \
+                 Fork the profile or rerun with --force-contaminate to accept permanent save contamination."
+            );
+        }
+        if report.is_blocked() {
+            eprintln!(
+                "WARNING: forcing removal of '{mod_id}' even though saves depend on it; affected saves may be permanently contaminated."
+            );
+        }
+    } else if dry_run {
+        println!(
+            "No record-level save dependency analyzer is available for game '{}'. No removal performed.",
+            profile.game_id
+        );
+        return Ok(());
     }
 
     // Pull the file manifest before we touch anything, then drop the
@@ -79,6 +112,78 @@ pub async fn handle(mod_id: String, profile_name: Option<String>) -> Result<()> 
     );
 
     Ok(())
+}
+
+fn analyze_save_removal_gate(
+    profile_name: &str,
+    game_id: &str,
+    mod_id: &str,
+) -> Result<Option<SaveRemovalGateReport>> {
+    let Some(analyzer) = modde_games::resolve_save_dependency_analyzer(game_id) else {
+        return Ok(None);
+    };
+
+    let mod_dir = ProfileManager::staging_dir(profile_name).join(mod_id);
+    let mut save_roots = Vec::new();
+    if let Some(save_dir) = super::resolve_save_dir(game_id) {
+        save_roots.push(save_dir);
+    }
+    let vault_dir = paths::save_vault_dir(&GameId::from(game_id));
+    if vault_dir.exists() {
+        save_roots.push(vault_dir);
+    }
+
+    let report = analyzer.analyze_mod_removal(mod_id, &mod_dir, &save_roots)?;
+    Ok(Some(report))
+}
+
+fn print_gate_report(report: &SaveRemovalGateReport, verbose: bool) {
+    let safety = match report.safety {
+        ModSafety::SaveBreaking => "save-breaking",
+        ModSafety::SaveSafe => "save-safe",
+        ModSafety::Unknown => "unknown",
+    };
+    println!(
+        "Save removal gate for '{}': {safety}, {} save file(s) analyzed.",
+        report.mod_id, report.analyzed_saves
+    );
+
+    if !verbose {
+        return;
+    }
+
+    for warning in &report.warnings {
+        eprintln!("  warning: {warning}");
+    }
+
+    if report.blocking_findings.is_empty() {
+        println!("  No save records tied to this mod were found.");
+        return;
+    }
+
+    eprintln!("  Blocking save dependencies:");
+    for finding in &report.blocking_findings {
+        let source = finding
+            .source_file
+            .as_deref()
+            .map(|s| format!(" via {s}"))
+            .unwrap_or_default();
+        let kind = match finding.dependency_kind {
+            SaveDependencyKind::PluginRecord => "plugin record",
+            SaveDependencyKind::PapyrusScript => "Papyrus script",
+            SaveDependencyKind::ActiveScript => "active script",
+            SaveDependencyKind::UnattachedInstance => "unattached instance",
+            SaveDependencyKind::UndefinedElement => "undefined element",
+            SaveDependencyKind::ParseIncomplete => "parse incomplete",
+        };
+        eprintln!(
+            "    {}: {kind} '{}'{} (confidence {:.2})",
+            finding.save_path.display(),
+            finding.symbol,
+            source,
+            finding.confidence
+        );
+    }
 }
 
 /// `modde mod diagnose <mod_id>` — locate the skill dossier for an

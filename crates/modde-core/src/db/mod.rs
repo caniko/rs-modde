@@ -17,9 +17,18 @@ use smallvec::SmallVec;
 
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 
+use crate::bisect::{BisectResult, BisectSaveSafety, BisectSession, BisectStatus, BisectStep};
+use crate::crash::CrashCorrelationReport;
+use crate::doctor::{DoctorProfileModSnapshot, ProfileSnapshotRow};
 use crate::error::{CoreError, Result};
 use crate::installer::{InstallMethod, InstallPlan, InstallStatus, StagedFile};
 use crate::nexus_id::{NexusFileId, NexusModId};
+use crate::patcher::{
+    PatcherStageKind, PatcherStageOutputRow, PatcherStageRow, PatcherStageSettings,
+};
+use crate::performance::{
+    PerformanceModSnapshot, PerformanceSample, PerformanceSummary, mod_set_hash,
+};
 use crate::profile::{EnabledMod, LoadOrderLock, LockReason, Profile, ProfileSource};
 use crate::resolver::{GameId, LoadOrderRule, ModId};
 use crate::settings::{AppSettings, DatabaseSettings, DbBackend};
@@ -127,6 +136,42 @@ pub struct ExecutableConfigRow {
     pub output_mod: String,
     pub enabled: bool,
 }
+
+/// New performance capture run to persist before launch.
+#[derive(Debug, Clone)]
+pub struct NewPerformanceRun {
+    pub run_id: String,
+    pub game_id: GameId,
+    pub profile_id: Option<i64>,
+    pub profile_name: String,
+    pub mod_snapshot: Vec<PerformanceModSnapshot>,
+    pub experiment_depth: usize,
+    pub label: Option<String>,
+}
+
+/// Stored performance capture run with parsed summary metrics when available.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PerformanceRunRow {
+    pub run_id: String,
+    pub game_id: GameId,
+    pub profile_id: Option<i64>,
+    pub profile_name: String,
+    pub mod_set_hash: String,
+    pub mod_snapshot_json: String,
+    pub experiment_depth: usize,
+    pub label: Option<String>,
+    pub status: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub mangohud_csv_path: Option<PathBuf>,
+    pub exit_status: Option<i64>,
+    pub summary: PerformanceSummary,
+}
+
+pub use crate::bisect::{NewBisectSession, NewBisectStep};
+
+/// A configured patcher pipeline stage for one profile.
+pub type PatcherConfigRow = PatcherStageRow;
 
 /// SQLite/PostgreSQL-backed persistent storage for modde.
 #[derive(Debug, Clone)]
@@ -333,6 +378,7 @@ impl ModdeDb {
 
         self.insert_mods(id, &profile.mods).await?;
         self.insert_rules(id, &profile.load_order_rules).await?;
+        self.record_profile_state_snapshot(id, profile).await?;
 
         Ok(id)
     }
@@ -505,8 +551,69 @@ impl ModdeDb {
         self.insert_mods(profile_id, &profile.mods).await?;
         self.insert_rules(profile_id, &profile.load_order_rules)
             .await?;
+        self.record_profile_state_snapshot(profile_id, profile)
+            .await?;
 
         Ok(())
+    }
+
+    /// Persist the profile mod state used by `modde doctor` for recent diffs.
+    pub async fn record_profile_state_snapshot(
+        &self,
+        profile_id: i64,
+        profile: &Profile,
+    ) -> Result<()> {
+        let snapshot = DoctorProfileModSnapshot::from_profile(profile);
+        let snapshot_json = serde_json::to_string(&snapshot).map_err(|e| {
+            CoreError::Other(format!("failed to encode profile state snapshot: {e}").into())
+        })?;
+        self.db
+            .execute(
+                "INSERT INTO profile_state_snapshots
+                    (profile_id, game_id, profile_name, snapshot_json)
+                 VALUES (?, ?, ?, ?)",
+                &vals![
+                    profile_id,
+                    &profile.game_id,
+                    profile.name.clone(),
+                    snapshot_json,
+                ],
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Return recent profile state snapshots, newest first.
+    pub async fn recent_profile_state_snapshots(
+        &self,
+        profile_id: i64,
+        limit: usize,
+    ) -> Result<Vec<ProfileSnapshotRow>> {
+        self.db
+            .fetch_all(
+                "SELECT id, snapshot_json, created_at
+                   FROM profile_state_snapshots
+                  WHERE profile_id = ?
+               ORDER BY created_at DESC, id DESC
+                  LIMIT ?",
+                &vals![profile_id, limit as i64],
+                |r| {
+                    let snapshot_json = r.string(1)?;
+                    let snapshot =
+                        serde_json::from_str::<Vec<DoctorProfileModSnapshot>>(&snapshot_json)
+                            .map_err(|e| {
+                                CoreError::Other(
+                                    format!("failed to decode profile state snapshot: {e}").into(),
+                                )
+                            })?;
+                    Ok(ProfileSnapshotRow {
+                        id: r.i64(0)?,
+                        snapshot,
+                        created_at: r.string(2)?,
+                    })
+                },
+            )
+            .await
     }
 
     /// Delete a profile by name and `game_id`.
@@ -907,6 +1014,41 @@ impl ModdeDb {
             .await
     }
 
+    /// Copy profile-adjacent state that is not represented inside [`Profile`].
+    ///
+    /// Used by bisect candidate profiles so hidden-file exclusions, native
+    /// plugin order, and installer file manifests remain consistent with the
+    /// source profile.
+    pub async fn copy_profile_auxiliary_state(
+        &self,
+        source_profile_id: i64,
+        target_profile_id: i64,
+    ) -> Result<()> {
+        let mut tx = self.db.begin().await?;
+        tx.execute(
+            "INSERT INTO hidden_files (profile_id, mod_id, rel_path)
+             SELECT ?, mod_id, rel_path FROM hidden_files WHERE profile_id = ?",
+            &vals![target_profile_id, source_profile_id],
+        )
+        .await?;
+        tx.execute(
+            "INSERT INTO plugin_order (profile_id, plugin_name, sort_index, enabled)
+             SELECT ?, plugin_name, sort_index, enabled FROM plugin_order WHERE profile_id = ?",
+            &vals![target_profile_id, source_profile_id],
+        )
+        .await?;
+        tx.execute(
+            "INSERT INTO installed_mod_files
+                (profile_id, mod_id, rel_path, origin_rel_path, size, merge_group)
+             SELECT ?, mod_id, rel_path, origin_rel_path, size, merge_group
+               FROM installed_mod_files WHERE profile_id = ?",
+            &vals![target_profile_id, source_profile_id],
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
     /// Toggle a plugin's enabled state.
     pub async fn toggle_plugin(
         &self,
@@ -1200,6 +1342,234 @@ impl ModdeDb {
                         },
                     ))
                 },
+            )
+            .await
+    }
+
+    /// Return every installer-tracked file in a profile, paired with its owning
+    /// mod id. Crash-log correlation uses this to map mentioned DLLs/assets
+    /// back to the managed install database.
+    pub async fn installed_files_for_profile(
+        &self,
+        profile_id: i64,
+    ) -> Result<Vec<(String, StagedFile)>> {
+        self.db
+            .fetch_all(
+                "SELECT mod_id, rel_path, origin_rel_path, size, merge_group
+                   FROM installed_mod_files
+                  WHERE profile_id = ?
+               ORDER BY mod_id, rel_path",
+                &vals![profile_id],
+                |r| {
+                    Ok((
+                        r.string(0)?,
+                        StagedFile {
+                            rel_path: r.string(1)?,
+                            origin_rel_path: r.string(2)?,
+                            size: r.i64(3)?.max(0) as u64,
+                            merge_group: r.opt_string(4)?,
+                        },
+                    ))
+                },
+            )
+            .await
+    }
+
+    /// Persist a raw local crash log and its structured correlation report.
+    ///
+    /// This stores logs locally only; callers must not upload or transmit the
+    /// raw crash text.
+    pub async fn record_crash_log(
+        &self,
+        profile_id: Option<i64>,
+        report: &CrashCorrelationReport,
+        raw_log: &str,
+    ) -> Result<()> {
+        let signature_json = serde_json::to_string(&report.signature).map_err(|e| {
+            CoreError::Other(format!("failed to encode crash signature: {e}").into())
+        })?;
+        let report_json = serde_json::to_string(report)
+            .map_err(|e| CoreError::Other(format!("failed to encode crash report: {e}").into()))?;
+        self.db
+            .execute(
+                "INSERT INTO crash_logs
+                    (game_id, profile_id, profile_name, source_path, logger_format,
+                     raw_sha256, raw_log, signature_json, report_json)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                &vals![
+                    report.game_id.clone(),
+                    profile_id,
+                    report.profile_name.clone(),
+                    report.source_path.display().to_string(),
+                    report.format.as_str(),
+                    report.raw_sha256.clone(),
+                    raw_log,
+                    signature_json,
+                    report_json,
+                ],
+            )
+            .await?;
+        Ok(())
+    }
+
+    // ── Bisect sessions ──────────────────────────────────────────
+
+    pub async fn create_bisect_session(&self, session: &NewBisectSession) -> Result<()> {
+        self.db
+            .execute(
+                "INSERT INTO bisect_sessions
+                    (session_id, game_id, source_profile_id, source_profile_name, oracle_json,
+                     status, suspect_mod_ids_json, known_good_mod_ids_json,
+                     known_bad_mod_ids_json, save_safety, keep_profiles)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, '[]', '[]', ?, ?)",
+                &vals![
+                    session.session_id.clone(),
+                    &session.game_id,
+                    session.source_profile_id,
+                    session.source_profile_name.clone(),
+                    encode_json(&session.oracle, "bisect oracle")?,
+                    BisectStatus::Active.as_str(),
+                    encode_json(&session.suspect_mod_ids, "bisect suspect mod ids")?,
+                    match session.save_safety {
+                        BisectSaveSafety::Refuse => "refuse",
+                        BisectSaveSafety::Force => "force",
+                    },
+                    session.keep_profiles,
+                ],
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub async fn load_bisect_session(&self, session_id: &str) -> Result<BisectSession> {
+        self.db
+            .fetch_optional(
+                "SELECT session_id, game_id, source_profile_id, source_profile_name,
+                        oracle_json, status, suspect_mod_ids_json,
+                        known_good_mod_ids_json, known_bad_mod_ids_json,
+                        current_step_id, current_candidate_profile, save_safety,
+                        keep_profiles, created_at, updated_at
+                   FROM bisect_sessions WHERE session_id = ?",
+                &vals![session_id],
+                bisect_session_from_row,
+            )
+            .await?
+            .ok_or_else(|| {
+                CoreError::Other(format!("bisect session not found: {session_id}").into())
+            })
+    }
+
+    pub async fn update_bisect_session_state(
+        &self,
+        session_id: &str,
+        status: BisectStatus,
+        suspect_mod_ids: &[String],
+        known_good_mod_ids: &[String],
+        known_bad_mod_ids: &[String],
+        current_step_id: Option<i64>,
+        current_candidate_profile: Option<&str>,
+    ) -> Result<()> {
+        self.db
+            .execute(
+                "UPDATE bisect_sessions SET
+                    status = ?,
+                    suspect_mod_ids_json = ?,
+                    known_good_mod_ids_json = ?,
+                    known_bad_mod_ids_json = ?,
+                    current_step_id = ?,
+                    current_candidate_profile = ?,
+                    updated_at = {NOW}
+                 WHERE session_id = ?",
+                &vals![
+                    status.as_str(),
+                    encode_json(suspect_mod_ids, "bisect suspect mod ids")?,
+                    encode_json(known_good_mod_ids, "bisect known good mod ids")?,
+                    encode_json(known_bad_mod_ids, "bisect known bad mod ids")?,
+                    current_step_id,
+                    current_candidate_profile.map(str::to_string),
+                    session_id,
+                ],
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub async fn create_bisect_step(&self, step: &NewBisectStep) -> Result<i64> {
+        let id = self
+            .db
+            .fetch_one(
+                "INSERT INTO bisect_steps
+                    (session_id, step_index, candidate_profile, candidate_mod_ids_json,
+                     enabled_mod_ids_json, disabled_mod_ids_json)
+                 VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+                &vals![
+                    step.session_id.clone(),
+                    step.step_index as i64,
+                    step.candidate_profile.clone(),
+                    encode_json(&step.candidate_mod_ids, "bisect candidate mod ids")?,
+                    encode_json(&step.enabled_mod_ids, "bisect enabled mod ids")?,
+                    encode_json(&step.disabled_mod_ids, "bisect disabled mod ids")?,
+                ],
+                |r| r.i64(0),
+            )
+            .await?;
+        Ok(id)
+    }
+
+    pub async fn load_bisect_step(&self, id: i64) -> Result<BisectStep> {
+        self.db
+            .fetch_optional(
+                "SELECT id, session_id, step_index, candidate_profile,
+                        candidate_mod_ids_json, enabled_mod_ids_json, disabled_mod_ids_json,
+                        result, observed_signal, notes, launched_at
+                   FROM bisect_steps WHERE id = ?",
+                &vals![id],
+                bisect_step_from_row,
+            )
+            .await?
+            .ok_or_else(|| CoreError::Other(format!("bisect step not found: {id}").into()))
+    }
+
+    pub async fn list_bisect_steps(&self, session_id: &str) -> Result<Vec<BisectStep>> {
+        self.db
+            .fetch_all(
+                "SELECT id, session_id, step_index, candidate_profile,
+                        candidate_mod_ids_json, enabled_mod_ids_json, disabled_mod_ids_json,
+                        result, observed_signal, notes, launched_at
+                   FROM bisect_steps WHERE session_id = ? ORDER BY step_index",
+                &vals![session_id],
+                bisect_step_from_row,
+            )
+            .await
+    }
+
+    pub async fn complete_bisect_step(
+        &self,
+        id: i64,
+        result: BisectResult,
+        observed_signal: Option<&str>,
+        notes: Option<&str>,
+    ) -> Result<()> {
+        self.db
+            .execute(
+                "UPDATE bisect_steps SET result = ?, observed_signal = ?, notes = ? WHERE id = ?",
+                &vals![
+                    result.as_str(),
+                    observed_signal.map(str::to_string),
+                    notes.map(str::to_string),
+                    id,
+                ],
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub async fn bisect_candidate_profiles(&self, session_id: &str) -> Result<Vec<String>> {
+        self.db
+            .fetch_all(
+                "SELECT candidate_profile FROM bisect_steps WHERE session_id = ? ORDER BY step_index",
+                &vals![session_id],
+                |r| r.string(0),
             )
             .await
     }
@@ -1650,6 +2020,41 @@ impl ModdeDb {
             .await
     }
 
+    /// Load every file recorded as applied by any managed tool for this game.
+    pub async fn load_all_applied_files(&self, game_id: &GameId) -> Result<Vec<String>> {
+        self.db
+            .fetch_all(
+                "SELECT rel_path FROM tool_applied_files
+                 WHERE game_id = ?
+                 ORDER BY tool_id, rel_path",
+                &vals![game_id],
+                |r| r.string(0),
+            )
+            .await
+    }
+
+    /// Load every file recorded as applied by any managed tool for this game,
+    /// preserving the owning tool id for provenance exports.
+    pub async fn load_all_applied_file_rows(
+        &self,
+        game_id: &GameId,
+    ) -> Result<Vec<ToolAppliedFileRow>> {
+        self.db
+            .fetch_all(
+                "SELECT tool_id, rel_path FROM tool_applied_files
+                 WHERE game_id = ?
+                 ORDER BY tool_id, rel_path",
+                &vals![game_id],
+                |r| {
+                    Ok(ToolAppliedFileRow {
+                        tool_id: r.string(0)?,
+                        rel_path: r.string(1)?,
+                    })
+                },
+            )
+            .await
+    }
+
     /// Clear all applied file records for a tool on a game.
     pub async fn clear_applied_files(&self, game_id: &GameId, tool_id: &str) -> Result<()> {
         self.db
@@ -1659,6 +2064,216 @@ impl ModdeDb {
             )
             .await?;
         Ok(())
+    }
+
+    // ── Patcher Pipeline Config CRUD ─────────────────────────────
+
+    /// Save or update a profile-scoped patcher stage.
+    pub async fn save_patcher_stage(&self, stage: &PatcherStageRow) -> Result<()> {
+        if stage.name.trim().is_empty() {
+            return Err(CoreError::Validation(
+                "patcher stage name cannot be empty".into(),
+            ));
+        }
+        if stage.output_mod.trim().is_empty() {
+            return Err(CoreError::Validation(
+                "patcher output mod cannot be empty".into(),
+            ));
+        }
+        if matches!(stage.settings, PatcherStageSettings::RustNative) {
+            return Err(CoreError::Validation(
+                "rust-native patcher stages are reserved for a future release".into(),
+            ));
+        }
+        if self
+            .db
+            .fetch_optional(
+                "SELECT name FROM profile_patcher_stages
+                 WHERE profile_id = ? AND output_mod = ? AND name <> ?",
+                &vals![
+                    stage.profile_id,
+                    stage.output_mod.clone(),
+                    stage.name.clone()
+                ],
+                |r| r.string(0),
+            )
+            .await?
+            .is_some()
+        {
+            return Err(CoreError::Validation(
+                format!(
+                    "patcher output mod '{}' is already used by another stage in this profile",
+                    stage.output_mod
+                )
+                .into(),
+            ));
+        }
+        let settings_json = serde_json::to_string(&stage.settings).map_err(|e| {
+            CoreError::Other(format!("failed to serialize patcher settings: {e}").into())
+        })?;
+        self.db
+            .execute(
+                "INSERT INTO profile_patcher_stages (
+                    profile_id, name, stage_kind, enabled, sort_index,
+                    settings_json, output_mod, updated_at
+                 )
+                 VALUES (?, ?, ?, ?, ?, ?, ?, {NOW})
+                 ON CONFLICT(profile_id, name) DO UPDATE SET
+                    stage_kind = excluded.stage_kind,
+                    enabled = excluded.enabled,
+                    sort_index = excluded.sort_index,
+                    settings_json = excluded.settings_json,
+                    output_mod = excluded.output_mod,
+                    updated_at = excluded.updated_at",
+                &vals![
+                    stage.profile_id,
+                    stage.name.clone(),
+                    stage.stage_kind.as_str(),
+                    stage.enabled,
+                    stage.sort_index,
+                    settings_json,
+                    stage.output_mod.clone(),
+                ],
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// List patcher stages for a profile in execution order.
+    pub async fn list_patcher_stages(&self, profile_id: i64) -> Result<Vec<PatcherStageRow>> {
+        self.db
+            .fetch_all(
+                "SELECT profile_id, name, stage_kind, enabled, sort_index, settings_json, output_mod
+                 FROM profile_patcher_stages
+                 WHERE profile_id = ?
+                 ORDER BY sort_index, lower(name)",
+                &vals![profile_id],
+                patcher_stage_from_row,
+            )
+            .await
+    }
+
+    /// Load one patcher stage by name.
+    pub async fn load_patcher_stage(
+        &self,
+        profile_id: i64,
+        name: &str,
+    ) -> Result<Option<PatcherStageRow>> {
+        self.db
+            .fetch_optional(
+                "SELECT profile_id, name, stage_kind, enabled, sort_index, settings_json, output_mod
+                 FROM profile_patcher_stages
+                 WHERE profile_id = ? AND name = ?",
+                &vals![profile_id, name],
+                patcher_stage_from_row,
+            )
+            .await
+    }
+
+    /// Delete a patcher stage. Returns whether a row was removed.
+    pub async fn delete_patcher_stage(&self, profile_id: i64, name: &str) -> Result<bool> {
+        let affected = self
+            .db
+            .execute(
+                "DELETE FROM profile_patcher_stages WHERE profile_id = ? AND name = ?",
+                &vals![profile_id, name],
+            )
+            .await?;
+        Ok(affected > 0)
+    }
+
+    /// Toggle a patcher stage's enabled state.
+    pub async fn set_patcher_stage_enabled(
+        &self,
+        profile_id: i64,
+        name: &str,
+        enabled: bool,
+    ) -> Result<bool> {
+        let affected = self
+            .db
+            .execute(
+                "UPDATE profile_patcher_stages SET enabled = ?, updated_at = {NOW}
+                 WHERE profile_id = ? AND name = ?",
+                &vals![enabled, profile_id, name],
+            )
+            .await?;
+        Ok(affected > 0)
+    }
+
+    /// Replace stage ordering for the supplied names.
+    pub async fn reorder_patcher_stages(&self, profile_id: i64, names: &[String]) -> Result<()> {
+        for (idx, name) in names.iter().enumerate() {
+            self.db
+                .execute(
+                    "UPDATE profile_patcher_stages SET sort_index = ?, updated_at = {NOW}
+                     WHERE profile_id = ? AND name = ?",
+                    &vals![idx as i64, profile_id, name.clone()],
+                )
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Load every managed output path recorded for one patcher stage.
+    pub async fn list_patcher_stage_outputs(
+        &self,
+        profile_id: i64,
+        stage_name: &str,
+    ) -> Result<Vec<PatcherStageOutputRow>> {
+        self.db
+            .fetch_all(
+                "SELECT profile_id, stage_name, rel_path
+                 FROM profile_patcher_stage_outputs
+                 WHERE profile_id = ? AND stage_name = ?
+                 ORDER BY rel_path",
+                &vals![profile_id, stage_name],
+                patcher_stage_output_from_row,
+            )
+            .await
+    }
+
+    /// Replace the recorded managed output manifest for one stage.
+    pub async fn replace_patcher_stage_outputs(
+        &self,
+        profile_id: i64,
+        stage_name: &str,
+        rel_paths: &[String],
+    ) -> Result<()> {
+        self.db
+            .execute(
+                "DELETE FROM profile_patcher_stage_outputs
+                 WHERE profile_id = ? AND stage_name = ?",
+                &vals![profile_id, stage_name],
+            )
+            .await?;
+        for rel_path in rel_paths {
+            self.db
+                .execute(
+                    "INSERT INTO profile_patcher_stage_outputs (
+                        profile_id, stage_name, rel_path, updated_at
+                     ) VALUES (?, ?, ?, {NOW})",
+                    &vals![profile_id, stage_name, rel_path.clone()],
+                )
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Load every managed output path for all stages on this profile.
+    pub async fn list_all_patcher_stage_outputs(
+        &self,
+        profile_id: i64,
+    ) -> Result<Vec<PatcherStageOutputRow>> {
+        self.db
+            .fetch_all(
+                "SELECT profile_id, stage_name, rel_path
+                 FROM profile_patcher_stage_outputs
+                 WHERE profile_id = ?
+                 ORDER BY stage_name, rel_path",
+                &vals![profile_id],
+                patcher_stage_output_from_row,
+            )
+            .await
     }
 
     // ── Executable Config CRUD ───────────────────────────────────
@@ -1748,6 +2363,184 @@ impl ModdeDb {
         Ok(affected > 0)
     }
 
+    // ── Performance telemetry CRUD ───────────────────────────────
+
+    /// Create a pending performance run before launching the game.
+    pub async fn create_performance_run(&self, run: &NewPerformanceRun) -> Result<()> {
+        let mod_snapshot_json = serde_json::to_string(&run.mod_snapshot)?;
+        let hash = mod_set_hash(&run.mod_snapshot);
+        self.db
+            .execute(
+                "INSERT INTO performance_runs (
+                    run_id, game_id, profile_id, profile_name, mod_set_hash,
+                    mod_snapshot, experiment_depth, label, status
+                 )
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                &vals![
+                    run.run_id.clone(),
+                    &run.game_id,
+                    run.profile_id,
+                    run.profile_name.clone(),
+                    hash,
+                    mod_snapshot_json,
+                    run.experiment_depth as i64,
+                    run.label.clone(),
+                ],
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Mark a performance run complete and replace its parsed samples.
+    pub async fn complete_performance_run(
+        &self,
+        run_id: &str,
+        csv_path: &Path,
+        exit_status: Option<i64>,
+        summary: &PerformanceSummary,
+        samples: &[PerformanceSample],
+    ) -> Result<()> {
+        let mut tx = self.db.begin().await?;
+        tx.execute(
+            "UPDATE performance_runs SET
+                status = 'complete',
+                finished_at = {NOW},
+                mangohud_csv_path = ?,
+                exit_status = ?,
+                sample_count = ?,
+                duration_seconds = ?,
+                median_fps = ?,
+                average_fps = ?,
+                one_percent_low_fps = ?,
+                point_one_percent_low_fps = ?,
+                median_frame_time_ms = ?,
+                p95_frame_time_ms = ?,
+                p99_frame_time_ms = ?
+             WHERE run_id = ?",
+            &vals![
+                csv_path.to_string_lossy().to_string(),
+                exit_status,
+                summary.sample_count as i64,
+                summary.duration_seconds,
+                summary.median_fps,
+                summary.average_fps,
+                summary.one_percent_low_fps,
+                summary.point_one_percent_low_fps,
+                summary.median_frame_time_ms,
+                summary.p95_frame_time_ms,
+                summary.p99_frame_time_ms,
+                run_id,
+            ],
+        )
+        .await?;
+        tx.execute(
+            "DELETE FROM performance_samples WHERE run_id = ?",
+            &vals![run_id],
+        )
+        .await?;
+        for sample in samples {
+            tx.execute(
+                "INSERT INTO performance_samples (
+                    run_id, elapsed_seconds, fps, frame_time_ms, cpu_load, gpu_load
+                 )
+                 VALUES (?, ?, ?, ?, ?, ?)",
+                &vals![
+                    run_id,
+                    sample.elapsed_seconds,
+                    sample.fps,
+                    sample.frame_time_ms,
+                    sample.cpu_load,
+                    sample.gpu_load,
+                ],
+            )
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Attach a CSV path to a run that could not be observed to completion.
+    pub async fn mark_performance_run_pending(
+        &self,
+        run_id: &str,
+        csv_path: Option<&Path>,
+    ) -> Result<()> {
+        self.db
+            .execute(
+                "UPDATE performance_runs SET status = 'pending', mangohud_csv_path = ?
+                 WHERE run_id = ?",
+                &vals![csv_path.map(|p| p.to_string_lossy().to_string()), run_id,],
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Load one performance run.
+    pub async fn load_performance_run(&self, run_id: &str) -> Result<PerformanceRunRow> {
+        self.db
+            .fetch_optional(
+                "SELECT run_id, game_id, profile_id, profile_name, mod_set_hash,
+                        mod_snapshot, experiment_depth, label, status, started_at,
+                        finished_at, mangohud_csv_path, exit_status, sample_count,
+                        duration_seconds, median_fps, average_fps,
+                        one_percent_low_fps, point_one_percent_low_fps,
+                        median_frame_time_ms, p95_frame_time_ms, p99_frame_time_ms
+                 FROM performance_runs
+                 WHERE run_id = ?",
+                &vals![run_id],
+                performance_run_from_row,
+            )
+            .await?
+            .ok_or_else(|| CoreError::Other(format!("performance run not found: {run_id}").into()))
+    }
+
+    /// List performance runs for a game, newest first.
+    pub async fn list_performance_runs(
+        &self,
+        game_id: &GameId,
+        profile_name: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<PerformanceRunRow>> {
+        match profile_name {
+            Some(profile_name) => {
+                self.db
+                    .fetch_all(
+                        "SELECT run_id, game_id, profile_id, profile_name, mod_set_hash,
+                                mod_snapshot, experiment_depth, label, status, started_at,
+                                finished_at, mangohud_csv_path, exit_status, sample_count,
+                                duration_seconds, median_fps, average_fps,
+                                one_percent_low_fps, point_one_percent_low_fps,
+                                median_frame_time_ms, p95_frame_time_ms, p99_frame_time_ms
+                         FROM performance_runs
+                         WHERE game_id = ? AND profile_name = ?
+                         ORDER BY started_at DESC
+                         LIMIT ?",
+                        &vals![game_id, profile_name, limit as i64],
+                        performance_run_from_row,
+                    )
+                    .await
+            }
+            None => {
+                self.db
+                    .fetch_all(
+                        "SELECT run_id, game_id, profile_id, profile_name, mod_set_hash,
+                                mod_snapshot, experiment_depth, label, status, started_at,
+                                finished_at, mangohud_csv_path, exit_status, sample_count,
+                                duration_seconds, median_fps, average_fps,
+                                one_percent_low_fps, point_one_percent_low_fps,
+                                median_frame_time_ms, p95_frame_time_ms, p99_frame_time_ms
+                         FROM performance_runs
+                         WHERE game_id = ?
+                         ORDER BY started_at DESC
+                         LIMIT ?",
+                        &vals![game_id, limit as i64],
+                        performance_run_from_row,
+                    )
+                    .await
+            }
+        }
+    }
+
     /// Clear cross-crate UI test state stored outside profiles.
     ///
     /// The UI integration tests share one isolated on-disk database because
@@ -1759,8 +2552,14 @@ impl ModdeDb {
             "tool_setting_edges",
             "tool_setting_nodes",
             "tool_applied_files",
+            "profile_patcher_stage_outputs",
+            "profile_patcher_stages",
             "game_tools",
             "executable_configs",
+            "performance_samples",
+            "performance_runs",
+            "bisect_steps",
+            "bisect_sessions",
         ] {
             self.db
                 .execute(&format!("DELETE FROM {table}"), &vals![])
@@ -1804,6 +2603,140 @@ fn executable_from_row(r: &dyn DbRow) -> Result<ExecutableConfigRow> {
         wine_dll_overrides: r.opt_string(6)?,
         output_mod: r.string(7)?,
         enabled: r.bool(8)?,
+    })
+}
+
+fn performance_run_from_row(r: &dyn DbRow) -> Result<PerformanceRunRow> {
+    Ok(PerformanceRunRow {
+        run_id: r.string(0)?,
+        game_id: GameId::from(r.string(1)?),
+        profile_id: r.opt_i64(2)?,
+        profile_name: r.string(3)?,
+        mod_set_hash: r.string(4)?,
+        mod_snapshot_json: r.string(5)?,
+        experiment_depth: r.i64(6)?.max(0) as usize,
+        label: r.opt_string(7)?,
+        status: r.string(8)?,
+        started_at: r.string(9)?,
+        finished_at: r.opt_string(10)?,
+        mangohud_csv_path: r.opt_string(11)?.map(PathBuf::from),
+        exit_status: r.opt_i64(12)?,
+        summary: PerformanceSummary {
+            sample_count: r.opt_i64(13)?.unwrap_or(0).max(0) as usize,
+            duration_seconds: r.opt_f64(14)?,
+            median_fps: r.opt_f64(15)?,
+            average_fps: r.opt_f64(16)?,
+            one_percent_low_fps: r.opt_f64(17)?,
+            point_one_percent_low_fps: r.opt_f64(18)?,
+            median_frame_time_ms: r.opt_f64(19)?,
+            p95_frame_time_ms: r.opt_f64(20)?,
+            p99_frame_time_ms: r.opt_f64(21)?,
+        },
+    })
+}
+
+fn bisect_session_from_row(r: &dyn DbRow) -> Result<BisectSession> {
+    let status_raw = r.string(5)?;
+    let status = BisectStatus::parse(&status_raw).ok_or_else(|| {
+        CoreError::Other(format!("invalid bisect session status: {status_raw}").into())
+    })?;
+    let safety_raw = r.string(11)?;
+    let save_safety = match safety_raw.as_str() {
+        "refuse" => BisectSaveSafety::Refuse,
+        "force" => BisectSaveSafety::Force,
+        _ => {
+            return Err(CoreError::Other(
+                format!("invalid bisect save safety mode: {safety_raw}").into(),
+            ));
+        }
+    };
+    Ok(BisectSession {
+        session_id: r.string(0)?,
+        game_id: GameId::from(r.string(1)?),
+        source_profile_id: r.i64(2)?,
+        source_profile_name: r.string(3)?,
+        oracle: decode_json(&r.string(4)?, "bisect oracle")?,
+        status,
+        suspect_mod_ids: decode_json(&r.string(6)?, "bisect suspect mod ids")?,
+        known_good_mod_ids: decode_json(&r.string(7)?, "bisect known good mod ids")?,
+        known_bad_mod_ids: decode_json(&r.string(8)?, "bisect known bad mod ids")?,
+        current_step_id: r.opt_i64(9)?,
+        current_candidate_profile: r.opt_string(10)?,
+        save_safety,
+        keep_profiles: r.bool(12)?,
+        created_at: r.string(13)?,
+        updated_at: r.string(14)?,
+    })
+}
+
+fn bisect_step_from_row(r: &dyn DbRow) -> Result<BisectStep> {
+    let result = match r.opt_string(7)?.as_deref() {
+        None => None,
+        Some("good") => Some(BisectResult::Good),
+        Some("bad") => Some(BisectResult::Bad),
+        Some(raw) => {
+            return Err(CoreError::Other(
+                format!("invalid bisect step result: {raw}").into(),
+            ));
+        }
+    };
+    Ok(BisectStep {
+        id: r.i64(0)?,
+        session_id: r.string(1)?,
+        step_index: r.i64(2)?.max(0) as usize,
+        candidate_profile: r.string(3)?,
+        candidate_mod_ids: decode_json(&r.string(4)?, "bisect candidate mod ids")?,
+        enabled_mod_ids: decode_json(&r.string(5)?, "bisect enabled mod ids")?,
+        disabled_mod_ids: decode_json(&r.string(6)?, "bisect disabled mod ids")?,
+        result,
+        observed_signal: r.opt_string(8)?,
+        notes: r.opt_string(9)?,
+        launched_at: r.string(10)?,
+    })
+}
+
+fn encode_json(value: &(impl serde::Serialize + ?Sized), label: &str) -> Result<String> {
+    serde_json::to_string(value)
+        .map_err(|e| CoreError::Other(format!("failed to encode {label}: {e}").into()))
+}
+
+fn decode_json<T: serde::de::DeserializeOwned>(raw: &str, label: &str) -> Result<T> {
+    serde_json::from_str(raw)
+        .map_err(|e| CoreError::Other(format!("failed to decode {label}: {e}").into()))
+}
+
+fn patcher_stage_from_row(r: &dyn DbRow) -> Result<PatcherStageRow> {
+    let stage_kind = PatcherStageKind::parse(&r.string(2)?)?;
+    let settings_json = r.string(5)?;
+    let settings = serde_json::from_str::<PatcherStageSettings>(&settings_json).map_err(|e| {
+        CoreError::Other(format!("failed to parse patcher stage settings: {e}").into())
+    })?;
+    if settings.kind() != stage_kind {
+        return Err(CoreError::Validation(
+            format!(
+                "patcher stage kind '{}' does not match serialized settings kind '{}'",
+                stage_kind.as_str(),
+                settings.kind().as_str()
+            )
+            .into(),
+        ));
+    }
+    Ok(PatcherStageRow {
+        profile_id: r.i64(0)?,
+        name: r.string(1)?,
+        stage_kind,
+        enabled: r.bool(3)?,
+        sort_index: r.i64(4)?,
+        settings,
+        output_mod: r.string(6)?,
+    })
+}
+
+fn patcher_stage_output_from_row(r: &dyn DbRow) -> Result<PatcherStageOutputRow> {
+    Ok(PatcherStageOutputRow {
+        profile_id: r.i64(0)?,
+        stage_name: r.string(1)?,
+        rel_path: r.string(2)?,
     })
 }
 

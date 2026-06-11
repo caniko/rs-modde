@@ -6,6 +6,8 @@ members = [
   "crates/modde-games",
   "crates/modde-ui",
   "crates/modde-cli",
+  "crates/modde-oracle-api",
+  "crates/modde-oracle",
   "crates/modde-xtask",
 ]
 
@@ -58,6 +60,12 @@ sha2 = "0.11"
 smallvec = { version = "1", features = ["serde"] }
 
 # HTTP
+axum = { version = "0.8", default-features = false, features = [
+  "http1",
+  "json",
+  "query",
+  "tokio",
+] }
 reqwest = { version = "0.13.2", default-features = false, features = [
   "rustls",
   "stream",
@@ -65,7 +73,10 @@ reqwest = { version = "0.13.2", default-features = false, features = [
   "form",
   "cookies",
 ] }
+tower-http = { version = "0.6", features = ["trace", "limit"] }
+tower = { version = "0.5", features = ["util"] }
 semver = "1"
+resolvo = { version = "0.10.3", features = ["tokio"] }
 
 # Keyring
 keyring = "4"
@@ -75,6 +86,8 @@ keyring-core = "1"
 aes = "0.9.1"
 ctr = "0.10.1"
 base64 = "0.22"
+ed25519-dalek = "2"
+getrandom = "0.3"
 
 # Compression
 flate2 = "1"
@@ -161,6 +174,7 @@ modde-core = { version = "0.3.9-rc.1", path = "crates/modde-core" }
 modde-sources = { version = "0.3.9-rc.1", path = "crates/modde-sources" }
 modde-games = { version = "0.3.9-rc.1", path = "crates/modde-games" }
 modde-ui = { version = "0.3.9-rc.1", path = "crates/modde-ui" }
+modde-oracle-api = { version = "0.3.9-rc.1", path = "crates/modde-oracle-api" }
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

@@ -1,0 +1,19 @@
+---
+source: crates/modde-cli/tests/cli_help_snapshots.rs
+expression: "stdout(&[\"doctor\", \"explain\", \"--help\"])"
+---
+Ask an OpenAI-compatible LLM for grounded, cited hypotheses
+
+Usage: modde doctor explain [OPTIONS] --game <GAME> <LOG_PATH>
+
+Arguments:
+  <LOG_PATH>
+
+Options:
+      --data-dir <DATA_DIR>          Override data directory (default: ~/.local/share/modde or $`MODDE_DATA_DIR`) [env: MODDE_DATA_DIR=]
+      --game <GAME>
+      --heap-profile <HEAP_PROFILE>  Write a DHAT heap profile. Requires the `heap-profile` cargo feature [env: MODDE_HEAP_PROFILE=]
+      --profile <PROFILE>
+      --provider <PROVIDER>          [default: local] [possible values: local, remote]
+      --json
+  -h, --help                         Print help

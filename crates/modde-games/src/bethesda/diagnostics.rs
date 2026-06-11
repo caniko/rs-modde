@@ -9,6 +9,7 @@ use modde_core::diagnostics::{
 };
 
 use super::plugin_header::{self, PluginWarning};
+use super::records;
 
 /// Rule: Check for plugins with missing master dependencies.
 pub struct MissingMasterRule;
@@ -99,6 +100,75 @@ impl DiagnosticRule for Form43Rule {
 
 pub use modde_core::diagnostics::StorePresenceRule as EmptyModRule;
 
+/// Rule: parse active plugin records and check conservative FormID references.
+pub struct RecordReferenceRule;
+
+impl DiagnosticRule for RecordReferenceRule {
+    fn name(&self) -> &'static str {
+        "record-references"
+    }
+
+    fn check(&self, ctx: &DiagContext) -> Vec<Diagnostic> {
+        let active_plugins: Vec<&str> = collect_active_plugins(ctx);
+        if active_plugins.is_empty() {
+            return Vec::new();
+        }
+
+        let report =
+            records::validate_record_references(ctx.staging_dir, &active_plugins, ctx.game_id);
+
+        let mut diagnostics = Vec::new();
+
+        diagnostics.extend(report.unresolved.into_iter().map(|reference| {
+            let target = match &reference.expected_plugin {
+                Some(plugin) => format!("{:08X} in {plugin}", reference.target_form_id),
+                None => format!("{:08X}", reference.target_form_id),
+            };
+            Diagnostic {
+                severity: Severity::Error,
+                title: format!("Unresolved FormID: {target}"),
+                detail: format!(
+                    "Plugin '{}' record {} {:08X} references missing FormID {} through {}. \
+                     Validate or repair the plugin in xEdit before relying on generated LOD or playing this load order.",
+                    reference.source_plugin,
+                    reference.source_record,
+                    reference.source_form_id,
+                    target,
+                    reference.subrecord,
+                ),
+                affected_mod: Some(reference.source_plugin),
+                affected_file: reference.expected_plugin.map(PathBuf::from),
+                fix: Some(DiagFix {
+                    label: "Repair in xEdit".to_string(),
+                    description:
+                        "Open the load order in xEdit, inspect the unresolved reference, and install, enable, patch, or remove the plugin that owns the missing record."
+                            .to_string(),
+                }),
+            }
+        }));
+
+        diagnostics.extend(report.parse_errors.into_iter().map(|failure| Diagnostic {
+            severity: Severity::Error,
+            title: format!("Could not parse plugin records: {}", failure.plugin),
+            detail: format!(
+                "modde could not read '{}' for native record validation: {}",
+                failure.path.display(),
+                failure.error
+            ),
+            affected_mod: Some(failure.plugin),
+            affected_file: Some(failure.path),
+            fix: Some(DiagFix {
+                label: "Verify plugin file".to_string(),
+                description:
+                    "Reinstall the mod or validate the active plugin with xEdit; malformed active plugins can break the load order."
+                        .to_string(),
+            }),
+        }));
+
+        diagnostics
+    }
+}
+
 /// Rule: Check if overrides directory has unexpected files.
 pub struct OrphanedOverridesRule;
 
@@ -144,6 +214,7 @@ pub fn bethesda_diagnostics() -> DiagnosticEngine {
     let mut engine = modde_core::diagnostics::base_diagnostics();
     engine.add_rule(Box::new(MissingMasterRule));
     engine.add_rule(Box::new(Form43Rule));
+    engine.add_rule(Box::new(RecordReferenceRule));
     engine.add_rule(Box::new(OrphanedOverridesRule));
     engine
 }

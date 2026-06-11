@@ -1,19 +1,26 @@
 pub mod backup;
+pub mod bisect;
 pub mod collisions;
 pub mod config;
+pub mod crash;
 pub mod deploy;
 pub mod detect;
 pub mod diagnostics;
+pub mod doctor;
 pub mod export;
 pub mod fomod;
 pub mod game;
+pub mod hot_deploy;
 pub mod import;
 pub mod install;
 pub mod instance;
+pub mod lockfile;
 pub mod loot;
 pub mod nexus;
 pub mod nix_schema;
 pub mod nxm;
+pub mod patcher;
+pub mod perf;
 pub mod play;
 pub mod profile;
 pub mod rollback;
@@ -150,6 +157,8 @@ pub async fn persist_plugin_order(
     profile: &Profile,
     plugins: &[PluginEntry],
 ) -> Result<()> {
+    validate_native_record_references(profile, plugins)?;
+
     if let Some(profile_id) = profile.id {
         pm.db().set_plugin_order(profile_id, plugins).await?;
     }
@@ -161,6 +170,59 @@ pub async fn persist_plugin_order(
     }
 
     Ok(())
+}
+
+fn validate_native_record_references(profile: &Profile, plugins: &[PluginEntry]) -> Result<()> {
+    if !matches!(
+        profile.game_id.as_str(),
+        "skyrim-se" | "skyrim-ae" | "fallout4" | "fallout76" | "starfield"
+    ) {
+        return Ok(());
+    }
+
+    let active_plugins = plugins
+        .iter()
+        .filter(|plugin| plugin.enabled)
+        .map(|plugin| plugin.plugin_name.as_str())
+        .collect::<Vec<_>>();
+    if active_plugins.is_empty() {
+        return Ok(());
+    }
+
+    let staging = ProfileManager::staging_dir(&profile.name);
+    let report = modde_games::bethesda::records::validate_record_references(
+        &staging,
+        &active_plugins,
+        profile.game_id.as_str(),
+    );
+    if report.is_empty() {
+        return Ok(());
+    }
+
+    let issue_count = report.unresolved.len() + report.parse_errors.len();
+    let mut message = format!(
+        "refusing to write native plugin order because validation found {issue_count} issue(s). Run `modde diagnostics {}` for details.",
+        profile.game_id
+    );
+    for reference in report.unresolved.iter().take(5) {
+        message.push_str(&format!("\n  [ERROR] {reference}"));
+    }
+    for failure in report.parse_errors.iter().take(5) {
+        message.push_str(&format!(
+            "\n  [ERROR] {}: {}",
+            failure.plugin, failure.error
+        ));
+    }
+    if issue_count > 10 {
+        message.push_str(&format!("\n  ... and {} more", issue_count - 10));
+    }
+    if !report.unsupported_record_types.is_empty() {
+        message.push_str(&format!(
+            "\n  [INFO] Record validation is not exhaustive; unsupported record types present: {}",
+            report.unsupported_record_types.join(", ")
+        ));
+    }
+    anyhow::bail!(message)
 }
 
 #[cfg(test)]

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use iced::widget::{container, opaque};
 use iced::{Element, Length, Task};
+use modde_core::installer::StagedFile;
 use modde_core::profile::ProfileManager;
 use modde_core::resolver::GameId;
 
@@ -429,6 +430,29 @@ impl Modde {
         Task::perform(load_diagnostics(self.db.clone(), profile), move |result| {
             Message::DiagnosticsComputed { generation, result }
         })
+    }
+
+    pub(super) fn start_crash_log_analysis(&mut self) -> Task<Message> {
+        let Some(profile) = self.loaded_profile.clone() else {
+            self.status_message = "Select a profile before analyzing crash logs".to_string();
+            self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Error(
+                "Select a profile before analyzing crash logs.".to_string(),
+            );
+            return Task::none();
+        };
+        let path = self.crash_log_path_draft.trim();
+        if path.is_empty() {
+            self.status_message = "Enter a crash log path first".to_string();
+            return Task::none();
+        }
+        self.diagnostics_generation = self.diagnostics_generation.wrapping_add(1);
+        let generation = self.diagnostics_generation;
+        self.diagnostics_state = crate::views::diagnostics::DiagnosticsState::Running;
+        self.status_message = "Analyzing crash log...".to_string();
+        Task::perform(
+            load_diagnostics_with_crash(self.db.clone(), profile, std::path::PathBuf::from(path)),
+            move |result| Message::DiagnosticsComputed { generation, result },
+        )
     }
 
     pub(super) fn apply_diagnostics_computed(&mut self, computed: DiagnosticsComputed) {
@@ -973,14 +997,68 @@ pub(super) async fn load_diagnostics(
     db: modde_core::db::ModdeDb,
     profile: modde_core::Profile,
 ) -> Result<DiagnosticsComputed, String> {
-    tokio::task::spawn_blocking(move || load_diagnostics_blocking(db, profile))
+    tokio::task::spawn_blocking(move || load_diagnostics_blocking(db, profile, None))
         .await
         .map_err(|err| err.to_string())?
+}
+
+pub(super) async fn load_diagnostics_with_crash(
+    db: modde_core::db::ModdeDb,
+    profile: modde_core::Profile,
+    crash_log_path: PathBuf,
+) -> Result<DiagnosticsComputed, String> {
+    let profile_id = profile
+        .id
+        .ok_or_else(|| format!("Profile '{}' is not stored in the database", profile.name))?;
+    let raw_log = std::fs::read_to_string(&crash_log_path).map_err(|err| {
+        format!(
+            "Failed to read crash log {}: {err}",
+            crash_log_path.display()
+        )
+    })?;
+    let installed_files = db
+        .installed_files_for_profile(profile_id)
+        .await
+        .map_err(|err| err.to_string())?;
+    let tool_files = db
+        .load_all_applied_files(&profile.game_id)
+        .await
+        .map_err(|err| err.to_string())?;
+    let raw_log_for_record = raw_log.clone();
+    let db_for_blocking = db.clone();
+    let computed = tokio::task::spawn_blocking(move || {
+        load_diagnostics_blocking(
+            db_for_blocking,
+            profile,
+            Some(CrashLogInput {
+                path: crash_log_path,
+                raw_log,
+                installed_files,
+                tool_files,
+            }),
+        )
+    })
+    .await
+    .map_err(|err| err.to_string())??;
+    if let Some(report) = &computed.report.crash_report {
+        db.record_crash_log(Some(profile_id), report, &raw_log_for_record)
+            .await
+            .map_err(|err| err.to_string())?;
+    }
+    Ok(computed)
+}
+
+struct CrashLogInput {
+    path: PathBuf,
+    raw_log: String,
+    installed_files: Vec<(String, StagedFile)>,
+    tool_files: Vec<String>,
 }
 
 fn load_diagnostics_blocking(
     db: modde_core::db::ModdeDb,
     profile: modde_core::Profile,
+    crash_log: Option<CrashLogInput>,
 ) -> Result<DiagnosticsComputed, String> {
     let pm = ProfileManager::with_db(db);
     let hidden = load_hidden_files_blocking(&pm, &profile);
@@ -1004,6 +1082,15 @@ fn load_diagnostics_blocking(
         &engine,
     )
     .map_err(|err| err.to_string())?;
+    let crash_report = if let Some(input) = crash_log {
+        Some(analyze_crash_log_blocking(
+            &profile,
+            &active_plugins,
+            input,
+        )?)
+    } else {
+        None
+    };
     let entries = diagnostics.iter().map(format_diagnostic_entry).collect();
     Ok(DiagnosticsComputed {
         report: crate::views::diagnostics::DiagnosticsReport {
@@ -1011,8 +1098,37 @@ fn load_diagnostics_blocking(
             game_id: profile.game_id.to_string(),
             entries,
             integrity,
+            crash_report,
         },
         data_tab_conflicts: build_conflict_rows(&analysis, &hidden),
         missing_store_mod_count: analysis.missing_store_mods.len(),
     })
+}
+
+fn analyze_crash_log_blocking(
+    profile: &modde_core::Profile,
+    active_plugins: &[String],
+    input: CrashLogInput,
+) -> Result<modde_core::crash::CrashCorrelationReport, String> {
+    let report = modde_core::crash::correlate_crash_log(
+        &input.path,
+        &input.raw_log,
+        modde_core::crash::CrashLogFormat::Auto,
+        modde_core::crash::CrashCorrelationInput {
+            game_id: profile.game_id.to_string(),
+            profile: profile.clone(),
+            active_plugins: active_plugins
+                .iter()
+                .enumerate()
+                .map(|(idx, plugin_name)| modde_core::PluginEntry {
+                    plugin_name: plugin_name.clone(),
+                    sort_index: idx as i64,
+                    enabled: true,
+                })
+                .collect(),
+            installed_files: input.installed_files,
+            tool_files: input.tool_files,
+        },
+    );
+    Ok(report)
 }

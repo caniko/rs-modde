@@ -19,6 +19,7 @@ pub mod meta;
 pub(crate) mod mirror;
 pub mod nexus;
 pub mod queue;
+pub mod resolution;
 pub mod traits;
 pub mod wabbajack;
 

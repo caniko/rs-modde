@@ -8,9 +8,11 @@ use super::state::ToolLoadRequest;
 use super::tool_settings::{
     apply_derived_tool_settings, build_tool_derived_facts, current_tool_config_async,
     current_tool_config_blocking, format_tool_availability, normalize_tool_settings_for_specs,
-    patch_tool_setting_options, save_tool_config_with_reason_async, set_tool_options,
-    sync_optiscaler_release_options, tool_apply_is_pending, tool_apply_signature, tool_options,
+    patch_tool_setting_options, save_tool_config_with_reason_async,
+    sync_optiscaler_release_options, tool_apply_is_pending, tool_apply_signature,
 };
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
+use super::tool_settings::{set_tool_options, tool_options};
 use super::{
     ExecutableDraft, ExecutableUiEntry, ToolApplyResult, ToolHistoryUiEntry, ToolLoadSnapshot,
     ToolOptionCatalog, ToolReleaseSupport, ToolRevertResult, ToolUiEntry,
@@ -30,10 +32,26 @@ pub(super) async fn load_tool_releases(
     tool.list_releases().await.map_err(|err| err.to_string())
 }
 
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
+pub(super) fn proton_version_options_for_ui() -> Vec<String> {
+    modde_games::tools::proton::proton_version_options()
+}
+
+#[cfg(not(all(target_os = "linux", feature = "linux-integrations")))]
+pub(super) fn proton_version_options_for_ui() -> Vec<String> {
+    Vec::new()
+}
+
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 pub(super) async fn load_proton_versions() -> Result<Vec<String>, String> {
     modde_games::tools::proton::list_ge_proton_versions()
         .await
         .map_err(|err| err.to_string())
+}
+
+#[cfg(not(all(target_os = "linux", feature = "linux-integrations")))]
+pub(super) async fn load_proton_versions() -> Result<Vec<String>, String> {
+    Err("Proton integration is not enabled for this platform build".to_string())
 }
 
 pub(super) async fn install_selected_tool_release(
@@ -74,6 +92,7 @@ pub(super) async fn install_selected_tool_release(
     ))
 }
 
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 pub(super) async fn install_selected_proton_version(
     db: modde_core::db::ModdeDb,
     game_id: String,
@@ -97,6 +116,14 @@ pub(super) async fn install_selected_proton_version(
     modde_games::tools::proton::install_ge_proton_with_protonup_rs(version, target)
         .map_err(|err| err.to_string())?;
     Ok(format!("Installed GEProton {version} for {target}"))
+}
+
+#[cfg(not(all(target_os = "linux", feature = "linux-integrations")))]
+pub(super) async fn install_selected_proton_version(
+    _db: modde_core::db::ModdeDb,
+    _game_id: String,
+) -> Result<String, String> {
+    Err("Proton integration is not enabled for this platform build".to_string())
 }
 
 pub(super) async fn load_tools_state(
@@ -141,12 +168,13 @@ pub(super) fn load_tools_state_blocking(
     ));
     let game_dir_configured = game_dir.is_some();
     let mut option_catalog = request.tool_option_catalog.clone();
+    #[cfg(all(target_os = "linux", feature = "linux-integrations"))]
     if tool_options(&option_catalog, "proton", "selected_version").is_none() {
         set_tool_options(
             &mut option_catalog,
             "proton",
             "selected_version",
-            modde_games::tools::proton::proton_version_options(),
+            proton_version_options_for_ui(),
         );
     }
     if !request.optiscaler_releases.is_empty()

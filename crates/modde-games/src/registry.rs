@@ -7,7 +7,9 @@ use std::sync::{OnceLock, RwLock};
 use crate::generic::loader::load_user_games;
 use crate::optiscaler::OptiScalerProfile;
 use crate::policies::{CollisionPolicy, PolicyCollisionClassifier};
-use crate::traits::{GamePlugin, ModScanner, SaveTracker};
+use crate::traits::{
+    GamePlugin, HotDeploySupport, ModScanner, SaveDependencyAnalyzer, SaveTracker,
+};
 
 /// Factory producing a boxed collision classifier for a registered game.
 pub type CollisionClassifierFactory = fn() -> Box<dyn modde_core::collision::CollisionClassifier>;
@@ -51,7 +53,9 @@ pub struct GameRegistration {
     pub plugin: &'static dyn GamePlugin,
     pub scanner: Option<&'static dyn ModScanner>,
     pub save_tracker: Option<&'static dyn SaveTracker>,
+    pub save_dependency_analyzer: Option<&'static dyn SaveDependencyAnalyzer>,
     pub collision_classifier: Option<CollisionClassifierFactory>,
+    pub hot_deploy: HotDeploySupport,
     pub optiscaler_profiles: &'static [OptiScalerProfile],
 }
 
@@ -167,7 +171,9 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         plugin: &crate::bethesda::SKYRIM_SE,
         scanner: Some(&crate::bethesda::scanner::SKYRIM_SCANNER),
         save_tracker: Some(&crate::bethesda::saves::SKYRIM_SAVE_TRACKER),
+        save_dependency_analyzer: Some(&crate::bethesda::save_analysis::SKYRIM_SAVE_ANALYZER),
         collision_classifier: Some(bethesda_collision_classifier),
+        hot_deploy: HotDeploySupport::Unsupported,
         optiscaler_profiles: &[],
     },
     GameRegistration {
@@ -189,7 +195,9 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         plugin: &crate::bethesda::SKYRIM_AE,
         scanner: Some(&crate::bethesda::scanner::SKYRIM_SCANNER),
         save_tracker: Some(&crate::bethesda::saves::SKYRIM_SAVE_TRACKER),
+        save_dependency_analyzer: Some(&crate::bethesda::save_analysis::SKYRIM_SAVE_ANALYZER),
         collision_classifier: Some(bethesda_collision_classifier),
+        hot_deploy: HotDeploySupport::Unsupported,
         optiscaler_profiles: &[],
     },
     GameRegistration {
@@ -209,7 +217,9 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         plugin: &crate::bethesda::FALLOUT4,
         scanner: Some(&crate::bethesda::scanner::FALLOUT4_SCANNER),
         save_tracker: Some(&crate::bethesda::saves::FALLOUT4_SAVE_TRACKER),
+        save_dependency_analyzer: Some(&crate::bethesda::save_analysis::FALLOUT4_SAVE_ANALYZER),
         collision_classifier: Some(bethesda_collision_classifier),
+        hot_deploy: HotDeploySupport::Unsupported,
         optiscaler_profiles: &[],
     },
     GameRegistration {
@@ -229,7 +239,9 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         plugin: &crate::bethesda::FALLOUT76,
         scanner: Some(&crate::bethesda::scanner::FALLOUT76_SCANNER),
         save_tracker: Some(&crate::bethesda::saves::FALLOUT76_SAVE_TRACKER),
+        save_dependency_analyzer: None,
         collision_classifier: Some(bethesda_collision_classifier),
+        hot_deploy: HotDeploySupport::Unsupported,
         optiscaler_profiles: &[],
     },
     GameRegistration {
@@ -249,7 +261,9 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         plugin: &crate::bethesda::STARFIELD,
         scanner: Some(&crate::bethesda::scanner::STARFIELD_SCANNER),
         save_tracker: Some(&crate::bethesda::saves::STARFIELD_SAVE_TRACKER),
+        save_dependency_analyzer: None,
         collision_classifier: Some(bethesda_collision_classifier),
+        hot_deploy: HotDeploySupport::Unsupported,
         optiscaler_profiles: &[],
     },
     GameRegistration {
@@ -269,7 +283,9 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         plugin: &crate::cyberpunk::CYBERPUNK2077,
         scanner: Some(&crate::cyberpunk::scanner::CYBERPUNK_SCANNER),
         save_tracker: Some(&crate::cyberpunk::saves::CYBERPUNK_SAVE_TRACKER),
+        save_dependency_analyzer: None,
         collision_classifier: Some(cyberpunk_collision_classifier),
+        hot_deploy: HotDeploySupport::Experimental,
         optiscaler_profiles: &[],
     },
     GameRegistration {
@@ -294,7 +310,9 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         plugin: &crate::ue4::STELLAR_BLADE,
         scanner: Some(&crate::ue4::scanner::STELLAR_BLADE_SCANNER),
         save_tracker: Some(&crate::ue4::saves::STELLAR_BLADE_SAVE_TRACKER),
+        save_dependency_analyzer: None,
         collision_classifier: Some(ue4_collision_classifier),
+        hot_deploy: HotDeploySupport::Unsupported,
         optiscaler_profiles: crate::ue4::STELLAR_BLADE_OPTISCALER_PROFILES,
     },
     GameRegistration {
@@ -314,7 +332,9 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         plugin: &crate::bg3::BALDURS_GATE3,
         scanner: Some(&crate::bg3::scanner::BG3_SCANNER),
         save_tracker: Some(&crate::bg3::saves::BG3_SAVE_TRACKER),
+        save_dependency_analyzer: None,
         collision_classifier: Some(pak_collision_classifier),
+        hot_deploy: HotDeploySupport::Experimental,
         optiscaler_profiles: &[],
     },
     GameRegistration {
@@ -334,7 +354,9 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         plugin: &crate::stardew::STARDEW_VALLEY,
         scanner: Some(&crate::stardew::scanner::STARDEW_SCANNER),
         save_tracker: Some(&crate::stardew::saves::STARDEW_SAVE_TRACKER),
+        save_dependency_analyzer: None,
         collision_classifier: Some(generic_collision_classifier),
+        hot_deploy: HotDeploySupport::Unsupported,
         optiscaler_profiles: &[],
     },
     GameRegistration {
@@ -354,7 +376,9 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         plugin: &crate::gamebryo::FALLOUT_NEW_VEGAS,
         scanner: Some(&crate::gamebryo::scanner::FALLOUT_NEW_VEGAS_SCANNER),
         save_tracker: Some(&crate::gamebryo::saves::GAMEBRYO_SAVE_TRACKER),
+        save_dependency_analyzer: None,
         collision_classifier: Some(gamebryo_collision_classifier),
+        hot_deploy: HotDeploySupport::Unsupported,
         optiscaler_profiles: &[],
     },
     GameRegistration {
@@ -374,7 +398,9 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         plugin: &crate::gamebryo::OBLIVION,
         scanner: Some(&crate::gamebryo::scanner::OBLIVION_SCANNER),
         save_tracker: Some(&crate::gamebryo::saves::GAMEBRYO_SAVE_TRACKER),
+        save_dependency_analyzer: None,
         collision_classifier: Some(gamebryo_collision_classifier),
+        hot_deploy: HotDeploySupport::Unsupported,
         optiscaler_profiles: &[],
     },
     GameRegistration {
@@ -394,7 +420,9 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         plugin: &crate::oblivion_remastered::OBLIVION_REMASTERED,
         scanner: Some(&crate::oblivion_remastered::scanner::OBLIVION_REMASTERED_SCANNER),
         save_tracker: Some(&crate::oblivion_remastered::saves::OBLIVION_REMASTERED_SAVE_TRACKER),
+        save_dependency_analyzer: None,
         collision_classifier: Some(pak_collision_classifier),
+        hot_deploy: HotDeploySupport::Unsupported,
         optiscaler_profiles: &[],
     },
     GameRegistration {
@@ -414,7 +442,9 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         plugin: &crate::bannerlord::BANNERLORD,
         scanner: Some(&crate::bannerlord::scanner::BANNERLORD_SCANNER),
         save_tracker: Some(&crate::bannerlord::saves::BANNERLORD_SAVE_TRACKER),
+        save_dependency_analyzer: None,
         collision_classifier: Some(generic_collision_classifier),
+        hot_deploy: HotDeploySupport::Unsupported,
         optiscaler_profiles: &[],
     },
     GameRegistration {
@@ -434,7 +464,9 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         plugin: &crate::witcher3::WITCHER3,
         scanner: Some(&crate::witcher3::scanner::WITCHER3_SCANNER),
         save_tracker: Some(&crate::witcher3::saves::WITCHER3_SAVE_TRACKER),
+        save_dependency_analyzer: None,
         collision_classifier: Some(witcher_collision_classifier),
+        hot_deploy: HotDeploySupport::Unsupported,
         optiscaler_profiles: &[],
     },
     GameRegistration {
@@ -454,7 +486,9 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         plugin: &crate::ue4::SUBNAUTICA2,
         scanner: Some(&crate::ue4::scanner::SUBNAUTICA2_SCANNER),
         save_tracker: Some(&crate::ue4::saves::SUBNAUTICA2_SAVE_TRACKER),
+        save_dependency_analyzer: None,
         collision_classifier: Some(ue4_collision_classifier),
+        hot_deploy: HotDeploySupport::Unsupported,
         optiscaler_profiles: &[],
     },
 ];

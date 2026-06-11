@@ -8,6 +8,7 @@ use serde::Deserialize;
 use tracing::warn;
 
 /// Typed Nexus API client.
+#[derive(Clone)]
 pub struct NexusApi {
     client: Client,
     api_key: String,

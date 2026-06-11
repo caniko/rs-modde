@@ -21,8 +21,8 @@ use super::state::{empty_to_none, prefill_wabbajack_game_dir};
 use super::tool_ops::{
     apply_tool_for_game, deactivate_optiscaler_for_game, executable_draft_to_row,
     install_selected_proton_version, install_selected_tool_release, load_proton_versions,
-    load_tool_releases, remove_executable_for_game, revert_tool_for_game,
-    run_saved_executable_for_game, save_executable_for_game,
+    load_tool_releases, proton_version_options_for_ui, remove_executable_for_game,
+    revert_tool_for_game, run_saved_executable_for_game, save_executable_for_game,
 };
 use super::tool_settings::{
     adopt_optiscaler_for_game, reset_optiscaler_config_for_game, restore_tool_settings_for_game,
@@ -115,6 +115,7 @@ impl Modde {
             data_tab_state: Default::default(),
             data_tab_conflicts: Vec::new(),
             diagnostics_state: Default::default(),
+            crash_log_path_draft: String::new(),
             tool_state: Default::default(),
             browse_nexus: Default::default(),
             filter_mode: FilterMode::default(),
@@ -2390,6 +2391,12 @@ impl Modde {
             Message::RunDiagnostics => {
                 return self.start_diagnostics_load();
             }
+            Message::CrashLogPathChanged(path) => {
+                self.crash_log_path_draft = path;
+            }
+            Message::AnalyzeCrashLog => {
+                return self.start_crash_log_analysis();
+            }
             Message::DiagnosticsComputed { generation, result } => {
                 if generation != self.diagnostics_generation {
                     return Task::none();
@@ -2556,7 +2563,7 @@ impl Modde {
                             return Task::none();
                         };
                         let versions = if versions.is_empty() {
-                            modde_games::tools::proton::proton_version_options()
+                            proton_version_options_for_ui()
                         } else {
                             versions
                         };

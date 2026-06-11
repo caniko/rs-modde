@@ -188,7 +188,7 @@ mod tags_serde {
 /// This is now *provenance-only* metadata. Load-order business logic
 /// (preventing reorder of Wabbajack / Collection / TOML-imported profiles)
 /// is driven by [`LoadOrderLock`] on the profile, not by this field.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ProfileSource {
     #[default]
     Manual,

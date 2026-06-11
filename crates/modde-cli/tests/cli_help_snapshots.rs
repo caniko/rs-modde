@@ -81,6 +81,16 @@ fn snapshot_nxm_help() {
 }
 
 #[test]
+fn snapshot_doctor_help() {
+    insta::assert_snapshot!(stdout(&["doctor", "--help"]));
+}
+
+#[test]
+fn snapshot_doctor_explain_help() {
+    insta::assert_snapshot!(stdout(&["doctor", "explain", "--help"]));
+}
+
+#[test]
 fn snapshot_no_args_error() {
     // Capture clap's "missing subcommand" error so we notice when its
     // wording or exit code changes underneath us.

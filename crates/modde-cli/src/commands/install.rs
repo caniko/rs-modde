@@ -94,6 +94,7 @@ fn print_wine_override_report(report: &modde_games::launcher::WineOverrideReport
 }
 
 fn print_launch_wrapper_report(report: &modde_games::launcher::LaunchWrapperReport) {
+    println!("  Launch wrapper: {}", report.path.display());
     if report.restore_count > 0 {
         println!("  Launch wrapper: restores {} DLL(s)", report.restore_count);
     }
@@ -395,15 +396,18 @@ async fn handle_nexus_collection(
     let manifest = fetch_collection(&client, &api_key, &slug, version.as_deref())
         .await
         .context("failed to fetch collection manifest")?;
+    let transaction = modde_sources::resolution::preflight_collection_transaction(&manifest)
+        .context("collection dependency transaction is not solvable")?;
 
     let game_domain = manifest.game.domain_name.clone();
     let collection_version = manifest.version.version.clone();
 
     println!(
-        "Collection: {} by {} ({} mods)",
+        "Collection: {} by {} ({} mods, {} solved artifacts)",
         manifest.name,
         manifest.author.name,
-        manifest.mods.len()
+        manifest.mods.len(),
+        transaction.artifacts.len()
     );
 
     let store = paths::store_dir();
@@ -606,7 +610,7 @@ pub async fn configure_wine_overrides(
     info!(?launcher, "detected game launcher");
 
     // Set WINEDLLOVERRIDES in the launcher config (Linux only — Wine/Proton concept)
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "linux-integrations"))]
     {
         report.wine_overrides = modde_games::launcher::apply_wine_overrides(&launcher, &overrides)?;
     }

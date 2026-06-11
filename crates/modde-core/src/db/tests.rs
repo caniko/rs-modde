@@ -2,9 +2,10 @@ use super::backend::vals;
 use super::*;
 #[cfg(feature = "postgres")]
 use serial_test::serial;
-#[cfg(feature = "postgres")]
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+use crate::patcher::{CommandSettings, PatcherStageRow, PatcherStageSettings};
 
 /// Test-only raw query helpers, replacing the previous direct `conn` access.
 #[cfg(test)]
@@ -839,4 +840,109 @@ async fn executable_config_roundtrip() {
             .unwrap()
             .is_none()
     );
+}
+
+#[tokio::test]
+async fn patcher_stage_roundtrip_and_manifest_replace() {
+    let db = test_db().await;
+    let profile = sample_profile("patchers", "skyrim-se");
+    db.create_profile(&profile).await.unwrap();
+    let loaded = db
+        .load_profile("patchers", &GameId::from("skyrim-se"))
+        .await
+        .unwrap();
+    let profile_id = loaded.id.unwrap();
+
+    let stage = PatcherStageRow::new(
+        profile_id,
+        "synth",
+        true,
+        4,
+        PatcherStageSettings::Command(CommandSettings {
+            executable: PathBuf::from("/bin/true"),
+            args: vec!["--flag".to_string()],
+            environment: HashMap::new(),
+            working_dir: Some(PathBuf::from("/tmp")),
+        }),
+        "generated-synth",
+    )
+    .unwrap();
+    db.save_patcher_stage(&stage).await.unwrap();
+
+    let stages = db.list_patcher_stages(profile_id).await.unwrap();
+    assert_eq!(stages.len(), 1);
+    assert_eq!(stages[0], stage);
+
+    db.replace_patcher_stage_outputs(
+        profile_id,
+        "synth",
+        &[
+            "Meshes/a.nif".to_string(),
+            "Plugins/Synthesis.esp".to_string(),
+        ],
+    )
+    .await
+    .unwrap();
+    let outputs = db
+        .list_patcher_stage_outputs(profile_id, "synth")
+        .await
+        .unwrap();
+    let rels: Vec<_> = outputs.into_iter().map(|row| row.rel_path).collect();
+    assert_eq!(rels, vec!["Meshes/a.nif", "Plugins/Synthesis.esp"]);
+
+    db.replace_patcher_stage_outputs(profile_id, "synth", &["Only/new.esp".to_string()])
+        .await
+        .unwrap();
+    let outputs = db
+        .list_patcher_stage_outputs(profile_id, "synth")
+        .await
+        .unwrap();
+    let rels: Vec<_> = outputs.into_iter().map(|row| row.rel_path).collect();
+    assert_eq!(rels, vec!["Only/new.esp"]);
+}
+
+#[tokio::test]
+async fn patcher_stage_duplicate_output_mod_is_rejected() {
+    let db = test_db().await;
+    let profile = sample_profile("patchers", "skyrim-se");
+    db.create_profile(&profile).await.unwrap();
+    let loaded = db
+        .load_profile("patchers", &GameId::from("skyrim-se"))
+        .await
+        .unwrap();
+    let profile_id = loaded.id.unwrap();
+
+    let first = PatcherStageRow::new(
+        profile_id,
+        "first",
+        true,
+        0,
+        PatcherStageSettings::Command(CommandSettings {
+            executable: PathBuf::from("/bin/true"),
+            args: Vec::new(),
+            environment: HashMap::new(),
+            working_dir: None,
+        }),
+        "shared-output",
+    )
+    .unwrap();
+    db.save_patcher_stage(&first).await.unwrap();
+
+    let second = PatcherStageRow::new(
+        profile_id,
+        "second",
+        true,
+        1,
+        PatcherStageSettings::Command(CommandSettings {
+            executable: PathBuf::from("/bin/true"),
+            args: Vec::new(),
+            environment: HashMap::new(),
+            working_dir: None,
+        }),
+        "shared-output",
+    )
+    .unwrap();
+    let err = db.save_patcher_stage(&second).await.unwrap_err();
+    assert!(matches!(err, CoreError::Validation(_)));
+    assert!(err.to_string().contains("already used"));
 }

@@ -38,8 +38,10 @@ use crate::resolver::{GameId, ModId};
 pub enum Val {
     NullText,
     NullI64,
+    NullF64,
     Bool(bool),
     I64(i64),
+    F64(f64),
     Text(String),
 }
 
@@ -61,6 +63,11 @@ impl From<&String> for Val {
 impl From<i64> for Val {
     fn from(v: i64) -> Self {
         Val::I64(v)
+    }
+}
+impl From<f64> for Val {
+    fn from(v: f64) -> Self {
+        Val::F64(v)
     }
 }
 impl From<bool> for Val {
@@ -93,6 +100,11 @@ impl From<Option<i64>> for Val {
         v.map_or(Val::NullI64, Val::I64)
     }
 }
+impl From<Option<f64>> for Val {
+    fn from(v: Option<f64>) -> Self {
+        v.map_or(Val::NullF64, Val::F64)
+    }
+}
 
 /// Build a parameter list for an executor call.
 ///
@@ -115,6 +127,7 @@ pub(crate) use vals;
 pub trait DbRow {
     fn i64(&self, idx: usize) -> Result<i64>;
     fn opt_i64(&self, idx: usize) -> Result<Option<i64>>;
+    fn opt_f64(&self, idx: usize) -> Result<Option<f64>>;
     fn string(&self, idx: usize) -> Result<String>;
     fn opt_string(&self, idx: usize) -> Result<Option<String>>;
     fn bool(&self, idx: usize) -> Result<bool>;
@@ -125,6 +138,9 @@ impl DbRow for SqliteRow {
         Ok(self.try_get(idx)?)
     }
     fn opt_i64(&self, idx: usize) -> Result<Option<i64>> {
+        Ok(self.try_get(idx)?)
+    }
+    fn opt_f64(&self, idx: usize) -> Result<Option<f64>> {
         Ok(self.try_get(idx)?)
     }
     fn string(&self, idx: usize) -> Result<String> {
@@ -144,6 +160,9 @@ impl DbRow for PgRow {
         Ok(self.try_get(idx)?)
     }
     fn opt_i64(&self, idx: usize) -> Result<Option<i64>> {
+        Ok(self.try_get(idx)?)
+    }
+    fn opt_f64(&self, idx: usize) -> Result<Option<f64>> {
         Ok(self.try_get(idx)?)
     }
     fn string(&self, idx: usize) -> Result<String> {
@@ -175,8 +194,10 @@ fn sqlite_args(vals: &[Val]) -> Result<SqliteArguments<'static>> {
         match v {
             Val::NullText => args.add(None::<String>),
             Val::NullI64 => args.add(None::<i64>),
+            Val::NullF64 => args.add(None::<f64>),
             Val::Bool(b) => args.add(*b),
             Val::I64(i) => args.add(*i),
+            Val::F64(f) => args.add(*f),
             Val::Text(s) => args.add(s.clone()),
         }
         .map_err(bind_err)?;
@@ -191,8 +212,10 @@ fn pg_args(vals: &[Val]) -> Result<PgArguments> {
         match v {
             Val::NullText => args.add(None::<String>),
             Val::NullI64 => args.add(None::<i64>),
+            Val::NullF64 => args.add(None::<f64>),
             Val::Bool(b) => args.add(*b),
             Val::I64(i) => args.add(*i),
+            Val::F64(f) => args.add(*f),
             Val::Text(s) => args.add(s.clone()),
         }
         .map_err(bind_err)?;

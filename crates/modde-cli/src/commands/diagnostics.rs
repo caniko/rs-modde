@@ -6,6 +6,7 @@ use modde_core::paths;
 use modde_core::profile::ProfileManager;
 use modde_core::resolver::GameId;
 
+#[allow(dead_code)]
 pub async fn handle(game_id: &str, profile_name: Option<String>) -> Result<()> {
     let pm = ProfileManager::open()
         .await

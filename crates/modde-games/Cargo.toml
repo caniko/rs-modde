@@ -27,6 +27,12 @@ rustdoc-args = ["--cfg", "docsrs"]
 [lints]
 workspace = true
 
+[features]
+default = ["linux-integrations", "macos-integrations"]
+linux-integrations = []
+macos-integrations = []
+windows-integrations = ["modde-core/windows-integrations"]
+
 [dependencies]
 modde-core = { workspace = true }
 fomod-oxide = { workspace = true }
@@ -39,6 +45,8 @@ tokio = { workspace = true }
 reqwest = { workspace = true }
 zip = { workspace = true }
 futures = { workspace = true }
+flate2 = { workspace = true }
+lz4_flex = { workspace = true }
 tracing = { workspace = true }
 smallvec = { workspace = true }
 dashmap = { workspace = true }

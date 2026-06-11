@@ -361,7 +361,7 @@ pub fn generate_launch_wrapper(
 /// Format a list of DLL names as a `WINEDLLOVERRIDES` value string.
 ///
 /// Wine DLL overrides are only relevant on Linux (where games run via Wine/Proton).
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 fn format_wine_overrides(overrides: &[String]) -> String {
     overrides
         .iter()
@@ -375,7 +375,7 @@ fn format_wine_overrides(overrides: &[String]) -> String {
 /// Returns `true` if the config was updated, `false` if no changes were needed.
 ///
 /// Only relevant on Linux where games run via Wine/Proton.
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 pub fn apply_wine_overrides(
     launcher: &Launcher,
     overrides: &[String],
@@ -410,7 +410,7 @@ pub fn apply_wine_overrides(
 }
 
 /// Update Heroic's `GamesConfig` JSON to include WINEDLLOVERRIDES.
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 fn apply_heroic_overrides(
     config_path: &Path,
     game_id: &str,

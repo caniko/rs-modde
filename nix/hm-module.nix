@@ -159,6 +159,70 @@ flake: {
         else {}
       );
   };
+  patcherType = lib.types.submodule {
+    options = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Whether this patcher stage runs during modde deploy.";
+      };
+      type = lib.mkOption {
+        type = lib.types.enum ["synthesis-cli" "command"];
+        description = "Patcher stage implementation.";
+      };
+      order = lib.mkOption {
+        type = lib.types.int;
+        description = "Execution order for this stage.";
+      };
+      outputMod = lib.mkOption {
+        type = lib.types.str;
+        description = "User-facing name for the managed generated output.";
+      };
+      strict = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Forward-compatible failure policy knob. v1 requires true.";
+      };
+      settings = lib.mkOption {
+        type = lib.types.submodule {
+          options = {
+            executable = lib.mkOption {
+              type = lib.types.nullOr (lib.types.either lib.types.path lib.types.str);
+              default = null;
+              description = "Executable path for Synthesis CLI or the command stage.";
+            };
+            pipelineSettings = lib.mkOption {
+              type = lib.types.nullOr (lib.types.either lib.types.path lib.types.str);
+              default = null;
+              description = "Synthesis PipelineSettings.json path.";
+            };
+            synthesisProfile = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              description = "Synthesis profile nickname or GUID.";
+            };
+            args = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [];
+              description = "Arguments for command patcher stages.";
+            };
+            environment = lib.mkOption {
+              type = lib.types.attrsOf lib.types.str;
+              default = {};
+              description = "Environment variables for command patcher stages.";
+            };
+            workingDir = lib.mkOption {
+              type = lib.types.nullOr (lib.types.either lib.types.path lib.types.str);
+              default = null;
+              description = "Optional working directory for command patcher stages.";
+            };
+          };
+        };
+        default = {};
+        description = "Type-specific patcher stage settings.";
+      };
+    };
+  };
   profileType = lib.types.submodule ({
     name,
     config,
@@ -292,6 +356,12 @@ flake: {
         default = {};
         description = "Per-tool configuration for this profile.";
       };
+
+      patchers = lib.mkOption {
+        type = lib.types.attrsOf patcherType;
+        default = {};
+        description = "Profile-scoped patcher stages that run during deployment.";
+      };
     };
   });
   profileAssertions = lib.attrValues (
@@ -325,6 +395,9 @@ flake: {
           else [];
         resolvedManualArchiveHashes = map (entry: entry.resolvedHash) manualArchiveEntries;
         configuredTools = lib.filterAttrs (_toolId: toolCfg: toolCfg != null) profile.tools;
+        patcherNames = builtins.attrNames profile.patchers;
+        patcherEntries = lib.mapAttrsToList (patcherName: patcher: {inherit patcherName patcher;}) profile.patchers;
+        patcherOutputMods = map (entry: entry.patcher.outputMod) patcherEntries;
         toolAssertions =
           lib.concatMapAttrs (
             toolId: toolCfg: let
@@ -402,7 +475,70 @@ flake: {
               == builtins.length (lib.unique resolvedManualArchiveHashes);
             message = "programs.modde.profiles.${name}: manualArchives entries resolve to duplicate hashes.";
           };
+          "${name}-patcher-unique-names" = {
+            assertion = builtins.length patcherNames == builtins.length (lib.unique patcherNames);
+            message = "programs.modde.profiles.${name}.patchers: patcher stage names must be unique.";
+          };
+          "${name}-patcher-unique-output-mods" = {
+            assertion = builtins.length patcherOutputMods == builtins.length (lib.unique patcherOutputMods);
+            message = "programs.modde.profiles.${name}.patchers: outputMod values must be unique.";
+          };
         }
+        // lib.listToAttrs (
+          map (
+            entry: {
+              name = "${name}-patcher-${entry.patcherName}-synthesis-fields";
+              value = {
+                assertion =
+                  entry.patcher.type
+                  != "synthesis-cli"
+                  || (
+                    entry.patcher.settings.executable
+                    != null
+                    && entry.patcher.settings.pipelineSettings != null
+                    && entry.patcher.settings.synthesisProfile != null
+                    && entry.patcher.settings.args == []
+                    && entry.patcher.settings.environment == {}
+                    && entry.patcher.settings.workingDir == null
+                  );
+                message = "programs.modde.profiles.${name}.patchers.${entry.patcherName}: synthesis-cli requires settings.executable, settings.pipelineSettings, and settings.synthesisProfile only.";
+              };
+            }
+          )
+          patcherEntries
+        )
+        // lib.listToAttrs (
+          map (
+            entry: {
+              name = "${name}-patcher-${entry.patcherName}-command-fields";
+              value = {
+                assertion =
+                  entry.patcher.type
+                  != "command"
+                  || (
+                    entry.patcher.settings.executable
+                    != null
+                    && entry.patcher.settings.pipelineSettings == null
+                    && entry.patcher.settings.synthesisProfile == null
+                  );
+                message = "programs.modde.profiles.${name}.patchers.${entry.patcherName}: command patchers require settings.executable and must not set synthesis-only settings.";
+              };
+            }
+          )
+          patcherEntries
+        )
+        // lib.listToAttrs (
+          map (
+            entry: {
+              name = "${name}-patcher-${entry.patcherName}-strict";
+              value = {
+                assertion = entry.patcher.strict;
+                message = "programs.modde.profiles.${name}.patchers.${entry.patcherName}: strict must be true in v1.";
+              };
+            }
+          )
+          patcherEntries
+        )
         // toolAssertions
     )
     cfg.profiles
@@ -420,6 +556,10 @@ flake: {
     else if builtins.isString value
     then value
     else lib.concatStringsSep "," value;
+  shellArg = value:
+    if builtins.match "[A-Za-z0-9_./:=+@,% -]+" value != null && !(lib.hasInfix " " value)
+    then value
+    else lib.escapeShellArg value;
   renderTypedToolSettingValue = toolId: key: value: let
     spec = toolSchema.${toolId}.${key};
     mismatch = expected:
@@ -512,6 +652,29 @@ flake: {
       '';
   in
     lib.concatStringsSep "\n" (lib.mapAttrsToList renderToolActivation configuredTools);
+  patcherActivation = name: profile: let
+    nameArg = lib.escapeShellArg name;
+    gameArg = lib.escapeShellArg profile.game;
+    renderPatcher = patcherName: patcher: let
+      patcherNameArg = lib.escapeShellArg patcherName;
+      executable = lib.escapeShellArg (toString patcher.settings.executable);
+      outputMod = lib.escapeShellArg patcher.outputMod;
+      orderArg = toString patcher.order;
+      disableSnippet = lib.optionalString (!patcher.enable) ''
+        modde patcher disable ${patcherNameArg} --profile ${nameArg} --game ${gameArg} || echo "modde: patcher disable failed for ${patcherName}/${name}"
+      '';
+    in
+      if patcher.type == "synthesis-cli"
+      then ''
+        modde patcher add-synthesis ${patcherNameArg} --profile ${nameArg} --game ${gameArg} --executable ${executable} --pipeline-settings ${lib.escapeShellArg (toString patcher.settings.pipelineSettings)} --synthesis-profile ${lib.escapeShellArg patcher.settings.synthesisProfile} --output-mod ${outputMod} --order ${orderArg} || echo "modde: patcher add-synthesis failed for ${patcherName}/${name}"
+        ${disableSnippet}
+      ''
+      else ''
+        modde patcher add-command ${patcherNameArg} --profile ${nameArg} --game ${gameArg} --executable ${executable} ${lib.optionalString (patcher.settings.workingDir != null) "--working-dir ${lib.escapeShellArg (toString patcher.settings.workingDir)}"} ${lib.concatStringsSep " " (map (arg: "--arg ${shellArg arg}") patcher.settings.args)} ${lib.concatStringsSep " " (lib.mapAttrsToList (key: value: "--env ${shellArg "${key}=${value}"}") patcher.settings.environment)} --output-mod ${outputMod} --order ${orderArg} || echo "modde: patcher add-command failed for ${patcherName}/${name}"
+        ${disableSnippet}
+      '';
+  in
+    lib.concatStringsSep "\n" (lib.mapAttrsToList renderPatcher profile.patchers);
   profileActivation = name: profile: let
     nameArg = lib.escapeShellArg name;
     gameArg = lib.escapeShellArg profile.game;
@@ -576,12 +739,14 @@ flake: {
           if ! modde profile lock-info ${nameArg} --game ${gameArg} >/dev/null 2>&1; then
             modde install wabbajack ${modlistArg} --profile ${nameArg}${gameDirArg} --missing-archive-policy ${missingPolicyArg}
           fi
+          ${patcherActivation name profile}
           modde deploy ${deployArgs} || echo "modde: deploy failed for '${name}'"
           ${toolActivation name profile}
         fi
       ''
     else ''
       echo "modde: deploying profile '${name}' for game '${profile.game}'"
+      ${patcherActivation name profile}
       modde deploy ${deployArgs} || echo "modde: deploy failed for '${name}'"
       ${toolActivation name profile}
     '';
