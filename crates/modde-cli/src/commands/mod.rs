@@ -5,7 +5,6 @@ pub mod config;
 pub mod crash;
 pub mod deploy;
 pub mod detect;
-pub mod diagnostics;
 pub mod doctor;
 pub mod export;
 pub mod fomod;

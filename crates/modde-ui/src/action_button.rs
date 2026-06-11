@@ -73,6 +73,7 @@ pub enum ButtonAction {
     ResumeDownload(usize),
     CancelDownload(usize),
     RunDiagnostics,
+    AnalyzeCrashLog,
     ClearOverwrite,
     MoveOverwriteToMod(String),
     LoadSaveHistory,
@@ -237,6 +238,9 @@ impl ButtonActionDescription for ButtonAction {
             ButtonAction::CancelDownload(_) => "Cancel this queued or active download.",
             ButtonAction::RunDiagnostics => {
                 "Scan the active profile for game-specific modding and integrity issues."
+            }
+            ButtonAction::AnalyzeCrashLog => {
+                "Parse the selected crash log and correlate it with the active profile."
             }
             ButtonAction::ClearOverwrite => {
                 "Delete all files currently stored in the profile override area."
@@ -440,6 +444,7 @@ impl From<ButtonAction> for Message {
             ButtonAction::ResumeDownload(id) => Message::ResumeDownload(id),
             ButtonAction::CancelDownload(id) => Message::CancelDownload(id),
             ButtonAction::RunDiagnostics => Message::RunDiagnostics,
+            ButtonAction::AnalyzeCrashLog => Message::AnalyzeCrashLog,
             ButtonAction::ClearOverwrite => Message::ClearOverwrite,
             ButtonAction::MoveOverwriteToMod(mod_id) => Message::MoveOverwriteToMod(mod_id),
             ButtonAction::LoadSaveHistory => Message::LoadSaveHistory,

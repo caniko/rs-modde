@@ -336,13 +336,17 @@ pub async fn handle(action: ProfileAction) -> Result<()> {
                 .load(&name, game.as_deref().map(GameId::from).as_ref())
                 .await?;
             let idx = find_mod_or_bail(&profile, &mod_id)?;
-            if let Some(existing) = profile.mods[idx].lock.as_ref() {
+            let entry = profile
+                .mods
+                .get_mut(idx)
+                .with_context(|| format!("mod '{mod_id}' disappeared while updating profile"))?;
+            if let Some(existing) = entry.lock.as_ref() {
                 anyhow::bail!(
                     "mod '{mod_id}' is already pinned ({}) — unlock-mod first to re-pin",
                     format_lock_reason(existing)
                 );
             }
-            profile.mods[idx].lock = Some(LockReason::Manual { note: note.clone() });
+            entry.lock = Some(LockReason::Manual { note: note.clone() });
             pm.update(&profile).await?;
             match note {
                 Some(n) => println!("Pinned '{mod_id}' in profile '{name}' (manual: {n})"),
@@ -354,7 +358,11 @@ pub async fn handle(action: ProfileAction) -> Result<()> {
                 .load(&name, game.as_deref().map(GameId::from).as_ref())
                 .await?;
             let idx = find_mod_or_bail(&profile, &mod_id)?;
-            match profile.mods[idx].lock.take() {
+            let entry = profile
+                .mods
+                .get_mut(idx)
+                .with_context(|| format!("mod '{mod_id}' disappeared while updating profile"))?;
+            match entry.lock.take() {
                 None => println!("'{mod_id}' was not pinned"),
                 Some(prior) => {
                     pm.update(&profile).await?;

@@ -249,15 +249,19 @@ fn parse_nexus_url(url: &str) -> Result<(String, NexusModId, Option<NexusFileId>
         .map(std::iter::Iterator::collect)
         .unwrap_or_default();
 
-    if segments.len() < 3 || segments[1] != "mods" {
+    let [game_domain, "mods", mod_id, rest @ ..] = segments.as_slice() else {
+        bail!("URL does not look like a Nexus mod URL: {url}");
+    };
+    if game_domain.is_empty() || mod_id.is_empty() || !rest.iter().all(|segment| segment.is_empty())
+    {
         bail!("URL does not look like a Nexus mod URL: {url}");
     }
 
-    let game_domain = segments[0].to_string();
-    let mod_id = segments[2]
+    let game_domain = (*game_domain).to_string();
+    let mod_id = mod_id
         .parse::<u64>()
         .map(NexusModId::from)
-        .with_context(|| format!("invalid mod ID in URL: {}", segments[2]))?;
+        .with_context(|| format!("invalid mod ID in URL: {mod_id}"))?;
 
     // Check for file_id in query params
     let file_id = url_parsed
@@ -1151,8 +1155,21 @@ mod tests {
     }
 
     #[test]
+    fn parse_nexus_url_invalid_empty_game_domain() {
+        let result = parse_nexus_url("https://www.nexusmods.com//mods/12345");
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn parse_nexus_url_invalid_missing_mods_segment() {
         let result = parse_nexus_url("https://www.nexusmods.com/skyrimspecialedition/files/12345");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_nexus_url_invalid_extra_path_segments() {
+        let result =
+            parse_nexus_url("https://www.nexusmods.com/skyrimspecialedition/mods/12345/files");
         assert!(result.is_err());
     }
 

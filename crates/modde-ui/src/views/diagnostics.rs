@@ -80,7 +80,7 @@ pub fn view<'a>(state: &'a DiagnosticsState, crash_log_path: &'a str) -> Element
         button(text("Analyze Crash Log").size(14))
             .style(button::secondary)
             .padding([6, 14])
-            .on_press(Message::AnalyzeCrashLog),
+            .on_action(ButtonAction::AnalyzeCrashLog),
     ]
     .spacing(8)
     .align_y(Alignment::Center);

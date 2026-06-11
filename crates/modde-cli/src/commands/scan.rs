@@ -382,13 +382,14 @@ fn dir_prefixes(path: &str) -> Vec<String> {
 /// "common prefix" is the file itself, not a directory that identifies
 /// the mod beyond its scan location.
 fn mod_root_dir(m: &modde_games::DiscoveredMod) -> Option<String> {
-    if m.files.len() < 2 {
+    let (first_file, rest) = m.files.split_first()?;
+    if rest.is_empty() {
         return None;
     }
     let normalize = |p: &str| p.replace('\\', "/").to_lowercase();
-    let first = normalize(&m.files[0].rel_path);
+    let first = normalize(&first_file.rel_path);
     let mut common_len = first.len();
-    for f in &m.files[1..] {
+    for f in rest {
         let other = normalize(&f.rel_path);
         let n = first
             .bytes()

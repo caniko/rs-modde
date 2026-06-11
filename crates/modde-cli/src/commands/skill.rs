@@ -139,7 +139,9 @@ fn installed_version(path: &Path) -> Result<Option<u64>> {
     }
     let content =
         fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
-    Ok(Some(frontmatter_version(&content).unwrap_or(0)))
+    let version = frontmatter_version(&content)
+        .with_context(|| format!("{} is missing a valid modde_skill_version", path.display()))?;
+    Ok(Some(version))
 }
 
 fn write_atomic(path: &Path, content: &str) -> Result<()> {
@@ -339,5 +341,15 @@ mod tests {
             frontmatter_version("---\nmodde_skill_version: nope\n---\n"),
             None
         );
+    }
+
+    #[test]
+    fn installed_skill_requires_valid_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("SKILL.md");
+        fs::write(&path, "---\nname: custom\n---\n").unwrap();
+
+        let err = installed_version(&path).unwrap_err().to_string();
+        assert!(err.contains("modde_skill_version"));
     }
 }

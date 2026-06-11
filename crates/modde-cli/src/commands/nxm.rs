@@ -14,10 +14,8 @@ pub struct NxmUri {
     pub file_id: NexusFileId,
     /// Authorization key from a premium nxm:// link. Parsed for a complete
     /// representation of the URI; not yet consumed by the download flow.
-    #[allow(dead_code)]
     pub key: Option<String>,
     /// Expiry timestamp from a premium nxm:// link (see `key`).
-    #[allow(dead_code)]
     pub expires: Option<u64>,
 }
 
@@ -31,21 +29,24 @@ impl NxmUri {
         // Split off query string
         let (path, query) = uri.split_once('?').unwrap_or((uri, ""));
 
-        let segments: Vec<&str> = path.split('/').collect();
         // Expected: [game_domain, "mods", mod_id, "files", file_id]
-        if segments.len() < 5 || segments[1] != "mods" || segments[3] != "files" {
+        let segments = path.split('/').collect::<Vec<_>>();
+        let [game_domain, "mods", mod_id, "files", file_id] = segments.as_slice() else {
+            bail!("invalid nxm:// URI format: nxm://{uri}");
+        };
+        if game_domain.is_empty() || mod_id.is_empty() || file_id.is_empty() {
             bail!("invalid nxm:// URI format: nxm://{uri}");
         }
 
-        let game_domain = segments[0].to_string();
-        let mod_id = segments[2]
+        let game_domain = game_domain.to_string();
+        let mod_id = mod_id
             .parse::<u64>()
             .map(NexusModId::from)
-            .with_context(|| format!("invalid mod_id: {}", segments[2]))?;
-        let file_id = segments[4]
+            .with_context(|| format!("invalid mod_id: {mod_id}"))?;
+        let file_id = file_id
             .parse::<u64>()
             .map(NexusFileId::from)
-            .with_context(|| format!("invalid file_id: {}", segments[4]))?;
+            .with_context(|| format!("invalid file_id: {file_id}"))?;
 
         // Parse query parameters
         let mut key = None;
@@ -73,6 +74,13 @@ impl NxmUri {
 /// Handle an nxm:// URI — download the mod file.
 pub async fn handle(uri: String, _profile: Option<String>) -> Result<()> {
     let parsed = NxmUri::parse(&uri)?;
+    if parsed.key.is_some() || parsed.expires.is_some() {
+        info!(
+            has_key = parsed.key.is_some(),
+            expires = parsed.expires,
+            "nxm URI included premium metadata; resolving download through configured API key"
+        );
+    }
 
     println!("nxm:// download request:");
     println!("  Game: {}", parsed.game_domain);
@@ -314,5 +322,9 @@ mod tests {
         assert!(NxmUri::parse("https://example.com").is_err());
         assert!(NxmUri::parse("nxm://invalid").is_err());
         assert!(NxmUri::parse("nxm://game/bad/format").is_err());
+        assert!(NxmUri::parse("nxm:///mods/100/files/200").is_err());
+        assert!(NxmUri::parse("nxm://game/mods/100/files/200/extra").is_err());
+        assert!(NxmUri::parse("nxm://game/mods//files/200").is_err());
+        assert!(NxmUri::parse("nxm://game/mods/100/files/").is_err());
     }
 }
