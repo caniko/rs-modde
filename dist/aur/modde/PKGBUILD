@@ -1,7 +1,7 @@
 # Maintainer: Can H. Tartanoglu <caniko@codeberg.org>
 # Maintainer GPG key: 818D507F1E62139F8A17EAA64623DEA06FDACFE1
 pkgname=modde
-pkgver=0.2.1
+pkgver=0.3.9_rc.1
 pkgrel=1
 pkgdesc='Cross-platform game mod manager'
 arch=('x86_64')
@@ -10,7 +10,7 @@ license=('GPL-3.0-only')
 depends=('dbus' 'gcc-libs' 'glibc' 'libxkbcommon' 'openssl' 'sqlite' 'vulkan-icd-loader' 'wayland')
 makedepends=('cargo' 'cmake' 'pkgconf' 'rust')
 conflicts=('modde-bin' 'modde-git')
-source=("rs-modde-${pkgver}.tar.gz::https://codeberg.org/caniko/rs-modde/archive/${pkgver}.tar.gz")
+source=("rs-modde-${pkgver//_/-}.tar.gz::https://codeberg.org/caniko/rs-modde/archive/${pkgver//_/-}.tar.gz")
 sha256sums=('SKIP')
 
 build() {

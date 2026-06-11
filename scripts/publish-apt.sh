@@ -9,8 +9,6 @@
 # Required environment:
 #   VERSION                   release tag (X.Y.Z), used in commit message only
 #   APT_REPO_GPG_KEY          ascii-armored secret key for the apt repository
-#   APT_REPO_GPG_KEY_ID       long-form key id or fingerprint that reprepro
-#                             references via SignWith (e.g. D18B...E408)
 #   APT_REPO_SSH_KEY          ed25519 private key with write deploy-key access
 #                             to caniko/apt-modde
 #
@@ -22,10 +20,10 @@
 #                             (default: pages)
 #
 # Behavior:
-# - When required apt secrets are unset, the script logs warnings and exits 0.
-#   Use this to keep tag pushes green before the apt repo has been bootstrapped
-#   (mirrors Homebrew/Scoop/Flathub gate semantics).
-# - When secrets are present, the script:
+# - Missing apt signing or SSH material is a hard failure. The apt repository is
+#   documented as a supported Linux channel, so publishing must not silently
+#   omit required signing data.
+# - When all inputs are present, the script:
 #     1. Imports the secret key into a throwaway GNUPGHOME.
 #     2. Loads the SSH deploy key into a throwaway ssh-agent.
 #     3. Stages every release/*.deb into a fresh reprepro tree under work/apt.
@@ -37,24 +35,29 @@ VERSION="${VERSION:?VERSION must be set to the release tag}"
 APT_REPO_REMOTE="${APT_REPO_REMOTE:-ssh://git@codeberg.org/caniko/apt-modde.git}"
 APT_REPO_BRANCH="${APT_REPO_BRANCH:-pages}"
 
-# --- soft gates: any missing piece is a clean skip, not a failure ---
-missing_secret=0
-if [ -z "${APT_REPO_GPG_KEY:-}" ] || [ -z "${APT_REPO_GPG_KEY_ID:-}" ]; then
-  echo "::warning::APT_REPO_GPG_KEY / APT_REPO_GPG_KEY_ID unset; skipping apt publish."
-  missing_secret=1
+if [ -z "${APT_REPO_GPG_KEY:-}" ]; then
+  echo "error: APT_REPO_GPG_KEY is unset; required upstream producer: apt repository signing-key bootstrap." >&2
+  echo 'regenerate/validate: export MODDE_APT_REPO_GPG_KEY_ID=<fingerprint>; gpg --armor --export "$MODDE_APT_REPO_GPG_KEY_ID" > dist/apt/key.gpg.asc; test -s dist/apt/key.gpg.asc && gpg --show-keys --with-fingerprint dist/apt/key.gpg.asc' >&2
+  exit 1
 fi
 if [ -z "${APT_REPO_SSH_KEY:-}" ]; then
-  echo "::warning::APT_REPO_SSH_KEY unset; skipping apt publish."
-  missing_secret=1
-fi
-if [ "$missing_secret" -ne 0 ]; then
-  exit 0
+  echo "error: APT_REPO_SSH_KEY is unset; required upstream producer: Codeberg apt-modde deploy key secret." >&2
+  echo "validation: ssh -i <deploy-key> -T git@codeberg.org" >&2
+  exit 1
 fi
 
 debs=(release/*.deb)
 if [ ! -e "${debs[0]}" ]; then
-  echo "::warning::No .deb files in release/; nothing to publish to apt."
-  exit 0
+  echo "error: no .deb files in release/; required upstream producer: Build Debian packages." >&2
+  echo "validation: ls -l release/*.deb" >&2
+  exit 1
+fi
+
+if [ ! -s dist/apt/key.gpg.asc ]; then
+  echo "error: missing dist/apt/key.gpg.asc; required upstream producer: apt repository signing-key bootstrap." >&2
+  echo 'regenerate: gpg --armor --export "$MODDE_APT_REPO_GPG_KEY_ID" > dist/apt/key.gpg.asc' >&2
+  echo "validation: test -s dist/apt/key.gpg.asc && gpg --show-keys --with-fingerprint dist/apt/key.gpg.asc" >&2
+  exit 1
 fi
 
 work="$(mktemp -d)"
@@ -65,6 +68,8 @@ chmod 700 "$work"
 GNUPGHOME="$work/gpg"; mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME"
 export GNUPGHOME
 printf '%s' "$APT_REPO_GPG_KEY" | gpg --batch --import 2>&1 | sed 's/^/gpg: /'
+APT_REPO_GPG_KEY_ID="$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" { print $10; exit }')"
+test -n "$APT_REPO_GPG_KEY_ID"
 echo "${APT_REPO_GPG_KEY_ID}:6:" | gpg --batch --import-ownertrust
 
 # --- ssh setup: agent + key + pinned known_hosts ---

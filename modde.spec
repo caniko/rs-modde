@@ -1,7 +1,7 @@
 %global crate modde
 
 Name:           modde
-Version:        0.3.4
+Version:        0.3.9~rc.1
 Release:        1%{?dist}
 Summary:        Cross-platform game mod manager
 
@@ -10,7 +10,7 @@ URL:            https://codeberg.org/caniko/rs-modde
 Source0:        %{url}/archive/v%{version}.tar.gz#/rs-modde-%{version}.tar.gz
 Source1:        vendor.tar.gz
 
-BuildRequires:  rust >= 1.85
+BuildRequires:  rust >= 1.93
 BuildRequires:  cargo
 BuildRequires:  gcc
 BuildRequires:  pkg-config
@@ -38,7 +38,7 @@ directory = "vendor"
 EOF
 
 %build
-cargo build --release --locked
+cargo build --release --locked --bin modde --bin modde-ui
 
 %install
 install -Dm755 target/release/modde %{buildroot}%{_bindir}/modde
