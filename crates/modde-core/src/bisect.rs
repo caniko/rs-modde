@@ -228,7 +228,7 @@ mod tests {
             source_profile_name: "main".to_string(),
             oracle: BisectOracle::Manual,
             status: BisectStatus::Active,
-            suspect_mod_ids: ids.iter().map(|s| s.to_string()).collect(),
+            suspect_mod_ids: ids.iter().map(std::string::ToString::to_string).collect(),
             known_good_mod_ids: Vec::new(),
             known_bad_mod_ids: Vec::new(),
             current_step_id: None,

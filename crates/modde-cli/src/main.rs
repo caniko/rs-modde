@@ -1329,13 +1329,13 @@ enum ToolAction {
 
 #[derive(Subcommand)]
 enum PerfAction {
-    /// Launch a profile with per-run MangoHud CSV capture
+    /// Launch a profile with per-run `MangoHud` CSV capture
     Run {
         /// Profile to activate and benchmark (uses active profile if omitted)
         profile: Option<String>,
         #[arg(long)]
         game: String,
-        /// MangoHud log duration in seconds
+        /// `MangoHud` log duration in seconds
         #[arg(long, default_value_t = 300)]
         duration: u64,
         /// Optional human label for the run
@@ -1348,7 +1348,7 @@ enum PerfAction {
         #[arg(long)]
         no_deploy: bool,
     },
-    /// Ingest a MangoHud CSV for a pending run
+    /// Ingest a `MangoHud` CSV for a pending run
     Ingest {
         #[arg(long = "run")]
         run_id: String,

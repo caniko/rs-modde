@@ -191,8 +191,7 @@ fn collect_mod_dependency_source(mod_dir: &Path) -> Result<ModDependencySource> 
                 Some("dll") => {
                     source.saw_save_relevant_file = true;
                     source.warnings.push(format!(
-                        "{} is a script extender/native plugin; save records may not name it directly",
-                        rel_normalized
+                        "{rel_normalized} is a script extender/native plugin; save records may not name it directly"
                     ));
                 }
                 Some("bsa" | "ba2") => {
@@ -402,7 +401,7 @@ fn looks_like_zlib(bytes: &[u8]) -> bool {
     bytes.len() >= 2
         && bytes[0] == 0x78
         && matches!(bytes[1], 0x01 | 0x5e | 0x9c | 0xda)
-        && u16::from_be_bytes([bytes[0], bytes[1]]) % 31 == 0
+        && u16::from_be_bytes([bytes[0], bytes[1]]).is_multiple_of(31)
 }
 
 fn decompress_zlib(bytes: &[u8]) -> Result<Vec<u8>> {
@@ -438,10 +437,9 @@ fn extract_names_by_extension(bytes: &[u8], extensions: &[&str]) -> BTreeSet<Str
         if extensions
             .iter()
             .any(|ext| token.ends_with(&format!(".{ext}")))
+            && let Some(name) = token.rsplit(['/', '\\', '\0']).next()
         {
-            if let Some(name) = token.rsplit(['/', '\\', '\0']).next() {
-                out.insert(name.to_string());
-            }
+            out.insert(name.to_string());
         }
     }
     out

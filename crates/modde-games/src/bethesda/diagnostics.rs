@@ -100,7 +100,7 @@ impl DiagnosticRule for Form43Rule {
 
 pub use modde_core::diagnostics::StorePresenceRule as EmptyModRule;
 
-/// Rule: parse active plugin records and check conservative FormID references.
+/// Rule: parse active plugin records and check conservative `FormID` references.
 pub struct RecordReferenceRule;
 
 impl DiagnosticRule for RecordReferenceRule {

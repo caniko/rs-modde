@@ -103,34 +103,30 @@ pub async fn handle_run(
     println!("Performance run: {run_id}");
     println!("Launching via {}...", detected.source);
     let exit_status = detected.source.launch_with_env(&env_vars)?;
-    match exit_status {
-        Some(status) => {
-            let csv_path = find_mangohud_csv(&perf_dir, &run_id).unwrap_or(expected_csv);
-            let parsed =
-                modde_core::parse_mangohud_csv_file_with_warmup(&csv_path, warmup_seconds)?;
-            pm.db()
-                .complete_performance_run(
-                    &run_id,
-                    &csv_path,
-                    status.code().map(i64::from),
-                    &parsed.summary,
-                    &parsed.samples,
-                )
-                .await?;
-            println!("Captured: {}", csv_path.display());
-            print_summary(&parsed.summary);
-            capture_saves_after_run(&pm, &profile.name, &game_id).await;
-        }
-        None => {
-            pm.db()
-                .mark_performance_run_pending(&run_id, Some(&expected_csv))
-                .await?;
-            println!("Game launched via Steam (fire-and-forget).");
-            println!(
-                "Run is pending. After MangoHud writes the CSV, ingest it with:\n  modde perf ingest --run {run_id} --csv {}",
-                expected_csv.display()
-            );
-        }
+    if let Some(status) = exit_status {
+        let csv_path = find_mangohud_csv(&perf_dir, &run_id).unwrap_or(expected_csv);
+        let parsed = modde_core::parse_mangohud_csv_file_with_warmup(&csv_path, warmup_seconds)?;
+        pm.db()
+            .complete_performance_run(
+                &run_id,
+                &csv_path,
+                status.code().map(i64::from),
+                &parsed.summary,
+                &parsed.samples,
+            )
+            .await?;
+        println!("Captured: {}", csv_path.display());
+        print_summary(&parsed.summary);
+        capture_saves_after_run(&pm, &profile.name, &game_id).await;
+    } else {
+        pm.db()
+            .mark_performance_run_pending(&run_id, Some(&expected_csv))
+            .await?;
+        println!("Game launched via Steam (fire-and-forget).");
+        println!(
+            "Run is pending. After MangoHud writes the CSV, ingest it with:\n  modde perf ingest --run {run_id} --csv {}",
+            expected_csv.display()
+        );
     }
 
     Ok(())

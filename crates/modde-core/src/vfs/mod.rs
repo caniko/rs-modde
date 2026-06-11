@@ -653,6 +653,8 @@ mod tests {
     async fn test_rollback_no_backup() {
         let tmp = TempDir::new().unwrap();
         // Point XDG_DATA_HOME to our temp dir so dirs_path() resolves there
+        // SAFETY: this test owns the process-global XDG_DATA_HOME mutation for
+        // the duration of the assertion and uses a unique temp directory.
         unsafe {
             std::env::set_var("XDG_DATA_HOME", tmp.path());
         }
@@ -673,6 +675,8 @@ mod tests {
     #[ignore = "env var race: XDG_DATA_HOME set_var is not thread-safe across parallel tests"]
     async fn test_rollback_swaps_dirs() {
         let tmp = TempDir::new().unwrap();
+        // SAFETY: this ignored test mutates XDG_DATA_HOME only when explicitly
+        // run, and points it at an isolated temp directory.
         unsafe {
             std::env::set_var("XDG_DATA_HOME", tmp.path());
         }

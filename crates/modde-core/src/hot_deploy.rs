@@ -132,11 +132,7 @@ pub fn ensure_cosmetic_mod(mod_dir: &Path, classifier: &dyn CollisionClassifier)
     for (rel_path, _) in &files {
         let severity = classifier.classify_severity(rel_path);
         if severity != CollisionSeverity::Cosmetic {
-            bail!(
-                "hot-deploy refused: mod file '{}' is classified as {}",
-                rel_path,
-                severity
-            );
+            bail!("hot-deploy refused: mod file '{rel_path}' is classified as {severity}");
         }
     }
 

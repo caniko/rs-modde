@@ -831,27 +831,24 @@ async fn run_perf_candidate(
     let detected = modde_games::find_detected_game(game_id)
         .ok_or_else(|| anyhow::anyhow!("could not detect launcher for '{game_id}'"))?;
     println!("Performance candidate run: {run_id}");
-    match detected.source.launch_with_env(&env_vars)? {
-        Some(status) => {
-            let csv_path = find_mangohud_csv(&perf_dir, &run_id).unwrap_or(expected_csv);
-            let parsed = modde_core::parse_mangohud_csv_file(&csv_path)?;
-            pm.db()
-                .complete_performance_run(
-                    &run_id,
-                    &csv_path,
-                    status.code().map(i64::from),
-                    &parsed.summary,
-                    &parsed.samples,
-                )
-                .await?;
-            Ok(Some(run_id))
-        }
-        None => {
-            pm.db()
-                .mark_performance_run_pending(&run_id, Some(&expected_csv))
-                .await?;
-            Ok(None)
-        }
+    if let Some(status) = detected.source.launch_with_env(&env_vars)? {
+        let csv_path = find_mangohud_csv(&perf_dir, &run_id).unwrap_or(expected_csv);
+        let parsed = modde_core::parse_mangohud_csv_file(&csv_path)?;
+        pm.db()
+            .complete_performance_run(
+                &run_id,
+                &csv_path,
+                status.code().map(i64::from),
+                &parsed.summary,
+                &parsed.samples,
+            )
+            .await?;
+        Ok(Some(run_id))
+    } else {
+        pm.db()
+            .mark_performance_run_pending(&run_id, Some(&expected_csv))
+            .await?;
+        Ok(None)
     }
 }
 

@@ -296,6 +296,8 @@ mod tests {
 
     #[test]
     fn compatibility_oracle_is_disabled_by_default() {
+        // SAFETY: this is the only test in this module that mutates this
+        // opt-in variable, and it removes it before reading the setting.
         unsafe {
             std::env::remove_var("MODDE_COMPAT_ORACLE_OPT_IN");
         }

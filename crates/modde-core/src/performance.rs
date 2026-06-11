@@ -1,4 +1,4 @@
-//! Local performance telemetry captured from MangoHud CSV logs.
+//! Local performance telemetry captured from `MangoHud` CSV logs.
 
 use std::cmp::Ordering;
 use std::path::Path;
@@ -406,7 +406,7 @@ time,fps,frametime,cpu_load,gpu_load
 20,16.0,62.5,1
 ";
         let parsed = parse_mangohud_csv(csv).unwrap();
-        assert_eq!(parsed.samples[0].fps, 125.0);
+        assert!((parsed.samples[0].fps - 125.0).abs() < f64::EPSILON);
         assert_eq!(parsed.samples[1].frame_time_ms, Some(16.0));
     }
 

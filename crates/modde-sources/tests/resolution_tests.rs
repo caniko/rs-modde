@@ -11,7 +11,7 @@ use modde_sources::resolution::{
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 fn collection_with_mods(mods: Vec<CollectionMod>) -> CollectionManifest {
     CollectionManifest {
@@ -186,7 +186,7 @@ fn wabbajack_patch_missing_source_archive_is_unsat() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lazy_nexus_file_candidates_are_fetched_mid_solve() {
-    let _env_guard = ENV_LOCK.lock().unwrap();
+    let _env_guard = ENV_LOCK.lock().await;
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/games/skyrimspecialedition/mods/42/files.json"))
@@ -241,7 +241,7 @@ async fn lazy_nexus_file_candidates_are_fetched_mid_solve() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lazy_nexus_metadata_failure_is_explicit() {
-    let _env_guard = ENV_LOCK.lock().unwrap();
+    let _env_guard = ENV_LOCK.lock().await;
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/games/skyrimspecialedition/mods/42/files.json"))

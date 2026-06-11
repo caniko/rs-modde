@@ -2517,6 +2517,8 @@ fn trim_process_allocator() {
     // Native decoders can transiently allocate very large buffers for solid
     // archives. glibc often keeps those arenas mapped, which makes the next
     // batch look resident even after Rust values were dropped.
+    // SAFETY: `malloc_trim(0)` is a process allocator hint on glibc. It takes
+    // no borrowed Rust pointers and does not invalidate live allocations.
     unsafe {
         libc::malloc_trim(0);
     }

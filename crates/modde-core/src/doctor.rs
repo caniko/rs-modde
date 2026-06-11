@@ -595,7 +595,7 @@ fn trim_doctor_context(mut context: DoctorContext, max_bytes: usize) -> Result<D
     while !context.installed_files.is_empty()
         && serde_json::to_string_pretty(&context)?.len() > max_bytes
     {
-        let keep = (context.installed_files.len() / 2).max(0);
+        let keep = context.installed_files.len() / 2;
         context.installed_files.truncate(keep);
         context.evidence = build_evidence(&context);
     }

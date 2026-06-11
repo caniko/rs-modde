@@ -1,4 +1,5 @@
 use std::collections::{BTreeSet, HashMap};
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -547,7 +548,10 @@ fn normalize_path(path: &str) -> String {
 
 fn sha256_hex(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
-    digest.iter().map(|b| format!("{b:02x}")).collect()
+    digest.iter().fold(String::with_capacity(64), |mut out, b| {
+        write!(&mut out, "{b:02x}").expect("writing to String cannot fail");
+        out
+    })
 }
 
 #[cfg(test)]

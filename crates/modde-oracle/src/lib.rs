@@ -323,7 +323,7 @@ fn laplace_noise(scale: f64) -> f64 {
     #[cfg(test)]
     {
         let _ = scale;
-        return 0.0;
+        0.0
     }
     #[cfg(not(test))]
     {
@@ -701,9 +701,9 @@ mod tests {
         let parsed: CompatQueryResponse = serde_json::from_slice(&body).unwrap();
         let stat = parsed.stats.first().expect("thresholded stat");
         assert_eq!(stat.coinstall_count, 2);
-        assert_eq!(stat.crash_signature_rate, 0.5);
-        assert_eq!(stat.baseline_rate, 0.25);
-        assert_eq!(stat.lift, 2.0);
+        assert!((stat.crash_signature_rate - 0.5).abs() < f64::EPSILON);
+        assert!((stat.baseline_rate - 0.25).abs() < f64::EPSILON);
+        assert!((stat.lift - 2.0).abs() < f64::EPSILON);
     }
 
     async fn assert_ok(response: axum::response::Response) -> axum::response::Response {

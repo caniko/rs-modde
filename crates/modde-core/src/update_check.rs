@@ -180,10 +180,13 @@ mod tests {
         let _guard = ENV_LOCK.lock().unwrap();
         let mut settings = AppSettings::default();
         settings.update_check.enabled = true;
+        // SAFETY: update-check env mutation is serialized by ENV_LOCK and is
+        // restored before the test releases the lock.
         unsafe {
             env::set_var("MODDE_NO_UPDATE_CHECK", "1");
         }
         assert!(!update_checks_enabled(&settings));
+        // SAFETY: guarded by ENV_LOCK; removes the variable set just above.
         unsafe {
             env::remove_var("MODDE_NO_UPDATE_CHECK");
         }
@@ -192,6 +195,8 @@ mod tests {
     #[test]
     fn config_opt_out_disables_checks() {
         let _guard = ENV_LOCK.lock().unwrap();
+        // SAFETY: update-check env mutation is serialized by ENV_LOCK for all
+        // tests in this module.
         unsafe {
             env::remove_var("MODDE_NO_UPDATE_CHECK");
         }

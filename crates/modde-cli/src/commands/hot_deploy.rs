@@ -11,6 +11,7 @@ use modde_core::vfs::{Built, SymlinkFarm};
 
 use super::load_profile_or_default;
 
+#[allow(clippy::fn_params_excessive_bools)]
 pub async fn handle(
     profile_name: Option<String>,
     game_id: Option<String>,
@@ -70,7 +71,11 @@ pub async fn handle(
     let inspected_files = ensure_cosmetic_mod(&mod_dir, classifier.as_ref())?;
 
     let mut next_profile = profile.clone();
-    next_profile.mods[target_index].enabled = target_enabled;
+    next_profile
+        .mods
+        .get_mut(target_index)
+        .context("hot-deploy target disappeared while planning profile update")?
+        .enabled = target_enabled;
 
     let before_farm = build_farm(&pm, &profile, &store).await?;
     let after_farm = build_farm(&pm, &next_profile, &store).await?;
@@ -91,7 +96,12 @@ pub async fn handle(
 
     if patch.is_empty() {
         println!("  No live VFS changes required.");
-        if !dry_run && profile.mods[target_index].enabled != target_enabled {
+        let current_enabled = profile
+            .mods
+            .get(target_index)
+            .context("hot-deploy target disappeared while checking profile state")?
+            .enabled;
+        if !dry_run && current_enabled != target_enabled {
             pm.create_or_update(&next_profile)
                 .await
                 .context("failed to persist profile state")?;

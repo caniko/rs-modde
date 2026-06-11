@@ -303,7 +303,7 @@ impl DependencyProvider for ModdeDependencyProvider {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(&package_name)
             .cloned()
-            .or_else(|| None);
+            .or(None);
         let candidates = match candidates {
             Some(candidates) => candidates,
             None => self.fetch_lazy_nexus_candidates(&package_name).await?,
@@ -489,7 +489,6 @@ pub fn preflight_wabbajack_transaction(
                 archive_hash,
                 to,
                 patch_id,
-                size: _,
                 ..
             } => {
                 let package = TransactionPackage::WabbajackPatchOutput {

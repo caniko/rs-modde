@@ -1,4 +1,4 @@
-//! Native Bethesda ESP/ESM/ESL record parsing and conservative FormID
+//! Native Bethesda ESP/ESM/ESL record parsing and conservative `FormID`
 //! reference validation.
 //!
 //! The parser handles the Creation Engine container format directly: TES4
@@ -38,7 +38,7 @@ impl RecordValidationReport {
     }
 }
 
-/// A reference whose target FormID could not be resolved in the active load
+/// A reference whose target `FormID` could not be resolved in the active load
 /// order plus the source plugin's masters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnresolvedFormReference {
@@ -154,7 +154,7 @@ const REFERENCE_SCHEMAS: &[ReferenceSchema] = &[
 
 const COMMON_UNSUPPORTED_RECORD_TYPES: &[&str] = &["ARMO", "LVLI", "FLST"];
 
-/// Validate active Bethesda plugins for unresolved record-level FormID
+/// Validate active Bethesda plugins for unresolved record-level `FormID`
 /// references.
 #[must_use]
 pub fn validate_record_references(
@@ -520,12 +520,10 @@ fn resolve_reference(
     light_by_lower: &HashMap<String, bool>,
 ) -> ResolvedReference {
     let raw_index = (form_id >> 24) as usize;
-    let target_name = if raw_index < source.masters.len() {
-        Some(source.masters[raw_index].clone())
-    } else if raw_index == source.masters.len() {
-        Some(source.filename.clone())
-    } else {
-        None
+    let target_name = match raw_index.cmp(&source.masters.len()) {
+        std::cmp::Ordering::Less => Some(source.masters[raw_index].clone()),
+        std::cmp::Ordering::Equal => Some(source.filename.clone()),
+        std::cmp::Ordering::Greater => None,
     };
 
     let Some(target_name) = target_name else {
