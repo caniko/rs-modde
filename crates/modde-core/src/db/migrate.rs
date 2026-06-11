@@ -756,6 +756,20 @@ CREATE TABLE IF NOT EXISTS profile_patcher_stages (
     UNIQUE(profile_id, name)
 );
 
+CREATE TABLE IF NOT EXISTS crash_logs (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    game_id         TEXT NOT NULL,
+    profile_id      BIGINT REFERENCES profiles(id) ON DELETE SET NULL,
+    profile_name    TEXT,
+    source_path     TEXT NOT NULL,
+    logger_format   TEXT NOT NULL,
+    imported_at     TEXT NOT NULL DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS')),
+    raw_sha256      TEXT NOT NULL,
+    raw_log         TEXT NOT NULL,
+    signature_json  TEXT NOT NULL,
+    report_json     TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS performance_runs (
     run_id                      TEXT PRIMARY KEY,
     game_id                     TEXT NOT NULL,
@@ -834,6 +848,15 @@ CREATE TABLE IF NOT EXISTS bisect_steps (
     notes                  TEXT,
     launched_at            TEXT NOT NULL DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS')),
     UNIQUE(session_id, step_index)
+);
+
+CREATE TABLE IF NOT EXISTS profile_state_snapshots (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    profile_id      BIGINT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    game_id         TEXT NOT NULL,
+    profile_name    TEXT NOT NULL,
+    snapshot_json   TEXT NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_profiles_game ON profiles(game_id);
