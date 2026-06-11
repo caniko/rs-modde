@@ -54,6 +54,7 @@ pub async fn handle_crash(
     };
     let bundle = load_bundle(&game, profile_name, Some(log_path), format).await?;
     bundle.record_crash_if_present().await?;
+    report_compatibility_crash(&bundle).await;
     if json {
         println!("{}", serde_json::to_string_pretty(&bundle.context)?);
     } else {
@@ -71,6 +72,7 @@ pub async fn handle_explain(
 ) -> Result<()> {
     let bundle = load_bundle(&game, profile_name, Some(log_path), CrashFormatArg::Auto).await?;
     bundle.record_crash_if_present().await?;
+    report_compatibility_crash(&bundle).await;
     let settings = modde_core::settings::AppSettings::load();
     let explanation = explain_with_openai_compatible_chat(
         &settings.doctor.llm,
@@ -88,6 +90,19 @@ pub async fn handle_explain(
     }
     Ok(())
 }
+
+#[cfg(feature = "remote-telemetry")]
+async fn report_compatibility_crash(bundle: &DoctorBundle) {
+    let Some(crash) = &bundle.context.crash else {
+        return;
+    };
+    if let Err(error) = crate::telemetry::try_report_compatibility_crash(crash).await {
+        tracing::warn!(%error, "failed to report compatibility crash telemetry");
+    }
+}
+
+#[cfg(not(feature = "remote-telemetry"))]
+async fn report_compatibility_crash(_bundle: &DoctorBundle) {}
 
 struct DoctorBundle {
     pm: ProfileManager,

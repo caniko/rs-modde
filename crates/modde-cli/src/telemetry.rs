@@ -1,4 +1,5 @@
 use std::{
+    fmt::Write as _,
     fs, io,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
@@ -206,7 +207,12 @@ fn pair_hashes(mod_hashes: &[String]) -> Vec<String> {
 
 fn hash_hex(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
-    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+    digest
+        .iter()
+        .fold(String::with_capacity(64), |mut output, byte| {
+            write!(&mut output, "{byte:02x}").expect("writing to String cannot fail");
+            output
+        })
 }
 
 fn now_unix() -> i64 {

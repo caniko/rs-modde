@@ -12,10 +12,10 @@ async fn main() -> anyhow::Result<()> {
 
     let database_url = std::env::var("MODDE_ORACLE_DATABASE_URL")
         .context("MODDE_ORACLE_DATABASE_URL is required")?;
-    let addr = std::env::var("MODDE_ORACLE_BIND")
-        .unwrap_or_else(|_| "127.0.0.1:3917".to_string())
+    let bind = std::env::var("MODDE_ORACLE_BIND").unwrap_or_else(|_| "127.0.0.1:3917".to_string());
+    let addr = bind
         .parse::<SocketAddr>()
-        .context("invalid MODDE_ORACLE_BIND")?;
+        .with_context(|| format!("invalid MODDE_ORACLE_BIND value '{bind}'"))?;
     let min_cohort = std::env::var("MODDE_ORACLE_MIN_COHORT")
         .ok()
         .and_then(|value| value.parse::<i64>().ok())
