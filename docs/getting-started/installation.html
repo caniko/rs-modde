@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-b2f1b584.js";
+            window.path_to_searchindex_js = "../searchindex-164e219d.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-1c5bb4e1.js"></script>
+        <script src="../toc-050961cc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -181,29 +181,53 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="installation"><a class="header" href="#installation">Installation</a></h1>
-<p>modde runs on <strong>Linux, macOS, and Windows</strong> — all first-class. Every release ships
-two binaries: the <code>modde</code> command-line tool and the <code>modde-ui</code> desktop app. Install
-them through your platform’s native package manager, a direct download, Cargo, or —
-if you use Nix — a flake with a declarative home-manager module.</p>
-<p>There is no single “blessed” method. Pick whatever fits how you already manage
-software:</p>
+<p>modde is Linux-first today. The live user-facing paths are the Nix flake, the
+Home-Manager module, source builds from the Nix development shell, and the Attic
+binary cache used by release/CI infrastructure. macOS and Windows builds exist
+as experimental CI outputs, and additional package-manager channels are wired or
+staged, but they are not the recommended live install path until this page marks
+them live.</p>
+<p>Use this table as channel status, not as a promise that every listed package is
+already published:</p>
 <div class="table-wrapper">
 <table>
 <thead>
 <tr><th>Platform</th><th>Native packages</th><th>Also available</th></tr>
 </thead>
 <tbody>
-<tr><td><strong>Linux</strong></td><td><a href="#arch-linux-aur">AUR</a> · <a href="#fedora--rhel-copr">COPR</a> · <a href="#debian--ubuntu-apt">apt</a> · <a href="#flatpak">Flatpak</a></td><td><a href="#appimage">AppImage</a> · <a href="#linux-direct-download">tarball</a> · <a href="#cargo">Cargo</a> · <a href="#nix">Nix</a></td></tr>
-<tr><td><strong>macOS</strong></td><td><a href="#homebrew">Homebrew</a></td><td><a href="#macos-direct-download">tarball</a> · <a href="#cargo">Cargo</a> · <a href="#nix">Nix</a></td></tr>
-<tr><td><strong>Windows</strong></td><td><a href="#winget">winget</a> · <a href="#scoop">Scoop</a> · <a href="#chocolatey">Chocolatey</a></td><td><a href="#windows-direct-download">zip</a> · <a href="#cargo">Cargo</a></td></tr>
+<tr><td><strong>Linux</strong></td><td><a href="#nix">Nix</a> / Home Manager</td><td>AUR, COPR, apt, Flatpak, AppImage, tarball, Cargo are staged or build-from-source paths</td></tr>
+<tr><td><strong>macOS</strong></td><td><a href="#nix">Nix</a> / source build</td><td>Homebrew and tarball are experimental staged outputs</td></tr>
+<tr><td><strong>Windows</strong></td><td>Experimental staged outputs</td><td>winget, Scoop, Chocolatey, and zip are not generally published yet</td></tr>
 </tbody>
 </table>
 </div>
-<p>Both binaries are included in every package except <code>cargo install modde-cli</code>, which
-builds the CLI only. After installing, jump to the <a href="quick-start.html">Quick start</a>.</p>
+<p>When a binary package is published it includes both <code>modde</code> and <code>modde-ui</code>;
+<code>cargo install modde-cli</code> builds the CLI only. After installing, jump to the
+<a href="quick-start.html">Quick start</a>.</p>
 <h2 id="linux"><a class="header" href="#linux">Linux</a></h2>
+<p>Linux releases are gated by package family rather than by every downstream
+distribution name. A channel is published only after its artifact exists and its
+release smoke check passes. At the moment, Nix/Home Manager is live; the other
+package families below are staged release wiring.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Family</th><th>Primary channel</th><th>Covered distributions</th></tr>
+</thead>
+<tbody>
+<tr><td>Debian</td><td><a href="#debian--ubuntu-apt">apt</a> / <code>.deb</code></td><td>Debian, Ubuntu, Linux Mint, Pop!_OS</td></tr>
+<tr><td>RPM</td><td><a href="#fedora--rhel-copr">COPR</a> / SRPM</td><td>Fedora, RHEL, Rocky Linux, AlmaLinux, Bazzite, Nobara</td></tr>
+<tr><td>Arch</td><td><a href="#arch-linux-aur">AUR</a></td><td>Arch, Manjaro, EndeavourOS, CachyOS</td></tr>
+<tr><td>Nix</td><td><a href="#nix">flake</a> / Home Manager</td><td>Nix and NixOS</td></tr>
+<tr><td>Universal</td><td><a href="#flatpak">Flatpak</a>, <a href="#appimage">AppImage</a>, <a href="#linux-direct-download">tarball</a></td><td>Desktop, immutable, and gaming-focused Linux systems</td></tr>
+</tbody>
+</table>
+</div>
+<p>Linux <code>x86_64</code> is the baseline for distro packages. Linux <code>aarch64</code> is currently
+released through the generic tarball and Nix paths unless a distro-specific
+channel adds its own <code>arm64</code> or equivalent build.</p>
 <h3 id="arch-linux-aur"><a class="header" href="#arch-linux-aur">Arch Linux (AUR)</a></h3>
-<p>Three packages are published to the AUR; install one with your preferred helper
+<p>Planned channel. Three packages are prepared for the AUR; once published, install one with your preferred helper
 (<code>yay</code>, <code>paru</code>, …):</p>
 <pre><code class="language-bash">yay -S modde-bin   # prebuilt from the signed release tarball (fastest)
 yay -S modde       # build the tagged release from source
@@ -218,8 +242,8 @@ tags are signed by the maintainer GPG key
 <pre><code class="language-bash">sudo dnf copr enable caniko/rs-modde
 sudo dnf install modde modde-ui
 </code></pre>
-<p>The COPR builds the RPMs from the signed release source. Prerelease builds are
-published to the separate <code>caniko/rs-modde-testing</code> project.</p>
+<p>Planned channel. COPR builds RPMs from the signed release source. Prerelease
+builds are intended for the separate <code>caniko/rs-modde-testing</code> project.</p>
 <h3 id="debian--ubuntu-apt"><a class="header" href="#debian--ubuntu-apt">Debian / Ubuntu (apt)</a></h3>
 <pre><code class="language-bash">sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL https://modde.rs/apt/key.gpg.asc | sudo gpg --dearmor -o /etc/apt/keyrings/modde.gpg
@@ -228,20 +252,23 @@ echo "deb [signed-by=/etc/apt/keyrings/modde.gpg] https://modde.rs/apt/ stable m
 sudo apt update
 sudo apt install modde modde-ui
 </code></pre>
-<p>The repository is signed with a dedicated key (fingerprint
+<p>Planned channel. The repository is signed with a dedicated key (fingerprint
 <code>CCFE4A8461DF8778F5227684B6DB8F177A951E1B</code>), separate from the maintainer
 tag-signing key and the minisign release key. See
 <a href="https://codeberg.org/caniko/rs-modde/src/branch/trunk/SECURITY.md"><code>SECURITY.md</code></a>
 for the signing-key policy and rotation procedure.</p>
+<p>The apt public key is a required release input. If <code>dist/apt/key.gpg.asc</code> is not
+present in a release candidate, the apt channel stays blocked until the release
+maintainer exports and validates the dedicated repository key.</p>
 <h3 id="flatpak"><a class="header" href="#flatpak">Flatpak</a></h3>
-<p>The desktop app is published to Flathub:</p>
+<p>Planned channel. The desktop app is intended to be published to Flathub:</p>
 <pre><code class="language-bash">flatpak install flathub com.tartanoglu.modde
 flatpak run com.tartanoglu.modde
 </code></pre>
 <p>The Flatpak ships <code>modde-ui</code> (the GUI). For scripting with the <code>modde</code> CLI, use one
 of the other channels.</p>
 <h3 id="appimage"><a class="header" href="#appimage">AppImage</a></h3>
-<p>Self-contained, no installation required:</p>
+<p>Planned channel. Self-contained, no installation required once release assets are published:</p>
 <pre><code class="language-bash">chmod +x modde-ui-&lt;version&gt;-x86_64.AppImage
 ./modde-ui-&lt;version&gt;-x86_64.AppImage
 </code></pre>
@@ -249,8 +276,9 @@ of the other channels.</p>
 one. Download both from the
 <a href="https://codeberg.org/caniko/rs-modde/releases">releases page</a>.</p>
 <h3 id="linux-direct-download"><a class="header" href="#linux-direct-download">Linux direct download</a></h3>
-<p>Grab the tarball for your architecture from the
-<a href="https://codeberg.org/caniko/rs-modde/releases">releases page</a> and extract it:</p>
+<p>Planned channel. Once release assets are published, grab the tarball for your
+architecture from the <a href="https://codeberg.org/caniko/rs-modde/releases">releases page</a>
+and extract it:</p>
 <pre><code class="language-bash">tar xzf modde-&lt;version&gt;-x86_64-linux.tar.gz   # or aarch64-linux
 ./modde --help
 </code></pre>
@@ -260,10 +288,10 @@ one. Download both from the
 <pre><code class="language-bash">brew tap caniko/modde https://codeberg.org/caniko/homebrew-modde
 brew install modde
 </code></pre>
-<p>The formula installs both <code>modde</code> and <code>modde-ui</code> on Apple Silicon and Intel Macs
-(it also works on Linux/Linuxbrew).</p>
+<p>Planned channel. The formula is intended to install both <code>modde</code> and <code>modde-ui</code>
+on Apple Silicon and Intel Macs (and Linux/Linuxbrew) once published.</p>
 <h3 id="macos-direct-download"><a class="header" href="#macos-direct-download">macOS direct download</a></h3>
-<p>modde ships ad-hoc-signed macOS binaries (no Apple Developer ID, no notarization).
+<p>Experimental channel. modde’s macOS binaries are ad-hoc signed (no Apple Developer ID, no notarization).
 macOS quarantines downloaded binaries, so clear the quarantine attribute once after
 extracting:</p>
 <pre><code class="language-bash">tar xzf modde-&lt;version&gt;-aarch64-darwin.tar.gz   # or x86_64-darwin on Intel
@@ -278,18 +306,22 @@ it.</p>
 <h3 id="winget"><a class="header" href="#winget">winget</a></h3>
 <pre><code class="language-powershell">winget install Caniko.Modde
 </code></pre>
+<p>Planned channel. Use only after the winget package is published.</p>
 <h3 id="scoop"><a class="header" href="#scoop">Scoop</a></h3>
 <pre><code class="language-powershell">scoop bucket add modde https://codeberg.org/caniko/scoop-modde
 scoop install modde
 </code></pre>
+<p>Planned channel. Use only after the Scoop bucket is published.</p>
 <h3 id="chocolatey"><a class="header" href="#chocolatey">Chocolatey</a></h3>
 <pre><code class="language-powershell">choco install modde
 </code></pre>
+<p>Planned channel. Use only after the Chocolatey package is published.</p>
 <p>Each Windows package installs <code>modde.exe</code> and <code>modde-ui.exe</code> on your <code>PATH</code>.</p>
 <h3 id="windows-direct-download"><a class="header" href="#windows-direct-download">Windows direct download</a></h3>
-<p>Download <code>modde-&lt;version&gt;-x86_64-windows.zip</code> from the
-<a href="https://codeberg.org/caniko/rs-modde/releases">releases page</a> and extract it. The
-<code>.exe</code> artifacts are Authenticode-signed; verify the signature before running:</p>
+<p>Experimental channel. Once a Windows zip is published, download
+<code>modde-&lt;version&gt;-x86_64-windows.zip</code> from the
+<a href="https://codeberg.org/caniko/rs-modde/releases">releases page</a> and extract it.
+The <code>.exe</code> artifacts are Authenticode-signed; verify the signature before running:</p>
 <pre><code class="language-powershell">Get-AuthenticodeSignature .\modde.exe
 Get-AuthenticodeSignature .\modde-ui.exe
 </code></pre>

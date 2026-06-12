@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-b2f1b584.js";
+            window.path_to_searchindex_js = "../searchindex-164e219d.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-1c5bb4e1.js"></script>
+        <script src="../toc-050961cc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -305,10 +305,18 @@ feeds the <strong>save-breaking</strong> fingerprint described below. For the fu
 workflow — how to inspect, hide files, and reorder — see the
 <a href="../guides/conflicts.html">Conflicts guide</a>.</p>
 <h2 id="save-tracking"><a class="header" href="#save-tracking">Save tracking</a></h2>
-<p>Save tracking for Starfield is <strong><code>Done</code></strong>. Unlike the older Bethesda titles, which
-parse a binary <code>.ess</code> header for the character name and save number, Starfield’s
-saves are <code>.sfs</code> files and are tracked with modde’s declarative pattern-based
-tracker.</p>
+<p>Save tracking for Starfield is <strong><code>Done</code></strong> for file capture and restore. Unlike
+the older Bethesda titles, which parse a binary <code>.ess</code> header for the character
+name and save number, Starfield’s saves are <code>.sfs</code> files and are tracked with
+modde’s declarative pattern-based tracker.</p>
+<blockquote>
+<p><strong>Save-contamination gate:</strong> Starfield does <strong>not</strong> currently have a
+record-level save dependency analyzer. <code>modde mod remove --dry-run</code> does not
+inspect <code>.sfs</code> records for plugin or script dependencies, because the project
+does not yet have a verified Starfield <code>.sfs</code> magic/header source or fixture.
+Until that evidence exists, modde will not invent a parser or silently claim
+removal-safety coverage for Starfield saves.</p>
+</blockquote>
 <p>What the tracker captures:</p>
 <ul>
 <li>

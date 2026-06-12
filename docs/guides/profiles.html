@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-b2f1b584.js";
+            window.path_to_searchindex_js = "../searchindex-164e219d.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-1c5bb4e1.js"></script>
+        <script src="../toc-050961cc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -347,6 +347,25 @@ would shift <strong>B</strong>, which violates B’s pin contract — so the mov
 though <strong>A</strong> itself is unpinned. Each variant carries enough structure (the
 offending id, the <code>LockReason</code>) for the UI or CLI to explain <em>why</em> without
 string-matching an error message.</p>
+<h2 id="portable-moddelock-exports"><a class="header" href="#portable-moddelock-exports">Portable <code>modde.lock</code> exports</a></h2>
+<p><code>modde.lock</code> is a signed JSON snapshot of one profile’s reproducible state:
+profile provenance, mod priority order, Nexus/Wabbajack source identities,
+tracked staged files with content hashes, plugin order, hidden files, patcher
+configuration and outputs, and managed tool output files.</p>
+<pre><code class="language-bash">modde lock export --profile my-skyrim --game skyrim-se --output modde.lock
+modde lock keygen --public modde-lock.pub.json --secret modde-lock.secret.json
+modde lock sign modde.lock --secret-key modde-lock.secret.json
+modde lock verify modde.lock --profile my-skyrim --game skyrim-se
+</code></pre>
+<p>Export is strict by default. If a mod was installed before modde recorded source
+archive hashes or staged file manifests, export fails and prints the missing
+artifact, why it is required, how to regenerate it, and the validation command.
+Use <code>--allow-incomplete</code> only for a diagnostic lock that explicitly sets
+<code>reproducible = false</code>; incomplete locks are not byte-for-byte replay promises.</p>
+<p><code>modde lock import</code> verifies signatures and imports profile metadata, but v1
+does not silently download or fabricate missing archives. Re-run the normal
+Nexus/Wabbajack install flows to materialize files from the source identities in
+the lock.</p>
 <h2 id="experiment-stack"><a class="header" href="#experiment-stack">Experiment stack</a></h2>
 <p>The experiment stack lets you try profile changes non-destructively, like git
 branches for your mod setup. <code>try</code> pushes the currently-active profile onto a

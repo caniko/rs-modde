@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-b2f1b584.js";
+            window.path_to_searchindex_js = "../searchindex-164e219d.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-1c5bb4e1.js"></script>
+        <script src="../toc-050961cc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -450,6 +450,68 @@ strings). The per-tool key tables are in <a href="#tool-settings-reference">Tool
 below. The reserved keys <code>_game_id</code> and <code>optiscaler_profile</code> are ignored if set
 directly in <code>settings</code> (the module prints a warning and uses the dedicated
 <code>profile</code> option instead).</p>
+<h3 id="profilesnamepatchers"><a class="header" href="#profilesnamepatchers"><code>profiles.&lt;name&gt;.patchers</code></a></h3>
+<p>Profile-scoped patcher stages configured before activation deploy. <code>modde deploy</code> owns execution, so the same required-stage behavior applies from both
+Home Manager and the CLI.</p>
+<ul>
+<li><strong>Type:</strong> attrs of patcher submodules, keyed by stage name</li>
+<li><strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Common options:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>type</code></td><td><code>synthesis-cli</code> or <code>command</code></td><td>—</td><td>Stage implementation</td></tr>
+<tr><td><code>order</code></td><td><code>int</code></td><td>—</td><td>Execution order</td></tr>
+<tr><td><code>enable</code></td><td><code>bool</code></td><td><code>true</code></td><td>Whether the stage runs during deploy</td></tr>
+<tr><td><code>outputMod</code></td><td><code>str</code></td><td>—</td><td>Generated output mod</td></tr>
+<tr><td><code>strict</code></td><td><code>bool</code></td><td><code>true</code></td><td>Forward-compatible; v1 requires true</td></tr>
+</tbody>
+</table>
+</div>
+<p>Synthesis stages additionally require these <code>settings</code>:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Option</th><th>Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>executable</code></td><td><code>path</code> or <code>str</code></td><td>Synthesis CLI executable</td></tr>
+<tr><td><code>pipelineSettings</code></td><td><code>path</code> or <code>str</code></td><td>Synthesis <code>PipelineSettings.json</code></td></tr>
+<tr><td><code>synthesisProfile</code></td><td><code>str</code></td><td>Synthesis profile nickname or GUID</td></tr>
+</tbody>
+</table>
+</div>
+<p>Command stages use these <code>settings</code>:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>executable</code></td><td><code>path</code> or <code>str</code></td><td>—</td><td>Command executable</td></tr>
+<tr><td><code>args</code></td><td>list of <code>str</code></td><td><code>[]</code></td><td>Arguments passed to the command</td></tr>
+<tr><td><code>environment</code></td><td>attrs of <code>str</code></td><td><code>{}</code></td><td>Extra environment variables</td></tr>
+<tr><td><code>workingDir</code></td><td><code>null</code>, <code>path</code>, <code>str</code></td><td><code>null</code></td><td>Optional working directory</td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-nix">patchers = {
+  synthesis = {
+    type = "synthesis-cli";
+    order = 10;
+    outputMod = "synthesis-output";
+    settings = {
+      executable = "/tools/Synthesis/Synthesis.CLI.exe";
+      pipelineSettings = "/tools/Synthesis/PipelineSettings.json";
+      synthesisProfile = "my-skyrim";
+    };
+  };
+};
+</code></pre>
 <h4 id="toolsidrelease"><a class="header" href="#toolsidrelease"><code>tools.&lt;id&gt;.release</code></a></h4>
 <p>Pins a downloaded release asset for a release-backed tool. Today <strong>only
 <code>optiscaler</code> supports release pinning</strong> (sourced from

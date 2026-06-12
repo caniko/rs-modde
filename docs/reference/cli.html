@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-b2f1b584.js";
+            window.path_to_searchindex_js = "../searchindex-164e219d.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-1c5bb4e1.js"></script>
+        <script src="../toc-050961cc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -432,6 +432,22 @@ each suspect as LEAKED (safe to delete) or GENUINE (a user addition to keep), an
 <p>Deploy mods for the active or specified profile.</p>
 <pre><code class="language-bash">modde deploy [--profile &lt;name&gt;] [--game &lt;id&gt;]
 </code></pre>
+<hr>
+<h2 id="modde-patcher"><a class="header" href="#modde-patcher"><code>modde patcher</code></a></h2>
+<p>Configure profile-scoped patcher stages that run during deploy. See the
+<a href="../guides/patcher-pipelines.html">patcher pipelines guide</a>.</p>
+<pre><code class="language-bash">modde patcher list [--profile &lt;name&gt;] [--game &lt;id&gt;]
+modde patcher add-synthesis &lt;name&gt; --profile &lt;name&gt; --game &lt;id&gt; \
+  --executable &lt;path&gt; --pipeline-settings &lt;path&gt; \
+  --synthesis-profile &lt;id&gt; --output-mod &lt;mod&gt; --order &lt;n&gt;
+modde patcher add-command &lt;name&gt; --profile &lt;name&gt; --game &lt;id&gt; \
+  --executable &lt;path&gt; [--working-dir &lt;path&gt;] [--arg &lt;arg&gt;]... \
+  [--env KEY=VALUE]... --output-mod &lt;mod&gt; --order &lt;n&gt;
+modde patcher run [--profile &lt;name&gt;] [--game &lt;id&gt;]
+modde patcher enable|disable|remove &lt;name&gt; [--profile &lt;name&gt;] [--game &lt;id&gt;]
+</code></pre>
+<p>Enabled stages are required. Missing executables, settings files, invalid
+Synthesis profiles, or non-zero exits fail deploy.</p>
 <hr>
 <h2 id="modde-rollback"><a class="header" href="#modde-rollback"><code>modde rollback</code></a></h2>
 <p>Rollback to the previous deployment.</p>
@@ -1180,9 +1196,21 @@ modde tool install-release optiscaler --game cyberpunk2077 \
 </table>
 </div>
 <hr>
-<h2 id="modde-diagnostics"><a class="header" href="#modde-diagnostics"><code>modde diagnostics</code></a></h2>
-<p>Run diagnostic checks for common modding issues.</p>
+<h2 id="modde-doctor"><a class="header" href="#modde-doctor"><code>modde doctor</code></a></h2>
+<p>Diagnose profiles and crash logs using modde’s local database. <code>doctor profile</code>
+and <code>doctor crash</code> are deterministic; <code>doctor explain</code> sends the grounded context
+to an OpenAI-compatible model and rejects hypotheses that do not cite modde
+evidence IDs.</p>
+<pre><code class="language-bash">modde doctor profile --game &lt;id&gt; [--profile &lt;name&gt;] [--json]
+modde doctor crash &lt;log-path&gt; --game &lt;id&gt; [--profile &lt;name&gt;] [--format auto|crash-logger-sse|trainwreck|generic] [--json]
+modde doctor explain &lt;log-path&gt; --game &lt;id&gt; [--profile &lt;name&gt;] [--provider local|remote] [--json]
+</code></pre>
+<p><code>--provider local</code> uses the configured llama.cpp/OpenAI-compatible local server.
+<code>--provider remote</code> is explicit opt-in and requires a configured remote endpoint,
+model, and API key environment variable.</p>
+<p>Deprecated aliases retained for compatibility:</p>
 <pre><code class="language-bash">modde diagnostics --game &lt;id&gt; [--profile &lt;name&gt;]
+modde crash analyze &lt;log-path&gt; --game &lt;id&gt; [--profile &lt;name&gt;]
 </code></pre>
 <hr>
 <h2 id="modde-export"><a class="header" href="#modde-export"><code>modde export</code></a></h2>
@@ -1345,7 +1373,7 @@ modde save history --game skyrim-se --profile main
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../configuration/settings-file.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../contributing.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
@@ -1359,7 +1387,7 @@ modde save history --game skyrim-se --profile main
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../configuration/settings-file.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../contributing.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 

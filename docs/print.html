@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-b2f1b584.js";
+            window.path_to_searchindex_js = "searchindex-164e219d.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-1c5bb4e1.js"></script>
+        <script src="toc-050961cc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -179,15 +179,15 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="modde"><a class="header" href="#modde">modde</a></h1>
-<p><strong>modde</strong> is a game mod manager written in Rust that runs natively on <strong>Linux,
-macOS, and Windows</strong>. It gives you declarative, reproducible mod management with a
-virtual-filesystem deployment that keeps your game directory clean, git-backed save
-vaults, profile experiments, and graph-based conflict detection — and it installs
-Wabbajack modlists and Nexus Collections natively, no Windows VM required.</p>
-<p>Every platform is a first-class target. Install modde with your system’s package
-manager, a direct download, or Cargo — and if you happen to use Nix, modde is also a
-flake, which gives you a reproducible install and the option to declare your mod
-profiles as code through a home-manager module.</p>
+<p><strong>modde</strong> is a Linux-first game mod manager written in Rust. It gives you
+declarative, reproducible mod management with a virtual-filesystem deployment
+that keeps your game directory clean, git-backed save vaults, profile
+experiments, and graph-based conflict detection — and it installs Wabbajack
+modlists and Nexus Collections natively, no Windows VM required.</p>
+<p>The live install path today is the Nix flake/Home-Manager integration or a
+source build from the Nix development shell. macOS and Windows builds exist as
+experimental CI outputs, and package-manager channels are staged until the
+installation guide marks them live.</p>
 <ul>
 <li><strong>Project site:</strong> <a href="https://modde.tartanoglu.com/">https://modde.tartanoglu.com/</a></li>
 <li><strong>Source:</strong> <a href="https://codeberg.org/caniko/rs-modde">https://codeberg.org/caniko/rs-modde</a></li>
@@ -230,29 +230,53 @@ the <a href="#home-manager-module">Home-Manager module</a>, the
 most common questions.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="installation"><a class="header" href="#installation">Installation</a></h1>
-<p>modde runs on <strong>Linux, macOS, and Windows</strong> — all first-class. Every release ships
-two binaries: the <code>modde</code> command-line tool and the <code>modde-ui</code> desktop app. Install
-them through your platform’s native package manager, a direct download, Cargo, or —
-if you use Nix — a flake with a declarative home-manager module.</p>
-<p>There is no single “blessed” method. Pick whatever fits how you already manage
-software:</p>
+<p>modde is Linux-first today. The live user-facing paths are the Nix flake, the
+Home-Manager module, source builds from the Nix development shell, and the Attic
+binary cache used by release/CI infrastructure. macOS and Windows builds exist
+as experimental CI outputs, and additional package-manager channels are wired or
+staged, but they are not the recommended live install path until this page marks
+them live.</p>
+<p>Use this table as channel status, not as a promise that every listed package is
+already published:</p>
 <div class="table-wrapper">
 <table>
 <thead>
 <tr><th>Platform</th><th>Native packages</th><th>Also available</th></tr>
 </thead>
 <tbody>
-<tr><td><strong>Linux</strong></td><td><a href="#arch-linux-aur">AUR</a> · <a href="#fedora--rhel-copr">COPR</a> · <a href="#debian--ubuntu-apt">apt</a> · <a href="#flatpak">Flatpak</a></td><td><a href="#appimage">AppImage</a> · <a href="#linux-direct-download">tarball</a> · <a href="#cargo">Cargo</a> · <a href="#nix">Nix</a></td></tr>
-<tr><td><strong>macOS</strong></td><td><a href="#homebrew">Homebrew</a></td><td><a href="#macos-direct-download">tarball</a> · <a href="#cargo">Cargo</a> · <a href="#nix">Nix</a></td></tr>
-<tr><td><strong>Windows</strong></td><td><a href="#winget">winget</a> · <a href="#scoop">Scoop</a> · <a href="#chocolatey">Chocolatey</a></td><td><a href="#windows-direct-download">zip</a> · <a href="#cargo">Cargo</a></td></tr>
+<tr><td><strong>Linux</strong></td><td><a href="#nix">Nix</a> / Home Manager</td><td>AUR, COPR, apt, Flatpak, AppImage, tarball, Cargo are staged or build-from-source paths</td></tr>
+<tr><td><strong>macOS</strong></td><td><a href="#nix">Nix</a> / source build</td><td>Homebrew and tarball are experimental staged outputs</td></tr>
+<tr><td><strong>Windows</strong></td><td>Experimental staged outputs</td><td>winget, Scoop, Chocolatey, and zip are not generally published yet</td></tr>
 </tbody>
 </table>
 </div>
-<p>Both binaries are included in every package except <code>cargo install modde-cli</code>, which
-builds the CLI only. After installing, jump to the <a href="#quick-start">Quick start</a>.</p>
+<p>When a binary package is published it includes both <code>modde</code> and <code>modde-ui</code>;
+<code>cargo install modde-cli</code> builds the CLI only. After installing, jump to the
+<a href="#quick-start">Quick start</a>.</p>
 <h2 id="linux"><a class="header" href="#linux">Linux</a></h2>
+<p>Linux releases are gated by package family rather than by every downstream
+distribution name. A channel is published only after its artifact exists and its
+release smoke check passes. At the moment, Nix/Home Manager is live; the other
+package families below are staged release wiring.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Family</th><th>Primary channel</th><th>Covered distributions</th></tr>
+</thead>
+<tbody>
+<tr><td>Debian</td><td><a href="#debian--ubuntu-apt">apt</a> / <code>.deb</code></td><td>Debian, Ubuntu, Linux Mint, Pop!_OS</td></tr>
+<tr><td>RPM</td><td><a href="#fedora--rhel-copr">COPR</a> / SRPM</td><td>Fedora, RHEL, Rocky Linux, AlmaLinux, Bazzite, Nobara</td></tr>
+<tr><td>Arch</td><td><a href="#arch-linux-aur">AUR</a></td><td>Arch, Manjaro, EndeavourOS, CachyOS</td></tr>
+<tr><td>Nix</td><td><a href="#nix">flake</a> / Home Manager</td><td>Nix and NixOS</td></tr>
+<tr><td>Universal</td><td><a href="#flatpak">Flatpak</a>, <a href="#appimage">AppImage</a>, <a href="#linux-direct-download">tarball</a></td><td>Desktop, immutable, and gaming-focused Linux systems</td></tr>
+</tbody>
+</table>
+</div>
+<p>Linux <code>x86_64</code> is the baseline for distro packages. Linux <code>aarch64</code> is currently
+released through the generic tarball and Nix paths unless a distro-specific
+channel adds its own <code>arm64</code> or equivalent build.</p>
 <h3 id="arch-linux-aur"><a class="header" href="#arch-linux-aur">Arch Linux (AUR)</a></h3>
-<p>Three packages are published to the AUR; install one with your preferred helper
+<p>Planned channel. Three packages are prepared for the AUR; once published, install one with your preferred helper
 (<code>yay</code>, <code>paru</code>, …):</p>
 <pre><code class="language-bash">yay -S modde-bin   # prebuilt from the signed release tarball (fastest)
 yay -S modde       # build the tagged release from source
@@ -267,8 +291,8 @@ tags are signed by the maintainer GPG key
 <pre><code class="language-bash">sudo dnf copr enable caniko/rs-modde
 sudo dnf install modde modde-ui
 </code></pre>
-<p>The COPR builds the RPMs from the signed release source. Prerelease builds are
-published to the separate <code>caniko/rs-modde-testing</code> project.</p>
+<p>Planned channel. COPR builds RPMs from the signed release source. Prerelease
+builds are intended for the separate <code>caniko/rs-modde-testing</code> project.</p>
 <h3 id="debian--ubuntu-apt"><a class="header" href="#debian--ubuntu-apt">Debian / Ubuntu (apt)</a></h3>
 <pre><code class="language-bash">sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL https://modde.rs/apt/key.gpg.asc | sudo gpg --dearmor -o /etc/apt/keyrings/modde.gpg
@@ -277,20 +301,23 @@ echo "deb [signed-by=/etc/apt/keyrings/modde.gpg] https://modde.rs/apt/ stable m
 sudo apt update
 sudo apt install modde modde-ui
 </code></pre>
-<p>The repository is signed with a dedicated key (fingerprint
+<p>Planned channel. The repository is signed with a dedicated key (fingerprint
 <code>CCFE4A8461DF8778F5227684B6DB8F177A951E1B</code>), separate from the maintainer
 tag-signing key and the minisign release key. See
 <a href="https://codeberg.org/caniko/rs-modde/src/branch/trunk/SECURITY.md"><code>SECURITY.md</code></a>
 for the signing-key policy and rotation procedure.</p>
+<p>The apt public key is a required release input. If <code>dist/apt/key.gpg.asc</code> is not
+present in a release candidate, the apt channel stays blocked until the release
+maintainer exports and validates the dedicated repository key.</p>
 <h3 id="flatpak"><a class="header" href="#flatpak">Flatpak</a></h3>
-<p>The desktop app is published to Flathub:</p>
+<p>Planned channel. The desktop app is intended to be published to Flathub:</p>
 <pre><code class="language-bash">flatpak install flathub com.tartanoglu.modde
 flatpak run com.tartanoglu.modde
 </code></pre>
 <p>The Flatpak ships <code>modde-ui</code> (the GUI). For scripting with the <code>modde</code> CLI, use one
 of the other channels.</p>
 <h3 id="appimage"><a class="header" href="#appimage">AppImage</a></h3>
-<p>Self-contained, no installation required:</p>
+<p>Planned channel. Self-contained, no installation required once release assets are published:</p>
 <pre><code class="language-bash">chmod +x modde-ui-&lt;version&gt;-x86_64.AppImage
 ./modde-ui-&lt;version&gt;-x86_64.AppImage
 </code></pre>
@@ -298,8 +325,9 @@ of the other channels.</p>
 one. Download both from the
 <a href="https://codeberg.org/caniko/rs-modde/releases">releases page</a>.</p>
 <h3 id="linux-direct-download"><a class="header" href="#linux-direct-download">Linux direct download</a></h3>
-<p>Grab the tarball for your architecture from the
-<a href="https://codeberg.org/caniko/rs-modde/releases">releases page</a> and extract it:</p>
+<p>Planned channel. Once release assets are published, grab the tarball for your
+architecture from the <a href="https://codeberg.org/caniko/rs-modde/releases">releases page</a>
+and extract it:</p>
 <pre><code class="language-bash">tar xzf modde-&lt;version&gt;-x86_64-linux.tar.gz   # or aarch64-linux
 ./modde --help
 </code></pre>
@@ -309,10 +337,10 @@ one. Download both from the
 <pre><code class="language-bash">brew tap caniko/modde https://codeberg.org/caniko/homebrew-modde
 brew install modde
 </code></pre>
-<p>The formula installs both <code>modde</code> and <code>modde-ui</code> on Apple Silicon and Intel Macs
-(it also works on Linux/Linuxbrew).</p>
+<p>Planned channel. The formula is intended to install both <code>modde</code> and <code>modde-ui</code>
+on Apple Silicon and Intel Macs (and Linux/Linuxbrew) once published.</p>
 <h3 id="macos-direct-download"><a class="header" href="#macos-direct-download">macOS direct download</a></h3>
-<p>modde ships ad-hoc-signed macOS binaries (no Apple Developer ID, no notarization).
+<p>Experimental channel. modde’s macOS binaries are ad-hoc signed (no Apple Developer ID, no notarization).
 macOS quarantines downloaded binaries, so clear the quarantine attribute once after
 extracting:</p>
 <pre><code class="language-bash">tar xzf modde-&lt;version&gt;-aarch64-darwin.tar.gz   # or x86_64-darwin on Intel
@@ -327,18 +355,22 @@ it.</p>
 <h3 id="winget"><a class="header" href="#winget">winget</a></h3>
 <pre><code class="language-powershell">winget install Caniko.Modde
 </code></pre>
+<p>Planned channel. Use only after the winget package is published.</p>
 <h3 id="scoop"><a class="header" href="#scoop">Scoop</a></h3>
 <pre><code class="language-powershell">scoop bucket add modde https://codeberg.org/caniko/scoop-modde
 scoop install modde
 </code></pre>
+<p>Planned channel. Use only after the Scoop bucket is published.</p>
 <h3 id="chocolatey"><a class="header" href="#chocolatey">Chocolatey</a></h3>
 <pre><code class="language-powershell">choco install modde
 </code></pre>
+<p>Planned channel. Use only after the Chocolatey package is published.</p>
 <p>Each Windows package installs <code>modde.exe</code> and <code>modde-ui.exe</code> on your <code>PATH</code>.</p>
 <h3 id="windows-direct-download"><a class="header" href="#windows-direct-download">Windows direct download</a></h3>
-<p>Download <code>modde-&lt;version&gt;-x86_64-windows.zip</code> from the
-<a href="https://codeberg.org/caniko/rs-modde/releases">releases page</a> and extract it. The
-<code>.exe</code> artifacts are Authenticode-signed; verify the signature before running:</p>
+<p>Experimental channel. Once a Windows zip is published, download
+<code>modde-&lt;version&gt;-x86_64-windows.zip</code> from the
+<a href="https://codeberg.org/caniko/rs-modde/releases">releases page</a> and extract it.
+The <code>.exe</code> artifacts are Authenticode-signed; verify the signature before running:</p>
 <pre><code class="language-powershell">Get-AuthenticodeSignature .\modde.exe
 Get-AuthenticodeSignature .\modde-ui.exe
 </code></pre>
@@ -912,7 +944,7 @@ ready-to-run commands that hide files which never win anyway:</p>
 <pre><code class="language-bash">modde collisions --profile first-run --all --suggest-hides
 </code></pre>
 <p>For a broader health check (missing masters, Form 43 plugins, and more), run:</p>
-<pre><code class="language-bash">modde diagnostics --game skyrim-se --profile first-run
+<pre><code class="language-bash">modde doctor profile --game skyrim-se --profile first-run
 </code></pre>
 <p>For Bethesda games you can also sort plugin order with the LOOT masterlist
 (<code>modde loot sort --game skyrim-se</code>). Conflict resolution, per-file hiding, and
@@ -1007,7 +1039,7 @@ declarative home-manager path</li>
 <tr><td>Skyrim Anniversary Edition</td><td><code>skyrim-ae</code></td><td><code>Done</code></td><td>Yes</td><td>Yes</td><td><code>Done</code></td></tr>
 <tr><td>Fallout 4</td><td><code>fallout4</code></td><td><code>Done</code></td><td>Yes</td><td>Yes</td><td><code>Done</code></td></tr>
 <tr><td>Fallout 76</td><td><code>fallout76</code></td><td><code>Partial</code></td><td>Yes</td><td>Yes</td><td><code>Partial</code> (server-side / local cache only)</td></tr>
-<tr><td>Starfield</td><td><code>starfield</code></td><td><code>Partial</code></td><td>Yes</td><td>Yes</td><td><code>Done</code></td></tr>
+<tr><td>Starfield</td><td><code>starfield</code></td><td><code>Partial</code></td><td>Yes</td><td>Yes</td><td><code>Done</code> (capture only; no contamination gate)</td></tr>
 </tbody>
 </table>
 </div>
@@ -2126,10 +2158,18 @@ feeds the <strong>save-breaking</strong> fingerprint described below. For the fu
 workflow — how to inspect, hide files, and reorder — see the
 <a href="#conflicts--load-order">Conflicts guide</a>.</p>
 <h2 id="save-tracking-3"><a class="header" href="#save-tracking-3">Save tracking</a></h2>
-<p>Save tracking for Starfield is <strong><code>Done</code></strong>. Unlike the older Bethesda titles, which
-parse a binary <code>.ess</code> header for the character name and save number, Starfield’s
-saves are <code>.sfs</code> files and are tracked with modde’s declarative pattern-based
-tracker.</p>
+<p>Save tracking for Starfield is <strong><code>Done</code></strong> for file capture and restore. Unlike
+the older Bethesda titles, which parse a binary <code>.ess</code> header for the character
+name and save number, Starfield’s saves are <code>.sfs</code> files and are tracked with
+modde’s declarative pattern-based tracker.</p>
+<blockquote>
+<p><strong>Save-contamination gate:</strong> Starfield does <strong>not</strong> currently have a
+record-level save dependency analyzer. <code>modde mod remove --dry-run</code> does not
+inspect <code>.sfs</code> records for plugin or script dependencies, because the project
+does not yet have a verified Starfield <code>.sfs</code> magic/header source or fixture.
+Until that evidence exists, modde will not invent a parser or silently claim
+removal-safety coverage for Starfield saves.</p>
+</blockquote>
 <p>What the tracker captures:</p>
 <ul>
 <li>
@@ -2596,8 +2636,8 @@ modde scan --game fallout-new-vegas \
 # Deploy the symlink farm into &lt;install&gt;/Data
 modde deploy --profile viva-new-vegas --game fallout-new-vegas
 
-# Snapshot saves from the Proton prefix into the profile
-modde save snapshot --game fallout-new-vegas --profile viva-new-vegas
+# Capture saves from the Proton prefix into the profile
+modde save capture --game fallout-new-vegas --profile viva-new-vegas
 
 # Deploy then launch through Proton
 modde play --game fallout-new-vegas
@@ -3177,7 +3217,7 @@ modde tool add-executable \
   --game oblivion-remastered \
   --name "Oblivion Remastered (modded)" \
   --working-dir "OblivionRemastered/Binaries/Win64"
-modde exec --game oblivion-remastered "Oblivion Remastered (modded)"
+modde exec run "Oblivion Remastered (modded)" --game oblivion-remastered
 </code></pre>
 <h3 id="home-manager-profile-snippet"><a class="header" href="#home-manager-profile-snippet">home-manager profile snippet</a></h3>
 <p>A minimal modde profile for this title via the home-manager module:</p>
@@ -4138,7 +4178,7 @@ modde tool apply optiscaler --game stellar-blade
 # 5. (Optional) Register a named external tool/executable for this game so it runs
 #    with overwrite capture and the right Wine DLL overrides.
 modde tool add-executable --game stellar-blade --name my-tool /path/to/tool.exe
-modde exec my-tool --game stellar-blade
+modde exec run my-tool --game stellar-blade
 </code></pre>
 <h3 id="home-manager-profile-7"><a class="header" href="#home-manager-profile-7">Home-Manager profile</a></h3>
 <p>The home-manager module exposes Stellar Blade as a declarative profile. The
@@ -4798,8 +4838,9 @@ without failing. Set <code>gameDir</code> and rebuild once Steam has the game.</
 <pre><code class="language-bash"># Scan the resolved in-prefix Mods/ directory for installed .pak mods.
 modde scan --game baldurs-gate3
 
-# Install a mod archive (root .pak files or a top-level Mods/ folder).
-modde install ./SomeBg3Mod.zip --game baldurs-gate3
+# Install a Nexus-hosted BG3 mod archive into the active profile.
+modde install mod "https://www.nexusmods.com/baldursgate3/mods/1234" \
+  --profile bg3-mods
 
 # Deploy the profile. This symlinks .pak files into the prefix Mods/ and
 # regenerates PlayerProfiles/Public/modsettings.lsx from what was deployed.
@@ -7230,6 +7271,25 @@ would shift <strong>B</strong>, which violates B’s pin contract — so the mov
 though <strong>A</strong> itself is unpinned. Each variant carries enough structure (the
 offending id, the <code>LockReason</code>) for the UI or CLI to explain <em>why</em> without
 string-matching an error message.</p>
+<h2 id="portable-moddelock-exports"><a class="header" href="#portable-moddelock-exports">Portable <code>modde.lock</code> exports</a></h2>
+<p><code>modde.lock</code> is a signed JSON snapshot of one profile’s reproducible state:
+profile provenance, mod priority order, Nexus/Wabbajack source identities,
+tracked staged files with content hashes, plugin order, hidden files, patcher
+configuration and outputs, and managed tool output files.</p>
+<pre><code class="language-bash">modde lock export --profile my-skyrim --game skyrim-se --output modde.lock
+modde lock keygen --public modde-lock.pub.json --secret modde-lock.secret.json
+modde lock sign modde.lock --secret-key modde-lock.secret.json
+modde lock verify modde.lock --profile my-skyrim --game skyrim-se
+</code></pre>
+<p>Export is strict by default. If a mod was installed before modde recorded source
+archive hashes or staged file manifests, export fails and prints the missing
+artifact, why it is required, how to regenerate it, and the validation command.
+Use <code>--allow-incomplete</code> only for a diagnostic lock that explicitly sets
+<code>reproducible = false</code>; incomplete locks are not byte-for-byte replay promises.</p>
+<p><code>modde lock import</code> verifies signatures and imports profile metadata, but v1
+does not silently download or fabricate missing archives. Re-run the normal
+Nexus/Wabbajack install flows to materialize files from the source identities in
+the lock.</p>
 <h2 id="experiment-stack"><a class="header" href="#experiment-stack">Experiment stack</a></h2>
 <p>The experiment stack lets you try profile changes non-destructively, like git
 branches for your mod setup. <code>try</code> pushes the currently-active profile onto a
@@ -7603,9 +7663,9 @@ modde backup plugins --profile my-skyrim --game skyrim-se
 modde backup restore-plugins --profile my-skyrim --game skyrim-se
 </code></pre>
 <h2 id="diagnostics-1"><a class="header" href="#diagnostics-1">Diagnostics</a></h2>
-<p><code>modde diagnostics</code> runs a rule engine over the fully analysed profile — resolved
+<p><code>modde doctor profile</code> runs a rule engine over the fully analysed profile — resolved
 load order, the archive-aware conflict map, and the collision report together:</p>
-<pre><code class="language-bash">modde diagnostics --game skyrim-se --profile my-skyrim
+<pre><code class="language-bash">modde doctor profile --game skyrim-se --profile my-skyrim
 </code></pre>
 <p>Each finding carries a severity (<code>ERROR</code>, <code>WARN</code>, <code>INFO</code>), a title and detail, the
 affected mod (when applicable), and a suggested fix. Findings are sorted with
@@ -7729,7 +7789,11 @@ two-hop chain:</p>
 game can apply its own deploy strategy (for example, UE4 titles route paks into
 <code>Content/Paks/~mods/</code>). After deployment modde runs the game’s <code>post_deploy</code>
 hook and configures Wine DLL overrides (<code>WINEDLLOVERRIDES</code>) for any proxy DLLs
-the mods deploy, such as <code>version.dll</code> for CET or <code>winmm.dll</code> for ASI loaders.</p>
+the mods deploy, such as <code>version.dll</code> for CET or <code>winmm.dll</code> for ASI loaders.
+If the profile has enabled <a href="#patcher-pipelines">patcher pipeline</a> stages,
+modde then runs each stage, imports its generated files into the configured
+output mod, keeps that output mod late in the profile, and redeploys before the
+next stage.</p>
 <h3 id="symlinks-absolute-not-relative"><a class="header" href="#symlinks-absolute-not-relative">Symlinks: absolute, not relative</a></h3>
 <p>Both hops use the symlink <strong>target exactly as passed</strong> — these are absolute
 paths in modde, not relative ones. On Linux the call is a plain
@@ -7752,6 +7816,20 @@ modde deploy --profile my-skyrim --game skyrim-se
 <p><code>modde play</code> deploys before launching the game:</p>
 <pre><code class="language-bash">modde play --game skyrim-se
 </code></pre>
+<h3 id="experimental-hot-deploy"><a class="header" href="#experimental-hot-deploy">Experimental hot-deploy</a></h3>
+<p>Cyberpunk 2077 has an experimental cosmetic-only hot-deploy path:</p>
+<pre><code class="language-bash">modde hot-deploy --profile my-cyberpunk --game cyberpunk2077 --mod body-textures --enable
+modde hot-deploy --profile my-cyberpunk --game cyberpunk2077 --mod body-textures --disable --dry-run
+</code></pre>
+<p>Hot-deploy patches the existing profile staging tree and the live symlink
+deployment without rebuilding the full profile. It is intentionally narrower
+than <code>modde deploy</code>: Wabbajack profiles, unsupported games, missing store
+directories, unknown mods, mixed-content mods, and patches touching config,
+script, DLL, or unknown-severity files are refused. If a patch fails, recover
+with the printed <code>modde deploy --profile &lt;name&gt; --game &lt;game&gt;</code> command.</p>
+<p>This is a live filesystem patch, not a guarantee that the running game reloads
+every asset immediately. UE/Penumbra-style runtime reload support remains a
+per-game research path.</p>
 <h3 id="automatic-deployment"><a class="header" href="#automatic-deployment">Automatic deployment</a></h3>
 <p>After rebuilding your NixOS / home-manager configuration, modde deploys profiles
 via an activation script when their prerequisites are present. Wabbajack
@@ -8489,7 +8567,10 @@ modde tool configure proton --game cyberpunk2077 -- \
 <h1 id="executables--external-tools"><a class="header" href="#executables--external-tools">Executables &amp; external tools</a></h1>
 <h2 id="overview-10"><a class="header" href="#overview-10">Overview</a></h2>
 <p>modde manages <strong>named executable launch targets</strong> — the modding tools you run <em>against</em> a game install, such as xEdit, BodySlide, Nemesis, FNIS, the Creation Kit, or LOOT. Each target stores a name, an executable path, default arguments, a working directory, environment variables, optional Wine DLL overrides, and an output mod. When you run a target, modde snapshots the mod directory, runs the tool, and <strong>captures any new files</strong> the tool wrote into an output mod so they survive future deploys.</p>
-<p>This feature is shipped end to end and user-reachable from both the CLI and the GUI, so it is marked <strong>Done</strong> in the <a href="#mo2-parity--capability-audit">capability matrix</a>. It is distinct from <a href="#tools--overlays">Tools &amp; Overlays</a>, which manages the fixed set of six gaming overlays (MangoHud, OptiScaler, Proton, …).</p>
+<p>This feature is shipped end to end and user-reachable from both the CLI and the GUI, so it is marked <strong>Done</strong> in the <a href="#mo2-parity--capability-audit">capability matrix</a>. It is distinct from <a href="#tools--overlays">Tools &amp; Overlays</a>, which manages the fixed set of six gaming overlays (MangoHud, OptiScaler, Proton, …).
+It is also distinct from <a href="#patcher-pipelines">Patcher pipelines</a>: executables
+are user-invoked tools with overwrite capture, while patcher stages are
+profile-scoped deployment steps that run automatically during <code>modde deploy</code>.</p>
 <p>Configurations are stored in modde’s database (the <code>executable_configs</code> table), keyed uniquely by <code>(game_id, name)</code>. Saving a target with an existing name overwrites it, so <strong>add doubles as edit</strong>.</p>
 <h2 id="two-equivalent-command-surfaces"><a class="header" href="#two-equivalent-command-surfaces">Two equivalent command surfaces</a></h2>
 <p>The same storage is exposed through two CLI namespaces. <code>modde exec ...</code> is a thin alias for the executable subset of <code>modde tool ...</code>; <code>modde exec list</code> and <code>modde tool list-executables</code> print the same rows.</p>
@@ -8612,6 +8693,98 @@ modde exec run Nemesis --game skyrim-se
 <li><a href="#conflicts--load-order">Conflict resolution</a> — where the output mod sits in priority</li>
 <li><a href="#cli-reference">CLI reference</a> — full command and flag listing</li>
 </ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="patcher-pipelines"><a class="header" href="#patcher-pipelines">Patcher pipelines</a></h1>
+<p>modde can run profile-scoped patcher stages as part of <code>modde deploy</code>. This is
+for generated patches that must match the current deployed files and active
+plugin load order. The first shipped stage type manages Synthesis CLI; the
+second runs a user-provided command with modde-owned environment variables.</p>
+<p>Enabled patchers are required deployment artifacts. If an executable, settings
+file, Synthesis profile, runtime prerequisite, or command output is missing,
+deployment fails and prints the missing artifact, why it matters, how to
+regenerate it, and a validation command.</p>
+<h2 id="synthesis"><a class="header" href="#synthesis">Synthesis</a></h2>
+<p>Synthesis remains an external tool. Install the .NET SDK, unpack all files from
+the Synthesis release zip into a dedicated tools directory, and create a
+<code>PipelineSettings.json</code> with Synthesis itself.</p>
+<pre><code class="language-bash">modde patcher add-synthesis synthesis \
+  --profile my-skyrim \
+  --game skyrim-se \
+  --executable /tools/Synthesis/Synthesis.CLI.exe \
+  --pipeline-settings /tools/Synthesis/PipelineSettings.json \
+  --synthesis-profile my-skyrim \
+  --output-mod synthesis-output \
+  --order 10
+</code></pre>
+<p>During deploy, modde invokes:</p>
+<pre><code class="language-bash">Synthesis.CLI.exe run-pipeline \
+  --OutputDirectory &lt;deployed-data-dir&gt; \
+  --PipelineSettingsPath &lt;PipelineSettings.json&gt; \
+  --ProfileIdentifier &lt;profile&gt; \
+  --DataFolderPath &lt;deployed-data-dir&gt; \
+  --LoadOrderFilePath &lt;generated-load-order&gt;
+</code></pre>
+<p>modde snapshots the deployed game mod root before and after the run, accepts
+only brand-new files plus rewrites of that stage’s own previous outputs, moves
+those files into <code>~/.local/share/modde/generated/&lt;game&gt;/&lt;profile&gt;/&lt;stage&gt;/</code>,
+and then re-projects the managed output back into the game before the next
+stage runs. A stage that modifies base-deployed files or another stage’s output
+fails closed.</p>
+<h2 id="command-stages"><a class="header" href="#command-stages">Command stages</a></h2>
+<p>Command stages are for local scripts or compiled patchers. modde sets these
+environment variables:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Variable</th><th>Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td><code>MODDE_PATCHER_DATA_DIR</code></td><td>Deployed game data directory</td></tr>
+<tr><td><code>MODDE_PATCHER_LOAD_ORDER_FILE</code></td><td>Generated active plugin load order</td></tr>
+<tr><td><code>MODDE_PATCHER_PROFILE</code></td><td>modde profile name</td></tr>
+<tr><td><code>MODDE_PATCHER_GAME</code></td><td>modde game id</td></tr>
+<tr><td><code>MODDE_PATCHER_STAGE_NAME</code></td><td>Current patcher stage name</td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-bash">modde patcher add-command my-patcher \
+  --profile my-skyrim \
+  --game skyrim-se \
+  --executable /home/me/bin/build-my-patch \
+  --arg --strict \
+  --env LOG_LEVEL=info \
+  --output-mod my-patcher-output \
+  --order 20
+</code></pre>
+<h2 id="managing-stages"><a class="header" href="#managing-stages">Managing stages</a></h2>
+<pre><code class="language-bash">modde patcher list --profile my-skyrim --game skyrim-se
+modde patcher run --profile my-skyrim --game skyrim-se
+modde patcher disable synthesis --profile my-skyrim --game skyrim-se
+modde patcher enable synthesis --profile my-skyrim --game skyrim-se
+modde patcher remove my-patcher --profile my-skyrim --game skyrim-se
+</code></pre>
+<p><code>run</code> executes the enabled pipeline against the currently deployed profile
+without performing a fresh base deploy first.</p>
+<h2 id="home-manager"><a class="header" href="#home-manager">Home Manager</a></h2>
+<pre><code class="language-nix">programs.modde.profiles.my-skyrim = {
+  game = "skyrim-se";
+  patchers = {
+    synthesis = {
+      type = "synthesis-cli";
+      enable = true;
+      order = 10;
+      outputMod = "synthesis-output";
+      settings = {
+        executable = "/tools/Synthesis/Synthesis.CLI.exe";
+        pipelineSettings = "/tools/Synthesis/PipelineSettings.json";
+        synthesisProfile = "my-skyrim";
+      };
+    };
+  };
+};
+</code></pre>
+<p>Home Manager configures patcher stages before it calls <code>modde deploy</code>. Deploy
+owns execution order and failure behavior.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="data-instances--backups"><a class="header" href="#data-instances--backups">Data, instances &amp; backups</a></h1>
 <h2 id="overview-11"><a class="header" href="#overview-11">Overview</a></h2>
@@ -8893,6 +9066,7 @@ below.</p>
 <tr><td><code>modde tool apply</code> says “No files to apply”</td><td><a href="#tool-apply-revert-failures">Tool apply / revert failures</a></td><td><a href="#tools--overlays">Tools</a></td></tr>
 <tr><td><code>modde tool revert</code> says “No applied files to revert”</td><td><a href="#tool-apply-revert-failures">Tool apply / revert failures</a></td><td><a href="#tools--overlays">Tools</a></td></tr>
 <tr><td>OptiScaler: game crashes on first boot</td><td><a href="#optiscaler-first-boot-crash">OptiScaler first-boot crash</a></td><td><a href="#tools--overlays">Tools</a></td></tr>
+<tr><td>Crash Logger SSE / Trainwreck log needs install-state context</td><td><a href="#crash-log-correlation">Crash-log correlation</a></td><td><a href="#conflicts--load-order">Conflicts</a></td></tr>
 <tr><td>Save vault wants “adoption”</td><td><a href="#save-vault-issues">Save vault issues</a></td><td><a href="#save-management">Saves</a></td></tr>
 <tr><td><code>save restore</code> warns about fingerprint mismatch</td><td><a href="#save-vault-issues">Save vault issues</a></td><td><a href="#save-management">Saves</a></td></tr>
 <tr><td>Can’t reorder mods (profile locked)</td><td><a href="#profile-is-locked">Profile is locked</a></td><td><a href="#profile-management">Profiles</a></td></tr>
@@ -9034,6 +9208,21 @@ generate CDN download links. See <a href="#nexus-mods">Nexus Mods</a> for the fu
 download links. You’ll see an error if you try to download without Premium. For
 declarative (sops-nix / Home-Manager) key wiring, see
 <a href="#using-sops-nix-declarative">Nexus → Using sops-nix</a>.</p>
+<h2 id="crash-log-correlation"><a class="header" href="#crash-log-correlation">Crash-log correlation</a></h2>
+<p><strong>Symptom:</strong> You have a Crash Logger SSE or Trainwreck log and need to know
+which installed mod, plugin, DLL, or asset it points at in the current modde
+profile.</p>
+<p><strong>Cause:</strong> Web analyzers and MO2/Vortex integrations can parse the log, but
+they do not have modde’s local install database, profile experiment stack, or
+managed file manifest. modde’s crash command is a correlation tool: it maps
+evidence mentioned by the log to the active profile. It does not claim a root
+cause unless the log itself makes that explicit.</p>
+<p><strong>Fix:</strong></p>
+<pre><code class="language-bash">modde doctor crash /path/to/crash-2026-06-11-10-38-45.log --game skyrim-se
+</code></pre>
+<p>Use <code>--profile &lt;name&gt;</code> to analyze against a non-active profile and <code>--json</code> for
+the structured report. Raw logs and reports are stored locally in the modde
+database for history; nothing is uploaded.</p>
 <h2 id="deployment-fails"><a class="header" href="#deployment-fails">Deployment fails</a></h2>
 <p>See <a href="#deployment--vfs">Deployment &amp; VFS</a> for how the symlink farm is built and
 deployed.</p>
@@ -9530,6 +9719,68 @@ strings). The per-tool key tables are in <a href="#tool-settings-reference">Tool
 below. The reserved keys <code>_game_id</code> and <code>optiscaler_profile</code> are ignored if set
 directly in <code>settings</code> (the module prints a warning and uses the dedicated
 <code>profile</code> option instead).</p>
+<h3 id="profilesnamepatchers"><a class="header" href="#profilesnamepatchers"><code>profiles.&lt;name&gt;.patchers</code></a></h3>
+<p>Profile-scoped patcher stages configured before activation deploy. <code>modde deploy</code> owns execution, so the same required-stage behavior applies from both
+Home Manager and the CLI.</p>
+<ul>
+<li><strong>Type:</strong> attrs of patcher submodules, keyed by stage name</li>
+<li><strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Common options:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>type</code></td><td><code>synthesis-cli</code> or <code>command</code></td><td>—</td><td>Stage implementation</td></tr>
+<tr><td><code>order</code></td><td><code>int</code></td><td>—</td><td>Execution order</td></tr>
+<tr><td><code>enable</code></td><td><code>bool</code></td><td><code>true</code></td><td>Whether the stage runs during deploy</td></tr>
+<tr><td><code>outputMod</code></td><td><code>str</code></td><td>—</td><td>Generated output mod</td></tr>
+<tr><td><code>strict</code></td><td><code>bool</code></td><td><code>true</code></td><td>Forward-compatible; v1 requires true</td></tr>
+</tbody>
+</table>
+</div>
+<p>Synthesis stages additionally require these <code>settings</code>:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Option</th><th>Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>executable</code></td><td><code>path</code> or <code>str</code></td><td>Synthesis CLI executable</td></tr>
+<tr><td><code>pipelineSettings</code></td><td><code>path</code> or <code>str</code></td><td>Synthesis <code>PipelineSettings.json</code></td></tr>
+<tr><td><code>synthesisProfile</code></td><td><code>str</code></td><td>Synthesis profile nickname or GUID</td></tr>
+</tbody>
+</table>
+</div>
+<p>Command stages use these <code>settings</code>:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Option</th><th>Type</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>executable</code></td><td><code>path</code> or <code>str</code></td><td>—</td><td>Command executable</td></tr>
+<tr><td><code>args</code></td><td>list of <code>str</code></td><td><code>[]</code></td><td>Arguments passed to the command</td></tr>
+<tr><td><code>environment</code></td><td>attrs of <code>str</code></td><td><code>{}</code></td><td>Extra environment variables</td></tr>
+<tr><td><code>workingDir</code></td><td><code>null</code>, <code>path</code>, <code>str</code></td><td><code>null</code></td><td>Optional working directory</td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-nix">patchers = {
+  synthesis = {
+    type = "synthesis-cli";
+    order = 10;
+    outputMod = "synthesis-output";
+    settings = {
+      executable = "/tools/Synthesis/Synthesis.CLI.exe";
+      pipelineSettings = "/tools/Synthesis/PipelineSettings.json";
+      synthesisProfile = "my-skyrim";
+    };
+  };
+};
+</code></pre>
 <h4 id="toolsidrelease"><a class="header" href="#toolsidrelease"><code>tools.&lt;id&gt;.release</code></a></h4>
 <p>Pins a downloaded release asset for a release-backed tool. Today <strong>only
 <code>optiscaler</code> supports release pinning</strong> (sourced from
@@ -10172,6 +10423,44 @@ home-manager module import</li>
 <li><a href="#download-backends">Downloads guide</a> — the download directory and backends</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="contributing"><a class="header" href="#contributing">Contributing</a></h1>
+<p>Development setup and broad contribution guidance live in the repository
+<a href="https://codeberg.org/caniko/rs-modde/src/branch/trunk/CONTRIBUTING.md">CONTRIBUTING.md</a>.
+This page records contributor-facing implementation notes that should stay
+visible in the rendered docs.</p>
+<h2 id="crash-log-correlation-follow-ups"><a class="header" href="#crash-log-correlation-follow-ups">Crash-log correlation follow-ups</a></h2>
+<p>The crash-log correlation implementation is intentionally conservative: it parses
+Crash Logger SSE, Trainwreck, and generic logs, then correlates mentioned
+plugins, DLLs, assets, and form IDs with modde’s local install database. The
+public framing must stay narrow: existing analyzers and MO2/Vortex integrations
+already exist, while modde’s edge is correlating crash evidence with the managed
+profile, installed files, plugin order, versions, Nexus metadata, and experiment
+state.</p>
+<p>The parser section names were checked against upstream source instead of
+invented fixtures:</p>
+<ul>
+<li>Crash Logger SSE: <a href="https://github.com/alandtse/CrashLoggerSSE">https://github.com/alandtse/CrashLoggerSSE</a></li>
+<li>Phostwood analyzer: <a href="https://github.com/Phostwood/crash-analyzer">https://github.com/Phostwood/crash-analyzer</a></li>
+</ul>
+<p>The remaining missing pieces are:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Missing piece</th><th>Why it is required</th><th>Upstream/source to provide it</th><th>Validation command</th></tr>
+</thead>
+<tbody>
+<tr><td>Sanitized real Crash Logger SSE fixture logs</td><td>Parser behavior should be locked against real log shape, not synthetic examples</td><td>A contributor with permission to share redacted Crash Logger SSE logs</td><td><code>nix develop . -c cargo test -p modde-core crash_logger</code></td></tr>
+<tr><td>Sanitized real Trainwreck fixture logs</td><td>Trainwreck-specific parsing needs real-world coverage before broad compatibility claims</td><td>A contributor with permission to share redacted Trainwreck logs</td><td><code>nix develop . -c cargo test -p modde-core trainwreck</code></td></tr>
+<tr><td>CLI text and JSON snapshot tests for <code>modde doctor crash</code></td><td>The command output is user-facing and should not drift accidentally</td><td>Add fixtures under the CLI test fixture tree once real logs are available</td><td><code>nix develop . -c cargo test -p modde-cli crash</code></td></tr>
+<tr><td>Correlation matrix tests</td><td>Plugin, DLL, asset, no-match, disabled-mod, and inactive-profile cases need regression coverage</td><td>Local test databases built from sanitized fixture manifests</td><td><code>nix develop . -c cargo test -p modde-core crash::</code></td></tr>
+<tr><td>UI diagnostics crash-log tests</td><td>Import state and rendered suspect rows need coverage in the Iced diagnostics view</td><td>UI simulator tests using sanitized local fixture paths</td><td><code>nix develop . -c cargo test -p modde-ui diagnostics</code></td></tr>
+<tr><td>Full workspace verification after CLI async recursion is fixed</td><td>Current full CLI/workspace checks are blocked by unrelated deploy/patcher async recursion</td><td>Fix the recursion between <code>crates/modde-cli/src/commands/deploy.rs</code> and <code>crates/modde-cli/src/commands/patcher.rs</code></td><td><code>nix develop . -c cargo test --workspace</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>Do not replace the fixture requirement with generated crash logs. If a fixture is
+missing, report the exact fixture set needed and the validation command above.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="cli-reference"><a class="header" href="#cli-reference">CLI Reference</a></h1>
 <p>This is the exhaustive reference for the <code>modde</code> command-line interface. Every
 top-level command group, every subcommand, every flag, and the environment
@@ -10424,6 +10713,22 @@ each suspect as LEAKED (safe to delete) or GENUINE (a user addition to keep), an
 <p>Deploy mods for the active or specified profile.</p>
 <pre><code class="language-bash">modde deploy [--profile &lt;name&gt;] [--game &lt;id&gt;]
 </code></pre>
+<hr>
+<h2 id="modde-patcher"><a class="header" href="#modde-patcher"><code>modde patcher</code></a></h2>
+<p>Configure profile-scoped patcher stages that run during deploy. See the
+<a href="#patcher-pipelines">patcher pipelines guide</a>.</p>
+<pre><code class="language-bash">modde patcher list [--profile &lt;name&gt;] [--game &lt;id&gt;]
+modde patcher add-synthesis &lt;name&gt; --profile &lt;name&gt; --game &lt;id&gt; \
+  --executable &lt;path&gt; --pipeline-settings &lt;path&gt; \
+  --synthesis-profile &lt;id&gt; --output-mod &lt;mod&gt; --order &lt;n&gt;
+modde patcher add-command &lt;name&gt; --profile &lt;name&gt; --game &lt;id&gt; \
+  --executable &lt;path&gt; [--working-dir &lt;path&gt;] [--arg &lt;arg&gt;]... \
+  [--env KEY=VALUE]... --output-mod &lt;mod&gt; --order &lt;n&gt;
+modde patcher run [--profile &lt;name&gt;] [--game &lt;id&gt;]
+modde patcher enable|disable|remove &lt;name&gt; [--profile &lt;name&gt;] [--game &lt;id&gt;]
+</code></pre>
+<p>Enabled stages are required. Missing executables, settings files, invalid
+Synthesis profiles, or non-zero exits fail deploy.</p>
 <hr>
 <h2 id="modde-rollback"><a class="header" href="#modde-rollback"><code>modde rollback</code></a></h2>
 <p>Rollback to the previous deployment.</p>
@@ -11172,9 +11477,21 @@ modde tool install-release optiscaler --game cyberpunk2077 \
 </table>
 </div>
 <hr>
-<h2 id="modde-diagnostics"><a class="header" href="#modde-diagnostics"><code>modde diagnostics</code></a></h2>
-<p>Run diagnostic checks for common modding issues.</p>
+<h2 id="modde-doctor"><a class="header" href="#modde-doctor"><code>modde doctor</code></a></h2>
+<p>Diagnose profiles and crash logs using modde’s local database. <code>doctor profile</code>
+and <code>doctor crash</code> are deterministic; <code>doctor explain</code> sends the grounded context
+to an OpenAI-compatible model and rejects hypotheses that do not cite modde
+evidence IDs.</p>
+<pre><code class="language-bash">modde doctor profile --game &lt;id&gt; [--profile &lt;name&gt;] [--json]
+modde doctor crash &lt;log-path&gt; --game &lt;id&gt; [--profile &lt;name&gt;] [--format auto|crash-logger-sse|trainwreck|generic] [--json]
+modde doctor explain &lt;log-path&gt; --game &lt;id&gt; [--profile &lt;name&gt;] [--provider local|remote] [--json]
+</code></pre>
+<p><code>--provider local</code> uses the configured llama.cpp/OpenAI-compatible local server.
+<code>--provider remote</code> is explicit opt-in and requires a configured remote endpoint,
+model, and API key environment variable.</p>
+<p>Deprecated aliases retained for compatibility:</p>
 <pre><code class="language-bash">modde diagnostics --game &lt;id&gt; [--profile &lt;name&gt;]
+modde crash analyze &lt;log-path&gt; --game &lt;id&gt; [--profile &lt;name&gt;]
 </code></pre>
 <hr>
 <h2 id="modde-export"><a class="header" href="#modde-export"><code>modde export</code></a></h2>
@@ -11984,7 +12301,9 @@ The guardrail test <code>crates/modde-core/tests/repo_truth_tests.rs</code> fail
 <tr><td>Nexus install pipeline</td><td><code>Done</code></td><td>API-key auth, browse/search (REST + GraphQL), update checks, <code>nxm://</code>, single-mod installs, and Collections are shipped.</td></tr>
 <tr><td>FOMOD</td><td><code>Done</code></td><td>Interactive wizard plus declarative TOML/JSON/Nix config generation and non-interactive application are shipped.</td></tr>
 <tr><td>Executable management</td><td><code>Done</code></td><td>Named executables with arguments, working directory, environment, Wine DLL overrides, and a configurable output (overwrite) mod, plus overwrite capture on run — in both the CLI (<code>modde exec</code> / <code>modde tool add-executable</code>) and the UI. See <a href="#executables--external-tools">Executables &amp; external tools</a>.</td></tr>
-<tr><td>Starfield save tracking</td><td><code>Done</code></td><td>Starfield <code>.sfs</code> files flow through the shared save-tracker path.</td></tr>
+<tr><td>Patcher pipelines</td><td><code>Partial</code></td><td>CLI and Home Manager can configure required deployment-time Synthesis/command stages, import generated output mods, and redeploy. GUI editing and Rust-native patchers are future work. See <a href="#patcher-pipelines">Patcher pipelines</a>.</td></tr>
+<tr><td>Hot-deploy</td><td><code>Partial</code></td><td>Experimental Cyberpunk-first path-level VFS patching for cosmetic-only mod toggles. It updates the live symlink deployment without promising that the running game reloads every touched asset immediately.</td></tr>
+<tr><td>Starfield save tracking</td><td><code>Done</code></td><td>Starfield <code>.sfs</code> files are captured by the save tracker; the record-level save-contamination removal gate is not implemented.</td></tr>
 <tr><td>Instance switching</td><td><code>Partial</code></td><td>CLI/runtime instance selection changes the active data root, but there is no MO2-style portable/global UX yet.</td></tr>
 <tr><td>Diagnostics</td><td><code>Partial</code></td><td>The CLI and UI share a real diagnostics engine fed by resolved conflicts and plugin order, but there is no MO2-style “problems” button with guided fixes.</td></tr>
 <tr><td>Data tab</td><td><code>Partial</code></td><td>The UI renders real conflict rows from the resolver/collision engine, but it is not yet a full merged-VFS browser with archive/hidden filters.</td></tr>
@@ -12009,7 +12328,7 @@ The guardrail test <code>crates/modde-core/tests/repo_truth_tests.rs</code> fail
 <tr><td>Fallout 4</td><td><code>Done</code></td><td>Plugins, diagnostics, VFS, and save tracking are shipped.</td></tr>
 <tr><td>Cyberpunk 2077</td><td><code>Done</code></td><td>REDmod / CET / TweakXL-aware install and launch flows are shipped.</td></tr>
 <tr><td>Fallout 76</td><td><code>Partial</code></td><td>VFS, plugin handling, and BA2 scanning exist; saves are effectively server-side and only lightly represented locally.</td></tr>
-<tr><td>Starfield</td><td><code>Partial</code></td><td>Game plugin, plugin handling, VFS, diagnostics, and <code>.sfs</code> save tracking exist.</td></tr>
+<tr><td>Starfield</td><td><code>Partial</code></td><td>Game plugin, plugin handling, VFS, diagnostics, and <code>.sfs</code> save capture exist; record-level save-contamination gating does not.</td></tr>
 <tr><td>Stellar Blade</td><td><code>Partial</code></td><td>UE4/UE5-style deployment, scanning, conflicts, OptiScaler integration, and local save tracking are present, below the Bethesda/Cyberpunk depth.</td></tr>
 <tr><td>Baldur’s Gate 3, Stardew Valley, Fallout: New Vegas, Oblivion, Oblivion Remastered, Bannerlord, The Witcher 3, Subnautica 2</td><td><code>Partial</code></td><td>Engine-appropriate deployment, scanning, conflict classification, and save tracking ship; depth and game-specific polish are still maturing.</td></tr>
 </tbody>
@@ -12332,24 +12651,18 @@ intentionally conservative side-by-side — including what is <code>Done</code>,
 not yet shipped — lives in the
 <a href="#mo2-parity--capability-audit">MO2 parity &amp; capability audit</a>.</p>
 <h2 id="do-i-need-nixos-to-run-modde"><a class="header" href="#do-i-need-nixos-to-run-modde">Do I need NixOS to run modde?</a></h2>
-<p>No. modde runs natively on Linux, macOS, and Windows. Install it through your
-platform’s native package manager (AUR, COPR, apt, Flatpak, Homebrew, winget,
-Scoop, Chocolatey), a direct download, or <code>cargo install modde-cli</code>. If you use
-Nix, modde is also a flake — a reproducible install that, through the
-home-manager module, additionally lets you <strong>declare your mod profiles as code</strong>.
-That is one option among many, not a requirement. See
-<a href="#installation">Installation</a> for every channel and its commands.</p>
+<p>No. modde does not require NixOS, but the live user-facing install path today is
+Nix/Home Manager or a source build from the Nix development shell. Other
+package-manager channels are wired or staged, and macOS/Windows builds are
+experimental CI outputs until the <a href="#installation">Installation</a>
+page marks those channels live.</p>
 <h2 id="does-it-run-on-windows-or-macos"><a class="header" href="#does-it-run-on-windows-or-macos">Does it run on Windows or macOS?</a></h2>
-<p><strong>Yes — both are first-class native targets.</strong> Every release ships native builds
-for Linux (x86_64 / aarch64), macOS (x86_64 / aarch64), and Windows (x86_64),
-each with the <code>modde</code> CLI and the <code>modde-ui</code> desktop app. Install them via
-Homebrew, winget, Scoop, or Chocolatey, or grab a direct download. Two
-platform-native steps to know: on macOS, clear the quarantine attribute once after
-extracting a tarball (<code>xattr -dr com.apple.quarantine modde modde-ui</code>); on Windows,
-the <code>.exe</code> artifacts are Authenticode-signed, so you can verify them with
-<code>Get-AuthenticodeSignature</code>. Full per-platform instructions are under the
+<p>Experimental builds exist for both, but Linux is the live support target today.
+macOS tarballs are ad-hoc signed and not notarized; Windows artifacts are
+prepared for Authenticode signing. Treat both as staged until the
 <a href="#macos">macOS</a> and
-<a href="#windows">Windows</a> sections of the install page.</p>
+<a href="#windows">Windows</a> sections mark their channels
+live.</p>
 <h2 id="do-i-need-nexus-premium"><a class="header" href="#do-i-need-nexus-premium">Do I need Nexus Premium?</a></h2>
 <p>Only for <strong>automated CDN downloads</strong>. A free Nexus account and API key give you
 browse, search, update checks, metadata, endorsements, and <code>nxm://</code> handling.
@@ -12404,13 +12717,19 @@ stock snapshots, save vaults). You can relocate it wholesale with <code>--data-d
 <code>MODDE_DATA_DIR</code>, or run several isolated named <strong>instances</strong>. The full on-disk
 layout is documented in <a href="#data-instances--backups">Data, instances &amp; backups</a>.</p>
 <h2 id="is-there-any-telemetry"><a class="header" href="#is-there-any-telemetry">Is there any telemetry?</a></h2>
-<p><strong>Opt-in, and currently a no-op stub — nothing is sent.</strong> Telemetry is gated
-behind a non-default <code>remote-telemetry</code> build feature; default builds (including
-the Nix flake and <code>cargo install modde-cli</code>) do not include it at all. Even in a
-build that does, no data is collected or transmitted unless you explicitly
-configure a telemetry endpoint and token via environment variables. With no
-endpoint configured, the code path is inert. There is no analytics in a normal
-modde install.</p>
+<p><strong>Opt-in only. Normal builds send nothing.</strong> Remote code is gated behind the
+non-default <code>remote-telemetry</code> feature; default builds do not include it. Even
+with that feature, no data is transmitted unless you explicitly configure the
+relevant endpoint and opt-in environment variables.</p>
+<p>Crash telemetry and compatibility reporting are separate. Crash telemetry uses
+<code>RS_MODDE_TELEMETRY_ENDPOINT</code> plus <code>RS_MODDE_TELEMETRY_TOKEN</code> for modde process
+crash capture. Compatibility oracle reporting uses
+<code>MODDE_COMPAT_ORACLE_OPT_IN=1</code> plus <code>MODDE_COMPAT_ORACLE_ENDPOINT</code>, and uploads
+only derived hashes from local crash correlation: game id, coarse platform,
+hashed mod identities, hashed pair keys, hashed mod set, and hashed crash
+signature. It does not upload raw crash logs, paths, profile names, display
+names, plugin names, Nexus tokens, usernames, or install IDs. The oracle service
+returns only thresholded aggregate statistics.</p>
 <h2 id="see-also-38"><a class="header" href="#see-also-38">See also</a></h2>
 <ul>
 <li><a href="#installation">Installation</a> — every channel and its commands</li>
@@ -12422,16 +12741,6 @@ modde install.</p>
 <li><a href="#wabbajack-modlists">Wabbajack lists</a> — native list installs on Linux</li>
 <li><a href="#data-instances--backups">Data, instances &amp; backups</a> — storage layout and multi-machine sync</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="plan-025-simit-release-automation"><a class="header" href="#plan-025-simit-release-automation">Plan 025: simit release automation</a></h1>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="phase-01-complete-simit-release-workflow-generation"><a class="header" href="#phase-01-complete-simit-release-workflow-generation">Phase 01: Complete simit release workflow generation</a></h1>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="phase-02-validate-and-publish-the-fixed-simit"><a class="header" href="#phase-02-validate-and-publish-the-fixed-simit">Phase 02: Validate and publish the fixed simit</a></h1>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="phase-03-adopt-fixed-simit-in-rs-modde"><a class="header" href="#phase-03-adopt-fixed-simit-in-rs-modde">Phase 03: Adopt fixed simit in rs-modde</a></h1>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="phase-04-backfill-and-verify-codeberg-release-assets"><a class="header" href="#phase-04-backfill-and-verify-codeberg-release-assets">Phase 04: Backfill and verify Codeberg release assets</a></h1>
 
                     </main>
 

@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-b2f1b584.js";
+            window.path_to_searchindex_js = "../searchindex-164e219d.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-1c5bb4e1.js"></script>
+        <script src="../toc-050961cc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -278,7 +278,11 @@ two-hop chain:</p>
 game can apply its own deploy strategy (for example, UE4 titles route paks into
 <code>Content/Paks/~mods/</code>). After deployment modde runs the game’s <code>post_deploy</code>
 hook and configures Wine DLL overrides (<code>WINEDLLOVERRIDES</code>) for any proxy DLLs
-the mods deploy, such as <code>version.dll</code> for CET or <code>winmm.dll</code> for ASI loaders.</p>
+the mods deploy, such as <code>version.dll</code> for CET or <code>winmm.dll</code> for ASI loaders.
+If the profile has enabled <a href="patcher-pipelines.html">patcher pipeline</a> stages,
+modde then runs each stage, imports its generated files into the configured
+output mod, keeps that output mod late in the profile, and redeploys before the
+next stage.</p>
 <h3 id="symlinks-absolute-not-relative"><a class="header" href="#symlinks-absolute-not-relative">Symlinks: absolute, not relative</a></h3>
 <p>Both hops use the symlink <strong>target exactly as passed</strong> — these are absolute
 paths in modde, not relative ones. On Linux the call is a plain
@@ -301,6 +305,20 @@ modde deploy --profile my-skyrim --game skyrim-se
 <p><code>modde play</code> deploys before launching the game:</p>
 <pre><code class="language-bash">modde play --game skyrim-se
 </code></pre>
+<h3 id="experimental-hot-deploy"><a class="header" href="#experimental-hot-deploy">Experimental hot-deploy</a></h3>
+<p>Cyberpunk 2077 has an experimental cosmetic-only hot-deploy path:</p>
+<pre><code class="language-bash">modde hot-deploy --profile my-cyberpunk --game cyberpunk2077 --mod body-textures --enable
+modde hot-deploy --profile my-cyberpunk --game cyberpunk2077 --mod body-textures --disable --dry-run
+</code></pre>
+<p>Hot-deploy patches the existing profile staging tree and the live symlink
+deployment without rebuilding the full profile. It is intentionally narrower
+than <code>modde deploy</code>: Wabbajack profiles, unsupported games, missing store
+directories, unknown mods, mixed-content mods, and patches touching config,
+script, DLL, or unknown-severity files are refused. If a patch fails, recover
+with the printed <code>modde deploy --profile &lt;name&gt; --game &lt;game&gt;</code> command.</p>
+<p>This is a live filesystem patch, not a guarantee that the running game reloads
+every asset immediately. UE/Penumbra-style runtime reload support remains a
+per-game research path.</p>
 <h3 id="automatic-deployment"><a class="header" href="#automatic-deployment">Automatic deployment</a></h3>
 <p>After rebuilding your NixOS / home-manager configuration, modde deploys profiles
 via an activation script when their prerequisites are present. Wabbajack

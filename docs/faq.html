@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-b2f1b584.js";
+            window.path_to_searchindex_js = "searchindex-164e219d.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-1c5bb4e1.js"></script>
+        <script src="toc-050961cc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -205,24 +205,18 @@ intentionally conservative side-by-side — including what is <code>Done</code>,
 not yet shipped — lives in the
 <a href="reference/parity.html">MO2 parity &amp; capability audit</a>.</p>
 <h2 id="do-i-need-nixos-to-run-modde"><a class="header" href="#do-i-need-nixos-to-run-modde">Do I need NixOS to run modde?</a></h2>
-<p>No. modde runs natively on Linux, macOS, and Windows. Install it through your
-platform’s native package manager (AUR, COPR, apt, Flatpak, Homebrew, winget,
-Scoop, Chocolatey), a direct download, or <code>cargo install modde-cli</code>. If you use
-Nix, modde is also a flake — a reproducible install that, through the
-home-manager module, additionally lets you <strong>declare your mod profiles as code</strong>.
-That is one option among many, not a requirement. See
-<a href="getting-started/installation.html">Installation</a> for every channel and its commands.</p>
+<p>No. modde does not require NixOS, but the live user-facing install path today is
+Nix/Home Manager or a source build from the Nix development shell. Other
+package-manager channels are wired or staged, and macOS/Windows builds are
+experimental CI outputs until the <a href="getting-started/installation.html">Installation</a>
+page marks those channels live.</p>
 <h2 id="does-it-run-on-windows-or-macos"><a class="header" href="#does-it-run-on-windows-or-macos">Does it run on Windows or macOS?</a></h2>
-<p><strong>Yes — both are first-class native targets.</strong> Every release ships native builds
-for Linux (x86_64 / aarch64), macOS (x86_64 / aarch64), and Windows (x86_64),
-each with the <code>modde</code> CLI and the <code>modde-ui</code> desktop app. Install them via
-Homebrew, winget, Scoop, or Chocolatey, or grab a direct download. Two
-platform-native steps to know: on macOS, clear the quarantine attribute once after
-extracting a tarball (<code>xattr -dr com.apple.quarantine modde modde-ui</code>); on Windows,
-the <code>.exe</code> artifacts are Authenticode-signed, so you can verify them with
-<code>Get-AuthenticodeSignature</code>. Full per-platform instructions are under the
+<p>Experimental builds exist for both, but Linux is the live support target today.
+macOS tarballs are ad-hoc signed and not notarized; Windows artifacts are
+prepared for Authenticode signing. Treat both as staged until the
 <a href="getting-started/installation.html#macos">macOS</a> and
-<a href="getting-started/installation.html#windows">Windows</a> sections of the install page.</p>
+<a href="getting-started/installation.html#windows">Windows</a> sections mark their channels
+live.</p>
 <h2 id="do-i-need-nexus-premium"><a class="header" href="#do-i-need-nexus-premium">Do I need Nexus Premium?</a></h2>
 <p>Only for <strong>automated CDN downloads</strong>. A free Nexus account and API key give you
 browse, search, update checks, metadata, endorsements, and <code>nxm://</code> handling.
@@ -277,13 +271,19 @@ stock snapshots, save vaults). You can relocate it wholesale with <code>--data-d
 <code>MODDE_DATA_DIR</code>, or run several isolated named <strong>instances</strong>. The full on-disk
 layout is documented in <a href="guides/data-management.html">Data, instances &amp; backups</a>.</p>
 <h2 id="is-there-any-telemetry"><a class="header" href="#is-there-any-telemetry">Is there any telemetry?</a></h2>
-<p><strong>Opt-in, and currently a no-op stub — nothing is sent.</strong> Telemetry is gated
-behind a non-default <code>remote-telemetry</code> build feature; default builds (including
-the Nix flake and <code>cargo install modde-cli</code>) do not include it at all. Even in a
-build that does, no data is collected or transmitted unless you explicitly
-configure a telemetry endpoint and token via environment variables. With no
-endpoint configured, the code path is inert. There is no analytics in a normal
-modde install.</p>
+<p><strong>Opt-in only. Normal builds send nothing.</strong> Remote code is gated behind the
+non-default <code>remote-telemetry</code> feature; default builds do not include it. Even
+with that feature, no data is transmitted unless you explicitly configure the
+relevant endpoint and opt-in environment variables.</p>
+<p>Crash telemetry and compatibility reporting are separate. Crash telemetry uses
+<code>RS_MODDE_TELEMETRY_ENDPOINT</code> plus <code>RS_MODDE_TELEMETRY_TOKEN</code> for modde process
+crash capture. Compatibility oracle reporting uses
+<code>MODDE_COMPAT_ORACLE_OPT_IN=1</code> plus <code>MODDE_COMPAT_ORACLE_ENDPOINT</code>, and uploads
+only derived hashes from local crash correlation: game id, coarse platform,
+hashed mod identities, hashed pair keys, hashed mod set, and hashed crash
+signature. It does not upload raw crash logs, paths, profile names, display
+names, plugin names, Nexus tokens, usernames, or install IDs. The oracle service
+returns only thresholded aggregate statistics.</p>
 <h2 id="see-also"><a class="header" href="#see-also">See also</a></h2>
 <ul>
 <li><a href="getting-started/installation.html">Installation</a> — every channel and its commands</li>
@@ -304,9 +304,6 @@ modde install.</p>
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="planning/025-simit-release-automation/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
-                            </a>
 
                         <div style="clear: both"></div>
                     </nav>
@@ -318,9 +315,6 @@ modde install.</p>
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="planning/025-simit-release-automation/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
-                    </a>
             </nav>
 
         </div>

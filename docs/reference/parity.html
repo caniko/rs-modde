@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-b2f1b584.js";
+            window.path_to_searchindex_js = "../searchindex-164e219d.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-1c5bb4e1.js"></script>
+        <script src="../toc-050961cc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -206,7 +206,9 @@ The guardrail test <code>crates/modde-core/tests/repo_truth_tests.rs</code> fail
 <tr><td>Nexus install pipeline</td><td><code>Done</code></td><td>API-key auth, browse/search (REST + GraphQL), update checks, <code>nxm://</code>, single-mod installs, and Collections are shipped.</td></tr>
 <tr><td>FOMOD</td><td><code>Done</code></td><td>Interactive wizard plus declarative TOML/JSON/Nix config generation and non-interactive application are shipped.</td></tr>
 <tr><td>Executable management</td><td><code>Done</code></td><td>Named executables with arguments, working directory, environment, Wine DLL overrides, and a configurable output (overwrite) mod, plus overwrite capture on run — in both the CLI (<code>modde exec</code> / <code>modde tool add-executable</code>) and the UI. See <a href="../guides/executables.html">Executables &amp; external tools</a>.</td></tr>
-<tr><td>Starfield save tracking</td><td><code>Done</code></td><td>Starfield <code>.sfs</code> files flow through the shared save-tracker path.</td></tr>
+<tr><td>Patcher pipelines</td><td><code>Partial</code></td><td>CLI and Home Manager can configure required deployment-time Synthesis/command stages, import generated output mods, and redeploy. GUI editing and Rust-native patchers are future work. See <a href="../guides/patcher-pipelines.html">Patcher pipelines</a>.</td></tr>
+<tr><td>Hot-deploy</td><td><code>Partial</code></td><td>Experimental Cyberpunk-first path-level VFS patching for cosmetic-only mod toggles. It updates the live symlink deployment without promising that the running game reloads every touched asset immediately.</td></tr>
+<tr><td>Starfield save tracking</td><td><code>Done</code></td><td>Starfield <code>.sfs</code> files are captured by the save tracker; the record-level save-contamination removal gate is not implemented.</td></tr>
 <tr><td>Instance switching</td><td><code>Partial</code></td><td>CLI/runtime instance selection changes the active data root, but there is no MO2-style portable/global UX yet.</td></tr>
 <tr><td>Diagnostics</td><td><code>Partial</code></td><td>The CLI and UI share a real diagnostics engine fed by resolved conflicts and plugin order, but there is no MO2-style “problems” button with guided fixes.</td></tr>
 <tr><td>Data tab</td><td><code>Partial</code></td><td>The UI renders real conflict rows from the resolver/collision engine, but it is not yet a full merged-VFS browser with archive/hidden filters.</td></tr>
@@ -231,7 +233,7 @@ The guardrail test <code>crates/modde-core/tests/repo_truth_tests.rs</code> fail
 <tr><td>Fallout 4</td><td><code>Done</code></td><td>Plugins, diagnostics, VFS, and save tracking are shipped.</td></tr>
 <tr><td>Cyberpunk 2077</td><td><code>Done</code></td><td>REDmod / CET / TweakXL-aware install and launch flows are shipped.</td></tr>
 <tr><td>Fallout 76</td><td><code>Partial</code></td><td>VFS, plugin handling, and BA2 scanning exist; saves are effectively server-side and only lightly represented locally.</td></tr>
-<tr><td>Starfield</td><td><code>Partial</code></td><td>Game plugin, plugin handling, VFS, diagnostics, and <code>.sfs</code> save tracking exist.</td></tr>
+<tr><td>Starfield</td><td><code>Partial</code></td><td>Game plugin, plugin handling, VFS, diagnostics, and <code>.sfs</code> save capture exist; record-level save-contamination gating does not.</td></tr>
 <tr><td>Stellar Blade</td><td><code>Partial</code></td><td>UE4/UE5-style deployment, scanning, conflicts, OptiScaler integration, and local save tracking are present, below the Bethesda/Cyberpunk depth.</td></tr>
 <tr><td>Baldur’s Gate 3, Stardew Valley, Fallout: New Vegas, Oblivion, Oblivion Remastered, Bannerlord, The Witcher 3, Subnautica 2</td><td><code>Partial</code></td><td>Engine-appropriate deployment, scanning, conflict classification, and save tracking ship; depth and game-specific polish are still maturing.</td></tr>
 </tbody>
