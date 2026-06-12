@@ -1,135 +1,61 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>modde vs MO2 — NixOS-native game mod manager</title>
-  <meta name="description" content="NixOS-native game mod manager">
-  <link rel="stylesheet" href="https://modde.tartanoglu.com/style.css">
-</head>
-<body>
-  <nav class="top-nav">
-    <div class="nav-inner">
-      <a href="https:&#x2F;&#x2F;modde.tartanoglu.com" class="nav-brand">modde</a>
-      <div class="nav-links">
-        <a href="https:&#x2F;&#x2F;modde.tartanoglu.com/#install">Install</a>
-        <a href="https:&#x2F;&#x2F;modde.tartanoglu.com/#supported-games">Supported games</a>
-        <a href="https:&#x2F;&#x2F;modde.tartanoglu.com/docs/">Documentation</a>
-        <a href="https:&#x2F;&#x2F;modde.tartanoglu.com/comparison/">vs MO2</a>
-        <a href="https://codeberg.org/caniko/rs-modde">Source</a>
-      </div>
-    </div>
-  </nav>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>modde vs MO2 - modde</title><meta name="description" content="How modde compares to Mod Organizer 2."><meta name="generator" content="plinth-project"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"modde","author":{"@type":"Person","name":"Caniko","url":"https://codeberg.org/caniko"}}</script><link rel="stylesheet" href="/style.css"></head><body><nav class="top-nav"><div class="nav-inner"><a href="/" class="nav-brand">modde</a><div class="nav-links"><a href="/#install">Install</a><a href="/#supported-games">Supported games</a><a href="/docs/">Documentation</a><a href="/comparison/">vs MO2</a><a href="https://codeberg.org/caniko/rs-modde">Source</a></div></div></nav><main><section class="hero"><h1>modde vs MO2</h1><p class="tagline">Truth-first comparison</p><p class="subtitle">What is fully shipped today, what is still partial, and which MO2 gaps remain.</p><div class="hero-actions"><a href="/#install" class="btn btn-primary">Install</a><a href="/docs/" class="btn btn-secondary">Docs</a></div></section><section id="modde-only" class="features"><div class="features-grid"><div class="feature-card highlight"><h3>Git-backed save vaults</h3><p>Full history, branching, and restore for game saves.</p></div><div class="feature-card highlight"><h3>Save fingerprinting</h3><p>Warns before loading a save incompatible with your current mod setup.</p></div><div class="feature-card highlight"><h3>Experiment stack</h3><p>Try profile changes non-destructively and commit or roll back.</p></div><div class="feature-card highlight"><h3>Declarative FOMOD configs</h3><p>TOML, JSON, and Nix configs for reproducible installers.</p></div><div class="feature-card highlight"><h3>Wabbajack installation</h3><p>Install complete Wabbajack modlists natively on Linux.</p></div><div class="feature-card highlight"><h3>NixOS-native</h3><p>Declarative profiles in Home Manager with no Wine manager required.</p></div></div></section><section id="shipped-today" class="comparison-section"><h2>Shipped today</h2><p class="section-subtitle">The areas that are actually trustworthy today.</p><table class="coverage-table"><thead><tr><th>Area</th><th>Status</th><th>Notes</th></tr></thead><tbody><tr><td>Profiles + save vaults</td><td><span class="badge high">Done</span></td><td>Profile switching, experiments, git-backed save history, and fingerprints are shipped.</td></tr><tr><td>VFS deployment</td><td><span class="badge high">Done</span></td><td>Symlink-farm deployment, rollback, and conflict resolution are strong differentiators on Linux.</td></tr><tr><td>Nexus / Wabbajack / Collections</td><td><span class="badge high">Done</span></td><td>These are the first-class install flows today.</td></tr><tr><td>Data Files / Diagnostics / Tools / Downloads views</td><td><span class="badge mid">Partial</span></td><td>Reachable and data-backed, but not yet MO2-complete.</td></tr><tr><td>BAIN and non-Nexus source breadth</td><td><span class="badge mid">Partial</span></td><td>Core plumbing exists, but UX and positioning are still incomplete.</td></tr><tr><td>Generic / user-defined games</td><td><span class="badge mid">Partial</span></td><td>Arbitrary titles can be registered, without bespoke scanner or save tracker depth.</td></tr></tbody></table></section></main><footer class="site-footer"><div class="footer-inner"><div><p>modde is open-source software licensed under GPL-3.0.</p><p class="person-attribution">Maintained by <a href="https://codeberg.org/caniko" target="_blank" rel="noopener noreferrer">Caniko</a></p></div><div class="footer-links"><a href="/docs/">Docs</a><a href="https://codeberg.org/caniko/rs-modde">Repo</a><a href="https://codeberg.org/caniko/rs-modde/src/branch/trunk/CHANGELOG.md">CHANGELOG</a><a href="https://codeberg.org/caniko/rs-modde/issues">Issues</a></div></div></footer><script>
+document.addEventListener('click', async event => {
+  const button = event.target.closest('[data-copy]');
+  if (!button) return;
+  try {
+    await navigator.clipboard.writeText(button.dataset.copy);
+    button.textContent = 'Copied';
+    setTimeout(() => { button.textContent = 'Copy'; }, 1200);
+  } catch (_) {
+    button.textContent = 'Select';
+  }
+});
 
-  <main>
-    
-<section class="comparison-hero">
-  <h1>modde vs MO2</h1>
-  <p class="subtitle">Truth-first comparison: what is fully shipped today (executables, conflict detection, Bethesda plugins), what is still partial, and which MO2 gaps remain — no Windows VM in sight.</p>
-</section>
+(() => {
+  let lastTrigger = null;
+  const dialog = document.createElement('div');
+  dialog.className = 'image-lightbox';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-hidden', 'true');
+  dialog.innerHTML = '<div class=\"image-lightbox-panel\" role=\"document\"><button type=\"button\" class=\"image-lightbox-close\" aria-label=\"Close enlarged image\">Close</button><img alt=\"\"><p></p></div>';
+  document.body.appendChild(dialog);
 
-<section class="comparison-content">
-  <div class="comparison-section">
-    <h2>modde-only features</h2>
-    <p class="section-subtitle">Features that exist in modde but have no MO2 equivalent.</p>
-    <div class="features-grid">
-      <div class="feature-card highlight">
-        <h3>Git-backed save vaults</h3>
-        <p>Full history, branching, and restore for game saves. Every snapshot is a git commit you can roll back to.</p>
-      </div>
-      <div class="feature-card highlight">
-        <h3>Save fingerprinting</h3>
-        <p>SHA-256 fingerprint of save-breaking mods. Warns you before loading a save that's incompatible with your current mod setup.</p>
-      </div>
-      <div class="feature-card highlight">
-        <h3>Experiment stack</h3>
-        <p>Try profile changes non-destructively. Stack experiments like git branches — rollback or commit when done.</p>
-      </div>
-      <div class="feature-card highlight">
-        <h3>Declarative FOMOD configs</h3>
-        <p>TOML/JSON/Nix configs for reproducible, non-interactive FOMOD installations. No more clicking through wizards.</p>
-      </div>
-      <div class="feature-card highlight">
-        <h3>Wabbajack installation</h3>
-        <p>Install complete Wabbajack modlists natively on Linux. MO2 is a target for Wabbajack, not an installer.</p>
-      </div>
-      <div class="feature-card highlight">
-        <h3>Nexus Collections</h3>
-        <p>Install curated Nexus Collections directly. MO2 doesn't support Collections.</p>
-      </div>
-      <div class="feature-card highlight">
-        <h3>NixOS-native</h3>
-        <p>Declarative profiles in home-manager. sops-nix compatible API key management. No Wine needed for the manager.</p>
-      </div>
-      <div class="feature-card highlight">
-        <h3>Profile forking with saves</h3>
-        <p>Clone a profile including its entire save history. Fork locked Wabbajack profiles into freely editable copies.</p>
-      </div>
-      <div class="feature-card highlight">
-        <h3>Save auto-capture</h3>
-        <p>Automatically snapshot saves when the game exits or via continuous polling. Never lose progress.</p>
-      </div>
-      <div class="feature-card highlight">
-        <h3>Stock game verification</h3>
-        <p>Tree-hash your vanilla installation to detect unexpected modifications.</p>
-      </div>
-      <div class="feature-card highlight">
-        <h3>Multi-launcher detection</h3>
-        <p>Auto-detect games across Steam and Heroic (GOG, Epic, Sideload) in a single scan.</p>
-      </div>
-    </div>
-  </div>
+  const image = dialog.querySelector('img');
+  const caption = dialog.querySelector('p');
+  const closeButton = dialog.querySelector('button');
 
-  <div class="comparison-section">
-    <h2>Shipped today</h2>
-    <p class="section-subtitle">This page no longer publishes a hand-maintained percentage. These are the areas that are actually trustworthy today.</p>
-    <table class="coverage-table">
-      <thead>
-        <tr>
-          <th>Area</th>
-          <th>Status</th>
-          <th>Notes</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr><td>Profiles + save vaults</td><td><span class="badge high">Done</span></td><td>Profile switching, experiments, git-backed save history, and fingerprints are shipped.</td></tr>
-        <tr><td>VFS deployment</td><td><span class="badge high">Done</span></td><td>Symlink-farm deployment, rollback, and conflict resolution are strong differentiators on Linux.</td></tr>
-        <tr><td>Bethesda plugin pipeline</td><td><span class="badge high">Done</span></td><td>LOOT parsing, plugin validation, real plugin-order backup/restore, and archive-aware conflict analysis are shipped.</td></tr>
-        <tr><td>Nexus / Wabbajack / Collections</td><td><span class="badge high">Done</span></td><td>These are the first-class install flows today.</td></tr>
-        <tr><td>Executable management &amp; external tools</td><td><span class="badge high">Done</span></td><td>Named executables with arguments, working directory, environment, Wine DLL overrides, and a configurable output mod run with overwrite capture — in both the CLI and UI.</td></tr>
-        <tr><td>Data Files / Diagnostics / Tools / Downloads views</td><td><span class="badge mid">Partial</span></td><td>All are now reachable and data-backed, but they are not yet MO2-complete.</td></tr>
-        <tr><td>BAIN and non-Nexus source breadth</td><td><span class="badge mid">Partial</span></td><td>Core plumbing exists, but the UX and positioning are still incomplete.</td></tr>
-        <tr><td>Generic / user-defined games</td><td><span class="badge mid">Partial</span></td><td>`modde game add` registers arbitrary titles, but without a bespoke scanner or save tracker.</td></tr>
-        <tr><td>Starfield save tracking</td><td><span class="badge high">Done</span></td><td>Starfield `.sfs` files use the shared save tracker path.</td></tr>
-      </tbody>
-    </table>
-  </div>
+  function closeLightbox() {
+    dialog.classList.remove('open');
+    dialog.setAttribute('aria-hidden', 'true');
+    image.removeAttribute('src');
+    document.body.classList.remove('lightbox-open');
+    if (lastTrigger) {
+      lastTrigger.focus();
+    }
+  }
 
-  <div class="comparison-section">
-    <h2>Where MO2 is ahead</h2>
-    <p class="section-subtitle">These are the gaps that still matter most for any serious “replace MO2/Vortex” claim.</p>
-    <ul class="gap-list">
-      <li><strong>Mod Information Dialog</strong> — file tree, conflict tabs, image preview, text/INI editing, and optional plugin management (modde ships a Nexus-metadata side panel, not the full dialog)</li>
-      <li><strong>Durable download pipeline</strong> — transport-level pause/resume/cancel, ETA, concurrency, and update-all workflows</li>
-      <li><strong>Merged VFS browser</strong> — a true Data tab with archive visibility, overwrite workflows, and conflict navigation</li>
-      <li><strong>Sharper load-order UX</strong> — richer LOOT reports, plugin pinning, and clearer load-order governance</li>
-      <li><strong>Broader title depth</strong> — not by chasing every game first, but by being unquestionably solid for the supported Linux-first workflows</li>
-    </ul>
-  </div>
-</section>
+  document.addEventListener('click', event => {
+    const trigger = event.target.closest('[data-lightbox-image]');
+    if (!trigger) return;
+    lastTrigger = trigger;
+    image.src = trigger.dataset.lightboxImage;
+    image.alt = trigger.dataset.lightboxAlt || '';
+    caption.textContent = trigger.dataset.lightboxCaption || trigger.dataset.lightboxAlt || '';
+    dialog.classList.add('open');
+    dialog.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('lightbox-open');
+    closeButton.focus();
+  });
 
-  </main>
-
-  <footer class="site-footer">
-    <div class="footer-inner">
-      <p>modde is open-source software licensed under GPL-3.0.</p>
-      <div class="footer-links">
-        <a href="https://modde.tartanoglu.com/docs/">Docs</a>
-        <a href="https://codeberg.org/caniko/rs-modde">Repo</a>
-        <a href="https://codeberg.org/caniko/rs-modde/src/branch/trunk/CHANGELOG.md">CHANGELOG</a>
-        <a href="https://codeberg.org/caniko/rs-modde/issues">Issues</a>
-      </div>
-    </div>
-  </footer>
-</body>
-</html>
+  closeButton.addEventListener('click', closeLightbox);
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) closeLightbox();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && dialog.classList.contains('open')) {
+      closeLightbox();
+    }
+  });
+})();
+</script></body></html>
