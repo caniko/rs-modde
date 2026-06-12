@@ -34,16 +34,16 @@
       inputs.flake-utils.follows = "rs-harbor/flake-utils";
     };
 
-  plinth = {
-    url = "git+file:/data/nvme0/can/Projects/solo/plinth";
-    inputs.nixpkgs.follows = "nixpkgs";
-    inputs.rust-overlay.follows = "rust-overlay";
-    inputs.crane.follows = "crane";
+    plinth = {
+      url = "git+https://codeberg.org/caniko/plinth.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.crane.follows = "crane";
       inputs.flake-utils.follows = "flake-utils";
     };
 
     visual-rubric = {
-      url = "git+file:/data/nvme0/can/Projects/visual-rubric";
+      url = "git+https://codeberg.org/caniko/visual-rubric.git";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.rust-overlay.follows = "rust-overlay";
       inputs.crane.follows = "crane";
@@ -92,27 +92,6 @@
         simitPackage = simit.packages.${system}.default;
         plinthProject = plinth.packages.${system}.plinth-project;
         visualRubric = visual-rubric.packages.${system}.default;
-        plinthProjectLocal = pkgs.writeShellApplication {
-          name = "plinth-project";
-          runtimeInputs = [toolchain.rustToolchain];
-          text = ''
-            exec cargo run --quiet \
-              --manifest-path /data/nvme0/can/Projects/solo/plinth/Cargo.toml \
-              --package plinth-project \
-              --bin plinth-project \
-              -- "$@"
-          '';
-        };
-        visualRubricLocal = pkgs.writeShellApplication {
-          name = "visual-rubric";
-          runtimeInputs = [toolchain.rustToolchain];
-          text = ''
-            exec cargo run --quiet \
-              --manifest-path /data/nvme0/can/Projects/visual-rubric/Cargo.toml \
-              --bin visual-rubric \
-              -- "$@"
-          '';
-        };
         simitCli = pkgs.writeShellApplication {
           name = "simit";
           text = ''
@@ -1452,8 +1431,6 @@
               cargo-llvm-cov
               toolchain.rustToolchain
               simitCli
-              plinthProjectLocal
-              visualRubricLocal
               plinthProject
               visualRubric
               just

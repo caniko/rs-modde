@@ -349,16 +349,17 @@
         ]
       },
       "locked": {
-        "dirtyRev": "fd27a8f1900baed1ac52655b7440be1e9ab3138f-dirty",
-        "dirtyShortRev": "fd27a8f-dirty",
-        "lastModified": 1780562736,
-        "narHash": "sha256-YPVCztqN1D580AfbecW8hk41GiniZDJazigj1pqElJ4=",
+        "lastModified": 1780921919,
+        "narHash": "sha256-qWNGqKWmGecXS7PaDHS3TS++XX3IdWnf4HRscDYfD0E=",
+        "ref": "refs/heads/trunk",
+        "rev": "8c4855f9ee40543277b15d1dbf0298f0a90c34d7",
+        "revCount": 43,
         "type": "git",
-        "url": "file:/data/nvme0/can/Projects/solo/plinth"
+        "url": "https://codeberg.org/caniko/plinth.git"
       },
       "original": {
         "type": "git",
-        "url": "file:/data/nvme0/can/Projects/solo/plinth"
+        "url": "https://codeberg.org/caniko/plinth.git"
       }
     },
     "root": {
@@ -589,16 +590,17 @@
         "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
-        "dirtyRev": "0ee8d7cbc02f8fff468410f36c37c8718398d15f-dirty",
-        "dirtyShortRev": "0ee8d7c-dirty",
-        "lastModified": 1780694172,
-        "narHash": "sha256-759z9+88YDfdYiWsDmZnnajCNqLSwP6747AGaDlZMzU=",
+        "lastModified": 1780891999,
+        "narHash": "sha256-tbCUBjBeuVowXuT/zI4Om0eNAzyy068m+fHPZ2HSgwY=",
+        "ref": "refs/heads/trunk",
+        "rev": "6c5ae07eca2857632edbe43008d43a8634d86e8d",
+        "revCount": 14,
         "type": "git",
-        "url": "file:/data/nvme0/can/Projects/visual-rubric"
+        "url": "https://codeberg.org/caniko/visual-rubric.git"
       },
       "original": {
         "type": "git",
-        "url": "file:/data/nvme0/can/Projects/visual-rubric"
+        "url": "https://codeberg.org/caniko/visual-rubric.git"
       }
     }
   },
