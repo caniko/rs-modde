@@ -9,8 +9,20 @@ use crate::resolver::GameId;
 #[serde(rename_all = "kebab-case")]
 pub enum BisectOracle {
     Manual,
-    Crash { crash_dir: PathBuf },
-    Perf { baseline_run: String },
+    Crash {
+        crash_dir: PathBuf,
+    },
+    Perf {
+        baseline_run: String,
+        #[serde(default = "default_perf_p99_frame_time_percent")]
+        p99_frame_time_percent: u16,
+        #[serde(default = "default_perf_one_percent_low_fps_percent")]
+        one_percent_low_fps_percent: u16,
+        #[serde(default = "default_perf_alpha_micros")]
+        alpha_micros: u32,
+        #[serde(default = "default_perf_min_samples")]
+        min_samples: usize,
+    },
 }
 
 impl BisectOracle {
@@ -22,6 +34,26 @@ impl BisectOracle {
             Self::Perf { .. } => "perf",
         }
     }
+}
+
+#[must_use]
+pub const fn default_perf_p99_frame_time_percent() -> u16 {
+    115
+}
+
+#[must_use]
+pub const fn default_perf_one_percent_low_fps_percent() -> u16 {
+    85
+}
+
+#[must_use]
+pub const fn default_perf_alpha_micros() -> u32 {
+    50_000
+}
+
+#[must_use]
+pub const fn default_perf_min_samples() -> usize {
+    30
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

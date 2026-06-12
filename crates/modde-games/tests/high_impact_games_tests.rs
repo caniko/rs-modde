@@ -110,6 +110,67 @@ fn bg3_deploy_updates_modsettings_from_paks() {
 }
 
 #[test]
+fn bg3_hot_deploy_is_experimental() {
+    let capability = modde_games::bg3::BALDURS_GATE3.hot_deploy_capability();
+    assert_eq!(
+        capability.support,
+        modde_games::traits::HotDeploySupport::Experimental
+    );
+    assert!(capability.cosmetic_only);
+}
+
+#[test]
+fn bg3_hot_deploy_patches_staging_and_refreshes_root_symlink() {
+    let tmp = TempDir::new().unwrap();
+    let install = tmp.path().join("Baldurs Gate 3");
+    let staging = tmp.path().join("staging");
+    let source = tmp.path().join("source");
+    std::fs::create_dir_all(&install).unwrap();
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::create_dir_all(&source).unwrap();
+
+    let source_file = source.join("Cool.pak");
+    std::fs::write(&source_file, b"pak").unwrap();
+
+    // A stale deployed root that must be replaced by a fresh symlink.
+    let mods_dir = modde_games::bg3::mods_dir_from_install(&install);
+    std::fs::create_dir_all(&mods_dir).unwrap();
+    std::fs::write(mods_dir.join("Cool.pak"), b"stale").unwrap();
+
+    let patch = modde_core::hot_deploy::HotDeployPatch {
+        changes: vec![modde_core::hot_deploy::HotDeployChange {
+            rel_path: "Cool.pak".to_string(),
+            before: None,
+            after: Some(source_file),
+        }],
+    };
+
+    modde_games::bg3::BALDURS_GATE3
+        .apply_hot_deploy_patch(&patch, &staging, &install)
+        .unwrap();
+
+    let staged = staging.join("Cool.pak");
+    assert!(staged.symlink_metadata().unwrap().file_type().is_symlink());
+
+    let deployed_root = mods_dir.join("Cool.pak");
+    assert!(
+        deployed_root
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(std::fs::read(&deployed_root).unwrap(), b"pak");
+
+    // post_deploy must regenerate modsettings.lsx from the deployed paks.
+    let modsettings = modde_games::bg3::modsettings_path_from_install(&install);
+    assert_eq!(
+        modde_games::bg3::read_modsettings(&modsettings).unwrap(),
+        vec!["Cool"]
+    );
+}
+
+#[test]
 fn stardew_scanner_discovers_smapi_mods() {
     let tmp = TempDir::new().unwrap();
     let mod_dir = tmp.path().join("Mods/BetterRanching");

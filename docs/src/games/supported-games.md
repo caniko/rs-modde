@@ -15,7 +15,7 @@ This table is intentionally conservative:
 | Skyrim Anniversary Edition | `skyrim-ae` | `Done` | Yes | Yes | `Done` |
 | Fallout 4 | `fallout4` | `Done` | Yes | Yes | `Done` |
 | Fallout 76 | `fallout76` | `Partial` | Yes | Yes | `Partial` (server-side / local cache only) |
-| Starfield | `starfield` | `Partial` | Yes | Yes | `Done` |
+| Starfield | `starfield` | `Partial` | Yes | Yes | `Done` (capture only; no contamination gate) |
 
 ## Other games
 

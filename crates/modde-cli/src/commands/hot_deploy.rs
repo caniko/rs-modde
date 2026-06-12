@@ -130,26 +130,15 @@ pub async fn handle(
             plugin.display_name()
         )
     })?;
-    if !force && let Some(process) = running_game_process(profile.game_id.as_str()) {
-        bail!(
-            "hot-deploy refused: {} appears to be running as process '{}'. Close the game or re-run with --force.",
-            plugin.display_name(),
-            process
-        );
-    }
+    ensure_game_not_running(force, profile.game_id.as_str(), plugin.display_name())?;
 
-    if let Err(err) = plugin.apply_hot_deploy_patch(&patch, &before_farm.staging_dir, &install_dir)
-    {
-        eprintln!(
-            "hot-deploy failed; recover with: modde deploy --profile {} --game {}",
-            profile.name, profile.game_id
-        );
-        return Err(err).context("game plugin hot-deploy patch failed");
-    }
-
-    pm.create_or_update(&next_profile)
-        .await
-        .context("failed to persist profile state")?;
+    apply_patch_then_persist(
+        || plugin.apply_hot_deploy_patch(&patch, &before_farm.staging_dir, &install_dir),
+        || pm.create_or_update(&next_profile),
+        &profile.name,
+        profile.game_id.as_str(),
+    )
+    .await?;
 
     println!("  Live VFS patched.");
     println!("  Profile state updated.");
@@ -157,9 +146,49 @@ pub async fn handle(
     Ok(())
 }
 
-fn running_game_process(game_id: &str) -> Option<String> {
+fn ensure_game_not_running(force: bool, game_id: &str, display_name: &str) -> Result<()> {
+    ensure_game_not_running_at(Path::new("/proc"), force, game_id, display_name)
+}
+
+fn ensure_game_not_running_at(
+    proc_root: &Path,
+    force: bool,
+    game_id: &str,
+    display_name: &str,
+) -> Result<()> {
+    if !force && let Some(process) = running_game_process_at(proc_root, game_id) {
+        bail!(
+            "hot-deploy refused: {display_name} appears to be running as process '{process}'. Close the game or re-run with --force.",
+        );
+    }
+    Ok(())
+}
+
+async fn apply_patch_then_persist<A, P, Fut, T, E>(
+    apply: A,
+    persist: P,
+    profile_name: &str,
+    game_id: &str,
+) -> Result<()>
+where
+    A: FnOnce() -> Result<()>,
+    P: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = std::result::Result<T, E>>,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    if let Err(err) = apply() {
+        eprintln!(
+            "hot-deploy failed; recover with: modde deploy --profile {profile_name} --game {game_id}"
+        );
+        return Err(err).context("game plugin hot-deploy patch failed");
+    }
+    persist().await.context("failed to persist profile state")?;
+    Ok(())
+}
+
+fn running_game_process_at(proc_root: &Path, game_id: &str) -> Option<String> {
     let executable_names = hot_deploy_process_names(game_id)?;
-    let entries = std::fs::read_dir("/proc").ok()?;
+    let entries = std::fs::read_dir(proc_root).ok()?;
     for entry in entries.flatten() {
         let file_name = entry.file_name();
         let pid = file_name.to_string_lossy();
@@ -240,4 +269,168 @@ async fn build_farm(
         hidden_set.as_ref(),
     )
     .context("failed to build symlink farm")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use super::*;
+
+    fn fake_proc_entry(root: &Path, pid: &str, comm: Option<&str>, exe_target: Option<&str>) {
+        let dir = root.join(pid);
+        std::fs::create_dir_all(&dir).unwrap();
+        if let Some(comm) = comm {
+            std::fs::write(dir.join("comm"), format!("{comm}\n")).unwrap();
+        }
+        if let Some(exe_target) = exe_target {
+            modde_core::fs::symlink(&root.join(exe_target), &dir.join("exe")).unwrap();
+        }
+    }
+
+    #[test]
+    fn running_game_process_detects_matching_comm() {
+        let proc_root = tempfile::tempdir().unwrap();
+        fake_proc_entry(proc_root.path(), "1", Some("systemd"), None);
+        fake_proc_entry(proc_root.path(), "1234", Some("Cyberpunk2077"), None);
+
+        assert_eq!(
+            running_game_process_at(proc_root.path(), "cyberpunk2077").as_deref(),
+            Some("Cyberpunk2077")
+        );
+    }
+
+    #[test]
+    fn running_game_process_matches_comm_case_insensitively() {
+        let proc_root = tempfile::tempdir().unwrap();
+        fake_proc_entry(proc_root.path(), "42", Some("bg3.EXE"), None);
+
+        assert_eq!(
+            running_game_process_at(proc_root.path(), "baldurs-gate3").as_deref(),
+            Some("bg3.EXE")
+        );
+    }
+
+    #[test]
+    fn running_game_process_detects_matching_exe_link() {
+        let proc_root = tempfile::tempdir().unwrap();
+        std::fs::write(proc_root.path().join("bg3"), b"binary").unwrap();
+        fake_proc_entry(proc_root.path(), "777", Some("wine-preloader"), Some("bg3"));
+
+        assert_eq!(
+            running_game_process_at(proc_root.path(), "baldurs-gate3").as_deref(),
+            Some("bg3")
+        );
+    }
+
+    #[test]
+    fn running_game_process_ignores_non_matching_names() {
+        let proc_root = tempfile::tempdir().unwrap();
+        fake_proc_entry(proc_root.path(), "1", Some("systemd"), None);
+        fake_proc_entry(proc_root.path(), "200", Some("bash"), None);
+
+        assert!(running_game_process_at(proc_root.path(), "cyberpunk2077").is_none());
+    }
+
+    #[test]
+    fn running_game_process_skips_garbage_entries_without_error() {
+        let proc_root = tempfile::tempdir().unwrap();
+        // Non-numeric directory names must be ignored even if they match.
+        fake_proc_entry(proc_root.path(), "self", Some("Cyberpunk2077"), None);
+        // Numeric entry without comm/exe must be skipped.
+        std::fs::create_dir_all(proc_root.path().join("99")).unwrap();
+        // Numeric entry whose comm is a directory (unreadable as a file).
+        std::fs::create_dir_all(proc_root.path().join("100/comm")).unwrap();
+        // Numeric entry whose exe is a dangling symlink with no matching name.
+        fake_proc_entry(proc_root.path(), "101", None, Some("missing-binary"));
+
+        assert!(running_game_process_at(proc_root.path(), "cyberpunk2077").is_none());
+    }
+
+    #[test]
+    fn running_game_process_returns_none_for_unknown_game() {
+        let proc_root = tempfile::tempdir().unwrap();
+        fake_proc_entry(proc_root.path(), "1234", Some("Cyberpunk2077"), None);
+
+        assert!(running_game_process_at(proc_root.path(), "no-such-game").is_none());
+    }
+
+    #[test]
+    fn ensure_game_not_running_refuses_when_game_is_running() {
+        let proc_root = tempfile::tempdir().unwrap();
+        fake_proc_entry(proc_root.path(), "1234", Some("Cyberpunk2077"), None);
+
+        let err =
+            ensure_game_not_running_at(proc_root.path(), false, "cyberpunk2077", "Cyberpunk 2077")
+                .unwrap_err();
+        assert!(err.to_string().contains("hot-deploy refused"));
+        assert!(err.to_string().contains("Cyberpunk2077"));
+        assert!(err.to_string().contains("--force"));
+    }
+
+    #[test]
+    fn ensure_game_not_running_force_bypasses_running_game_check() {
+        let proc_root = tempfile::tempdir().unwrap();
+        fake_proc_entry(proc_root.path(), "1234", Some("Cyberpunk2077"), None);
+
+        ensure_game_not_running_at(proc_root.path(), true, "cyberpunk2077", "Cyberpunk 2077")
+            .unwrap();
+    }
+
+    #[test]
+    fn ensure_game_not_running_allows_when_game_is_not_running() {
+        let proc_root = tempfile::tempdir().unwrap();
+        fake_proc_entry(proc_root.path(), "1", Some("systemd"), None);
+
+        ensure_game_not_running_at(proc_root.path(), false, "cyberpunk2077", "Cyberpunk 2077")
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn failed_patch_does_not_persist_profile_state() {
+        let persisted = Cell::new(false);
+
+        let err = apply_patch_then_persist(
+            || bail!("simulated plugin failure"),
+            || {
+                persisted.set(true);
+                async { Ok::<_, std::io::Error>(0i64) }
+            },
+            "default",
+            "cyberpunk2077",
+        )
+        .await
+        .unwrap_err();
+
+        assert!(
+            !persisted.get(),
+            "profile must not persist after a failed patch"
+        );
+        assert!(
+            err.to_string()
+                .contains("game plugin hot-deploy patch failed")
+        );
+    }
+
+    #[tokio::test]
+    async fn successful_patch_persists_profile_state() {
+        let persisted = Cell::new(false);
+
+        apply_patch_then_persist(
+            || Ok(()),
+            || {
+                persisted.set(true);
+                async { Ok::<_, std::io::Error>(0i64) }
+            },
+            "default",
+            "cyberpunk2077",
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            persisted.get(),
+            "profile must persist after a successful patch"
+        );
+    }
 }

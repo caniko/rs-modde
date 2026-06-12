@@ -31,26 +31,20 @@ not yet shipped — lives in the
 
 ## Do I need NixOS to run modde?
 
-No. modde runs natively on Linux, macOS, and Windows. Install it through your
-platform's native package manager (AUR, COPR, apt, Flatpak, Homebrew, winget,
-Scoop, Chocolatey), a direct download, or `cargo install modde-cli`. If you use
-Nix, modde is also a flake — a reproducible install that, through the
-home-manager module, additionally lets you **declare your mod profiles as code**.
-That is one option among many, not a requirement. See
-[Installation](getting-started/installation.md) for every channel and its commands.
+No. modde does not require NixOS, but the live user-facing install path today is
+Nix/Home Manager or a source build from the Nix development shell. Other
+package-manager channels are wired or staged, and macOS/Windows builds are
+experimental CI outputs until the [Installation](getting-started/installation.md)
+page marks those channels live.
 
 ## Does it run on Windows or macOS?
 
-**Yes — both are first-class native targets.** Every release ships native builds
-for Linux (x86_64 / aarch64), macOS (x86_64 / aarch64), and Windows (x86_64),
-each with the `modde` CLI and the `modde-ui` desktop app. Install them via
-Homebrew, winget, Scoop, or Chocolatey, or grab a direct download. Two
-platform-native steps to know: on macOS, clear the quarantine attribute once after
-extracting a tarball (`xattr -dr com.apple.quarantine modde modde-ui`); on Windows,
-the `.exe` artifacts are Authenticode-signed, so you can verify them with
-`Get-AuthenticodeSignature`. Full per-platform instructions are under the
+Experimental builds exist for both, but Linux is the live support target today.
+macOS tarballs are ad-hoc signed and not notarized; Windows artifacts are
+prepared for Authenticode signing. Treat both as staged until the
 [macOS](getting-started/installation.md#macos) and
-[Windows](getting-started/installation.md#windows) sections of the install page.
+[Windows](getting-started/installation.md#windows) sections mark their channels
+live.
 
 ## Do I need Nexus Premium?
 

@@ -291,7 +291,7 @@ modde tool apply optiscaler --game stellar-blade
 # 5. (Optional) Register a named external tool/executable for this game so it runs
 #    with overwrite capture and the right Wine DLL overrides.
 modde tool add-executable --game stellar-blade --name my-tool /path/to/tool.exe
-modde exec my-tool --game stellar-blade
+modde exec run my-tool --game stellar-blade
 ```
 
 ### Home-Manager profile

@@ -1,9 +1,23 @@
+//! Opt-in empirical mod compatibility oracle service for modde.
+//!
+//! # Deployment
+//!
+//! Per-IP rate limiting keys on the socket peer address by default. Set
+//! `MODDE_ORACLE_TRUSTED_PROXY=1` (or `true`/`yes`) **only** when the service
+//! is exclusively reachable through a reverse proxy that overwrites
+//! `X-Forwarded-For`; the limiter then keys on the first `X-Forwarded-For`
+//! hop (or `X-Real-IP`) instead. With the toggle off (the default) those
+//! headers are ignored entirely, so direct clients cannot spoof their way
+//! past the per-IP limit.
+
 use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
-use axum::extract::{Query, State};
-use axum::http::StatusCode;
+use axum::extract::rejection::ExtensionRejection;
+use axum::extract::{ConnectInfo, Query, State};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -20,11 +34,83 @@ use tracing::info;
 
 const MAX_REQUEST_BYTES: usize = 256 * 1024;
 const LAPLACE_NOISE_SCALE: f64 = 1.0;
+const DEFAULT_RATE_LIMIT_WINDOW_SECONDS: u64 = 60;
+const DEFAULT_RATE_LIMIT_BURST: u32 = 60;
+
+#[derive(Clone)]
+struct RateLimiter {
+    burst: u32,
+    window: Duration,
+    trusted_proxy: bool,
+    entries: Arc<Mutex<HashMap<String, RateLimitEntry>>>,
+}
+
+impl RateLimiter {
+    fn from_env() -> Self {
+        let burst = std::env::var("MODDE_ORACLE_RATE_LIMIT_BURST")
+            .ok()
+            .and_then(|value| value.parse::<u32>().ok())
+            .unwrap_or(DEFAULT_RATE_LIMIT_BURST);
+        let window_seconds = std::env::var("MODDE_ORACLE_RATE_LIMIT_WINDOW_SECONDS")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(DEFAULT_RATE_LIMIT_WINDOW_SECONDS);
+        let trusted_proxy = std::env::var("MODDE_ORACLE_TRUSTED_PROXY")
+            .map(|value| {
+                matches!(
+                    value.trim().to_ascii_lowercase().as_str(),
+                    "1" | "true" | "yes"
+                )
+            })
+            .unwrap_or(false);
+        Self::new(
+            burst,
+            Duration::from_secs(window_seconds.max(1)),
+            trusted_proxy,
+        )
+    }
+
+    fn new(burst: u32, window: Duration, trusted_proxy: bool) -> Self {
+        Self {
+            burst: burst.max(1),
+            window,
+            trusted_proxy,
+            entries: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    fn check(&self, key: &str) -> Result<(), ()> {
+        let now = Instant::now();
+        let mut entries = self.entries.lock().map_err(|_| ())?;
+        let entry = entries
+            .entry(key.to_string())
+            .or_insert_with(|| RateLimitEntry {
+                window_start: now,
+                count: 0,
+            });
+        if now.duration_since(entry.window_start) >= self.window {
+            entry.window_start = now;
+            entry.count = 0;
+        }
+        if entry.count >= self.burst {
+            return Err(());
+        }
+        entry.count += 1;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct RateLimitEntry {
+    window_start: Instant,
+    count: u32,
+}
 
 #[derive(Clone)]
 pub struct AppState {
     store: Store,
     config: OracleConfigResponse,
+    rate_limiter: RateLimiter,
 }
 
 impl AppState {
@@ -36,6 +122,7 @@ impl AppState {
                 min_cohort,
                 ..OracleConfigResponse::default()
             },
+            rate_limiter: RateLimiter::from_env(),
         }
     }
 
@@ -51,7 +138,20 @@ impl AppState {
                 min_cohort,
                 ..OracleConfigResponse::default()
             },
+            rate_limiter: RateLimiter::from_env(),
         })
+    }
+
+    #[must_use]
+    pub fn with_rate_limit(mut self, burst: u32, window: Duration) -> Self {
+        self.rate_limiter = RateLimiter::new(burst, window, self.rate_limiter.trusted_proxy);
+        self
+    }
+
+    #[must_use]
+    pub fn with_trusted_proxy(mut self, trusted_proxy: bool) -> Self {
+        self.rate_limiter.trusted_proxy = trusted_proxy;
+        self
     }
 }
 
@@ -69,9 +169,12 @@ pub fn router(state: AppState) -> Router {
 pub async fn serve(addr: SocketAddr, state: AppState) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     info!(%addr, "modde compatibility oracle listening");
-    axum::serve(listener, router(state))
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(
+        listener,
+        router(state).into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
     Ok(())
 }
 
@@ -108,15 +211,41 @@ async fn config(State(state): State<AppState>) -> Json<OracleConfigResponse> {
 
 async fn post_events(
     State(state): State<AppState>,
+    peer: Result<ConnectInfo<SocketAddr>, ExtensionRejection>,
+    headers: HeaderMap,
     Json(batch): Json<CompatEventBatch>,
 ) -> Result<Json<CompatEventAccepted>, ApiError> {
-    batch.validate()?;
-    let accepted = state.store.insert_events(&batch.events).await?;
+    let key = rate_limit_key(
+        &headers,
+        peer.ok().map(|ConnectInfo(addr)| addr),
+        state.rate_limiter.trusted_proxy,
+    );
     state
+        .rate_limiter
+        .check(&key)
+        .map_err(|()| ApiError::RateLimited)?;
+    batch.validate()?;
+    let accepted = state
         .store
-        .recompute_aggregates(state.config.min_cohort)
+        .ingest_events(&batch.events, state.config.min_cohort)
         .await?;
     Ok(Json(CompatEventAccepted { accepted }))
+}
+
+fn rate_limit_key(headers: &HeaderMap, peer: Option<SocketAddr>, trusted_proxy: bool) -> String {
+    if trusted_proxy {
+        let forwarded = headers
+            .get("x-forwarded-for")
+            .or_else(|| headers.get("x-real-ip"))
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.split(',').next())
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        if let Some(forwarded) = forwarded {
+            return forwarded.to_string();
+        }
+    }
+    peer.map_or_else(|| "unknown".to_string(), |addr| addr.ip().to_string())
 }
 
 #[derive(Debug, Deserialize)]
@@ -155,19 +284,17 @@ enum Store {
 }
 
 impl Store {
-    async fn insert_events(&self, events: &[CompatEvent]) -> Result<usize, ApiError> {
+    async fn ingest_events(
+        &self,
+        events: &[CompatEvent],
+        min_cohort: i64,
+    ) -> Result<usize, ApiError> {
         match self {
-            Self::Postgres(pool) => insert_postgres_events(pool, events).await,
-            Self::Memory(store) => Ok(store.insert_events(events)),
-        }
-    }
-
-    async fn recompute_aggregates(&self, min_cohort: i64) -> Result<(), ApiError> {
-        match self {
-            Self::Postgres(pool) => recompute_postgres_aggregates(pool, min_cohort).await,
+            Self::Postgres(pool) => insert_postgres_events(pool, events, min_cohort).await,
             Self::Memory(store) => {
+                let accepted = store.insert_events(events);
                 store.recompute_aggregates(min_cohort);
-                Ok(())
+                Ok(accepted)
             }
         }
     }
@@ -396,7 +523,12 @@ async fn migrate(pool: &PgPool) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
-async fn insert_postgres_events(pool: &PgPool, events: &[CompatEvent]) -> Result<usize, ApiError> {
+async fn insert_postgres_events(
+    pool: &PgPool,
+    events: &[CompatEvent],
+    min_cohort: i64,
+) -> Result<usize, ApiError> {
+    let touched = touched_pairs(events);
     let mut tx = pool.begin().await?;
     for event in events {
         sqlx::query(
@@ -423,55 +555,111 @@ async fn insert_postgres_events(pool: &PgPool, events: &[CompatEvent]) -> Result
         .await?;
     }
     tx.commit().await?;
+    update_postgres_aggregates(pool, &touched, min_cohort).await?;
     Ok(events.len())
 }
 
-async fn recompute_postgres_aggregates(pool: &PgPool, min_cohort: i64) -> Result<(), ApiError> {
-    sqlx::query("TRUNCATE compat_pair_aggregates")
+#[derive(Debug, Default)]
+struct TouchedAggregates {
+    games: BTreeMap<String, Vec<String>>,
+}
+
+fn touched_pairs(events: &[CompatEvent]) -> TouchedAggregates {
+    let mut touched = TouchedAggregates::default();
+    for event in events {
+        let pairs = touched.games.entry(event.game_id.clone()).or_default();
+        for pair in &event.pair_hashes {
+            if !pairs.contains(pair) {
+                pairs.push(pair.clone());
+            }
+        }
+    }
+    touched
+}
+
+async fn update_postgres_aggregates(
+    pool: &PgPool,
+    touched: &TouchedAggregates,
+    min_cohort: i64,
+) -> Result<(), ApiError> {
+    for (game_id, pair_hashes) in &touched.games {
+        sqlx::query(
+            "DELETE FROM compat_pair_aggregates
+             WHERE game_id = $1 AND pair_hash = ANY($2)",
+        )
+        .bind(game_id)
+        .bind(pair_hashes)
         .execute(pool)
         .await?;
-    sqlx::query(
-        "
-        INSERT INTO compat_pair_aggregates
-            (game_id, pair_hash, coinstall_count, crash_count, baseline_count,
-             baseline_crash_count, window_start_unix, window_end_unix)
-        WITH baseline AS (
+
+        sqlx::query(
+            "
+            INSERT INTO compat_pair_aggregates
+                (game_id, pair_hash, coinstall_count, crash_count, baseline_count,
+                 baseline_crash_count, window_start_unix, window_end_unix)
+            WITH baseline AS (
+                SELECT
+                    game_id,
+                    count(*)::BIGINT AS baseline_count,
+                    count(*) FILTER (WHERE kind = 'crash')::BIGINT AS baseline_crash_count
+                FROM compat_events
+                WHERE game_id = $1
+                GROUP BY game_id
+            ),
+            pairs AS (
+                SELECT
+                    e.game_id,
+                    pair_hash,
+                    count(*)::BIGINT AS coinstall_count,
+                    count(*) FILTER (WHERE e.kind = 'crash')::BIGINT AS crash_count,
+                    min(e.observed_at_unix)::BIGINT AS window_start_unix,
+                    max(e.observed_at_unix)::BIGINT AS window_end_unix
+                FROM compat_events e
+                CROSS JOIN LATERAL unnest(e.pair_hashes) AS pair_hash
+                WHERE e.game_id = $1 AND pair_hash = ANY($2)
+                GROUP BY e.game_id, pair_hash
+                HAVING count(*) >= $3
+            )
             SELECT
-                game_id,
-                count(*)::BIGINT AS baseline_count,
-                count(*) FILTER (WHERE kind = 'crash')::BIGINT AS baseline_crash_count
-            FROM compat_events
-            GROUP BY game_id
-        ),
-        pairs AS (
-            SELECT
-                e.game_id,
-                pair_hash,
-                count(*)::BIGINT AS coinstall_count,
-                count(*) FILTER (WHERE e.kind = 'crash')::BIGINT AS crash_count,
-                min(e.observed_at_unix)::BIGINT AS window_start_unix,
-                max(e.observed_at_unix)::BIGINT AS window_end_unix
-            FROM compat_events e
-            CROSS JOIN LATERAL unnest(e.pair_hashes) AS pair_hash
-            GROUP BY e.game_id, pair_hash
-            HAVING count(*) >= $1
+                pairs.game_id,
+                pairs.pair_hash,
+                pairs.coinstall_count,
+                pairs.crash_count,
+                baseline.baseline_count,
+                baseline.baseline_crash_count,
+                pairs.window_start_unix,
+                pairs.window_end_unix
+            FROM pairs
+            JOIN baseline ON baseline.game_id = pairs.game_id
+            ",
         )
-        SELECT
-            pairs.game_id,
-            pairs.pair_hash,
-            pairs.coinstall_count,
-            pairs.crash_count,
-            baseline.baseline_count,
-            baseline.baseline_crash_count,
-            pairs.window_start_unix,
-            pairs.window_end_unix
-        FROM pairs
-        JOIN baseline ON baseline.game_id = pairs.game_id
-        ",
-    )
-    .bind(min_cohort)
-    .execute(pool)
-    .await?;
+        .bind(game_id)
+        .bind(pair_hashes)
+        .bind(min_cohort)
+        .execute(pool)
+        .await?;
+
+        sqlx::query(
+            "
+            WITH baseline AS (
+                SELECT
+                    count(*)::BIGINT AS baseline_count,
+                    count(*) FILTER (WHERE kind = 'crash')::BIGINT AS baseline_crash_count
+                FROM compat_events
+                WHERE game_id = $1
+            )
+            UPDATE compat_pair_aggregates
+            SET baseline_count = baseline.baseline_count,
+                baseline_crash_count = baseline.baseline_crash_count,
+                updated_at = now()
+            FROM baseline
+            WHERE compat_pair_aggregates.game_id = $1
+            ",
+        )
+        .bind(game_id)
+        .execute(pool)
+        .await?;
+    }
     Ok(())
 }
 
@@ -529,6 +717,7 @@ async fn query_postgres_stats(
 #[derive(Debug)]
 enum ApiError {
     BadRequest(String),
+    RateLimited,
     Store(anyhow::Error),
 }
 
@@ -550,6 +739,11 @@ impl IntoResponse for ApiError {
             Self::BadRequest(message) => (
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({ "error": message })),
+            )
+                .into_response(),
+            Self::RateLimited => (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(serde_json::json!({ "error": "compatibility event rate limit exceeded" })),
             )
                 .into_response(),
             Self::Store(error) => {
@@ -704,6 +898,117 @@ mod tests {
         assert!((stat.crash_signature_rate - 0.5).abs() < f64::EPSILON);
         assert!((stat.baseline_rate - 0.25).abs() < f64::EPSILON);
         assert!((stat.lift - 2.0).abs() < f64::EPSILON);
+    }
+
+    fn peer(addr: &str) -> ConnectInfo<SocketAddr> {
+        ConnectInfo(addr.parse().expect("valid socket address"))
+    }
+
+    fn events_request(body: &[u8], peer_addr: &str, forwarded_for: Option<&str>) -> Request<Body> {
+        let mut builder = Request::builder()
+            .method(Method::POST)
+            .uri("/v1/compat/events")
+            .header("content-type", "application/json")
+            .extension(peer(peer_addr));
+        if let Some(forwarded_for) = forwarded_for {
+            builder = builder.header("x-forwarded-for", forwarded_for);
+        }
+        builder.body(Body::from(body.to_vec())).unwrap()
+    }
+
+    fn rate_limited_batch_body() -> Vec<u8> {
+        let pair = "9".repeat(64);
+        let batch = CompatEventBatch {
+            schema_version: CURRENT_SCHEMA_VERSION,
+            client_version: "0.3.9".to_string(),
+            events: vec![event(CompatEventKind::Session, &pair, 1)],
+        };
+        serde_json::to_vec(&batch).unwrap()
+    }
+
+    #[tokio::test]
+    async fn post_events_rate_limits_by_peer_address() {
+        let app = router(AppState::memory_for_tests(1).with_rate_limit(1, Duration::from_mins(1)));
+        let body = rate_limited_batch_body();
+        let first = app
+            .clone()
+            .oneshot(events_request(&body, "203.0.113.10:50000", None))
+            .await
+            .unwrap();
+        assert_ok(first).await;
+
+        let second = app
+            .oneshot(events_request(&body, "203.0.113.10:50001", None))
+            .await
+            .unwrap();
+        assert_eq!(second.status(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[tokio::test]
+    async fn spoofed_forwarded_for_is_ignored_without_trusted_proxy() {
+        let app = router(AppState::memory_for_tests(1).with_rate_limit(1, Duration::from_mins(1)));
+        let body = rate_limited_batch_body();
+        let first = app
+            .clone()
+            .oneshot(events_request(
+                &body,
+                "203.0.113.10:50000",
+                Some("198.51.100.1"),
+            ))
+            .await
+            .unwrap();
+        assert_ok(first).await;
+
+        let second = app
+            .oneshot(events_request(
+                &body,
+                "203.0.113.10:50001",
+                Some("198.51.100.2"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(second.status(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[tokio::test]
+    async fn trusted_proxy_honors_forwarded_for() {
+        let app = router(
+            AppState::memory_for_tests(1)
+                .with_rate_limit(1, Duration::from_mins(1))
+                .with_trusted_proxy(true),
+        );
+        let body = rate_limited_batch_body();
+        let first = app
+            .clone()
+            .oneshot(events_request(
+                &body,
+                "127.0.0.1:50000",
+                Some("198.51.100.1"),
+            ))
+            .await
+            .unwrap();
+        assert_ok(first).await;
+
+        let second = app
+            .clone()
+            .oneshot(events_request(
+                &body,
+                "127.0.0.1:50001",
+                Some("198.51.100.2"),
+            ))
+            .await
+            .unwrap();
+        assert_ok(second).await;
+
+        let third = app
+            .oneshot(events_request(
+                &body,
+                "127.0.0.1:50002",
+                Some("198.51.100.1"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(third.status(), StatusCode::TOO_MANY_REQUESTS);
     }
 
     async fn assert_ok(response: axum::response::Response) -> axum::response::Response {

@@ -114,10 +114,20 @@ fn public_docs_match_capability_matrix_for_critical_statuses() {
     assert_contains(
         &supported_games,
         &format!(
-            "| {} | `starfield` | `{}` | Yes | Yes | `{}` |",
+            "| {} | `starfield` | `{}` | Yes | Yes | `{}`",
             starfield.display_name, starfield.overall, starfield.save_tracking
         ),
         "docs site supported games table",
+    );
+    assert_contains(
+        &supported_games,
+        "no contamination gate",
+        "Starfield supported games row",
+    );
+    assert_contains(
+        &coverage,
+        "record-level save-contamination removal gate is not implemented",
+        "MO2 coverage audit",
     );
 
     for feature_id in [
@@ -153,5 +163,41 @@ fn public_docs_match_capability_matrix_for_critical_statuses() {
         &comparison,
         "type = \"capability_matrix\"",
         "website comparison table",
+    );
+}
+
+#[test]
+fn public_installation_docs_do_not_market_staged_channels_as_live() {
+    let readme = read_repo_file("README.md");
+    let installation = read_repo_file("docs/src/getting-started/installation.md");
+    let contributing = read_repo_file("CONTRIBUTING.md");
+
+    for (label, docs) in [
+        ("README", readme.as_str()),
+        ("installation guide", installation.as_str()),
+        ("contributing guide", contributing.as_str()),
+    ] {
+        assert_contains(docs, "Nix", label);
+    }
+
+    assert_contains(
+        &readme,
+        "flake/Home-Manager path is live",
+        "README install status",
+    );
+    assert_contains(
+        &installation,
+        "Nix/Home Manager is live",
+        "installation guide channel status",
+    );
+    assert_contains(
+        &installation,
+        "package families below are staged release wiring",
+        "installation guide channel status",
+    );
+    assert_contains(
+        &contributing,
+        "Only the Nix flake, home-manager module, and the Attic cache are live",
+        "contributing distribution table",
     );
 }

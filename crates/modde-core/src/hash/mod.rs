@@ -11,6 +11,16 @@ use crate::error::Result;
 
 const BUF_SIZE: usize = 64 * 1024;
 
+#[must_use]
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    let mut out = String::with_capacity(64);
+    for byte in digest {
+        let _ = write!(&mut out, "{byte:02x}");
+    }
+    out
+}
+
 /// Return a `HashMismatch` error with hex-formatted u64 hashes.
 fn hash_mismatch(path: &Path, expected: u64, actual: u64) -> CoreError {
     CoreError::HashMismatch {

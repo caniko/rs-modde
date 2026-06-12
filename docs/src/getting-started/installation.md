@@ -1,27 +1,31 @@
 # Installation
 
-modde runs on **Linux, macOS, and Windows** — all first-class. Every release ships
-two binaries: the `modde` command-line tool and the `modde-ui` desktop app. Install
-them through your platform's native package manager, a direct download, Cargo, or —
-if you use Nix — a flake with a declarative home-manager module.
+modde is Linux-first today. The live user-facing paths are the Nix flake, the
+Home-Manager module, source builds from the Nix development shell, and the Attic
+binary cache used by release/CI infrastructure. macOS and Windows builds exist
+as experimental CI outputs, and additional package-manager channels are wired or
+staged, but they are not the recommended live install path until this page marks
+them live.
 
-There is no single "blessed" method. Pick whatever fits how you already manage
-software:
+Use this table as channel status, not as a promise that every listed package is
+already published:
 
 | Platform | Native packages | Also available |
 | -------- | --------------- | -------------- |
-| **Linux** | [AUR](#arch-linux-aur) · [COPR](#fedora--rhel-copr) · [apt](#debian--ubuntu-apt) · [Flatpak](#flatpak) | [AppImage](#appimage) · [tarball](#linux-direct-download) · [Cargo](#cargo) · [Nix](#nix) |
-| **macOS** | [Homebrew](#homebrew) | [tarball](#macos-direct-download) · [Cargo](#cargo) · [Nix](#nix) |
-| **Windows** | [winget](#winget) · [Scoop](#scoop) · [Chocolatey](#chocolatey) | [zip](#windows-direct-download) · [Cargo](#cargo) |
+| **Linux** | [Nix](#nix) / Home Manager | AUR, COPR, apt, Flatpak, AppImage, tarball, Cargo are staged or build-from-source paths |
+| **macOS** | [Nix](#nix) / source build | Homebrew and tarball are experimental staged outputs |
+| **Windows** | Experimental staged outputs | winget, Scoop, Chocolatey, and zip are not generally published yet |
 
-Both binaries are included in every package except `cargo install modde-cli`, which
-builds the CLI only. After installing, jump to the [Quick start](quick-start.md).
+When a binary package is published it includes both `modde` and `modde-ui`;
+`cargo install modde-cli` builds the CLI only. After installing, jump to the
+[Quick start](quick-start.md).
 
 ## Linux
 
 Linux releases are gated by package family rather than by every downstream
 distribution name. A channel is published only after its artifact exists and its
-release smoke check passes.
+release smoke check passes. At the moment, Nix/Home Manager is live; the other
+package families below are staged release wiring.
 
 | Family | Primary channel | Covered distributions |
 | ------ | --------------- | --------------------- |
@@ -37,7 +41,7 @@ channel adds its own `arm64` or equivalent build.
 
 ### Arch Linux (AUR)
 
-Three packages are published to the AUR; install one with your preferred helper
+Planned channel. Three packages are prepared for the AUR; once published, install one with your preferred helper
 (`yay`, `paru`, …):
 
 ```bash
@@ -59,8 +63,8 @@ sudo dnf copr enable caniko/rs-modde
 sudo dnf install modde modde-ui
 ```
 
-The COPR builds the RPMs from the signed release source. Prerelease builds are
-published to the separate `caniko/rs-modde-testing` project.
+Planned channel. COPR builds RPMs from the signed release source. Prerelease
+builds are intended for the separate `caniko/rs-modde-testing` project.
 
 ### Debian / Ubuntu (apt)
 
@@ -73,7 +77,7 @@ sudo apt update
 sudo apt install modde modde-ui
 ```
 
-The repository is signed with a dedicated key (fingerprint
+Planned channel. The repository is signed with a dedicated key (fingerprint
 `CCFE4A8461DF8778F5227684B6DB8F177A951E1B`), separate from the maintainer
 tag-signing key and the minisign release key. See
 [`SECURITY.md`](https://codeberg.org/caniko/rs-modde/src/branch/trunk/SECURITY.md)
@@ -85,7 +89,7 @@ maintainer exports and validates the dedicated repository key.
 
 ### Flatpak
 
-The desktop app is published to Flathub:
+Planned channel. The desktop app is intended to be published to Flathub:
 
 ```bash
 flatpak install flathub com.tartanoglu.modde
@@ -97,7 +101,7 @@ of the other channels.
 
 ### AppImage
 
-Self-contained, no installation required:
+Planned channel. Self-contained, no installation required once release assets are published:
 
 ```bash
 chmod +x modde-ui-<version>-x86_64.AppImage
@@ -110,8 +114,9 @@ one. Download both from the
 
 ### Linux direct download
 
-Grab the tarball for your architecture from the
-[releases page](https://codeberg.org/caniko/rs-modde/releases) and extract it:
+Planned channel. Once release assets are published, grab the tarball for your
+architecture from the [releases page](https://codeberg.org/caniko/rs-modde/releases)
+and extract it:
 
 ```bash
 tar xzf modde-<version>-x86_64-linux.tar.gz   # or aarch64-linux
@@ -129,12 +134,12 @@ brew tap caniko/modde https://codeberg.org/caniko/homebrew-modde
 brew install modde
 ```
 
-The formula installs both `modde` and `modde-ui` on Apple Silicon and Intel Macs
-(it also works on Linux/Linuxbrew).
+Planned channel. The formula is intended to install both `modde` and `modde-ui`
+on Apple Silicon and Intel Macs (and Linux/Linuxbrew) once published.
 
 ### macOS direct download
 
-modde ships ad-hoc-signed macOS binaries (no Apple Developer ID, no notarization).
+Experimental channel. modde's macOS binaries are ad-hoc signed (no Apple Developer ID, no notarization).
 macOS quarantines downloaded binaries, so clear the quarantine attribute once after
 extracting:
 
@@ -156,6 +161,7 @@ it.
 ```powershell
 winget install Caniko.Modde
 ```
+Planned channel. Use only after the winget package is published.
 
 ### Scoop
 
@@ -163,20 +169,23 @@ winget install Caniko.Modde
 scoop bucket add modde https://codeberg.org/caniko/scoop-modde
 scoop install modde
 ```
+Planned channel. Use only after the Scoop bucket is published.
 
 ### Chocolatey
 
 ```powershell
 choco install modde
 ```
+Planned channel. Use only after the Chocolatey package is published.
 
 Each Windows package installs `modde.exe` and `modde-ui.exe` on your `PATH`.
 
 ### Windows direct download
 
-Download `modde-<version>-x86_64-windows.zip` from the
-[releases page](https://codeberg.org/caniko/rs-modde/releases) and extract it. The
-`.exe` artifacts are Authenticode-signed; verify the signature before running:
+Experimental channel. Once a Windows zip is published, download
+`modde-<version>-x86_64-windows.zip` from the
+[releases page](https://codeberg.org/caniko/rs-modde/releases) and extract it.
+The `.exe` artifacts are Authenticode-signed; verify the signature before running:
 
 ```powershell
 Get-AuthenticodeSignature .\modde.exe

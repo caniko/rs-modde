@@ -992,6 +992,85 @@ mod tests {
         assert!(verify_signatures(&lock).is_err());
     }
 
+    #[tokio::test]
+    async fn verify_locked_file_accepts_untouched_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file.bin");
+        tokio::fs::write(&path, b"locked file contents")
+            .await
+            .unwrap();
+        let locked = lock_file_at(&path, "file.bin", "file.bin", None)
+            .await
+            .unwrap();
+
+        verify_locked_file(&path, &locked).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn verify_locked_file_rejects_corrupted_xxh3_digest() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file.bin");
+        tokio::fs::write(&path, b"locked file contents")
+            .await
+            .unwrap();
+        let locked = lock_file_at(&path, "file.bin", "file.bin", None)
+            .await
+            .unwrap();
+
+        // Size, sha256, and xxh64 stay correct; only the xxh3 digest is wrong.
+        let mut corrupted = locked.clone();
+        let flipped = u64::from_str_radix(&locked.xxh3, 16).unwrap() ^ 1;
+        corrupted.xxh3 = format!("{flipped:016x}");
+
+        let error = verify_locked_file(&path, &corrupted).await.unwrap_err();
+        match error {
+            CoreError::HashMismatch {
+                expected, actual, ..
+            } => {
+                assert_eq!(expected, corrupted.xxh3, "the xxh3 check must have failed");
+                assert_eq!(actual, locked.xxh3);
+            }
+            other => panic!("expected hash mismatch, got: {other}"),
+        }
+        let message = verify_locked_file(&path, &corrupted)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            message.contains("hash mismatch"),
+            "error should report a hash mismatch: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn verify_locked_file_checks_xxh_before_sha256() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file.bin");
+        tokio::fs::write(&path, b"locked file contents")
+            .await
+            .unwrap();
+        let locked = lock_file_at(&path, "file.bin", "file.bin", None)
+            .await
+            .unwrap();
+
+        // Same-size corruption invalidates every digest; the xxh64 check
+        // must trip first, so the reported expected digest is the 16-char
+        // xxh64 value rather than the 64-char sha256.
+        tokio::fs::write(&path, b"LOCKED FILE CONTENTS")
+            .await
+            .unwrap();
+        let error = verify_locked_file(&path, &locked).await.unwrap_err();
+        match error {
+            CoreError::HashMismatch { expected, .. } => {
+                assert_eq!(
+                    expected, locked.xxh64,
+                    "xxh64 must be verified before sha256"
+                );
+            }
+            other => panic!("expected hash mismatch, got: {other}"),
+        }
+    }
+
     #[test]
     fn rejects_future_lock_versions() {
         let lock = ModdeLock {

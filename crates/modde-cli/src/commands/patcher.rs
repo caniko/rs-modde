@@ -1,11 +1,14 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 
 use modde_core::fs::{is_cross_device_error, walk_files_relative};
+use modde_core::hash::sha256_hex;
 use modde_core::profile::{Profile, ProfileManager};
 use modde_core::{
     CommandSettings, ModdeDb, PatcherStageRow, PatcherStageSettings, SynthesisCliSettings, paths,
@@ -54,6 +57,7 @@ pub async fn handle_add_synthesis(
     synthesis_profile: String,
     output_mod: String,
     order: i64,
+    timeout_seconds: u64,
 ) -> Result<()> {
     let pm = ProfileManager::open()
         .await
@@ -71,7 +75,8 @@ pub async fn handle_add_synthesis(
             synthesis_profile,
         }),
         output_mod,
-    )?;
+    )?
+    .with_timeout_seconds(timeout_seconds);
     validate_stage_definition(&stage)?;
     pm.db().save_patcher_stage(&stage).await?;
     println!(
@@ -92,6 +97,7 @@ pub async fn handle_add_command(
     environment: Vec<String>,
     output_mod: String,
     order: i64,
+    timeout_seconds: u64,
 ) -> Result<()> {
     let pm = ProfileManager::open()
         .await
@@ -109,7 +115,8 @@ pub async fn handle_add_command(
             working_dir,
         }),
         output_mod,
-    )?;
+    )?
+    .with_timeout_seconds(timeout_seconds);
     validate_stage_definition(&stage)?;
     pm.db().save_patcher_stage(&stage).await?;
     println!(
@@ -323,6 +330,8 @@ async fn run_enabled_pipeline(
         .context("failed to resolve game mod root for patcher pipeline")?;
     let stages = pm.db().list_patcher_stages(profile_id).await?;
     let enabled: Vec<PatcherStageRow> = stages.into_iter().filter(|stage| stage.enabled).collect();
+    let original_manifests = load_stage_manifests(pm.db(), profile_id, &enabled).await?;
+    let backup = backup_generated_outputs(profile, &enabled)?;
 
     reset_managed_outputs(
         pm.db(),
@@ -334,9 +343,9 @@ async fn run_enabled_pipeline(
     )
     .await?;
 
-    let mut manifests = load_stage_manifests(pm.db(), profile_id, &enabled).await?;
+    let mut manifests = original_manifests.clone();
     for stage in &enabled {
-        run_stage(
+        if let Err(error) = run_stage(
             pm.db(),
             profile,
             game_plugin,
@@ -345,10 +354,87 @@ async fn run_enabled_pipeline(
             stage,
             &mut manifests,
         )
-        .await?;
+        .await
+        {
+            restore_patcher_pipeline(
+                pm.db(),
+                profile,
+                &enabled,
+                game_plugin,
+                install_dir,
+                &game_mod_dir,
+                &original_manifests,
+                &backup,
+            )
+            .await?;
+            return Err(error);
+        }
     }
+    remove_dir_if_exists(&backup.root)?;
 
     Ok(enabled.len())
+}
+
+#[derive(Debug)]
+struct PatcherPipelineBackup {
+    root: PathBuf,
+    stage_dirs: HashMap<String, PathBuf>,
+}
+
+fn backup_generated_outputs(
+    profile: &Profile,
+    stages: &[PatcherStageRow],
+) -> Result<PatcherPipelineBackup> {
+    let root = paths::modde_cache_dir()
+        .join("patchers")
+        .join("backups")
+        .join(format!("{}-{}", profile.name, patcher_time_id()));
+    if root.exists() {
+        fs::remove_dir_all(&root)?;
+    }
+    fs::create_dir_all(&root)?;
+    let mut stage_dirs = HashMap::new();
+    for stage in stages {
+        let generated = stage_generated_dir(profile, &stage.name);
+        if generated.exists() {
+            let backup_dir = root.join(&stage.name);
+            copy_dir_recursive(&generated, &backup_dir)?;
+            stage_dirs.insert(stage.name.clone(), backup_dir);
+        }
+    }
+    Ok(PatcherPipelineBackup { root, stage_dirs })
+}
+
+async fn restore_patcher_pipeline(
+    db: &ModdeDb,
+    profile: &Profile,
+    stages: &[PatcherStageRow],
+    game_plugin: &dyn modde_games::GamePlugin,
+    install_dir: &Path,
+    game_mod_dir: &Path,
+    manifests: &HashMap<String, Vec<String>>,
+    backup: &PatcherPipelineBackup,
+) -> Result<()> {
+    for stage in stages {
+        let generated = stage_generated_dir(profile, &stage.name);
+        if generated.exists() {
+            fs::remove_dir_all(&generated)?;
+        }
+        if let Some(backup_dir) = backup.stage_dirs.get(&stage.name) {
+            copy_dir_recursive(backup_dir, &generated)?;
+        }
+        db.replace_patcher_stage_outputs(
+            require_profile_id(profile)?,
+            &stage.name,
+            manifests
+                .get(&stage.name)
+                .map(Vec::as_slice)
+                .unwrap_or_default(),
+        )
+        .await?;
+    }
+    reset_managed_outputs(db, profile, stages, game_plugin, install_dir, game_mod_dir).await?;
+    remove_dir_if_exists(&backup.root)
 }
 
 async fn load_stage_manifests(
@@ -418,7 +504,11 @@ async fn run_stage(
     validate_stage_runtime(stage, profile, game_plugin)?;
 
     let before = snapshot_dir(game_mod_dir).await?;
-    execute_stage(profile, install_dir, game_mod_dir, stage).await?;
+    let execution = execute_stage(profile, install_dir, game_mod_dir, stage).await?;
+    if execution.skipped {
+        println!("Skipped patcher stage '{}' (cache hit)", stage.name);
+        return Ok(());
+    }
     let after = snapshot_dir(game_mod_dir).await?;
 
     let own_before = manifests
@@ -443,6 +533,7 @@ async fn run_stage(
         stage,
         &own_before,
         &next_manifest,
+        &execution.cache_key,
     )
     .await?;
     manifests.insert(stage.name.clone(), next_manifest);
@@ -542,18 +633,29 @@ async fn execute_stage(
     install_dir: &Path,
     game_mod_dir: &Path,
     stage: &PatcherStageRow,
-) -> Result<()> {
+) -> Result<StageExecution> {
     let work_dir = paths::modde_cache_dir()
         .join("patchers")
         .join(profile.game_id.as_str())
         .join(&profile.name)
         .join(&stage.name);
+    fs::create_dir_all(&work_dir)?;
+    let load_order_path = work_dir.join("load-order.txt");
+    write_load_order(profile, &load_order_path).await?;
+    let load_order = fs::read_to_string(&load_order_path)?;
+    let cache_key = patcher_cache_key(stage, &load_order)?;
+    let generated = stage_generated_dir(profile, &stage.name);
+    if stage.last_cache_key.as_deref() == Some(cache_key.as_str()) && generated.exists() {
+        return Ok(StageExecution {
+            cache_key,
+            skipped: true,
+        });
+    }
     if work_dir.exists() {
         fs::remove_dir_all(&work_dir)?;
     }
     fs::create_dir_all(&work_dir)?;
-    let load_order_path = work_dir.join("load-order.txt");
-    write_load_order(profile, &load_order_path).await?;
+    fs::write(&load_order_path, load_order)?;
 
     match &stage.settings {
         PatcherStageSettings::SynthesisCli(settings) => {
@@ -563,6 +665,8 @@ async fn execute_stage(
                 &load_order_path,
                 install_dir,
                 &stage.name,
+                &work_dir,
+                stage.timeout_seconds,
             )?;
         }
         PatcherStageSettings::Command(settings) => {
@@ -573,11 +677,22 @@ async fn execute_stage(
                 install_dir,
                 profile,
                 &stage.name,
+                &work_dir,
+                stage.timeout_seconds,
             )?;
         }
         PatcherStageSettings::RustNative => unreachable!("validated before execution"),
     }
-    Ok(())
+    Ok(StageExecution {
+        cache_key,
+        skipped: false,
+    })
+}
+
+#[derive(Debug, Clone)]
+struct StageExecution {
+    cache_key: String,
+    skipped: bool,
 }
 
 fn run_synthesis_stage(
@@ -586,8 +701,11 @@ fn run_synthesis_stage(
     load_order_path: &Path,
     install_dir: &Path,
     stage_name: &str,
+    work_dir: &Path,
+    timeout_seconds: u64,
 ) -> Result<()> {
-    let status = Command::new(&settings.executable)
+    let mut command = Command::new(&settings.executable);
+    command
         .current_dir(install_dir)
         .arg("run-pipeline")
         .arg("--OutputDirectory")
@@ -599,14 +717,16 @@ fn run_synthesis_stage(
         .arg("--DataFolderPath")
         .arg(game_mod_dir)
         .arg("--LoadOrderFilePath")
-        .arg(load_order_path)
-        .status()
+        .arg(load_order_path);
+    let status = run_patcher_command(&mut command, stage_name, work_dir, timeout_seconds)
         .with_context(|| format!("failed to execute synthesis-cli stage '{stage_name}'"))?;
     if !status.success() {
         anyhow::bail!(
-            "synthesis-cli stage '{}' exited with status {:?}",
+            "synthesis-cli stage '{}' exited with status {:?}; stdout={} stderr={}",
             stage_name,
-            status.code()
+            status.code(),
+            work_dir.join("stdout.log").display(),
+            work_dir.join("stderr.log").display(),
         );
     }
     Ok(())
@@ -619,6 +739,8 @@ fn run_command_stage(
     install_dir: &Path,
     profile: &Profile,
     stage_name: &str,
+    work_dir: &Path,
+    timeout_seconds: u64,
 ) -> Result<()> {
     let mut command = Command::new(&settings.executable);
     command.args(&settings.args);
@@ -631,17 +753,54 @@ fn run_command_stage(
     for (key, value) in &settings.environment {
         command.env(key, value);
     }
-    let status = command
-        .status()
+    let status = run_patcher_command(&mut command, stage_name, work_dir, timeout_seconds)
         .with_context(|| format!("failed to execute command patcher stage '{stage_name}'"))?;
     if !status.success() {
         anyhow::bail!(
-            "command patcher stage '{}' exited with status {:?}",
+            "command patcher stage '{}' exited with status {:?}; stdout={} stderr={}",
             stage_name,
-            status.code()
+            status.code(),
+            work_dir.join("stdout.log").display(),
+            work_dir.join("stderr.log").display(),
         );
     }
     Ok(())
+}
+
+fn run_patcher_command(
+    command: &mut Command,
+    stage_name: &str,
+    work_dir: &Path,
+    timeout_seconds: u64,
+) -> Result<std::process::ExitStatus> {
+    let stdout_path = work_dir.join("stdout.log");
+    let stderr_path = work_dir.join("stderr.log");
+    let stdout = fs::File::create(&stdout_path)
+        .with_context(|| format!("failed to create {}", stdout_path.display()))?;
+    let stderr = fs::File::create(&stderr_path)
+        .with_context(|| format!("failed to create {}", stderr_path.display()))?;
+    let mut child = command
+        .stdout(Stdio::from(stdout))
+        .stderr(Stdio::from(stderr))
+        .spawn()?;
+    let deadline = Instant::now() + Duration::from_secs(timeout_seconds.max(1));
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(status);
+        }
+        if Instant::now() >= deadline {
+            child.kill()?;
+            let _ = child.wait();
+            anyhow::bail!(
+                "patcher stage '{}' exceeded timeout of {}s; stdout={} stderr={}",
+                stage_name,
+                timeout_seconds,
+                stdout_path.display(),
+                stderr_path.display()
+            );
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
 }
 
 async fn write_load_order(profile: &Profile, path: &Path) -> Result<()> {
@@ -738,6 +897,7 @@ async fn install_managed_output(
     stage: &PatcherStageRow,
     own_before: &HashSet<String>,
     next_manifest: &[String],
+    cache_key: &str,
 ) -> Result<()> {
     let generated = stage_generated_dir(profile, &stage.name);
     let mut old_paths = own_before.iter().cloned().collect::<Vec<_>>();
@@ -771,6 +931,8 @@ async fn install_managed_output(
                 )
             })?;
     }
+    db.mark_patcher_stage_cache_success(require_profile_id(profile)?, &stage.name, cache_key)
+        .await?;
     Ok(())
 }
 
@@ -784,6 +946,60 @@ fn remove_rel_paths(root: &Path, rel_paths: &[String]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn patcher_cache_key(stage: &PatcherStageRow, load_order: &str) -> Result<String> {
+    let settings_json = serde_json::to_string(&stage.settings)
+        .context("failed to serialize patcher settings for cache key")?;
+    let payload = serde_json::json!({
+        "stage_name": &stage.name,
+        "stage_kind": stage.stage_kind.as_str(),
+        "settings": settings_json,
+        "output_mod": &stage.output_mod,
+        "load_order": load_order,
+    });
+    Ok(sha256_hex(payload.to_string().as_bytes()))
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
+    if !src.exists() {
+        return Ok(());
+    }
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src).with_context(|| format!("failed to read {}", src.display()))? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            if let Some(parent) = dst_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(&src_path, &dst_path).with_context(|| {
+                format!(
+                    "failed to copy {} to {}",
+                    src_path.display(),
+                    dst_path.display()
+                )
+            })?;
+        }
+    }
+    Ok(())
+}
+
+fn remove_dir_if_exists(path: &Path) -> Result<()> {
+    if path.exists() {
+        fs::remove_dir_all(path).with_context(|| format!("failed to remove {}", path.display()))?;
+    }
+    Ok(())
+}
+
+fn patcher_time_id() -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    format!("{}{:09}", now.as_secs(), now.subsec_nanos())
 }
 
 fn remove_empty_parents(root: &Path, mut current: Option<&Path>) {
@@ -865,6 +1081,58 @@ mod tests {
             format!("{name}-output"),
         )
         .unwrap()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_patcher_command_kills_process_on_timeout() {
+        let work_dir = tempfile::tempdir().unwrap();
+        let mut command = Command::new("/bin/sh");
+        command.args(["-c", "sleep 30"]);
+
+        let started = Instant::now();
+        let err = run_patcher_command(&mut command, "slow-stage", work_dir.path(), 1).unwrap_err();
+        let elapsed = started.elapsed();
+
+        let message = err.to_string();
+        assert!(
+            message.contains("exceeded timeout of 1s"),
+            "unexpected error message: {message}"
+        );
+        assert!(
+            message.contains("slow-stage"),
+            "error should name the stage: {message}"
+        );
+        assert!(
+            elapsed < Duration::from_secs(10),
+            "timed-out process should be killed promptly, took {elapsed:?}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_patcher_command_captures_stdout_and_stderr_logs() {
+        let work_dir = tempfile::tempdir().unwrap();
+        let mut command = Command::new("/bin/sh");
+        command.args(["-c", "echo out-marker; echo err-marker >&2"]);
+
+        let status = run_patcher_command(&mut command, "log-stage", work_dir.path(), 30).unwrap();
+        assert!(status.success(), "stage command should exit zero");
+
+        let stdout = fs::read_to_string(work_dir.path().join("stdout.log")).unwrap();
+        let stderr = fs::read_to_string(work_dir.path().join("stderr.log")).unwrap();
+        assert!(
+            stdout.contains("out-marker"),
+            "stdout.log missing marker:\n{stdout}"
+        );
+        assert!(
+            stderr.contains("err-marker"),
+            "stderr.log missing marker:\n{stderr}"
+        );
+        assert!(
+            !stdout.contains("err-marker"),
+            "stderr leaked into stdout.log:\n{stdout}"
+        );
     }
 
     #[test]

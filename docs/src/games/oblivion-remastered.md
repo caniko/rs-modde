@@ -272,7 +272,7 @@ modde tool add-executable \
   --game oblivion-remastered \
   --name "Oblivion Remastered (modded)" \
   --working-dir "OblivionRemastered/Binaries/Win64"
-modde exec --game oblivion-remastered "Oblivion Remastered (modded)"
+modde exec run "Oblivion Remastered (modded)" --game oblivion-remastered
 ```
 
 ### home-manager profile snippet

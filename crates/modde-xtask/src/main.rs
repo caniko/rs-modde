@@ -1,13 +1,14 @@
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use harbor_xtask::{
+    run_cargo_package, run_check, run_copr_srpm, run_copr_vendor, run_copr_vendor_check,
+    run_coverage, run_docs_serve, run_fmt, run_lint, run_nix_build, run_nix_develop, run_test,
     CargoWorkspace, CoprConfig, CoverageMode, DocsSite, FormatMode, NixBuildOptions, NixPackage,
-    ProjectConfig, run_cargo_package, run_check, run_copr_srpm, run_copr_vendor,
-    run_copr_vendor_check, run_coverage, run_docs_serve, run_fmt, run_lint, run_nix_build,
-    run_nix_develop, run_test,
+    ProjectConfig,
 };
 use semver::Version;
 
@@ -63,6 +64,9 @@ enum Cmd {
         #[arg(default_value = "docs")]
         site: String,
     },
+    /// Validate docs build, local links, and known command examples.
+    #[command(name = "docs-validate")]
+    DocsValidate,
 }
 
 #[derive(clap::Args)]
@@ -148,11 +152,15 @@ fn project() -> ProjectConfig {
             srpm_dir: root.join("srpms"),
             vendor_tarball: root.join("vendor.tar.gz"),
         }),
-        docs: vec![DocsSite::zola("docs", root.join("docs/site"))],
+        docs: vec![DocsSite::mdbook("docs", root.join("docs"))],
         nix_packages: vec![
             NixPackage {
                 name: "modde".into(),
                 flake_ref: ".#modde".into(),
+            },
+            NixPackage {
+                name: "docs".into(),
+                flake_ref: ".#docs".into(),
             },
             NixPackage {
                 name: "site".into(),
@@ -228,5 +236,144 @@ fn main() -> Result<()> {
         }
         Cmd::Nix(NixCmd::Develop) => run_nix_develop(&cfg),
         Cmd::Docs { site } => run_docs_serve(&cfg, &site),
+        Cmd::DocsValidate => run_docs_validate(&cfg),
     }
+}
+
+fn run_docs_validate(cfg: &ProjectConfig) -> Result<()> {
+    run_nix_build(cfg, "docs", NixBuildOptions { impure: false })?;
+    validate_local_markdown_links(&cfg.workspace_root)?;
+    validate_docs_command_examples(&cfg.workspace_root)?;
+    Ok(())
+}
+
+fn docs_markdown_files(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for file in [
+        "README.md",
+        "CONTRIBUTING.md",
+        "SECURITY.md",
+        "CHANGELOG.md",
+    ] {
+        let path = root.join(file);
+        if path.exists() {
+            files.push(path);
+        }
+    }
+    collect_markdown_files(&root.join("docs"), &mut files)?;
+    collect_markdown_files(&root.join("crates"), &mut files)?;
+    files.sort();
+    Ok(files)
+}
+
+fn collect_markdown_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+    for entry in fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {
+        let entry = entry?;
+        let path = entry.path();
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name == ".git" || name == "target" || name == "book" {
+            continue;
+        }
+        if path.is_dir() {
+            collect_markdown_files(&path, files)?;
+        } else if path.extension().is_some_and(|ext| ext == "md") {
+            files.push(path);
+        }
+    }
+    Ok(())
+}
+
+fn validate_local_markdown_links(root: &Path) -> Result<()> {
+    let mut failures = Vec::new();
+    for path in docs_markdown_files(root)? {
+        let text = fs::read_to_string(&path)
+            .with_context(|| format!("reading markdown file {}", path.display()))?;
+        for (line_idx, line) in text.lines().enumerate() {
+            let mut rest = line;
+            while let Some(start) = rest.find("](") {
+                rest = &rest[start + 2..];
+                let Some(end) = rest.find(')') else {
+                    break;
+                };
+                let target = rest[..end].trim();
+                rest = &rest[end + 1..];
+
+                if target.is_empty()
+                    || target.starts_with('#')
+                    || target.starts_with("http://")
+                    || target.starts_with("https://")
+                    || target.starts_with("mailto:")
+                {
+                    continue;
+                }
+
+                let target = target.trim_matches(['<', '>']);
+                let target = target.split_whitespace().next().unwrap_or(target);
+                let path_part = target.split('#').next().unwrap_or(target);
+                if path_part.is_empty() {
+                    continue;
+                }
+
+                let resolved = path.parent().unwrap_or(root).join(path_part);
+                if !resolved.exists() {
+                    let rel = path.strip_prefix(root).unwrap_or(&path);
+                    failures.push(format!(
+                        "{}:{} links to missing local target `{}`",
+                        rel.display(),
+                        line_idx + 1,
+                        target
+                    ));
+                }
+            }
+        }
+    }
+
+    if !failures.is_empty() {
+        anyhow::bail!(
+            "local markdown link validation failed:\n{}",
+            failures.join("\n")
+        );
+    }
+    Ok(())
+}
+
+fn validate_docs_command_examples(root: &Path) -> Result<()> {
+    let allowed_deprecated = [
+        "docs/src/reference/cli.md",
+        "crates/modde-cli/src/main.rs",
+        "crates/modde-cli/src/commands/mod.rs",
+    ];
+    let mut failures = Vec::new();
+    for path in docs_markdown_files(root)? {
+        let rel = path.strip_prefix(root).unwrap_or(&path);
+        let rel_str = rel.to_string_lossy();
+        let text = fs::read_to_string(&path)
+            .with_context(|| format!("reading markdown file {}", path.display()))?;
+        for (line_idx, line) in text.lines().enumerate() {
+            let invalid = line.contains("modde save snapshot")
+                || line.contains("modde exec --game")
+                || line.contains("modde install ./");
+            let deprecated =
+                line.contains("modde diagnostics") || line.contains("modde crash analyze");
+            if invalid
+                || (deprecated
+                    && !allowed_deprecated
+                        .iter()
+                        .any(|allowed| rel_str.as_ref() == *allowed))
+            {
+                failures.push(format!(
+                    "{}:{} contains stale command example: {}",
+                    rel.display(),
+                    line_idx + 1,
+                    line.trim()
+                ));
+            }
+        }
+    }
+
+    if !failures.is_empty() {
+        anyhow::bail!("docs command validation failed:\n{}", failures.join("\n"));
+    }
+    Ok(())
 }

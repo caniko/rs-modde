@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{CoreError, Result};
 
+pub const DEFAULT_PATCHER_TIMEOUT_SECONDS: u64 = 1_800;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PatcherStageKind {
@@ -81,6 +83,9 @@ pub struct PatcherStageRow {
     pub sort_index: i64,
     pub settings: PatcherStageSettings,
     pub output_mod: String,
+    pub last_cache_key: Option<String>,
+    pub last_success_at: Option<String>,
+    pub timeout_seconds: u64,
 }
 
 impl PatcherStageRow {
@@ -112,7 +117,16 @@ impl PatcherStageRow {
             sort_index,
             settings,
             output_mod,
+            last_cache_key: None,
+            last_success_at: None,
+            timeout_seconds: DEFAULT_PATCHER_TIMEOUT_SECONDS,
         })
+    }
+
+    #[must_use]
+    pub fn with_timeout_seconds(mut self, timeout_seconds: u64) -> Self {
+        self.timeout_seconds = timeout_seconds.max(1);
+        self
     }
 }
 

@@ -38,6 +38,9 @@ cargo xtask check
 # Regenerate the committed Nix tool schema
 just export-tool-schema
 
+# Validate mdBook output, local docs links, and command examples
+cargo xtask docs-validate
+
 # Run the GUI directly with development logging
 cargo xtask gui
 
@@ -143,7 +146,8 @@ Include:
 ## Releases
 
 Release tags are bare semver names such as `0.2.0` or `1.0.0-rc.1`.
-See [docs/copr-release.md](docs/copr-release.md) for the Fedora COPR wiring (one-time setup + per-tag flow).
+Fedora COPR wiring lives in the release workflow and the distribution-channel
+table below; there is no separate COPR release document in this repository.
 
 ### Release tooling
 

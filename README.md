@@ -4,7 +4,7 @@
 ![CI](https://img.shields.io/badge/CI-drift-2088ff) [![Nix](https://img.shields.io/badge/Nix-managed-5277c3)](flake.nix) [![docs](https://img.shields.io/badge/docs-enabled-6f42c1)](docs) [![crates.io](https://img.shields.io/badge/crates.io-ready-f46623)](https://crates.io/crates/modde-cli) [![release](https://img.shields.io/badge/release-configured-2ea44f)](.forgejo/workflows/release.yml) [![artifacts](https://img.shields.io/badge/artifacts-configured-2ea44f)](.forgejo/workflows/release.yml) [![Homebrew](https://img.shields.io/badge/Homebrew-configured-2ea44f)](https://codeberg.org/caniko/homebrew-modde.git) [![Chocolatey](https://img.shields.io/badge/Chocolatey-configured-7b3f99)](https://community.chocolatey.org/) [![Scoop](https://img.shields.io/badge/Scoop-configured-2ea44f)](https://codeberg.org/caniko/scoop-modde.git) [![AUR](https://img.shields.io/badge/AUR-configured-1793d1)](dist/aur) [![COPR](https://img.shields.io/badge/COPR-configured-3f51b5)](.copr/Makefile) [![apt](https://img.shields.io/badge/apt-configured-a81d33)](dist/apt/conf/distributions) [![Flatpak](https://img.shields.io/badge/Flatpak-configured-4a86cf)](https://github.com/flathub/com.tartanoglu.modde) [![winget](https://img.shields.io/badge/winget-configured-0078d4)](https://github.com/microsoft/winget-pkgs/tree/master/manifests/c/Caniko/Modde)
 <!-- simit:badges:end -->
 
-A cross-platform game mod manager written in Rust, running natively on Linux, macOS, and Windows. Provides mod management with virtual filesystem deployment, profile management, save versioning, and conflict detection.
+A Linux-first game mod manager written in Rust, with experimental macOS and Windows builds. Provides mod management with virtual filesystem deployment, profile management, save versioning, and conflict detection.
 
 Project site: <https://modde.tartanoglu.com/>
 Documentation: <https://modde.tartanoglu.com/docs/>
@@ -17,7 +17,7 @@ Documentation: <https://modde.tartanoglu.com/docs/>
 | Fallout 4 | `Done`: plugins, VFS, LOOT sorting, diagnostics, save tracking |
 | Cyberpunk 2077 | `Done`: REDmod, CET, TweakXL, scripts, conflict detection |
 | Fallout 76 | `Partial`: plugins, VFS, BA2 scanning; saves are effectively server-side |
-| Starfield | `Partial`: plugins, VFS, diagnostics, save tracking |
+| Starfield | `Partial`: plugins, VFS, diagnostics, `.sfs` save capture with a save-contamination removal gate |
 | Fallout: New Vegas | `Partial`: Gamebryo plugins, VFS, scanning, save tracking |
 | Oblivion | `Partial`: Gamebryo plugins, VFS, scanning, save tracking |
 | Oblivion Remastered | `Partial`: hybrid UE5 pak + ESP plugins, VFS, save tracking |
@@ -100,41 +100,41 @@ modde gui
 
 ## Installation
 
-Every release ships two binaries: the `modde` command-line tool and the
-`modde-ui` desktop app. Install them through your platform's native package
-manager, a direct download, Cargo, build from source, or — if you use Nix — a
-flake with a declarative home-manager module. There is no single blessed
-method; pick whatever fits how you already manage software. The canonical,
-exhaustive list lives in the
-[installation guide](docs/src/getting-started/installation.md).
+The currently live user-facing install paths are the Nix flake, the
+Home-Manager module, source builds from the Nix development shell, and the Attic
+binary cache used by CI. Other distribution channels are wired or staged in the
+release workflow, but should not be treated as generally available until the
+[installation guide](docs/src/getting-started/installation.md) marks them live.
 
 ### Linux
 
-Linux support is released by package family: Debian/Ubuntu/Mint/Pop!_OS through
+Linux support is staged by package family: Debian/Ubuntu/Mint/Pop!_OS through
 apt and `.deb`, Fedora/RHEL/Rocky/Alma/Bazzite/Nobara through COPR/SRPM, Arch
 derivatives through AUR, Nix/NixOS through the flake and Home Manager module, and
-Flatpak/AppImage/tarballs as universal fallback channels. Each channel is
-published only after its artifact and smoke gate pass.
+Flatpak/AppImage/tarballs as universal fallback channels. Today, only the Nix
+flake/Home-Manager path is live for end users; the other commands below document
+the intended channel wiring and become user-facing only after their release gate
+is marked live.
 
 ```bash
-# Arch (AUR) — modde-bin (prebuilt), modde (source), or modde-git (dev branch)
+# Planned Arch (AUR) — modde-bin (prebuilt), modde (source), or modde-git
 yay -S modde-bin
 
-# Fedora / RHEL (COPR)
+# Planned Fedora / RHEL (COPR)
 sudo dnf copr enable caniko/rs-modde
 sudo dnf install modde modde-ui
 
-# Debian / Ubuntu (apt)
+# Planned Debian / Ubuntu (apt)
 sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL https://modde.rs/apt/key.gpg.asc | sudo gpg --dearmor -o /etc/apt/keyrings/modde.gpg
 echo "deb [signed-by=/etc/apt/keyrings/modde.gpg] https://modde.rs/apt/ stable main" \
   | sudo tee /etc/apt/sources.list.d/modde.list
 sudo apt update && sudo apt install modde modde-ui
 
-# Flatpak (GUI)
+# Planned Flatpak (GUI)
 flatpak install flathub com.tartanoglu.modde
 
-# AppImage (self-contained) or tarball from the releases page
+# Planned AppImage (self-contained) or tarball from the releases page
 chmod +x modde-ui-<version>-x86_64.AppImage && ./modde-ui-<version>-x86_64.AppImage
 ```
 
@@ -145,9 +145,9 @@ brew tap caniko/modde https://codeberg.org/caniko/homebrew-modde
 brew install modde
 ```
 
-The formula installs both `modde` and `modde-ui` on Apple Silicon and Intel
-Macs. To install from a downloaded tarball instead, clear the macOS quarantine
-attribute once after extracting, then run normally:
+The Homebrew formula and macOS tarballs are staged release outputs, not the
+recommended live install path today. When a macOS release asset is published,
+clear the quarantine attribute once after extracting, then run normally:
 
 ```bash
 tar xzf modde-<version>-aarch64-darwin.tar.gz   # or x86_64-darwin on Intel
@@ -155,11 +155,9 @@ xattr -dr com.apple.quarantine modde modde-ui
 ./modde --help
 ```
 
-modde ships ad-hoc-signed macOS binaries (no Apple Developer ID, no
-notarization). The `xattr -dr` step removes the "downloaded from the internet"
-flag that triggers Gatekeeper; subsequent runs work without further
-intervention. If you'd rather have notarized binaries (Apple Developer ID,
-$99/yr), [open an issue][issues] to fund or contribute it.
+macOS binaries are experimental, ad-hoc signed, and not notarized. The `xattr
+-dr` step removes the "downloaded from the internet" flag that triggers
+Gatekeeper; subsequent runs work without further intervention.
 
 ### Windows
 
@@ -167,9 +165,10 @@ $99/yr), [open an issue][issues] to fund or contribute it.
 winget install Caniko.Modde      # or: scoop install modde / choco install modde
 ```
 
-Each Windows package installs `modde.exe` and `modde-ui.exe` on your `PATH`. To
-install from the downloaded `.zip` instead, verify the Authenticode signature
-before running:
+Windows packages and zip artifacts are staged release outputs, not the
+recommended live install path today. When published, each Windows package
+installs `modde.exe` and `modde-ui.exe` on your `PATH`. For a downloaded `.zip`,
+verify the Authenticode signature before running:
 
 ```powershell
 Get-AuthenticodeSignature .\modde.exe
@@ -310,13 +309,15 @@ imports = [ inputs.modde.homeManagerModules.modde ];
 
 ## Platform Support
 
-modde runs natively on all three desktop platforms; every one is first-class.
+modde's live support target is Linux. macOS and Windows builds are produced by
+CI for validation and future distribution work, but they remain experimental
+until the installation guide marks their channels live.
 
 | Platform | Architectures            | Status          |
 | -------- | ------------------------ | --------------- |
 | Linux    | x86_64, aarch64          | Fully supported |
-| macOS    | x86_64, aarch64          | Fully supported |
-| Windows  | x86_64                   | Fully supported |
+| macOS    | x86_64, aarch64          | Experimental CI build |
+| Windows  | x86_64                   | Experimental CI build |
 
 ## CI
 
@@ -327,9 +328,10 @@ documentation site and presentation website to Codeberg Pages.
 
 Tag releases are managed through `cargo xtask release`. Run
 `cargo xtask release X.Y.Z --dry-run` to preview a workspace release, then
-`cargo xtask release X.Y.Z` to publish all workspace crates to crates.io and
-push the bare `X.Y.Z` tag. Release tags build and publish Linux, macOS, and
-Windows CLI/GUI artifacts.
+`cargo xtask release X.Y.Z` to publish stable crates.io crates and push the bare
+`X.Y.Z` tag. Release tags build Linux, macOS, and Windows CLI/GUI artifacts,
+but only the channel statuses in the installation guide decide what is
+advertised as live.
 
 ## Website and docs
 

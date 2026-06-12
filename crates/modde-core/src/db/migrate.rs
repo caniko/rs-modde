@@ -18,7 +18,7 @@ use crate::error::Result;
 
 /// Current schema version. Bump this and add a migration step (`SQLite` ladder +
 /// Postgres end-state DDL) when the schema changes.
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 16;
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 17;
 
 // ── SQLite schema constants (verbatim from the original rusqlite layer) ──────
 
@@ -372,6 +372,12 @@ CREATE INDEX IF NOT EXISTS idx_profile_state_snapshots_profile
     ON profile_state_snapshots(profile_id, created_at);
 ";
 
+const SCHEMA_V17: &str = "
+ALTER TABLE profile_patcher_stages ADD COLUMN last_cache_key TEXT;
+ALTER TABLE profile_patcher_stages ADD COLUMN last_success_at TEXT;
+ALTER TABLE profile_patcher_stages ADD COLUMN timeout_seconds INTEGER NOT NULL DEFAULT 1800;
+";
+
 // ── SQLite migration ladder ─────────────────────────────────────────────────
 
 async fn sqlite_user_version(pool: &sqlx::SqlitePool) -> Result<i64> {
@@ -565,6 +571,15 @@ pub(crate) async fn migrate_sqlite(pool: &sqlx::SqlitePool) -> Result<()> {
         );
     }
 
+    if version < 17 {
+        sqlx::raw_sql(SCHEMA_V17).execute(pool).await?;
+        info!(
+            from = version.max(16),
+            to = 17,
+            "database schema migrated to V17"
+        );
+    }
+
     if version < CURRENT_SCHEMA_VERSION {
         sqlite_set_user_version(pool, CURRENT_SCHEMA_VERSION).await?;
     }
@@ -752,6 +767,9 @@ CREATE TABLE IF NOT EXISTS profile_patcher_stages (
     sort_index    BIGINT NOT NULL,
     settings_json TEXT NOT NULL,
     output_mod    TEXT NOT NULL,
+    last_cache_key TEXT,
+    last_success_at TEXT,
+    timeout_seconds BIGINT NOT NULL DEFAULT 1800,
     updated_at    TEXT NOT NULL DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS')),
     UNIQUE(profile_id, name)
 );

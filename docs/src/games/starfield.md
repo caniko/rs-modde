@@ -131,10 +131,17 @@ workflow — how to inspect, hide files, and reorder — see the
 
 ## Save tracking
 
-Save tracking for Starfield is **`Done`**. Unlike the older Bethesda titles, which
-parse a binary `.ess` header for the character name and save number, Starfield's
-saves are `.sfs` files and are tracked with modde's declarative pattern-based
-tracker.
+Save tracking for Starfield is **`Done`** for file capture and restore. Unlike
+the older Bethesda titles, which parse a binary `.ess` header for the character
+name and save number, Starfield's saves are `.sfs` files and are tracked with
+modde's declarative pattern-based tracker.
+
+> **Save-contamination gate:** Starfield does **not** currently have a
+> record-level save dependency analyzer. `modde mod remove --dry-run` does not
+> inspect `.sfs` records for plugin or script dependencies, because the project
+> does not yet have a verified Starfield `.sfs` magic/header source or fixture.
+> Until that evidence exists, modde will not invent a parser or silently claim
+> removal-safety coverage for Starfield saves.
 
 What the tracker captures:
 

@@ -451,6 +451,14 @@ enum BisectAction {
         oracle: commands::bisect::BisectOracleArg,
         #[arg(long)]
         baseline_run: Option<String>,
+        #[arg(long, default_value_t = modde_core::bisect::default_perf_p99_frame_time_percent())]
+        perf_p99_frame_time_percent: u16,
+        #[arg(long, default_value_t = modde_core::bisect::default_perf_one_percent_low_fps_percent())]
+        perf_one_percent_low_fps_percent: u16,
+        #[arg(long, default_value_t = modde_core::bisect::default_perf_alpha_micros())]
+        perf_alpha_micros: u32,
+        #[arg(long, default_value_t = modde_core::bisect::default_perf_min_samples())]
+        perf_min_samples: usize,
         #[arg(long)]
         crash_dir: Option<PathBuf>,
         #[arg(long)]
@@ -1116,6 +1124,8 @@ enum PatcherAction {
         output_mod: String,
         #[arg(long)]
         order: i64,
+        #[arg(long, default_value_t = modde_core::patcher::DEFAULT_PATCHER_TIMEOUT_SECONDS)]
+        timeout_seconds: u64,
     },
     /// Add or update a generic command stage.
     AddCommand {
@@ -1136,6 +1146,8 @@ enum PatcherAction {
         output_mod: String,
         #[arg(long, default_value_t = -1)]
         order: i64,
+        #[arg(long, default_value_t = modde_core::patcher::DEFAULT_PATCHER_TIMEOUT_SECONDS)]
+        timeout_seconds: u64,
     },
     /// Remove a patcher stage.
     Remove {
@@ -2096,6 +2108,10 @@ fn run_command(cli: Cli) -> Result<()> {
                     profile,
                     oracle,
                     baseline_run,
+                    perf_p99_frame_time_percent,
+                    perf_one_percent_low_fps_percent,
+                    perf_alpha_micros,
+                    perf_min_samples,
                     crash_dir,
                     force_save_risk,
                     keep_profiles,
@@ -2105,6 +2121,10 @@ fn run_command(cli: Cli) -> Result<()> {
                         profile,
                         oracle,
                         baseline_run,
+                        perf_p99_frame_time_percent,
+                        perf_one_percent_low_fps_percent,
+                        perf_alpha_micros,
+                        perf_min_samples,
                         crash_dir,
                         force_save_risk,
                         keep_profiles,
@@ -2331,6 +2351,7 @@ fn run_command(cli: Cli) -> Result<()> {
                     synthesis_profile,
                     output_mod,
                     order,
+                    timeout_seconds,
                 } => {
                     commands::patcher::handle_add_synthesis(
                         &name,
@@ -2341,6 +2362,7 @@ fn run_command(cli: Cli) -> Result<()> {
                         synthesis_profile,
                         output_mod,
                         order,
+                        timeout_seconds,
                     )
                     .await?;
                 }
@@ -2354,6 +2376,7 @@ fn run_command(cli: Cli) -> Result<()> {
                     environment,
                     output_mod,
                     order,
+                    timeout_seconds,
                 } => {
                     commands::patcher::handle_add_command(
                         &name,
@@ -2365,6 +2388,7 @@ fn run_command(cli: Cli) -> Result<()> {
                         environment,
                         output_mod,
                         order,
+                        timeout_seconds,
                     )
                     .await?;
                 }
@@ -3048,6 +3072,7 @@ mod mutation_classification_tests {
                 environment: Vec::new(),
                 output_mod: "generated".into(),
                 order: 1,
+                timeout_seconds: modde_core::patcher::DEFAULT_PATCHER_TIMEOUT_SECONDS,
             },
         }));
     }

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **Docs**: Cleaned public install-channel wording so live Nix/Home-Manager
+  paths are not confused with staged package-manager channels, fixed stale CLI
+  examples, and moved internal planning notes out of the public mdBook source.
+- **Docs tooling**: Added `cargo xtask docs-validate` to build mdBook docs,
+  check local Markdown links, and reject known-stale command examples.
+- **Starfield**: Clarified `.sfs` save capture and the save-contamination
+  removal gate in the README, supported-games table, and parity reference.
+
 ## [0.3.8] - 2026-06-08
 
 ### Fixed

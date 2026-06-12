@@ -1,5 +1,8 @@
 use modde_games::bethesda;
-use modde_games::{GamePlugin, SUPPORTED_GAME_IDS, resolve_game_plugin, resolve_save_tracker};
+use modde_games::{
+    resolve_game_plugin, resolve_save_dependency_analyzer, resolve_save_tracker, GamePlugin,
+    SUPPORTED_GAME_IDS,
+};
 
 #[test]
 fn starfield_constant_has_correct_game_id() {
@@ -32,6 +35,14 @@ fn starfield_save_tracker_is_exposed() {
 }
 
 #[test]
+fn starfield_save_dependency_analyzer_is_explicitly_unavailable_until_verified() {
+    assert!(
+        resolve_save_dependency_analyzer("starfield").is_none(),
+        "Starfield must remain without a save dependency analyzer until a verified .sfs magic/header fixture or format source exists; update docs and this test when STARFIELD_SAVE_ANALYZER is real"
+    );
+}
+
+#[test]
 fn starfield_save_tracker_detects_sfs_files_by_category() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join("Autosave1.sfs"), b"").unwrap();
@@ -48,9 +59,7 @@ fn starfield_save_tracker_detects_sfs_files_by_category() {
 
     assert_eq!(saves.len(), 4);
     assert_eq!(categories, vec!["auto", "exit", "manual", "quick"]);
-    assert!(
-        saves
-            .iter()
-            .any(|save| save.label.as_deref() == Some("Save42_Custom"))
-    );
+    assert!(saves
+        .iter()
+        .any(|save| save.label.as_deref() == Some("Save42_Custom")));
 }

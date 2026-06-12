@@ -289,8 +289,8 @@ modde scan --game fallout-new-vegas \
 # Deploy the symlink farm into <install>/Data
 modde deploy --profile viva-new-vegas --game fallout-new-vegas
 
-# Snapshot saves from the Proton prefix into the profile
-modde save snapshot --game fallout-new-vegas --profile viva-new-vegas
+# Capture saves from the Proton prefix into the profile
+modde save capture --game fallout-new-vegas --profile viva-new-vegas
 
 # Deploy then launch through Proton
 modde play --game fallout-new-vegas

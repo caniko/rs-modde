@@ -2115,15 +2115,16 @@ impl ModdeDb {
             .execute(
                 "INSERT INTO profile_patcher_stages (
                     profile_id, name, stage_kind, enabled, sort_index,
-                    settings_json, output_mod, updated_at
+                    settings_json, output_mod, timeout_seconds, updated_at
                  )
-                 VALUES (?, ?, ?, ?, ?, ?, ?, {NOW})
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, {NOW})
                  ON CONFLICT(profile_id, name) DO UPDATE SET
                     stage_kind = excluded.stage_kind,
                     enabled = excluded.enabled,
                     sort_index = excluded.sort_index,
                     settings_json = excluded.settings_json,
                     output_mod = excluded.output_mod,
+                    timeout_seconds = excluded.timeout_seconds,
                     updated_at = excluded.updated_at",
                 &vals![
                     stage.profile_id,
@@ -2133,7 +2134,25 @@ impl ModdeDb {
                     stage.sort_index,
                     settings_json,
                     stage.output_mod.clone(),
+                    stage.timeout_seconds as i64,
                 ],
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub async fn mark_patcher_stage_cache_success(
+        &self,
+        profile_id: i64,
+        stage_name: &str,
+        cache_key: &str,
+    ) -> Result<()> {
+        self.db
+            .execute(
+                "UPDATE profile_patcher_stages
+                 SET last_cache_key = ?, last_success_at = {NOW}, updated_at = {NOW}
+                 WHERE profile_id = ? AND name = ?",
+                &vals![cache_key, profile_id, stage_name],
             )
             .await?;
         Ok(())
@@ -2143,7 +2162,8 @@ impl ModdeDb {
     pub async fn list_patcher_stages(&self, profile_id: i64) -> Result<Vec<PatcherStageRow>> {
         self.db
             .fetch_all(
-                "SELECT profile_id, name, stage_kind, enabled, sort_index, settings_json, output_mod
+                "SELECT profile_id, name, stage_kind, enabled, sort_index, settings_json, output_mod,
+                        last_cache_key, last_success_at, timeout_seconds
                  FROM profile_patcher_stages
                  WHERE profile_id = ?
                  ORDER BY sort_index, lower(name)",
@@ -2161,7 +2181,8 @@ impl ModdeDb {
     ) -> Result<Option<PatcherStageRow>> {
         self.db
             .fetch_optional(
-                "SELECT profile_id, name, stage_kind, enabled, sort_index, settings_json, output_mod
+                "SELECT profile_id, name, stage_kind, enabled, sort_index, settings_json, output_mod,
+                        last_cache_key, last_success_at, timeout_seconds
                  FROM profile_patcher_stages
                  WHERE profile_id = ? AND name = ?",
                 &vals![profile_id, name],
@@ -2494,6 +2515,20 @@ impl ModdeDb {
             .ok_or_else(|| CoreError::Other(format!("performance run not found: {run_id}").into()))
     }
 
+    /// List parsed `MangoHud` samples for a performance run in capture order.
+    pub async fn list_performance_samples(&self, run_id: &str) -> Result<Vec<PerformanceSample>> {
+        self.db
+            .fetch_all(
+                "SELECT elapsed_seconds, fps, frame_time_ms, cpu_load, gpu_load
+                 FROM performance_samples
+                 WHERE run_id = ?
+                 ORDER BY id",
+                &vals![run_id],
+                performance_sample_from_row,
+            )
+            .await
+    }
+
     /// List performance runs for a game, newest first.
     pub async fn list_performance_runs(
         &self,
@@ -2635,6 +2670,16 @@ fn performance_run_from_row(r: &dyn DbRow) -> Result<PerformanceRunRow> {
     })
 }
 
+fn performance_sample_from_row(r: &dyn DbRow) -> Result<PerformanceSample> {
+    Ok(PerformanceSample {
+        elapsed_seconds: r.opt_f64(0)?,
+        fps: r.opt_f64(1)?.unwrap_or_default(),
+        frame_time_ms: r.opt_f64(2)?,
+        cpu_load: r.opt_f64(3)?,
+        gpu_load: r.opt_f64(4)?,
+    })
+}
+
 fn bisect_session_from_row(r: &dyn DbRow) -> Result<BisectSession> {
     let status_raw = r.string(5)?;
     let status = BisectStatus::parse(&status_raw).ok_or_else(|| {
@@ -2729,6 +2774,9 @@ fn patcher_stage_from_row(r: &dyn DbRow) -> Result<PatcherStageRow> {
         sort_index: r.i64(4)?,
         settings,
         output_mod: r.string(6)?,
+        last_cache_key: r.opt_string(7)?,
+        last_success_at: r.opt_string(8)?,
+        timeout_seconds: r.opt_i64(9)?.unwrap_or(1_800).max(1) as u64,
     })
 }
 

@@ -268,8 +268,9 @@ without failing. Set `gameDir` and rebuild once Steam has the game.
 # Scan the resolved in-prefix Mods/ directory for installed .pak mods.
 modde scan --game baldurs-gate3
 
-# Install a mod archive (root .pak files or a top-level Mods/ folder).
-modde install ./SomeBg3Mod.zip --game baldurs-gate3
+# Install a Nexus-hosted BG3 mod archive into the active profile.
+modde install mod "https://www.nexusmods.com/baldursgate3/mods/1234" \
+  --profile bg3-mods
 
 # Deploy the profile. This symlinks .pak files into the prefix Mods/ and
 # regenerates PlayerProfiles/Public/modsettings.lsx from what was deployed.

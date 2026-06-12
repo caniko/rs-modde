@@ -1,15 +1,15 @@
 # modde
 
-**modde** is a game mod manager written in Rust that runs natively on **Linux,
-macOS, and Windows**. It gives you declarative, reproducible mod management with a
-virtual-filesystem deployment that keeps your game directory clean, git-backed save
-vaults, profile experiments, and graph-based conflict detection — and it installs
-Wabbajack modlists and Nexus Collections natively, no Windows VM required.
+**modde** is a Linux-first game mod manager written in Rust. It gives you
+declarative, reproducible mod management with a virtual-filesystem deployment
+that keeps your game directory clean, git-backed save vaults, profile
+experiments, and graph-based conflict detection — and it installs Wabbajack
+modlists and Nexus Collections natively, no Windows VM required.
 
-Every platform is a first-class target. Install modde with your system's package
-manager, a direct download, or Cargo — and if you happen to use Nix, modde is also a
-flake, which gives you a reproducible install and the option to declare your mod
-profiles as code through a home-manager module.
+The live install path today is the Nix flake/Home-Manager integration or a
+source build from the Nix development shell. macOS and Windows builds exist as
+experimental CI outputs, and package-manager channels are staged until the
+installation guide marks them live.
 
 - **Project site:** <https://modde.tartanoglu.com/>
 - **Source:** <https://codeberg.org/caniko/rs-modde>

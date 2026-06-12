@@ -6,8 +6,8 @@
 #     site, the website comparison, and the parity reference must agree with it)
 #   - website/data/capability-matrix.toml (mirror; rendered by the `games`
 #     shortcode on the landing site — keep the two files identical)
-#   - docs/site/content/docs/games/supported-games.md (human-readable table)
-#   - docs/site/content/docs/reference/parity.md (MO2 parity audit)
+#   - docs/src/games/supported-games.md (human-readable table)
+#   - docs/src/reference/parity.md (MO2 parity audit)
 #
 # Status vocabulary is defined in [status] below. Do not market anything above
 # its real status here.

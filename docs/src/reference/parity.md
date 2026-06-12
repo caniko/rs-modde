@@ -26,7 +26,7 @@ The guardrail test `crates/modde-core/tests/repo_truth_tests.rs` fails the build
 | Executable management | `Done` | Named executables with arguments, working directory, environment, Wine DLL overrides, and a configurable output (overwrite) mod, plus overwrite capture on run — in both the CLI (`modde exec` / `modde tool add-executable`) and the UI. See [Executables & external tools](../guides/executables.md). |
 | Patcher pipelines | `Partial` | CLI and Home Manager can configure required deployment-time Synthesis/command stages, import generated output mods, and redeploy. GUI editing and Rust-native patchers are future work. See [Patcher pipelines](../guides/patcher-pipelines.md). |
 | Hot-deploy | `Partial` | Experimental Cyberpunk-first path-level VFS patching for cosmetic-only mod toggles. It updates the live symlink deployment without promising that the running game reloads every touched asset immediately. |
-| Starfield save tracking | `Done` | Starfield `.sfs` files flow through the shared save-tracker path. |
+| Starfield save tracking | `Done` | Starfield `.sfs` files are captured by the save tracker; the record-level save-contamination removal gate is not implemented. |
 | Instance switching | `Partial` | CLI/runtime instance selection changes the active data root, but there is no MO2-style portable/global UX yet. |
 | Diagnostics | `Partial` | The CLI and UI share a real diagnostics engine fed by resolved conflicts and plugin order, but there is no MO2-style "problems" button with guided fixes. |
 | Data tab | `Partial` | The UI renders real conflict rows from the resolver/collision engine, but it is not yet a full merged-VFS browser with archive/hidden filters. |
@@ -47,7 +47,7 @@ Depth varies by game. `Done` titles are the strongest end-to-end paths; `Partial
 | Fallout 4 | `Done` | Plugins, diagnostics, VFS, and save tracking are shipped. |
 | Cyberpunk 2077 | `Done` | REDmod / CET / TweakXL-aware install and launch flows are shipped. |
 | Fallout 76 | `Partial` | VFS, plugin handling, and BA2 scanning exist; saves are effectively server-side and only lightly represented locally. |
-| Starfield | `Partial` | Game plugin, plugin handling, VFS, diagnostics, and `.sfs` save tracking exist. |
+| Starfield | `Partial` | Game plugin, plugin handling, VFS, diagnostics, and `.sfs` save capture exist; record-level save-contamination gating does not. |
 | Stellar Blade | `Partial` | UE4/UE5-style deployment, scanning, conflicts, OptiScaler integration, and local save tracking are present, below the Bethesda/Cyberpunk depth. |
 | Baldur's Gate 3, Stardew Valley, Fallout: New Vegas, Oblivion, Oblivion Remastered, Bannerlord, The Witcher 3, Subnautica 2 | `Partial` | Engine-appropriate deployment, scanning, conflict classification, and save tracking ship; depth and game-specific polish are still maturing. |
 
