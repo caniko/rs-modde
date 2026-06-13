@@ -671,7 +671,7 @@ jobs:
           copr_url = https://copr.fedorainfracloud.org
           EOF
           chmod 600 ~/.config/copr
-          nix shell nixpkgs#copr-cli -c copr-cli build --nowait "${COPR_PROJECT}" srpms/*.src.rpm
+          nix run .#copr-cli -- build --nowait "${COPR_PROJECT}" srpms/*.src.rpm
       - name: Publish Chocolatey package
         env:
           CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}

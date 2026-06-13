@@ -26,7 +26,7 @@
     };
 
     simit = {
-      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=2cfdb6a13817062f3340ede7afb71e2e1ea65353";
+      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=b232c9528da76ef4283e284b0e5345f9989b1ce4";
       inputs.rs-harbor.follows = "rs-harbor";
       inputs.nixpkgs.follows = "rs-harbor/nixpkgs";
       inputs.rust-overlay.follows = "rs-harbor/rust-overlay";
@@ -102,6 +102,43 @@
 
             exec ${lib.getExe' simitPackage "simit"} "$@"
           '';
+        };
+        coprPython = pkgs.python3Packages.buildPythonPackage rec {
+          pname = "copr";
+          version = "2.6";
+          format = "setuptools";
+          src = pkgs.fetchPypi {
+            inherit pname version;
+            hash = "sha256-w8tEbdLPyqIc01wD/qKETw8aDs0h+dxZ/NnbwcuZuY8=";
+          };
+          propagatedBuildInputs = with pkgs.python3Packages; [
+            filelock
+            munch
+            requests
+            requests-toolbelt
+            setuptools
+          ];
+          pythonImportsCheck = ["copr"];
+          doCheck = false;
+        };
+        coprCli = pkgs.python3Packages.buildPythonApplication rec {
+          pname = "copr-cli";
+          version = "2.5";
+          format = "setuptools";
+          src = pkgs.fetchPypi {
+            pname = "copr_cli";
+            inherit version;
+            hash = "sha256-4dKB03SQivnl3RX2l6+v/wcdJVJWKZF5GN52TOrnf3k=";
+          };
+          propagatedBuildInputs = with pkgs.python3Packages; [
+            coprPython
+            humanize
+            jinja2
+            rich
+            setuptools
+          ];
+          doCheck = false;
+          meta.mainProgram = "copr-cli";
         };
         cross = rs-harbor.lib.mkCross ({
             inherit pkgs system osxSdkVersion;
@@ -452,6 +489,7 @@
         packages =
           {
             inherit modde modde-oracle docs website site;
+            copr-cli = coprCli;
             default = modde;
             rs-harbor = rs-harbor.packages.${system}.rs-harbor;
 
@@ -1543,7 +1581,38 @@
 
           packages = with pkgs;
             [
+              appstream
+              cargo-about
+              cargo-cyclonedx
+              cargo-deb
+              cargo-deny
               cargo-llvm-cov
+              cargo-sbom
+              coprCli
+              cosign
+              debootstrap
+              dnf5
+              dpkg
+              file
+              findutils
+              flatpak
+              flatpak-builder
+              forgejo-cli
+              git
+              gnugrep
+              gnupg
+              gnutar
+              grype
+              gzip
+              jq
+              minisign
+              nodejs
+              openssh
+              osslsigncode
+              podman
+              qemu
+              reprepro
+              rpm
               toolchain.rustToolchain
               simitCli
               plinthProject
@@ -1552,6 +1621,9 @@
               _7zz
               unrar
               mdbook
+              unzip
+              util-linux
+              wineWow64Packages.stable
             ]
             ++ nativeBuildInputs
             ++ buildInputs;
@@ -1608,6 +1680,56 @@
               '';
             };
           in "${script}/bin/release-smoke";
+        };
+
+        apps.copr-cli = {
+          type = "app";
+          program = "${lib.getExe coprCli}";
+        };
+
+        apps.release-local-check = {
+          type = "app";
+          program = let
+            script = pkgs.writeShellApplication {
+              name = "release-local-check";
+              runtimeInputs = with pkgs; [
+                appstream
+                cargo-about
+                cargo-cyclonedx
+                cargo-deb
+                cargo-deny
+                cargo-sbom
+                coprCli
+                coreutils
+                cosign
+                curl
+                debootstrap
+                dnf5
+                dpkg
+                file
+                findutils
+                forgejo-cli
+                git
+                gnugrep
+                gnupg
+                gnutar
+                gzip
+                jq
+                minisign
+                toolchain.rustToolchain
+                nix
+                nodejs
+                openssh
+                reprepro
+                rpm
+                util-linux
+              ];
+              text = ''
+                repo="''${MODDE_SOURCE_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+                exec bash "$repo/scripts/release-local-check.sh" "$@"
+              '';
+            };
+          in "${script}/bin/release-local-check";
         };
 
         # Release artifact signing/verification via the rs-harbor binding.
@@ -1870,6 +1992,7 @@
           description = "modde is a cross-platform game mod manager with CLI and GUI interfaces.\nIt supports Nexus Mods, Wabbajack modlists, FOMOD installers, and BAIN\npackages for games like Skyrim, Fallout, Starfield, and Cyberpunk 2077.";
           license = "GPL-3.0-only";
           download_repo = "caniko/rs-modde";
+          nix_tool = ".#copr-cli";
           build_requires = ["rust >= 1.85" "cargo" "gcc" "pkg-config" "openssl-devel" "dbus-devel" "wayland-devel" "libxkbcommon-devel" "vulkan-loader-devel"];
           binaries = ["modde" "modde-ui"];
           project = "caniko/rs-modde";
