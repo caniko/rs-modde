@@ -26,7 +26,7 @@
     };
 
     simit = {
-      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=772f98f112f7b15f6600e09f77d65a463046a132";
+      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=1722643898e9469d9a4eb870108247ad99496c76";
       inputs.rs-harbor.follows = "rs-harbor";
       inputs.nixpkgs.follows = "rs-harbor/nixpkgs";
       inputs.rust-overlay.follows = "rs-harbor/rust-overlay";

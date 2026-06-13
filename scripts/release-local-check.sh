@@ -220,6 +220,11 @@ check_workflow_contract() {
     && ok "workflow passes local result paths to nix path-info for Attic" \
     || missing+=("workflow:Attic local result paths")
 
+  grep -F 'Attic login failed; skipping optional Nix closure cache push' .forgejo/workflows/release.yml >/dev/null \
+    && grep -F 'Attic push failed; continuing release without optional Nix closure cache push' .forgejo/workflows/release.yml >/dev/null \
+    && ok "workflow keeps Attic cache push warning-only" \
+    || missing+=("workflow:Attic warning-only fallback")
+
   grep -F 'skipping cosign verification because release signing degrades to warning-only' scripts/smoke/smoke-signatures.sh >/dev/null \
     && ok "smoke keeps missing cosign verification warning-only" \
     || missing+=("smoke:cosign warning-only fallback")

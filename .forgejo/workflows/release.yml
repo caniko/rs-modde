@@ -443,8 +443,14 @@ jobs:
             ./flatpak-result \
             > attic-paths.txt
           nix profile install nixpkgs#attic-client
-          attic login canix https://attic.candee.baby "$(cat "$attic_token")"
-          attic push canix $(cat attic-paths.txt)
+          if ! attic login canix https://attic.candee.baby "$(cat "$attic_token")"; then
+            echo "::warning::Attic login failed; skipping optional Nix closure cache push."
+            exit 0
+          fi
+          if ! attic push canix $(cat attic-paths.txt); then
+            echo "::warning::Attic push failed; continuing release without optional Nix closure cache push."
+            exit 0
+          fi
       - name: Publish APT repository
         env:
           APT_REPO_GPG_KEY: ${{ secrets.MODDE_APT_REPO_GPG_KEY }}
