@@ -93,16 +93,20 @@ jobs:
           CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
           MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
           MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+          MODDE_APT_REPO_GPG_KEY: ${{ secrets.MODDE_APT_REPO_GPG_KEY }}
+          MODDE_APT_REPO_GPG_KEY_ID: ${{ vars.MODDE_APT_REPO_GPG_KEY_ID }}
+          MODDE_APT_REPO_GPG_FINGERPRINT: ${{ vars.MODDE_APT_REPO_GPG_FINGERPRINT }}
+          MODDE_APT_REPO_GPG_PUBLIC_KEY: ${{ vars.MODDE_APT_REPO_GPG_PUBLIC_KEY }}
+          MODDE_APT_REPO_SSH_KEY: ${{ secrets.MODDE_APT_REPO_SSH_KEY }}
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
           COPR_LOGIN: ${{ secrets.COPR_LOGIN }}
           COPR_USERNAME: ${{ vars.COPR_USERNAME }}
           COPR_TOKEN: ${{ secrets.COPR_TOKEN }}
-          APT_REPO_GPG_KEY: ${{ secrets.MODDE_APT_REPO_GPG_KEY }}
-          APT_REPO_GPG_KEY_ID: ${{ vars.MODDE_APT_REPO_GPG_KEY_ID }}
-          APT_REPO_GPG_FINGERPRINT: ${{ vars.MODDE_APT_REPO_GPG_FINGERPRINT }}
-          APT_REPO_GPG_PUBLIC_KEY: ${{ vars.MODDE_APT_REPO_GPG_PUBLIC_KEY }}
-          APT_REPO_SSH_KEY: ${{ secrets.MODDE_APT_REPO_SSH_KEY }}
-          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.homebrew_tap_token }}
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
           CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+          FLATHUB_TOKEN: ${{ secrets.FLATHUB_TOKEN }}
+          WINGET_PAT: ${{ secrets.WINGET_PAT }}
         run: |
           set -euo pipefail
           . ./release-env
@@ -114,21 +118,41 @@ jobs:
           require_credential 'global/user secret' 'CODEBERG_TOKEN' "${CODEBERG_TOKEN:-}"
           require_credential 'repo secret' 'MINISIGN_SECRET_KEY' "${MINISIGN_SECRET_KEY:-}"
           require_credential 'repo secret' 'MINISIGN_PASSWORD' "${MINISIGN_PASSWORD:-}"
-          require_credential 'global/user secret' 'COPR_LOGIN' "${COPR_LOGIN:-}"
-          require_credential 'global/user variable' 'COPR_USERNAME' "${COPR_USERNAME:-}"
-          require_credential 'global/user secret' 'COPR_TOKEN' "${COPR_TOKEN:-}"
           if [ "${IS_PRERELEASE}" != "true" ]; then
-            require_credential 'repo secret' 'MODDE_APT_REPO_GPG_KEY' "${APT_REPO_GPG_KEY:-}"
-            require_credential 'repo variable' 'MODDE_APT_REPO_GPG_KEY_ID' "${APT_REPO_GPG_KEY_ID:-}"
-            require_credential 'repo variable' 'MODDE_APT_REPO_GPG_FINGERPRINT' "${APT_REPO_GPG_FINGERPRINT:-}"
-            require_credential 'repo variable' 'MODDE_APT_REPO_GPG_PUBLIC_KEY' "${APT_REPO_GPG_PUBLIC_KEY:-}"
-            require_credential 'repo secret' 'MODDE_APT_REPO_SSH_KEY' "${APT_REPO_SSH_KEY:-}"
+            require_credential 'repo secret' 'MODDE_APT_REPO_GPG_KEY' "${MODDE_APT_REPO_GPG_KEY:-}"
+          fi
+          if [ "${IS_PRERELEASE}" != "true" ]; then
+            require_credential 'repo variable' 'MODDE_APT_REPO_GPG_KEY_ID' "${MODDE_APT_REPO_GPG_KEY_ID:-}"
+          fi
+          if [ "${IS_PRERELEASE}" != "true" ]; then
+            require_credential 'repo variable' 'MODDE_APT_REPO_GPG_FINGERPRINT' "${MODDE_APT_REPO_GPG_FINGERPRINT:-}"
+          fi
+          if [ "${IS_PRERELEASE}" != "true" ]; then
+            require_credential 'repo variable' 'MODDE_APT_REPO_GPG_PUBLIC_KEY' "${MODDE_APT_REPO_GPG_PUBLIC_KEY:-}"
+          fi
+          if [ "${IS_PRERELEASE}" != "true" ]; then
+            require_credential 'repo secret' 'MODDE_APT_REPO_SSH_KEY' "${MODDE_APT_REPO_SSH_KEY:-}"
           fi
           if [ "${IS_PRERELEASE}" != "true" ]; then
             require_credential 'global/user secret' 'AUR_SSH_KEY' "${AUR_SSH_KEY:-}"
           fi
+          require_credential 'global/user secret' 'COPR_LOGIN' "${COPR_LOGIN:-}"
+          require_credential 'global/user variable' 'COPR_USERNAME' "${COPR_USERNAME:-}"
+          require_credential 'global/user secret' 'COPR_TOKEN' "${COPR_TOKEN:-}"
+          if [ "${IS_PRERELEASE}" != "true" ]; then
+            require_credential 'global/user secret' 'homebrew_tap_token' "${HOMEBREW_TAP_TOKEN:-}"
+          fi
+          if [ "${IS_PRERELEASE}" != "true" ]; then
+            require_credential 'global/user secret' 'SCOOP_BUCKET_TOKEN' "${SCOOP_BUCKET_TOKEN:-}"
+          fi
           if [ "${IS_PRERELEASE}" != "true" ]; then
             require_credential 'global/user secret' 'CHOCOLATEY_API_KEY' "${CHOCOLATEY_API_KEY:-}"
+          fi
+          if [ "${IS_PRERELEASE}" != "true" ]; then
+            require_credential 'global/user secret' 'FLATHUB_TOKEN' "${FLATHUB_TOKEN:-}"
+          fi
+          if [ "${IS_PRERELEASE}" != "true" ]; then
+            require_credential 'global/user secret' 'WINGET_PAT' "${WINGET_PAT:-}"
           fi
           if [ -n "$missing" ]; then
             printf 'Missing release credentials:%s\n' "$missing" >&2
@@ -316,7 +340,25 @@ jobs:
         run: |
           set -euo pipefail
           cd release
-          find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.src.rpm' -o -name '*.cdx.json' -o -name '*.spdx.json' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          shopt -s nullglob
+          files=()
+          add_matches() { local pattern="$1" match; while IFS= read -r match; do files+=("$match"); done < <(compgen -G "$pattern" || true); }
+          add_matches '*.tar.gz'
+          add_matches '*.zip'
+          add_matches '*.AppImage'
+          add_matches '*.deb'
+          add_matches '*.src.rpm'
+          add_matches '*.cdx.json'
+          add_matches '*.spdx.json'
+          : > SHA256SUMS.txt
+          count=0
+          while IFS= read -r file; do
+            [ -f "$file" ] || continue
+            [ "$file" != SHA256SUMS.txt ] || continue
+            sha256sum "$file" >> SHA256SUMS.txt
+            count=$((count + 1))
+          done < <(printf '%s\n' "${files[@]}" | LC_ALL=C sort -u)
+          test "$count" -gt 0
           test -s SHA256SUMS.txt
       - name: Sign checksums and attest release artifacts
         env:
@@ -350,12 +392,15 @@ jobs:
           attest_blob_keyless() { file="$1"; predicate="$2"; if [ -s "$oidc_token" ]; then cosign attest-blob --yes --identity-token "$oidc_token" --predicate "$predicate" --type slsaprovenance1 --output-attestation "${file}.intoto.jsonl" --bundle "${file}.intoto.bundle" "$file"; else return 1; fi; }
           sign_blob_with_key() { file="$1"; test -n "${COSIGN_PRIVATE_KEY:-}"; printf '%s' "$COSIGN_PRIVATE_KEY" > "$cosign_key"; cosign sign-blob --yes --key "$cosign_key" --bundle "${file}.cosign.bundle" "$file"; }
           attest_blob_with_key() { file="$1"; predicate="$2"; cosign attest-blob --yes --key "$cosign_key" --predicate "$predicate" --type slsaprovenance1 --output-attestation "${file}.intoto.jsonl" --bundle "${file}.intoto.bundle" "$file"; }
-          find release -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.src.rpm' -o -name '*.exe' \) -print0 | sort -z | while IFS= read -r -d '' file; do
+          shopt -s nullglob
+          files=(release/*.tar.gz release/*.zip release/*.AppImage release/*.deb release/*.src.rpm release/*.exe)
+          while IFS= read -r file; do
+            [ -f "$file" ] || continue
             artifact_sha="$(sha256sum "$file" | awk '{print $1}')"; predicate="$(mktemp)"
             jq -n --arg builder_id "$builder_id" --arg git_sha "$git_sha" --arg workflow_sha "$workflow_sha" --arg flake_lock_sha "$flake_lock_sha" --arg repo_url "$repo_url" --arg ref "refs/tags/${VERSION}" --arg artifact "$(basename "$file")" --arg artifact_sha "$artifact_sha" '{buildDefinition:{buildType:"https://simit.rs/release",externalParameters:{repository:$repo_url,ref:$ref,artifact:$artifact,artifactDigest:{sha256:$artifact_sha}},internalParameters:{},resolvedDependencies:[{uri:($repo_url+".git"),digest:{gitCommit:$git_sha}},{uri:"flake.lock",digest:{sha256:$flake_lock_sha}},{uri:"release workflow",digest:{sha256:$workflow_sha}}]},runDetails:{builder:{id:$builder_id}}}' > "$predicate"
             if sign_blob_keyless "$file" && attest_blob_keyless "$file" "$predicate"; then echo "signed+attested $file (keyless)"; elif [ -n "${COSIGN_PRIVATE_KEY:-}" ]; then echo "keyless failed for $file; using COSIGN_PRIVATE_KEY"; sign_blob_with_key "$file"; attest_blob_with_key "$file" "$predicate"; else echo "keyless Sigstore failed and COSIGN_PRIVATE_KEY unset" >&2; exit 1; fi
             rm -f "$predicate"
-          done
+          done < <(printf '%s\n' "${files[@]}" | LC_ALL=C sort -u)
           SCRIPT
       - name: Run release smoke checks
         env:
@@ -384,12 +429,15 @@ jobs:
             curl -sS --fail -H "Authorization: token ${CODEBERG_TOKEN}" "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases/tags/${VERSION}" > release.json
           elif [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then cat release.json; exit 1; fi
           release_id="$(jq -r '.id' release.json)"; test "$release_id" != "null"
-          find release -maxdepth 1 -type f -print0 | sort -z | while IFS= read -r -d '' file; do
+          shopt -s nullglob
+          files=(release/*)
+          while IFS= read -r file; do
+            [ -f "$file" ] || continue
             name="$(basename "$file")"
             asset_id="$(curl -sS --fail -H "Authorization: token ${CODEBERG_TOKEN}" "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases/${release_id}/assets" | jq -r --arg name "$name" '.[] | select(.name == $name) | .id' | head -n 1)"
             if [ -n "$asset_id" ]; then curl -sS --fail -X DELETE -H "Authorization: token ${CODEBERG_TOKEN}" "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases/${release_id}/assets/${asset_id}"; fi
             curl -sS --fail -H "Authorization: token ${CODEBERG_TOKEN}" -H 'Content-Type: application/octet-stream' --data-binary "@${file}" "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases/${release_id}/assets?name=${name}" > /dev/null
-          done
+          done < <(printf '%s\n' "${files[@]}" | LC_ALL=C sort -u)
           SCRIPT
       - name: Push Nix closures to Attic
         run: |
@@ -441,7 +489,9 @@ jobs:
           mkdir -p "$work/apt/conf"; cp dist/apt/conf/distributions "$work/apt/conf/distributions"
           for deb in release/*.deb; do reprepro -b "$work/apt" includedeb "$APT_DISTRIBUTION" "$deb"; done
           git clone --depth 1 --branch "$APT_REPO_BRANCH" "$APT_REPO_REMOTE" "$work/checkout"
-          find "$work/checkout" -mindepth 1 -maxdepth 1 -not -name .git -not -name README.md -exec rm -rf {} +
+          shopt -s dotglob nullglob
+          for path in "$work/checkout"/*; do name="$(basename "$path")"; case "$name" in .git|README.md) continue ;; esac; rm -rf "$path"; done
+          shopt -u dotglob nullglob
           cp -r "$work/apt/dists" "$work/checkout/dists"; cp -r "$work/apt/pool" "$work/checkout/pool"
           if [ -f dist/apt/key.gpg.asc ]; then cp dist/apt/key.gpg.asc "$work/checkout/key.gpg.asc"; fi
           cd "$work/checkout"
