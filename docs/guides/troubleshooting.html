@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-164e219d.js";
+            window.path_to_searchindex_js = "../searchindex-3cc7a69d.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-050961cc.js"></script>
@@ -213,6 +213,7 @@ below.</p>
 <tr><td><code>modde tool revert</code> says “No applied files to revert”</td><td><a href="#tool-apply-revert-failures">Tool apply / revert failures</a></td><td><a href="tools.html">Tools</a></td></tr>
 <tr><td>OptiScaler: game crashes on first boot</td><td><a href="#optiscaler-first-boot-crash">OptiScaler first-boot crash</a></td><td><a href="tools.html">Tools</a></td></tr>
 <tr><td>Crash Logger SSE / Trainwreck log needs install-state context</td><td><a href="#crash-log-correlation">Crash-log correlation</a></td><td><a href="conflicts.html">Conflicts</a></td></tr>
+<tr><td>Crashes or perf regression, unknown which mod is at fault</td><td><a href="#isolating-a-bad-mod-bisect">Isolating a bad mod (bisect)</a></td><td><a href="../reference/cli.html#modde-bisect">CLI → <code>modde bisect</code></a></td></tr>
 <tr><td>Save vault wants “adoption”</td><td><a href="#save-vault-issues">Save vault issues</a></td><td><a href="saves.html">Saves</a></td></tr>
 <tr><td><code>save restore</code> warns about fingerprint mismatch</td><td><a href="#save-vault-issues">Save vault issues</a></td><td><a href="saves.html">Saves</a></td></tr>
 <tr><td>Can’t reorder mods (profile locked)</td><td><a href="#profile-is-locked">Profile is locked</a></td><td><a href="profiles.html">Profiles</a></td></tr>
@@ -365,10 +366,40 @@ evidence mentioned by the log to the active profile. It does not claim a root
 cause unless the log itself makes that explicit.</p>
 <p><strong>Fix:</strong></p>
 <pre><code class="language-bash">modde doctor crash /path/to/crash-2026-06-11-10-38-45.log --game skyrim-se
+# or let modde pick the newest log from the game's default crash-log dirs:
+modde doctor crash --game skyrim-se
 </code></pre>
-<p>Use <code>--profile &lt;name&gt;</code> to analyze against a non-active profile and <code>--json</code> for
-the structured report. Raw logs and reports are stored locally in the modde
-database for history; nothing is uploaded.</p>
+<p>The log path is optional for games with known crash-log locations (Skyrim
+SE/AE/LE, Fallout 4, Fallout 76): modde scans the default directories under
+<code>~/Documents/My Games/</code> and analyzes the newest log. Use <code>--profile &lt;name&gt;</code> to
+analyze against a non-active profile and <code>--json</code> for the structured report.
+Raw logs and reports are stored locally in the modde database for history;
+nothing is uploaded.</p>
+<h2 id="isolating-a-bad-mod-bisect"><a class="header" href="#isolating-a-bad-mod-bisect">Isolating a bad mod (bisect)</a></h2>
+<p><strong>Symptom:</strong> the game crashes (or performance regressed) only with mods
+enabled, and you do not know which of dozens or hundreds of mods is
+responsible.</p>
+<p><strong>Cause:</strong> any one of the enabled mods — manual elimination is O(n) game
+launches; a binary search is O(log n).</p>
+<p><strong>Fix:</strong> run a bisect session. Each step deploys a candidate profile with half
+of the remaining suspects disabled (load-order and master-dependency
+constraints are respected, so dependents move with their masters):</p>
+<pre><code class="language-bash">modde bisect start --game skyrim-se --profile my-skyrim --oracle crash
+modde bisect run &lt;session-id&gt;      # launch next candidate; repeat until converged
+modde bisect status &lt;session-id&gt;   # progress and remaining suspects
+modde bisect history &lt;session-id&gt;  # steps, halves, and observed signals
+</code></pre>
+<p>With <code>--oracle crash</code>, a new crash log appearing in the game’s crash-log
+directory marks the step bad automatically. With <code>--oracle manual</code>, record
+each verdict yourself via <code>modde bisect mark &lt;session-id&gt; good|bad</code>. With
+<code>--oracle perf</code>, capture a known-good baseline first with <code>modde perf run</code> and
+pass its run ID as <code>--baseline-run</code>. See the
+<a href="../reference/cli.html#modde-bisect">CLI reference</a> for the full flag list,
+including the perf-oracle statistical thresholds.</p>
+<p>Disabling mods mid-playthrough can corrupt saves for some games; bisect refuses
+risky sessions unless you pass <code>--force-save-risk</code>. Candidate profiles are
+cleaned up when the session ends (<code>--keep-profiles</code> to keep them), and
+<code>modde bisect abort &lt;session-id&gt;</code> restores the source profile early.</p>
 <h2 id="deployment-fails"><a class="header" href="#deployment-fails">Deployment fails</a></h2>
 <p>See <a href="deployment.html">Deployment &amp; VFS</a> for how the symlink farm is built and
 deployed.</p>

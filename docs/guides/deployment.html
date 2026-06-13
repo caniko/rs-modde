@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-164e219d.js";
+            window.path_to_searchindex_js = "../searchindex-3cc7a69d.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-050961cc.js"></script>
@@ -314,8 +314,11 @@ modde hot-deploy --profile my-cyberpunk --game cyberpunk2077 --mod body-textures
 deployment without rebuilding the full profile. It is intentionally narrower
 than <code>modde deploy</code>: Wabbajack profiles, unsupported games, missing store
 directories, unknown mods, mixed-content mods, and patches touching config,
-script, DLL, or unknown-severity files are refused. If a patch fails, recover
-with the printed <code>modde deploy --profile &lt;name&gt; --game &lt;game&gt;</code> command.</p>
+script, DLL, or unknown-severity files are refused. It also refuses to run
+while the game process appears to be running (checked against <code>/proc</code>) — close
+the game or pass <code>--force</code> to bypass the check. If a patch fails, profile state
+is not persisted; recover with the printed
+<code>modde deploy --profile &lt;name&gt; --game &lt;game&gt;</code> command.</p>
 <p>This is a live filesystem patch, not a guarantee that the running game reloads
 every asset immediately. UE/Penumbra-style runtime reload support remains a
 per-game research path.</p>

@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-164e219d.js";
+            window.path_to_searchindex_js = "../searchindex-3cc7a69d.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-050961cc.js"></script>
@@ -411,6 +411,35 @@ read-only “suspects”. With <code>--manifest</code>, the manifest’s install
 each suspect as LEAKED (safe to delete) or GENUINE (a user addition to keep), and
 <code>--apply</code> deletes the LEAKED rows.</p>
 <hr>
+<h2 id="modde-lock"><a class="header" href="#modde-lock"><code>modde lock</code></a></h2>
+<p>Export, sign, verify, and import portable <code>modde.lock</code> files — signed JSON
+snapshots of one profile’s reproducible state (provenance, mod order, source
+identities, tracked file hashes, plugin order, patcher configuration). See
+<a href="../guides/profiles.html#portable-moddelock-exports">Profiles → Portable <code>modde.lock</code> exports</a>.</p>
+<pre><code class="language-bash">modde lock export --profile &lt;name&gt; --game &lt;id&gt; [--output &lt;path&gt;] [--allow-incomplete]
+modde lock keygen --public &lt;path&gt; --secret &lt;path&gt;
+modde lock sign &lt;path&gt; --secret-key &lt;path&gt; [--output &lt;path&gt;]
+modde lock verify &lt;path&gt; [--profile &lt;name&gt;] [--game &lt;id&gt;]
+modde lock import &lt;path&gt; --profile &lt;name&gt; --game &lt;id&gt; [--dry-run] [--apply]
+</code></pre>
+<h3 id="lock-export"><a class="header" href="#lock-export"><code>lock export</code></a></h3>
+<p>Export one profile to a portable JSON lockfile (default output: <code>modde.lock</code>).
+Export is strict: if required provenance (source archive hashes, staged file
+manifests) is missing, it fails and prints what is missing and how to
+regenerate it. <code>--allow-incomplete</code> emits a diagnostic lock instead, explicitly
+marked <code>reproducible = false</code>.</p>
+<h3 id="lock-keygen--lock-sign"><a class="header" href="#lock-keygen--lock-sign"><code>lock keygen</code> / <code>lock sign</code></a></h3>
+<p><code>keygen</code> generates an Ed25519 key pair for lock signing; <code>sign</code> appends a
+signature to a lockfile (in place, or to <code>--output</code>).</p>
+<h3 id="lock-verify"><a class="header" href="#lock-verify"><code>lock verify</code></a></h3>
+<p>Verify lock signatures, and — when <code>--profile</code>/<code>--game</code> are given — tracked
+files against local disk.</p>
+<h3 id="lock-import"><a class="header" href="#lock-import"><code>lock import</code></a></h3>
+<p>Validate a lock and import its profile metadata. <code>--dry-run</code> reports what would
+change; <code>--apply</code> writes it. Import does not download or fabricate missing
+archives: re-run the normal Nexus/Wabbajack install flows to materialize files
+from the source identities in the lock.</p>
+<hr>
 <h2 id="modde-play"><a class="header" href="#modde-play"><code>modde play</code></a></h2>
 <p>Switch profile, deploy mods, and launch the game.</p>
 <pre><code class="language-bash">modde play [profile] --game &lt;id&gt; [--no-deploy] [--no-switch] [--no-capture]
@@ -433,21 +462,66 @@ each suspect as LEAKED (safe to delete) or GENUINE (a user addition to keep), an
 <pre><code class="language-bash">modde deploy [--profile &lt;name&gt;] [--game &lt;id&gt;]
 </code></pre>
 <hr>
+<h2 id="modde-hot-deploy"><a class="header" href="#modde-hot-deploy"><code>modde hot-deploy</code></a></h2>
+<p>Patch one cosmetic mod into the live VFS without a full redeploy. Experimental,
+currently Cyberpunk 2077 only. See
+<a href="../guides/deployment.html#experimental-hot-deploy">Deployment → Experimental hot-deploy</a>.</p>
+<pre><code class="language-bash">modde hot-deploy --mod &lt;id&gt; (--enable | --disable) \
+  [--profile &lt;name&gt;] [--game &lt;id&gt;] [--dry-run] [--force]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--mod &lt;id&gt;</code></td><td>The mod to patch into or out of the live deployment</td></tr>
+<tr><td><code>--enable</code> / <code>--disable</code></td><td>Direction of the patch</td></tr>
+<tr><td><code>--dry-run</code></td><td>Report the planned patch without touching the filesystem</td></tr>
+<tr><td><code>--force</code></td><td>Apply even if the game process appears to be running</td></tr>
+</tbody>
+</table>
+</div>
+<p>modde refuses to hot-deploy while the game appears to be running (checked
+against <code>/proc</code>); close the game or pass <code>--force</code> to bypass the check. If a
+patch fails mid-way, profile state is <strong>not</strong> persisted — recover with the
+printed <code>modde deploy</code> command.</p>
+<hr>
 <h2 id="modde-patcher"><a class="header" href="#modde-patcher"><code>modde patcher</code></a></h2>
 <p>Configure profile-scoped patcher stages that run during deploy. See the
 <a href="../guides/patcher-pipelines.html">patcher pipelines guide</a>.</p>
 <pre><code class="language-bash">modde patcher list [--profile &lt;name&gt;] [--game &lt;id&gt;]
 modde patcher add-synthesis &lt;name&gt; --profile &lt;name&gt; --game &lt;id&gt; \
   --executable &lt;path&gt; --pipeline-settings &lt;path&gt; \
-  --synthesis-profile &lt;id&gt; --output-mod &lt;mod&gt; --order &lt;n&gt;
+  --synthesis-profile &lt;id&gt; --output-mod &lt;mod&gt; --order &lt;n&gt; \
+  [--timeout-seconds &lt;secs&gt;]
 modde patcher add-command &lt;name&gt; --profile &lt;name&gt; --game &lt;id&gt; \
   --executable &lt;path&gt; [--working-dir &lt;path&gt;] [--arg &lt;arg&gt;]... \
-  [--env KEY=VALUE]... --output-mod &lt;mod&gt; --order &lt;n&gt;
-modde patcher run [--profile &lt;name&gt;] [--game &lt;id&gt;]
+  [--env KEY=VALUE]... --output-mod &lt;mod&gt; [--order &lt;n&gt;] \
+  [--timeout-seconds &lt;secs&gt;]
+modde patcher run [name] [--profile &lt;name&gt;] [--game &lt;id&gt;]
+modde patcher validate [--profile &lt;name&gt;] [--game &lt;id&gt;]
+modde patcher reorder &lt;name&gt;... [--profile &lt;name&gt;] [--game &lt;id&gt;]
 modde patcher enable|disable|remove &lt;name&gt; [--profile &lt;name&gt;] [--game &lt;id&gt;]
 </code></pre>
 <p>Enabled stages are required. Missing executables, settings files, invalid
 Synthesis profiles, or non-zero exits fail deploy.</p>
+<p><code>run</code> executes one stage by name, or all enabled stages when no name is given.
+<code>validate</code> checks enabled stages (executables, settings files, Synthesis
+profiles) without running them. <code>reorder</code> replaces the stage order with the
+supplied names.</p>
+<p>Execution semantics:</p>
+<ul>
+<li><strong>Timeout</strong> — each stage is killed if it exceeds its <code>--timeout-seconds</code>
+(default <code>1800</code>, i.e. 30 minutes). Stage stdout/stderr are captured to log
+files for post-mortem.</li>
+<li><strong>Caching</strong> — a stage whose settings, output mod, and the profile’s load
+order are unchanged since its last successful run is skipped
+(<code>Skipped patcher stage '&lt;name&gt;' (cache hit)</code>).</li>
+<li><strong>Rollback</strong> — previously generated stage outputs are backed up before a run
+and restored if the pipeline fails, so a failing stage does not leave you
+with half-regenerated patches.</li>
+</ul>
 <hr>
 <h2 id="modde-rollback"><a class="header" href="#modde-rollback"><code>modde rollback</code></a></h2>
 <p>Rollback to the previous deployment.</p>
@@ -1202,16 +1276,114 @@ and <code>doctor crash</code> are deterministic; <code>doctor explain</code> sen
 to an OpenAI-compatible model and rejects hypotheses that do not cite modde
 evidence IDs.</p>
 <pre><code class="language-bash">modde doctor profile --game &lt;id&gt; [--profile &lt;name&gt;] [--json]
-modde doctor crash &lt;log-path&gt; --game &lt;id&gt; [--profile &lt;name&gt;] [--format auto|crash-logger-sse|trainwreck|generic] [--json]
+modde doctor crash [log-path] --game &lt;id&gt; [--profile &lt;name&gt;] [--format auto|crash-logger-sse|trainwreck|generic] [--json]
 modde doctor explain &lt;log-path&gt; --game &lt;id&gt; [--profile &lt;name&gt;] [--provider local|remote] [--json]
 </code></pre>
+<p>When <code>log-path</code> is omitted, <code>doctor crash</code> auto-discovers the newest crash log
+(by modification time) across the game’s default crash-log directories:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Game</th><th>Directories searched (under <code>~/Documents/My Games/</code>)</th></tr>
+</thead>
+<tbody>
+<tr><td>Skyrim SE / AE</td><td><code>Skyrim Special Edition/{SKSE,CrashLogger,NetScriptFramework}</code></td></tr>
+<tr><td>Skyrim LE</td><td><code>Skyrim/{SKSE,CrashLogger,NetScriptFramework}</code></td></tr>
+<tr><td>Fallout 4</td><td><code>Fallout4/{F4SE,CrashLogger}</code></td></tr>
+<tr><td>Fallout 76</td><td><code>Fallout 76</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>Other games have no default directories — pass an explicit log path.</p>
 <p><code>--provider local</code> uses the configured llama.cpp/OpenAI-compatible local server.
 <code>--provider remote</code> is explicit opt-in and requires a configured remote endpoint,
 model, and API key environment variable.</p>
 <p>Deprecated aliases retained for compatibility:</p>
 <pre><code class="language-bash">modde diagnostics --game &lt;id&gt; [--profile &lt;name&gt;]
-modde crash analyze &lt;log-path&gt; --game &lt;id&gt; [--profile &lt;name&gt;]
+modde crash analyze [log-path] --game &lt;id&gt; [--profile &lt;name&gt;]
 </code></pre>
+<hr>
+<h2 id="modde-perf"><a class="header" href="#modde-perf"><code>modde perf</code></a></h2>
+<p>Capture and compare local performance telemetry. <code>perf run</code> switches to a
+profile, deploys (unless <code>--no-deploy</code>), and launches the game with per-run
+MangoHud CSV capture; the run’s summary statistics (average/1 % low FPS, p99
+frame time) are stored in the local database.</p>
+<pre><code class="language-bash">modde perf run [profile] --game &lt;id&gt; [--duration &lt;secs&gt;] [--label &lt;text&gt;] \
+  [--warmup-seconds &lt;secs&gt;] [--no-deploy]
+modde perf ingest --run &lt;run-id&gt; --csv &lt;path&gt; [--warmup-seconds &lt;secs&gt;]
+modde perf list --game &lt;id&gt; [--profile &lt;name&gt;] [--limit &lt;n&gt;]
+modde perf show &lt;run-id&gt;
+modde perf compare --baseline &lt;run-id&gt; --candidate &lt;run-id&gt;
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--duration</code></td><td><code>300</code></td><td>MangoHud log duration in seconds</td></tr>
+<tr><td><code>--label</code></td><td>—</td><td>Optional human label for the run</td></tr>
+<tr><td><code>--warmup-seconds</code></td><td><code>30</code></td><td>Startup samples to skip when computing summary statistics</td></tr>
+<tr><td><code>--no-deploy</code></td><td>off</td><td>Skip mod deployment before launch</td></tr>
+</tbody>
+</table>
+</div>
+<p>If a run stays pending (for example the game was launched through a
+fire-and-forget launcher and the CSV appeared after modde returned), attach the
+MangoHud CSV manually with <code>perf ingest</code>. <code>perf compare</code> prints a side-by-side
+delta of two captured runs; run IDs come from <code>perf list</code>.</p>
+<hr>
+<h2 id="modde-bisect"><a class="header" href="#modde-bisect"><code>modde bisect</code></a></h2>
+<p>Binary-search the enabled mods of a profile to isolate which mod causes a crash
+or performance regression. A session is resumable: state lives in the database,
+and each step builds a candidate profile (<code>__bisect_&lt;session&gt;_&lt;step&gt;</code>) with half
+of the remaining suspects disabled, respecting load-order and Bethesda
+master-dependency constraints.</p>
+<pre><code class="language-bash">modde bisect start --game &lt;id&gt; --profile &lt;name&gt; --oracle manual|crash|perf [flags]
+modde bisect run &lt;session-id&gt;      # create/deploy/launch the next candidate
+modde bisect retry &lt;session-id&gt;    # relaunch the current pending candidate
+modde bisect mark &lt;session-id&gt; good|bad [--notes &lt;text&gt;]
+modde bisect status &lt;session-id&gt;   # session progress
+modde bisect history &lt;session-id&gt;  # step history and observed signals
+modde bisect abort &lt;session-id&gt;    # abort and clean candidate profiles
+</code></pre>
+<p><code>bisect start</code> flags:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--oracle</code></td><td>—</td><td>How candidates are judged: <code>manual</code>, <code>crash</code>, or <code>perf</code> (below)</td></tr>
+<tr><td><code>--baseline-run</code></td><td>—</td><td>Perf oracle: <code>modde perf</code> run ID of the known-good baseline</td></tr>
+<tr><td><code>--perf-p99-frame-time-percent</code></td><td><code>115</code></td><td>Perf oracle: regression threshold — candidate p99 frame time at or above this percentage of baseline</td></tr>
+<tr><td><code>--perf-one-percent-low-fps-percent</code></td><td><code>85</code></td><td>Perf oracle: regression threshold — candidate 1 % low FPS at or below this percentage of baseline</td></tr>
+<tr><td><code>--perf-alpha-micros</code></td><td><code>50000</code></td><td>Perf oracle: Welch’s t-test significance level in micro-units (<code>50000</code> = α 0.05)</td></tr>
+<tr><td><code>--perf-min-samples</code></td><td><code>30</code></td><td>Perf oracle: minimum post-warmup samples per run before a statistical verdict</td></tr>
+<tr><td><code>--crash-dir</code></td><td>per-game default</td><td>Crash oracle: directory watched for new crash logs</td></tr>
+<tr><td><code>--force-save-risk</code></td><td>off</td><td>Proceed even when disabling mods risks save corruption</td></tr>
+<tr><td><code>--keep-profiles</code></td><td>off</td><td>Keep generated candidate profiles after the session ends</td></tr>
+</tbody>
+</table>
+</div>
+<p>Oracle behavior on <code>bisect run</code>:</p>
+<ul>
+<li><strong>manual</strong> — launches the candidate and waits for you to
+<code>modde bisect mark &lt;session&gt; good|bad</code>.</li>
+<li><strong>crash</strong> — launches the candidate; a new crash log appearing in the
+crash-log directory marks the step <code>bad</code> (and correlates the log), no new log
+marks it <code>good</code>. The result advances the session automatically.</li>
+<li><strong>perf</strong> — captures a MangoHud run for the candidate and compares it against
+<code>--baseline-run</code>. A threshold breach only counts as a regression when it is
+statistically significant (Welch’s t-test at the configured α, after warmup
+trimming, with at least <code>--perf-min-samples</code> samples) — high-variance runs do
+not produce false-positive verdicts.</li>
+</ul>
+<p>With fire-and-forget launchers (where modde cannot observe game exit), <code>run</code>
+leaves the step pending; test manually and record the result with
+<code>bisect mark</code>. <code>bisect retry</code> relaunches the pending candidate without
+consuming a step. Wabbajack-source profiles are refused — import the list into
+a resolver-backed profile first.</p>
 <hr>
 <h2 id="modde-export"><a class="header" href="#modde-export"><code>modde export</code></a></h2>
 <p>Export a profile’s mod list to CSV.</p>
@@ -1350,6 +1522,12 @@ modde profile commit --game skyrim-se             # or keep it
   --wine-dll-overrides "dinput8=n,b"
 modde exec run xEdit --game skyrim-se --profile main   # output captured to __overwrite__
 modde collisions --profile main --game skyrim-se --suggest-hides
+</code></pre>
+<h3 id="isolate-a-crashing-or-slow-mod-with-bisect"><a class="header" href="#isolate-a-crashing-or-slow-mod-with-bisect">Isolate a crashing or slow mod with bisect</a></h3>
+<pre><code class="language-bash">modde perf run main --game skyrim-se --label baseline   # perf oracle only
+modde bisect start --game skyrim-se --profile main --oracle crash
+modde bisect run &lt;session-id&gt;                     # repeat until converged
+modde bisect history &lt;session-id&gt;                 # review steps and signals
 </code></pre>
 <h3 id="back-up-before-and-capture-after-a-session"><a class="header" href="#back-up-before-and-capture-after-a-session">Back up before and capture after a session</a></h3>
 <pre><code class="language-bash">modde backup plugins --profile main --game skyrim-se

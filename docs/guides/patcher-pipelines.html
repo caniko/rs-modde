@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-164e219d.js";
+            window.path_to_searchindex_js = "../searchindex-3cc7a69d.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-050961cc.js"></script>
@@ -244,13 +244,31 @@ environment variables:</p>
 </code></pre>
 <h2 id="managing-stages"><a class="header" href="#managing-stages">Managing stages</a></h2>
 <pre><code class="language-bash">modde patcher list --profile my-skyrim --game skyrim-se
+modde patcher validate --profile my-skyrim --game skyrim-se
 modde patcher run --profile my-skyrim --game skyrim-se
+modde patcher run synthesis --profile my-skyrim --game skyrim-se
+modde patcher reorder synthesis my-patcher --profile my-skyrim --game skyrim-se
 modde patcher disable synthesis --profile my-skyrim --game skyrim-se
 modde patcher enable synthesis --profile my-skyrim --game skyrim-se
 modde patcher remove my-patcher --profile my-skyrim --game skyrim-se
 </code></pre>
 <p><code>run</code> executes the enabled pipeline against the currently deployed profile
-without performing a fresh base deploy first.</p>
+without performing a fresh base deploy first; pass a stage name to run just
+that stage. <code>validate</code> checks executables, settings files, and Synthesis
+profiles without running anything. <code>reorder</code> replaces the stage order with the
+supplied names.</p>
+<h2 id="timeouts-caching-and-failure-recovery"><a class="header" href="#timeouts-caching-and-failure-recovery">Timeouts, caching, and failure recovery</a></h2>
+<p>Every stage has a hard timeout (default 1800 seconds; set per stage with
+<code>--timeout-seconds</code> on <code>add-synthesis</code>/<code>add-command</code>). A stage that exceeds it
+is killed and the run fails. Stage stdout/stderr are captured to log files so a
+killed or failed stage can be diagnosed after the fact.</p>
+<p>Stage results are cached: when a stage’s settings, output mod, and the
+profile’s active load order are unchanged since its last successful run, the
+stage is skipped with <code>Skipped patcher stage '&lt;name&gt;' (cache hit)</code>. Changing
+any input — including the load order — invalidates the cache.</p>
+<p>Before a pipeline run, previously generated stage outputs are backed up; if the
+pipeline fails, they are restored, so a mid-pipeline failure does not leave the
+profile with half-regenerated patches.</p>
 <h2 id="home-manager"><a class="header" href="#home-manager">Home Manager</a></h2>
 <pre><code class="language-nix">programs.modde.profiles.my-skyrim = {
   game = "skyrim-se";
