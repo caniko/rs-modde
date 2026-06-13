@@ -102,11 +102,7 @@ jobs:
           COPR_LOGIN: ${{ secrets.COPR_LOGIN }}
           COPR_USERNAME: ${{ vars.COPR_USERNAME }}
           COPR_TOKEN: ${{ secrets.COPR_TOKEN }}
-          HOMEBREW_TAP_TOKEN: ${{ secrets.homebrew_tap_token }}
-          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
           CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
-          FLATHUB_TOKEN: ${{ secrets.FLATHUB_TOKEN }}
-          WINGET_PAT: ${{ secrets.WINGET_PAT }}
         run: |
           set -euo pipefail
           . ./release-env
@@ -140,19 +136,7 @@ jobs:
           require_credential 'global/user variable' 'COPR_USERNAME' "${COPR_USERNAME:-}"
           require_credential 'global/user secret' 'COPR_TOKEN' "${COPR_TOKEN:-}"
           if [ "${IS_PRERELEASE}" != "true" ]; then
-            require_credential 'global/user secret' 'homebrew_tap_token' "${HOMEBREW_TAP_TOKEN:-}"
-          fi
-          if [ "${IS_PRERELEASE}" != "true" ]; then
-            require_credential 'global/user secret' 'SCOOP_BUCKET_TOKEN' "${SCOOP_BUCKET_TOKEN:-}"
-          fi
-          if [ "${IS_PRERELEASE}" != "true" ]; then
             require_credential 'global/user secret' 'CHOCOLATEY_API_KEY' "${CHOCOLATEY_API_KEY:-}"
-          fi
-          if [ "${IS_PRERELEASE}" != "true" ]; then
-            require_credential 'global/user secret' 'FLATHUB_TOKEN' "${FLATHUB_TOKEN:-}"
-          fi
-          if [ "${IS_PRERELEASE}" != "true" ]; then
-            require_credential 'global/user secret' 'WINGET_PAT' "${WINGET_PAT:-}"
           fi
           if [ -n "$missing" ]; then
             printf 'Missing release credentials:%s\n' "$missing" >&2
