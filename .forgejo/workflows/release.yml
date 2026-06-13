@@ -433,14 +433,14 @@ jobs:
             exit 0
           fi
           nix path-info -r \
-            linux-result \
-            aarch64-linux-result \
-            windows-result \
-            darwin-x86-result \
-            darwin-arm-result \
-            appimage-ui-result \
-            appimage-cli-result \
-            flatpak-result \
+            ./linux-result \
+            ./aarch64-linux-result \
+            ./windows-result \
+            ./darwin-x86-result \
+            ./darwin-arm-result \
+            ./appimage-ui-result \
+            ./appimage-cli-result \
+            ./flatpak-result \
             > attic-paths.txt
           nix profile install nixpkgs#attic-client
           attic login canix https://attic.candee.baby "$(cat "$attic_token")"
