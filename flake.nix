@@ -26,7 +26,7 @@
     };
 
     simit = {
-      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=4667faa98aefb96b65a06f8815729dc84a66429c";
+      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=cc78e144cb870c2e28a15e8d6eef06fdb8574a35";
       inputs.rs-harbor.follows = "rs-harbor";
       inputs.nixpkgs.follows = "rs-harbor/nixpkgs";
       inputs.rust-overlay.follows = "rs-harbor/rust-overlay";
@@ -1825,7 +1825,7 @@
           # package (caniko/nixpkgs add-chocolatey-scoop). Drop the nixpkgs ref to
           # plain `nixpkgs#chocolatey` once it lands upstream.
           nix_tool = "github:caniko/nixpkgs/add-chocolatey-scoop#chocolatey git+https://codeberg.org/caniko/simit";
-          api_key_from_runner = true;
+          api_key_secret = "CHOCOLATEY_API_KEY";
           api_key_env = "CHOCOLATEY_API_KEY";
         };
         scoop = {

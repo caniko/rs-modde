@@ -12,7 +12,7 @@
 # - AUR_SSH_KEY: Ed25519 private key for aur.archlinux.org pushes.
 # - COPR_LOGIN, COPR_USERNAME, COPR_TOKEN: COPR upload credentials; COPR_USERNAME is an Actions variable.
 # - WINDOWS_SIGNING_PFX, WINDOWS_SIGNING_PASS: optional Authenticode PKCS#12 cert + passphrase.
-# - runner-provided env CHOCOLATEY_API_KEY: Chocolatey push API key.
+# - CHOCOLATEY_API_KEY: optional Chocolatey push API key (env CHOCOLATEY_API_KEY).
 # - FLATHUB_TOKEN: optional GitHub PAT for flathub/com.tartanoglu.modde Flathub PRs.
 # - WINGET_PAT: optional GitHub PAT for winget-pkgs PRs.
 # - MASTODON_TOKEN, MASTODON_BASE_URL, MATRIX_TOKEN, MATRIX_HOMESERVER, MATRIX_ROOM: optional release announcement credentials.
@@ -93,13 +93,49 @@ jobs:
           CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
           MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
           MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+          COPR_LOGIN: ${{ secrets.COPR_LOGIN }}
+          COPR_USERNAME: ${{ vars.COPR_USERNAME }}
+          COPR_TOKEN: ${{ secrets.COPR_TOKEN }}
+          APT_REPO_GPG_KEY: ${{ secrets.MODDE_APT_REPO_GPG_KEY }}
+          APT_REPO_GPG_KEY_ID: ${{ vars.MODDE_APT_REPO_GPG_KEY_ID }}
+          APT_REPO_GPG_FINGERPRINT: ${{ vars.MODDE_APT_REPO_GPG_FINGERPRINT }}
+          APT_REPO_GPG_PUBLIC_KEY: ${{ vars.MODDE_APT_REPO_GPG_PUBLIC_KEY }}
+          APT_REPO_SSH_KEY: ${{ secrets.MODDE_APT_REPO_SSH_KEY }}
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
         run: |
           set -euo pipefail
           . ./release-env
-          test -n "${CODEBERG_TOKEN:-}"
+          missing=''
+          require_credential() {
+            scope="$1"; name="$2"; value="$3"
+            if [ -z "$value" ]; then missing="${missing}
+  - ${scope} ${name}"; fi
+          }
+          require_credential 'global/user secret' 'CODEBERG_TOKEN' "${CODEBERG_TOKEN:-}"
+          require_credential 'repo secret' 'MINISIGN_SECRET_KEY' "${MINISIGN_SECRET_KEY:-}"
+          require_credential 'repo secret' 'MINISIGN_PASSWORD' "${MINISIGN_PASSWORD:-}"
+          require_credential 'global/user secret' 'COPR_LOGIN' "${COPR_LOGIN:-}"
+          require_credential 'global/user variable' 'COPR_USERNAME' "${COPR_USERNAME:-}"
+          require_credential 'global/user secret' 'COPR_TOKEN' "${COPR_TOKEN:-}"
+          if [ "${IS_PRERELEASE}" != "true" ]; then
+            require_credential 'repo secret' 'MODDE_APT_REPO_GPG_KEY' "${APT_REPO_GPG_KEY:-}"
+            require_credential 'repo variable' 'MODDE_APT_REPO_GPG_KEY_ID' "${APT_REPO_GPG_KEY_ID:-}"
+            require_credential 'repo variable' 'MODDE_APT_REPO_GPG_FINGERPRINT' "${APT_REPO_GPG_FINGERPRINT:-}"
+            require_credential 'repo variable' 'MODDE_APT_REPO_GPG_PUBLIC_KEY' "${APT_REPO_GPG_PUBLIC_KEY:-}"
+            require_credential 'repo secret' 'MODDE_APT_REPO_SSH_KEY' "${APT_REPO_SSH_KEY:-}"
+          fi
+          if [ "${IS_PRERELEASE}" != "true" ]; then
+            require_credential 'global/user secret' 'AUR_SSH_KEY' "${AUR_SSH_KEY:-}"
+          fi
+          if [ "${IS_PRERELEASE}" != "true" ]; then
+            require_credential 'global/user secret' 'CHOCOLATEY_API_KEY' "${CHOCOLATEY_API_KEY:-}"
+          fi
+          if [ -n "$missing" ]; then
+            printf 'Missing release credentials:%s\n' "$missing" >&2
+            exit 1
+          fi
           test -s keys/minisign.pub
-          test -n "${MINISIGN_SECRET_KEY:-}"
-          test -n "${MINISIGN_PASSWORD:-}"
           umask 077
           minisign_key="$(mktemp)"; minisign_probe="$(mktemp)"; minisign_sig="${minisign_probe}.minisig"
           trap 'rm -f "$minisign_key" "$minisign_probe" "$minisign_sig"' EXIT
@@ -605,6 +641,7 @@ jobs:
           nix shell nixpkgs#copr-cli -c copr-cli build --nowait "${COPR_PROJECT}" srpms/*.src.rpm
       - name: Publish Chocolatey package
         env:
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
           CHOCO_PUSH_SOURCE: https://push.chocolatey.org/
         run: |
           set -euo pipefail
