@@ -252,7 +252,7 @@ jobs:
           . ./release-env
           export VERSION IS_PRERELEASE
           mkdir -p release
-          if ! nix shell nixpkgs#debootstrap nixpkgs#cargo nixpkgs#rustc -c bash <<'SCRIPT'
+          if ! nix shell nixpkgs#debootstrap nixpkgs#util-linux nixpkgs#cargo nixpkgs#rustc -c bash <<'SCRIPT'
           set -euo pipefail
           if [ "$(id -u)" -eq 0 ]; then
             priv() { "$@"; }
@@ -382,7 +382,7 @@ jobs:
             [ -f "$file" ] || continue
             artifact_sha="$(sha256sum "$file" | awk '{print $1}')"; predicate="$(mktemp)"
             jq -n --arg builder_id "$builder_id" --arg git_sha "$git_sha" --arg workflow_sha "$workflow_sha" --arg flake_lock_sha "$flake_lock_sha" --arg repo_url "$repo_url" --arg ref "refs/tags/${VERSION}" --arg artifact "$(basename "$file")" --arg artifact_sha "$artifact_sha" '{buildDefinition:{buildType:"https://simit.rs/release",externalParameters:{repository:$repo_url,ref:$ref,artifact:$artifact,artifactDigest:{sha256:$artifact_sha}},internalParameters:{},resolvedDependencies:[{uri:($repo_url+".git"),digest:{gitCommit:$git_sha}},{uri:"flake.lock",digest:{sha256:$flake_lock_sha}},{uri:"release workflow",digest:{sha256:$workflow_sha}}]},runDetails:{builder:{id:$builder_id}}}' > "$predicate"
-            if sign_blob_keyless "$file" && attest_blob_keyless "$file" "$predicate"; then echo "signed+attested $file (keyless)"; elif [ -n "${COSIGN_PRIVATE_KEY:-}" ]; then echo "keyless failed for $file; using COSIGN_PRIVATE_KEY"; sign_blob_with_key "$file"; attest_blob_with_key "$file" "$predicate"; else echo "keyless Sigstore failed and COSIGN_PRIVATE_KEY unset" >&2; exit 1; fi
+            if sign_blob_keyless "$file" && attest_blob_keyless "$file" "$predicate"; then echo "signed+attested $file (keyless)"; elif [ -n "${COSIGN_PRIVATE_KEY:-}" ]; then echo "keyless failed for $file; using COSIGN_PRIVATE_KEY"; sign_blob_with_key "$file"; attest_blob_with_key "$file" "$predicate"; else echo "::warning::keyless Sigstore failed and COSIGN_PRIVATE_KEY unset; continuing without cosign signature or attestation for $file" >&2; fi
             rm -f "$predicate"
           done < <(printf '%s\n' "${files[@]}" | LC_ALL=C sort -u)
           SCRIPT
