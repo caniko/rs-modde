@@ -1,6 +1,6 @@
 pkgbase = modde-git
 	pkgdesc = Cross-platform game mod manager
-	pkgver = 0.3.9_rc.1
+	pkgver = 0.4.0
 	pkgrel = 1
 	url = https://codeberg.org/caniko/rs-modde
 	arch = x86_64

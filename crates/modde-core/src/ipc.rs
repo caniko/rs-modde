@@ -90,7 +90,7 @@ fn socket_prefix() -> String {
 /// run side-by-side without colliding.
 ///
 /// On Windows with `windows-integrations`, this is a marker file containing the
-/// named-pipe path returned by [`gui_pipe_name`].
+/// named-pipe path returned by `gui_pipe_name`.
 #[must_use]
 pub fn gui_socket_path() -> PathBuf {
     let pid = std::process::id();

@@ -6,7 +6,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use modde_games::registry::GAME_REGISTRY;
-use modde_games::tools::{ToolSelectOption, ToolSettingKind, all_tools};
+use modde_games::tools::{ToolConfig, ToolSelectOption, ToolSettingKind, all_tools};
 
 #[derive(Debug, Clone, PartialEq)]
 enum SchemaType {
@@ -83,8 +83,9 @@ fn render_schema() -> String {
         .iter()
         .map(|tool| {
             let settings = tool
-                .settings_schema()
+                .settings_schema_for(None, &export_config_for_tool(tool.tool_id()))
                 .into_iter()
+                .map(|spec| normalize_exported_spec(tool.tool_id(), spec))
                 .filter_map(export_setting_spec)
                 .map(|(key, spec)| (key.to_string(), spec))
                 .collect();
@@ -144,6 +145,33 @@ fn render_schema() -> String {
 
     out.push_str("}\n");
     out
+}
+
+fn export_config_for_tool(tool_id: &str) -> ToolConfig {
+    let mut config = ToolConfig::new(tool_id);
+    if tool_id == "optiscaler" {
+        config.set("source_mode", serde_json::json!("github_release"));
+        config.set("goverlay_channel", serde_json::json!("edge"));
+        config.set("release_tag", serde_json::json!("latest"));
+        config.set("release_asset", serde_json::json!(""));
+        config.set("fsr4_variant", serde_json::json!("latest_fp8"));
+        config.set("emulate_fp8", serde_json::json!(false));
+        config.set("enable_optipatcher", serde_json::json!(false));
+        config.set("spoof_dlss", serde_json::json!(false));
+    }
+    config
+}
+
+fn normalize_exported_spec(
+    tool_id: &str,
+    mut spec: modde_games::tools::ToolSettingSpec,
+) -> modde_games::tools::ToolSettingSpec {
+    if tool_id == "proton" && spec.key == "selected_version" {
+        spec.kind = ToolSettingKind::Select {
+            options: vec![ToolSelectOption::value_label("latest")],
+        };
+    }
+    spec
 }
 
 fn render_optiscaler_profiles() -> String {

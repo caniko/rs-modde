@@ -166,8 +166,11 @@ Hot-deploy patches the existing profile staging tree and the live symlink
 deployment without rebuilding the full profile. It is intentionally narrower
 than `modde deploy`: Wabbajack profiles, unsupported games, missing store
 directories, unknown mods, mixed-content mods, and patches touching config,
-script, DLL, or unknown-severity files are refused. If a patch fails, recover
-with the printed `modde deploy --profile <name> --game <game>` command.
+script, DLL, or unknown-severity files are refused. It also refuses to run
+while the game process appears to be running (checked against `/proc`) — close
+the game or pass `--force` to bypass the check. If a patch fails, profile state
+is not persisted; recover with the printed
+`modde deploy --profile <name> --game <game>` command.
 
 This is a live filesystem patch, not a guarantee that the running game reloads
 every asset immediately. UE/Penumbra-style runtime reload support remains a

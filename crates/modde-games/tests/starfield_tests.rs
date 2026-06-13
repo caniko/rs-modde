@@ -1,7 +1,7 @@
 use modde_games::bethesda;
 use modde_games::{
-    resolve_game_plugin, resolve_save_dependency_analyzer, resolve_save_tracker, GamePlugin,
-    SUPPORTED_GAME_IDS,
+    GamePlugin, SUPPORTED_GAME_IDS, resolve_game_plugin, resolve_save_dependency_analyzer,
+    resolve_save_tracker,
 };
 
 #[test]
@@ -59,7 +59,9 @@ fn starfield_save_tracker_detects_sfs_files_by_category() {
 
     assert_eq!(saves.len(), 4);
     assert_eq!(categories, vec!["auto", "exit", "manual", "quick"]);
-    assert!(saves
-        .iter()
-        .any(|save| save.label.as_deref() == Some("Save42_Custom")));
+    assert!(
+        saves
+            .iter()
+            .any(|save| save.label.as_deref() == Some("Save42_Custom"))
+    );
 }

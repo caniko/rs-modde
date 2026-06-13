@@ -292,6 +292,48 @@ each suspect as LEAKED (safe to delete) or GENUINE (a user addition to keep), an
 
 ---
 
+## `modde lock`
+
+Export, sign, verify, and import portable `modde.lock` files — signed JSON
+snapshots of one profile's reproducible state (provenance, mod order, source
+identities, tracked file hashes, plugin order, patcher configuration). See
+[Profiles → Portable `modde.lock` exports](../guides/profiles.md#portable-moddelock-exports).
+
+```bash
+modde lock export --profile <name> --game <id> [--output <path>] [--allow-incomplete]
+modde lock keygen --public <path> --secret <path>
+modde lock sign <path> --secret-key <path> [--output <path>]
+modde lock verify <path> [--profile <name>] [--game <id>]
+modde lock import <path> --profile <name> --game <id> [--dry-run] [--apply]
+```
+
+### `lock export`
+
+Export one profile to a portable JSON lockfile (default output: `modde.lock`).
+Export is strict: if required provenance (source archive hashes, staged file
+manifests) is missing, it fails and prints what is missing and how to
+regenerate it. `--allow-incomplete` emits a diagnostic lock instead, explicitly
+marked `reproducible = false`.
+
+### `lock keygen` / `lock sign`
+
+`keygen` generates an Ed25519 key pair for lock signing; `sign` appends a
+signature to a lockfile (in place, or to `--output`).
+
+### `lock verify`
+
+Verify lock signatures, and — when `--profile`/`--game` are given — tracked
+files against local disk.
+
+### `lock import`
+
+Validate a lock and import its profile metadata. `--dry-run` reports what would
+change; `--apply` writes it. Import does not download or fabricate missing
+archives: re-run the normal Nexus/Wabbajack install flows to materialize files
+from the source identities in the lock.
+
+---
+
 ## `modde play`
 
 Switch profile, deploy mods, and launch the game.
@@ -318,6 +360,31 @@ modde deploy [--profile <name>] [--game <id>]
 
 ---
 
+## `modde hot-deploy`
+
+Patch one cosmetic mod into the live VFS without a full redeploy. Experimental,
+currently Cyberpunk 2077 only. See
+[Deployment → Experimental hot-deploy](../guides/deployment.md#experimental-hot-deploy).
+
+```bash
+modde hot-deploy --mod <id> (--enable | --disable) \
+  [--profile <name>] [--game <id>] [--dry-run] [--force]
+```
+
+| Flag                     | Description                                            |
+| ------------------------ | ------------------------------------------------------ |
+| `--mod <id>`             | The mod to patch into or out of the live deployment    |
+| `--enable` / `--disable` | Direction of the patch                                 |
+| `--dry-run`              | Report the planned patch without touching the filesystem |
+| `--force`                | Apply even if the game process appears to be running   |
+
+modde refuses to hot-deploy while the game appears to be running (checked
+against `/proc`); close the game or pass `--force` to bypass the check. If a
+patch fails mid-way, profile state is **not** persisted — recover with the
+printed `modde deploy` command.
+
+---
+
 ## `modde patcher`
 
 Configure profile-scoped patcher stages that run during deploy. See the
@@ -327,16 +394,37 @@ Configure profile-scoped patcher stages that run during deploy. See the
 modde patcher list [--profile <name>] [--game <id>]
 modde patcher add-synthesis <name> --profile <name> --game <id> \
   --executable <path> --pipeline-settings <path> \
-  --synthesis-profile <id> --output-mod <mod> --order <n>
+  --synthesis-profile <id> --output-mod <mod> --order <n> \
+  [--timeout-seconds <secs>]
 modde patcher add-command <name> --profile <name> --game <id> \
   --executable <path> [--working-dir <path>] [--arg <arg>]... \
-  [--env KEY=VALUE]... --output-mod <mod> --order <n>
-modde patcher run [--profile <name>] [--game <id>]
+  [--env KEY=VALUE]... --output-mod <mod> [--order <n>] \
+  [--timeout-seconds <secs>]
+modde patcher run [name] [--profile <name>] [--game <id>]
+modde patcher validate [--profile <name>] [--game <id>]
+modde patcher reorder <name>... [--profile <name>] [--game <id>]
 modde patcher enable|disable|remove <name> [--profile <name>] [--game <id>]
 ```
 
 Enabled stages are required. Missing executables, settings files, invalid
 Synthesis profiles, or non-zero exits fail deploy.
+
+`run` executes one stage by name, or all enabled stages when no name is given.
+`validate` checks enabled stages (executables, settings files, Synthesis
+profiles) without running them. `reorder` replaces the stage order with the
+supplied names.
+
+Execution semantics:
+
+- **Timeout** — each stage is killed if it exceeds its `--timeout-seconds`
+  (default `1800`, i.e. 30 minutes). Stage stdout/stderr are captured to log
+  files for post-mortem.
+- **Caching** — a stage whose settings, output mod, and the profile's load
+  order are unchanged since its last successful run is skipped
+  (`Skipped patcher stage '<name>' (cache hit)`).
+- **Rollback** — previously generated stage outputs are backed up before a run
+  and restored if the pipeline fails, so a failing stage does not leave you
+  with half-regenerated patches.
 
 ---
 
@@ -1234,9 +1322,21 @@ evidence IDs.
 
 ```bash
 modde doctor profile --game <id> [--profile <name>] [--json]
-modde doctor crash <log-path> --game <id> [--profile <name>] [--format auto|crash-logger-sse|trainwreck|generic] [--json]
+modde doctor crash [log-path] --game <id> [--profile <name>] [--format auto|crash-logger-sse|trainwreck|generic] [--json]
 modde doctor explain <log-path> --game <id> [--profile <name>] [--provider local|remote] [--json]
 ```
+
+When `log-path` is omitted, `doctor crash` auto-discovers the newest crash log
+(by modification time) across the game's default crash-log directories:
+
+| Game | Directories searched (under `~/Documents/My Games/`) |
+| ---- | ----------------------------------------------------- |
+| Skyrim SE / AE | `Skyrim Special Edition/{SKSE,CrashLogger,NetScriptFramework}` |
+| Skyrim LE | `Skyrim/{SKSE,CrashLogger,NetScriptFramework}` |
+| Fallout 4 | `Fallout4/{F4SE,CrashLogger}` |
+| Fallout 76 | `Fallout 76` |
+
+Other games have no default directories — pass an explicit log path.
 
 `--provider local` uses the configured llama.cpp/OpenAI-compatible local server.
 `--provider remote` is explicit opt-in and requires a configured remote endpoint,
@@ -1246,8 +1346,91 @@ Deprecated aliases retained for compatibility:
 
 ```bash
 modde diagnostics --game <id> [--profile <name>]
-modde crash analyze <log-path> --game <id> [--profile <name>]
+modde crash analyze [log-path] --game <id> [--profile <name>]
 ```
+
+---
+
+## `modde perf`
+
+Capture and compare local performance telemetry. `perf run` switches to a
+profile, deploys (unless `--no-deploy`), and launches the game with per-run
+MangoHud CSV capture; the run's summary statistics (average/1 % low FPS, p99
+frame time) are stored in the local database.
+
+```bash
+modde perf run [profile] --game <id> [--duration <secs>] [--label <text>] \
+  [--warmup-seconds <secs>] [--no-deploy]
+modde perf ingest --run <run-id> --csv <path> [--warmup-seconds <secs>]
+modde perf list --game <id> [--profile <name>] [--limit <n>]
+modde perf show <run-id>
+modde perf compare --baseline <run-id> --candidate <run-id>
+```
+
+| Flag               | Default | Description                                                  |
+| ------------------ | ------- | ------------------------------------------------------------ |
+| `--duration`       | `300`   | MangoHud log duration in seconds                              |
+| `--label`          | —       | Optional human label for the run                              |
+| `--warmup-seconds` | `30`    | Startup samples to skip when computing summary statistics     |
+| `--no-deploy`      | off     | Skip mod deployment before launch                             |
+
+If a run stays pending (for example the game was launched through a
+fire-and-forget launcher and the CSV appeared after modde returned), attach the
+MangoHud CSV manually with `perf ingest`. `perf compare` prints a side-by-side
+delta of two captured runs; run IDs come from `perf list`.
+
+---
+
+## `modde bisect`
+
+Binary-search the enabled mods of a profile to isolate which mod causes a crash
+or performance regression. A session is resumable: state lives in the database,
+and each step builds a candidate profile (`__bisect_<session>_<step>`) with half
+of the remaining suspects disabled, respecting load-order and Bethesda
+master-dependency constraints.
+
+```bash
+modde bisect start --game <id> --profile <name> --oracle manual|crash|perf [flags]
+modde bisect run <session-id>      # create/deploy/launch the next candidate
+modde bisect retry <session-id>    # relaunch the current pending candidate
+modde bisect mark <session-id> good|bad [--notes <text>]
+modde bisect status <session-id>   # session progress
+modde bisect history <session-id>  # step history and observed signals
+modde bisect abort <session-id>    # abort and clean candidate profiles
+```
+
+`bisect start` flags:
+
+| Flag                                | Default | Description                                                       |
+| ----------------------------------- | ------- | ----------------------------------------------------------------- |
+| `--oracle`                          | —       | How candidates are judged: `manual`, `crash`, or `perf` (below)   |
+| `--baseline-run`                    | —       | Perf oracle: `modde perf` run ID of the known-good baseline       |
+| `--perf-p99-frame-time-percent`     | `115`   | Perf oracle: regression threshold — candidate p99 frame time at or above this percentage of baseline |
+| `--perf-one-percent-low-fps-percent`| `85`    | Perf oracle: regression threshold — candidate 1 % low FPS at or below this percentage of baseline |
+| `--perf-alpha-micros`               | `50000` | Perf oracle: Welch's t-test significance level in micro-units (`50000` = α 0.05) |
+| `--perf-min-samples`                | `30`    | Perf oracle: minimum post-warmup samples per run before a statistical verdict |
+| `--crash-dir`                       | per-game default | Crash oracle: directory watched for new crash logs        |
+| `--force-save-risk`                 | off     | Proceed even when disabling mods risks save corruption            |
+| `--keep-profiles`                   | off     | Keep generated candidate profiles after the session ends          |
+
+Oracle behavior on `bisect run`:
+
+- **manual** — launches the candidate and waits for you to
+  `modde bisect mark <session> good|bad`.
+- **crash** — launches the candidate; a new crash log appearing in the
+  crash-log directory marks the step `bad` (and correlates the log), no new log
+  marks it `good`. The result advances the session automatically.
+- **perf** — captures a MangoHud run for the candidate and compares it against
+  `--baseline-run`. A threshold breach only counts as a regression when it is
+  statistically significant (Welch's t-test at the configured α, after warmup
+  trimming, with at least `--perf-min-samples` samples) — high-variance runs do
+  not produce false-positive verdicts.
+
+With fire-and-forget launchers (where modde cannot observe game exit), `run`
+leaves the step pending; test manually and record the result with
+`bisect mark`. `bisect retry` relaunches the pending candidate without
+consuming a step. Wabbajack-source profiles are refused — import the list into
+a resolver-backed profile first.
 
 ---
 
@@ -1486,6 +1669,15 @@ modde exec add xEdit "~/tools/SSEEdit/SSEEdit.exe" --game skyrim-se \
   --wine-dll-overrides "dinput8=n,b"
 modde exec run xEdit --game skyrim-se --profile main   # output captured to __overwrite__
 modde collisions --profile main --game skyrim-se --suggest-hides
+```
+
+### Isolate a crashing or slow mod with bisect
+
+```bash
+modde perf run main --game skyrim-se --label baseline   # perf oracle only
+modde bisect start --game skyrim-se --profile main --oracle crash
+modde bisect run <session-id>                     # repeat until converged
+modde bisect history <session-id>                 # review steps and signals
 ```
 
 ### Back up before and capture after a session

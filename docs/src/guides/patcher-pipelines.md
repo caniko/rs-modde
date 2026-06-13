@@ -73,14 +73,36 @@ modde patcher add-command my-patcher \
 
 ```bash
 modde patcher list --profile my-skyrim --game skyrim-se
+modde patcher validate --profile my-skyrim --game skyrim-se
 modde patcher run --profile my-skyrim --game skyrim-se
+modde patcher run synthesis --profile my-skyrim --game skyrim-se
+modde patcher reorder synthesis my-patcher --profile my-skyrim --game skyrim-se
 modde patcher disable synthesis --profile my-skyrim --game skyrim-se
 modde patcher enable synthesis --profile my-skyrim --game skyrim-se
 modde patcher remove my-patcher --profile my-skyrim --game skyrim-se
 ```
 
 `run` executes the enabled pipeline against the currently deployed profile
-without performing a fresh base deploy first.
+without performing a fresh base deploy first; pass a stage name to run just
+that stage. `validate` checks executables, settings files, and Synthesis
+profiles without running anything. `reorder` replaces the stage order with the
+supplied names.
+
+## Timeouts, caching, and failure recovery
+
+Every stage has a hard timeout (default 1800 seconds; set per stage with
+`--timeout-seconds` on `add-synthesis`/`add-command`). A stage that exceeds it
+is killed and the run fails. Stage stdout/stderr are captured to log files so a
+killed or failed stage can be diagnosed after the fact.
+
+Stage results are cached: when a stage's settings, output mod, and the
+profile's active load order are unchanged since its last successful run, the
+stage is skipped with `Skipped patcher stage '<name>' (cache hit)`. Changing
+any input — including the load order — invalidates the cache.
+
+Before a pipeline run, previously generated stage outputs are backed up; if the
+pipeline fails, they are restored, so a mid-pipeline failure does not leave the
+profile with half-regenerated patches.
 
 ## Home Manager
 

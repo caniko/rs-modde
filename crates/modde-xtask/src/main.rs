@@ -5,10 +5,10 @@ use std::process::Command;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use harbor_xtask::{
-    run_cargo_package, run_check, run_copr_srpm, run_copr_vendor, run_copr_vendor_check,
-    run_coverage, run_docs_serve, run_fmt, run_lint, run_nix_build, run_nix_develop, run_test,
     CargoWorkspace, CoprConfig, CoverageMode, DocsSite, FormatMode, NixBuildOptions, NixPackage,
-    ProjectConfig,
+    ProjectConfig, run_cargo_package, run_check, run_copr_srpm, run_copr_vendor,
+    run_copr_vendor_check, run_coverage, run_docs_serve, run_fmt, run_lint, run_nix_build,
+    run_nix_develop, run_test,
 };
 use semver::Version;
 

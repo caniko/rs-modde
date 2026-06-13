@@ -31,6 +31,7 @@ below.
 | `modde tool revert` says "No applied files to revert" | [Tool apply / revert failures](#tool-apply-revert-failures) | [Tools](tools.md) |
 | OptiScaler: game crashes on first boot | [OptiScaler first-boot crash](#optiscaler-first-boot-crash) | [Tools](tools.md) |
 | Crash Logger SSE / Trainwreck log needs install-state context | [Crash-log correlation](#crash-log-correlation) | [Conflicts](conflicts.md) |
+| Crashes or perf regression, unknown which mod is at fault | [Isolating a bad mod (bisect)](#isolating-a-bad-mod-bisect) | [CLI → `modde bisect`](../reference/cli.md#modde-bisect) |
 | Save vault wants "adoption" | [Save vault issues](#save-vault-issues) | [Saves](saves.md) |
 | `save restore` warns about fingerprint mismatch | [Save vault issues](#save-vault-issues) | [Saves](saves.md) |
 | Can't reorder mods (profile locked) | [Profile is locked](#profile-is-locked) | [Profiles](profiles.md) |
@@ -223,11 +224,49 @@ cause unless the log itself makes that explicit.
 
 ```bash
 modde doctor crash /path/to/crash-2026-06-11-10-38-45.log --game skyrim-se
+# or let modde pick the newest log from the game's default crash-log dirs:
+modde doctor crash --game skyrim-se
 ```
 
-Use `--profile <name>` to analyze against a non-active profile and `--json` for
-the structured report. Raw logs and reports are stored locally in the modde
-database for history; nothing is uploaded.
+The log path is optional for games with known crash-log locations (Skyrim
+SE/AE/LE, Fallout 4, Fallout 76): modde scans the default directories under
+`~/Documents/My Games/` and analyzes the newest log. Use `--profile <name>` to
+analyze against a non-active profile and `--json` for the structured report.
+Raw logs and reports are stored locally in the modde database for history;
+nothing is uploaded.
+
+## Isolating a bad mod (bisect)
+
+**Symptom:** the game crashes (or performance regressed) only with mods
+enabled, and you do not know which of dozens or hundreds of mods is
+responsible.
+
+**Cause:** any one of the enabled mods — manual elimination is O(n) game
+launches; a binary search is O(log n).
+
+**Fix:** run a bisect session. Each step deploys a candidate profile with half
+of the remaining suspects disabled (load-order and master-dependency
+constraints are respected, so dependents move with their masters):
+
+```bash
+modde bisect start --game skyrim-se --profile my-skyrim --oracle crash
+modde bisect run <session-id>      # launch next candidate; repeat until converged
+modde bisect status <session-id>   # progress and remaining suspects
+modde bisect history <session-id>  # steps, halves, and observed signals
+```
+
+With `--oracle crash`, a new crash log appearing in the game's crash-log
+directory marks the step bad automatically. With `--oracle manual`, record
+each verdict yourself via `modde bisect mark <session-id> good|bad`. With
+`--oracle perf`, capture a known-good baseline first with `modde perf run` and
+pass its run ID as `--baseline-run`. See the
+[CLI reference](../reference/cli.md#modde-bisect) for the full flag list,
+including the perf-oracle statistical thresholds.
+
+Disabling mods mid-playthrough can corrupt saves for some games; bisect refuses
+risky sessions unless you pass `--force-save-risk`. Candidate profiles are
+cleaned up when the session ends (`--keep-profiles` to keep them), and
+`modde bisect abort <session-id>` restores the source profile early.
 
 ## Deployment fails
 

@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-13
+
+### Added
+
+- **CLI/Core**: Added portable `modde.lock` export, signing, verification, and
+  import workflows for reproducible profile snapshots.
+- **CLI/Core**: Added `modde bisect` and `modde perf` workflows for isolating
+  bad mods and comparing profile performance against recorded baselines.
+- **CLI/Core**: Added patcher pipeline validation, single-stage execution,
+  reorder support, timeouts, cache hits, and failed-run output rollback.
+- **CLI/Core**: Added experimental Cyberpunk 2077 hot-deploy support for
+  patching cosmetic mods into a live VFS without a full redeploy.
+- **Diagnostics**: Added crash-log correlation and `modde doctor explain`
+  support that connects local Crash Logger SSE or Trainwreck evidence to the
+  managed profile state.
+- **Games**: Added native Bethesda record-reference validation for Skyrim,
+  Fallout, and Starfield plugin orders before persisting unsafe changes.
+- **Telemetry**: Added an opt-in compatibility oracle reporting path with
+  hashed crash signatures, hashed mod identities, retry storage, and
+  cohort-threshold query suppression.
+
+### Changed
+
+- **Release ops**: Hardened stable distribution automation for Codeberg release
+  assets, Debian/APT, AUR, COPR, Scoop, Chocolatey, Homebrew, winget, Flatpak,
+  AppImage, and tarball outputs.
+
+### Fixed
+
+- **Database**: Added the missing diagnostics migration tables needed by the
+  crash and doctor workflows.
+- **CLI**: Hardened command parsing, crash-action handling, download queue
+  sidecar status parsing, and doctor help snapshots.
+
 ### Documentation
 
 - **Docs**: Cleaned public install-channel wording so live Nix/Home-Manager
@@ -159,7 +193,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Diagnostics**: Form 43 detection, missing master detection, shadowed mod detection, load order validation
 - **Nix**: Flake with binary, docs, and website outputs; home-manager module for declarative configuration
 
-[Unreleased]: https://codeberg.org/caniko/rs-modde/compare/0.3.4...HEAD
+[Unreleased]: https://codeberg.org/caniko/rs-modde/compare/0.4.0...HEAD
+[0.4.0]: https://codeberg.org/caniko/rs-modde/compare/0.3.8...0.4.0
 [0.3.4]: https://codeberg.org/caniko/rs-modde/compare/0.3.3...0.3.4
 [0.3.3]: https://codeberg.org/caniko/rs-modde/compare/0.3.2...0.3.3
 [0.3.2]: https://codeberg.org/caniko/rs-modde/compare/0.3.1...0.3.2
