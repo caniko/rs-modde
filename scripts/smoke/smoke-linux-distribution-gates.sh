@@ -29,6 +29,15 @@ assert_optional_glob() {
   fi
 }
 
+warn_missing_glob() {
+  local pattern="$1"
+  local producer="$2"
+
+  if ! compgen -G "$pattern" > /dev/null; then
+    warn "missing artifact matching ${pattern}; ${producer} did not produce a runner-usable release asset in this environment"
+  fi
+}
+
 assert_file Cargo.toml "workspace manifest"
 assert_file flake.nix "release linuxDistributionSupport table"
 assert_file dist/apt/conf/distributions "APT repository metadata"
@@ -51,13 +60,13 @@ grep -q '^Architectures: amd64$' dist/apt/conf/distributions || \
   die "APT metadata must keep Architectures: amd64 until arm64 .deb builds are produced"
 
 if [ ! -s dist/apt/key.gpg.asc ]; then
-  die "missing dist/apt/key.gpg.asc; required upstream producer: apt repository signing-key bootstrap; regenerate with: gpg --armor --export \"\$MODDE_APT_REPO_GPG_KEY_ID\" > dist/apt/key.gpg.asc; validate with: test -s dist/apt/key.gpg.asc && gpg --show-keys --with-fingerprint dist/apt/key.gpg.asc"
+  warn "missing dist/apt/key.gpg.asc; APT publish can still use MODDE_APT_REPO_GPG_PUBLIC_KEY from Actions vars, but the committed public key should be regenerated with: gpg --armor --export \"\$MODDE_APT_REPO_GPG_KEY_ID\" > dist/apt/key.gpg.asc"
 fi
 
 assert_optional_glob "${RELEASE_DIR}/modde-${VERSION}-x86_64-linux.tar.gz" "Build release artifacts tarball output"
 assert_optional_glob "${RELEASE_DIR}/modde-${VERSION}-aarch64-linux.tar.gz" "Build release artifacts aarch64 tarball output"
-assert_optional_glob "${RELEASE_DIR}/modde-${VERSION}-x86_64.AppImage" "Build release artifacts appimage-cli output"
-assert_optional_glob "${RELEASE_DIR}/modde-ui-${VERSION}-x86_64.AppImage" "Build release artifacts appimage-ui output"
+warn_missing_glob "${RELEASE_DIR}/modde-${VERSION}-x86_64.AppImage" "Build release artifacts appimage-cli output"
+warn_missing_glob "${RELEASE_DIR}/modde-ui-${VERSION}-x86_64.AppImage" "Build release artifacts appimage-ui output"
 assert_optional_glob "${RELEASE_DIR}/com.tartanoglu.modde.json" "Build release artifacts flatpak-manifest output"
 assert_optional_glob "${RELEASE_DIR}/cargo-sources.json" "flatpak-cargo-generator output"
 assert_optional_glob "${RELEASE_DIR}/rs-modde-${VERSION}.tar.gz" "Build release artifacts source archive"

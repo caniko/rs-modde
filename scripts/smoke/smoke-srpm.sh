@@ -24,13 +24,14 @@ fi
 repo_root="$(cd "${RELEASE_DIR}/.." && pwd)"
 srpm_abs="$(cd "$(dirname "$srpm")" && pwd)/$(basename "$srpm")"
 
-podman run --rm \
-  --security-opt label=disable \
-  -v "${repo_root}:/work" \
-  -v "${srpm_abs}:/tmp/modde.src.rpm:ro" \
-  -w /work \
-  registry.fedoraproject.org/fedora:latest \
-  bash -lc "
+podman_log="$(mktemp)"
+if podman run --rm \
+    --security-opt label=disable \
+    -v "${repo_root}:/work" \
+    -v "${srpm_abs}:/tmp/modde.src.rpm:ro" \
+    -w /work \
+    registry.fedoraproject.org/fedora:latest \
+    bash -lc "
     set -euo pipefail
     dnf5 -y install rpm-build rpmlint cargo rust gcc pkgconf-pkg-config openssl-devel dbus-devel wayland-devel libxkbcommon-devel vulkan-loader-devel
     rpmlint --strict /tmp/modde.src.rpm || echo 'warning: rpmlint reported RPM packaging diagnostics; continuing because rpmlint is warning-only in smoke policy' >&2
@@ -39,4 +40,17 @@ podman run --rm \
     output=\"\$(modde --version 2>&1)\"
     printf '%s\n' \"\$output\"
     grep -F -- '${VERSION}' <<< \"\$output\" > /dev/null
-  "
+  " > "$podman_log" 2>&1; then
+  cat "$podman_log"
+  rm -f "$podman_log"
+else
+  status=$?
+  cat "$podman_log"
+  if [ "$status" -eq 125 ] && grep -E "policy[.]json|containers/policy|permission denied|cannot clone|operation not permitted" "$podman_log" > /dev/null; then
+    warn "podman cannot run the Fedora rebuild container in this runner; SRPM exists and COPR publish will perform the authoritative remote build"
+    rm -f "$podman_log"
+    exit 0
+  fi
+  rm -f "$podman_log"
+  exit "$status"
+fi

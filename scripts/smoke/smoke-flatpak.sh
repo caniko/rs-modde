@@ -25,7 +25,7 @@ source_uri="file://$(cd "$(dirname "$source_tarball")" && pwd)/$(basename "$sour
 
 jq --arg source_uri "$source_uri" '
   .modules[0].sources |= map(
-    if .type == "archive" and (.url | test("rs-modde-.*[.]tar[.]gz$"))
+    if type == "object" and .type == "archive" and (.url | test("rs-modde-.*[.]tar[.]gz$"))
     then .url = $source_uri
     else .
     end

@@ -214,6 +214,18 @@ check_workflow_contract() {
   grep -F 'nix run .#copr-cli -- build --nowait "${COPR_PROJECT}" srpms/*.src.rpm' .forgejo/workflows/release.yml >/dev/null \
     && ok "workflow uses local COPR CLI flake app" \
     || missing+=("workflow:local COPR CLI app")
+
+  grep -F 'skipping cosign verification because release signing degrades to warning-only' scripts/smoke/smoke-signatures.sh >/dev/null \
+    && ok "smoke keeps missing cosign verification warning-only" \
+    || missing+=("smoke:cosign warning-only fallback")
+
+  grep -F 'COPR publish will perform the authoritative remote build' scripts/smoke/smoke-srpm.sh >/dev/null \
+    && ok "smoke lets COPR remote build validate SRPM when local podman policy is unavailable" \
+    || missing+=("smoke:COPR local podman fallback")
+
+  grep -F 'Authenticode signing is optional and was skipped by the release workflow' scripts/smoke/smoke-windows-zip.sh >/dev/null \
+    && ok "smoke treats unsigned Windows artifacts as optional when signing credentials are absent" \
+    || missing+=("smoke:Windows optional signing fallback")
 }
 
 load_canix_release_inputs

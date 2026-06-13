@@ -23,6 +23,9 @@ test -s "$exe" || die "${zip_artifact} did not contain modde.exe"
 
 export WINEPREFIX="$tmpdir/wine"
 export WINEDEBUG=-all
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$tmpdir/runtime}"
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
 
 run_version_check "$VERSION" "Windows integration modde.exe --version via wine" timeout 60 wine "$exe" --version
 

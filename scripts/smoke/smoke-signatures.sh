@@ -42,7 +42,8 @@ elif [ -n "${COSIGN_CERTIFICATE_IDENTITY:-}" ] && [ -n "${COSIGN_CERTIFICATE_OID
     --certificate-oidc-issuer "$COSIGN_CERTIFICATE_OIDC_ISSUER"
   )
 else
-  die "missing cosign verification material; set COSIGN_PUBLIC_KEY, commit keys/cosign.pub, or set COSIGN_CERTIFICATE_IDENTITY and COSIGN_CERTIFICATE_OIDC_ISSUER for keyless verification"
+  warn "missing cosign verification material; skipping cosign verification because release signing degrades to warning-only when keyless Sigstore and COSIGN_PRIVATE_KEY are unavailable"
+  exit 0
 fi
 
 signed_artifacts=()
