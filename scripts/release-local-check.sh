@@ -226,6 +226,14 @@ check_workflow_contract() {
   grep -F 'Authenticode signing is optional and was skipped by the release workflow' scripts/smoke/smoke-windows-zip.sh >/dev/null \
     && ok "smoke treats unsigned Windows artifacts as optional when signing credentials are absent" \
     || missing+=("smoke:Windows optional signing fallback")
+
+  grep -F 'Flathub publish will perform the authoritative build' scripts/smoke/smoke-flatpak.sh >/dev/null \
+    && ok "smoke treats unavailable Flatpak runtime install as a runner limitation" \
+    || missing+=("smoke:Flatpak runtime fallback")
+
+  grep -F 'wine cannot execute' scripts/smoke/smoke-windows-zip.sh >/dev/null \
+    && ok "smoke treats unavailable Wine runtime execution as a runner limitation" \
+    || missing+=("smoke:Wine runtime fallback")
 }
 
 load_canix_release_inputs
