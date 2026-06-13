@@ -109,8 +109,7 @@ jobs:
           missing=''
           require_credential() {
             scope="$1"; name="$2"; value="$3"
-            if [ -z "$value" ]; then missing="${missing}
-  - ${scope} ${name}"; fi
+            if [ -z "$value" ]; then missing="$(printf '%s\n  - %s %s' "$missing" "$scope" "$name")"; fi
           }
           require_credential 'global/user secret' 'CODEBERG_TOKEN' "${CODEBERG_TOKEN:-}"
           require_credential 'repo secret' 'MINISIGN_SECRET_KEY' "${MINISIGN_SECRET_KEY:-}"
