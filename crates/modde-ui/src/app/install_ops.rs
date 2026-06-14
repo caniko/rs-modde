@@ -1,5 +1,9 @@
 use std::path::PathBuf;
 
+use iced::futures::SinkExt as _;
+
+use super::{WabbajackInstallEvent, WabbajackInstallUiSummary};
+
 /// Run the full install pipeline for a single Nexus mod, invoked from
 /// the Browse Nexus **Install** button. Owned as a free function so
 /// the `update()` arm can hand it to `Task::perform` without borrowing
@@ -173,54 +177,103 @@ pub(super) async fn download_wabbajack_source(source: String) -> Result<PathBuf,
         .map_err(|e| e.to_string())
 }
 
-pub(super) async fn run_wabbajack_install_for_ui(
+pub(super) async fn assess_wabbajack_readiness_for_ui(
+    path: PathBuf,
+    profile_name: Option<String>,
+    game_dir: Option<PathBuf>,
+) -> Result<modde_sources::wabbajack::readiness::WabbajackReadinessReport, String> {
+    let mut options = modde_sources::wabbajack::readiness::WabbajackReadinessOptions::new(path);
+    options.profile_name = profile_name;
+    options.game_dir = game_dir;
+    modde_sources::wabbajack::readiness::assess_wabbajack_readiness(options)
+        .await
+        .map_err(format_anyhow_error)
+}
+
+pub(super) async fn import_wabbajack_archives_for_ui(
+    manifest_path: PathBuf,
+    archive_paths: Vec<PathBuf>,
+) -> Result<Vec<modde_sources::wabbajack::import::ArchiveImportResult>, String> {
+    let manifest = modde_sources::wabbajack::runner::parse_wabbajack_manifest(&manifest_path)
+        .map_err(format_anyhow_error)?;
+    modde_sources::wabbajack::import::import_archives(
+        &manifest,
+        &modde_core::paths::store_dir(),
+        &archive_paths,
+    )
+    .await
+    .map_err(format_anyhow_error)
+}
+
+pub(super) fn run_wabbajack_install_for_ui_stream(
     db: modde_core::db::ModdeDb,
     path: PathBuf,
     profile_name: Option<String>,
     game_dir: Option<PathBuf>,
-) -> Result<(String, Vec<String>), String> {
-    tokio::task::spawn_blocking(move || {
-        let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-        runtime.block_on(async move {
-            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-            let collector = tokio::spawn(async move {
-                let mut lines = Vec::new();
-                while let Some(progress) = rx.recv().await {
-                    lines.push(format_install_progress(&progress));
+) -> impl iced::futures::Stream<Item = WabbajackInstallEvent> {
+    iced::stream::channel(100, async move |mut output| {
+        let (progress_tx, mut progress_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (done_tx, mut done_rx) = tokio::sync::oneshot::channel();
+
+        std::thread::spawn(move || {
+            let result = (|| -> Result<WabbajackInstallUiSummary, String> {
+                let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+                runtime.block_on(async move {
+                    let summary = modde_sources::wabbajack::runner::install_wabbajack(
+                        modde_sources::wabbajack::runner::WabbajackInstallOptions {
+                            db: Some(db),
+                            path,
+                            profile_name,
+                            game_dir,
+                            force: false,
+                            no_deploy: false,
+                            safety:
+                                modde_sources::wabbajack::runner::WabbajackInstallSafety::default(),
+                            diagnostics: None,
+                            archive_retention:
+                                modde_sources::wabbajack::installer::ArchiveRetentionPolicy::Keep,
+                            missing_archive_policy:
+                                modde_sources::wabbajack::impact::MissingArchivePolicy::Fail,
+                        },
+                        Some(progress_tx),
+                    )
+                    .await
+                    .map_err(format_anyhow_error)?;
+                    Ok(WabbajackInstallUiSummary {
+                        status_message: format!(
+                            "Installed '{}' to profile '{}' ({} mods)",
+                            summary.modlist_name, summary.profile_name, summary.mod_count
+                        ),
+                    })
+                })
+            })();
+            let _ = done_tx.send(result);
+        });
+
+        let mut progress_open = true;
+        loop {
+            tokio::select! {
+                progress = progress_rx.recv(), if progress_open => {
+                    match progress {
+                        Some(progress) => {
+                            if output.send(WabbajackInstallEvent::Progress(progress)).await.is_err() {
+                                break;
+                            }
+                        }
+                        None => {
+                            progress_open = false;
+                        }
+                    }
                 }
-                lines
-            });
-            let summary = modde_sources::wabbajack::runner::install_wabbajack(
-                modde_sources::wabbajack::runner::WabbajackInstallOptions {
-                    db: Some(db),
-                    path,
-                    profile_name,
-                    game_dir,
-                    force: false,
-                    no_deploy: false,
-                    safety: modde_sources::wabbajack::runner::WabbajackInstallSafety::default(),
-                    diagnostics: None,
-                    archive_retention:
-                        modde_sources::wabbajack::installer::ArchiveRetentionPolicy::Keep,
-                    missing_archive_policy:
-                        modde_sources::wabbajack::impact::MissingArchivePolicy::Fail,
-                },
-                Some(tx),
-            )
-            .await
-            .map_err(|e| e.to_string())?;
-            let lines = collector.await.map_err(|e| e.to_string())?;
-            Ok((
-                format!(
-                    "Installed '{}' to profile '{}' ({} mods)",
-                    summary.modlist_name, summary.profile_name, summary.mod_count
-                ),
-                lines,
-            ))
-        })
+                result = &mut done_rx => {
+                    let result = result
+                        .unwrap_or_else(|_| Err("Wabbajack install worker stopped unexpectedly".to_string()));
+                    let _ = output.send(WabbajackInstallEvent::Complete(result)).await;
+                    break;
+                }
+            }
+        }
     })
-    .await
-    .map_err(|e| e.to_string())?
 }
 
 pub(super) fn format_install_progress(

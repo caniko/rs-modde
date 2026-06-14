@@ -5,16 +5,15 @@ use modde_core::manifest::wabbajack::WabbajackManifest;
 
 #[test]
 fn parse_real_wabbajack_file() {
-    let wj_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("3077.wabbajack");
+    let Ok(wj_path) = std::env::var("MODDE_3077_WABBAJACK") else {
+        eprintln!("skipping: MODDE_3077_WABBAJACK is not set");
+        return;
+    };
+    let wj_path = Path::new(&wj_path);
 
     if !wj_path.exists() {
         eprintln!(
-            "skipping: 3077.wabbajack not found at {}",
+            "skipping: MODDE_3077_WABBAJACK not found at {}",
             wj_path.display()
         );
         return;

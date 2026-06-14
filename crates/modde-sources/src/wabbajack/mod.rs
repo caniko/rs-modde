@@ -13,6 +13,7 @@ pub mod installer;
 pub mod manifest;
 pub mod patcher;
 pub(crate) mod preflight;
+pub mod readiness;
 pub mod runner;
 pub mod staging;
 pub mod validator;

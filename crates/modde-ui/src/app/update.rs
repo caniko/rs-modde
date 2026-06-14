@@ -7,11 +7,13 @@ use modde_core::manifest::collection::CollectionManifest;
 use modde_core::profile::ProfileManager;
 use modde_core::resolver::GameId;
 use modde_core::settings::AppSettings;
+use modde_sources::wabbajack::installer::InstallProgress;
 use smallvec::SmallVec;
 
 use super::install_ops::{
-    download_wabbajack_source, format_anyhow_error, run_browse_install,
-    run_wabbajack_install_for_ui, slugify_profile_name,
+    assess_wabbajack_readiness_for_ui, download_wabbajack_source, format_anyhow_error,
+    format_install_progress, import_wabbajack_archives_for_ui, run_browse_install,
+    run_wabbajack_install_for_ui_stream, slugify_profile_name,
 };
 use super::profile_ops::{
     add_mod_to_profile, create_profile, delete_profile, fork_profile, remove_mod_from_profile,
@@ -33,8 +35,77 @@ use super::{
     AddCustomGameDraftField, AddCustomGameState, BUTTON_HOVER_TOAST_DELAY, ButtonHoverToast,
     ButtonHoverToastState, ExecutableDraft, ExecutableDraftField, ExperimentWriteKind,
     FOMODWizardState, Message, Modde, NexusAuthStatus, ProfileWriteKind, SidebarGroup, View,
-    detected_game_ids, resize_thumbnail_bytes,
+    WabbajackInstallEvent, WabbajackInstallerState, detected_game_ids, resize_thumbnail_bytes,
 };
+
+fn apply_wabbajack_progress_state(
+    state: &mut WabbajackInstallerState,
+    progress: &InstallProgress,
+    line: String,
+) {
+    state.status = line;
+    match progress {
+        InstallProgress::Starting { total_downloads } => {
+            state.install_phase = "Starting".to_string();
+            state.install_current_item = format!("{total_downloads} download(s) queued");
+            state.progress = 0.0;
+        }
+        InstallProgress::Downloading { name, bytes, total } => {
+            state.install_phase = "Downloading".to_string();
+            state.install_current_item = name.clone();
+            if *total > 0 {
+                state.progress = (*bytes as f32 / *total as f32).clamp(0.0, 1.0);
+            }
+        }
+        InstallProgress::DownloadComplete { name } => {
+            state.install_phase = "Downloaded".to_string();
+            state.install_current_item = name.clone();
+        }
+        InstallProgress::Verifying { name } => {
+            state.install_phase = "Verifying".to_string();
+            state.install_current_item = name.clone();
+        }
+        InstallProgress::Applying {
+            directive_index,
+            total,
+        } => {
+            state.install_phase = "Applying".to_string();
+            state.install_current_item = format!("directive {}/{}", directive_index + 1, total);
+            if *total > 0 {
+                state.progress = ((*directive_index + 1) as f32 / *total as f32).clamp(0.0, 1.0);
+            }
+        }
+        InstallProgress::Patching { name } => {
+            state.install_phase = "Patching".to_string();
+            state.install_current_item = name.clone();
+        }
+        InstallProgress::CreatingBSA { name } => {
+            state.install_phase = "Creating BSA".to_string();
+            state.install_current_item = name.clone();
+        }
+        InstallProgress::LauncherConfigured { .. } => {
+            state.install_phase = "Launcher".to_string();
+            state.install_current_item.clear();
+        }
+        InstallProgress::InlineFile { name } => {
+            state.install_phase = "Writing inline file".to_string();
+            state.install_current_item = name.clone();
+        }
+        InstallProgress::StagingAdopted { .. } => {
+            state.install_phase = "Resuming staging".to_string();
+            state.install_current_item.clear();
+        }
+        InstallProgress::Complete => {
+            state.install_phase = "Complete".to_string();
+            state.install_current_item.clear();
+            state.progress = 1.0;
+        }
+        InstallProgress::Failed { .. } => {
+            state.install_phase = "Failed".to_string();
+            state.install_current_item.clear();
+        }
+    }
+}
 
 impl Modde {
     pub(super) fn new() -> (Self, Task<Message>) {
@@ -1539,20 +1610,41 @@ impl Modde {
                 }
             }
             Message::WabbajackHmProfileChanged(value) => {
-                if let View::WabbajackInstaller(ref mut state) = self.active_view {
-                    state.hm_profile = value;
+                let should_recheck =
+                    if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                        state.hm_profile = value;
+                        state.file_path.is_some()
+                    } else {
+                        false
+                    };
+                if should_recheck {
+                    return self.update(Message::WabbajackCheckReadiness);
                 }
             }
             Message::WabbajackHmGameChanged(value) => {
-                if let View::WabbajackInstaller(ref mut state) = self.active_view {
-                    state.hm_game = value;
-                    prefill_wabbajack_game_dir(&self.settings, state);
+                let should_recheck =
+                    if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                        state.hm_game = value;
+                        prefill_wabbajack_game_dir(&self.settings, state);
+                        state.file_path.is_some()
+                    } else {
+                        false
+                    };
+                if should_recheck {
+                    return self.update(Message::WabbajackCheckReadiness);
                 }
             }
             Message::WabbajackHmGameDirChanged(value) => {
-                if let View::WabbajackInstaller(ref mut state) = self.active_view {
-                    state.hm_game_dir = value;
-                    state.hm_game_dir_user_edited = true;
+                let should_recheck =
+                    if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                        state.hm_game_dir = value;
+                        state.hm_game_dir_user_edited = true;
+                        state.file_path.is_some()
+                    } else {
+                        false
+                    };
+                if should_recheck {
+                    return self.update(Message::WabbajackCheckReadiness);
                 }
             }
             Message::WabbajackDownloadSelected => {
@@ -1574,11 +1666,16 @@ impl Modde {
                 );
             }
             Message::WabbajackDownloadComplete(result) => {
+                let mut should_recheck = false;
                 if let View::WabbajackInstaller(ref mut state) = self.active_view {
                     match result {
                         Ok(path) => {
                             state.downloaded_path = Some(path.clone());
                             state.file_path = Some(path.clone());
+                            state.readiness = None;
+                            state.readiness_error = None;
+                            state.archive_import_results.clear();
+                            state.archive_import_status = None;
                             state.status = format!("Downloaded {}", path.display());
                             state.log_lines.push(state.status.clone());
                             self.wabbajack_manifest =
@@ -1593,12 +1690,149 @@ impl Modde {
                                 state.hm_game_dir_user_edited = false;
                                 prefill_wabbajack_game_dir(&self.settings, state);
                             }
+                            should_recheck = true;
                         }
                         Err(e) => {
                             state.status = format!("Download failed: {e}");
                             state.log_lines.push(state.status.clone());
                         }
                     }
+                }
+                if should_recheck {
+                    return self.update(Message::WabbajackCheckReadiness);
+                }
+            }
+            Message::WabbajackCheckReadiness => {
+                let fallback_game_dir = self.current_game_dir();
+                let (path, profile_name, game_dir) =
+                    if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                        let Some(path) = state.file_path.clone() else {
+                            self.status_message =
+                                "Select or download a .wabbajack file first".to_string();
+                            return Task::none();
+                        };
+                        state.readiness_loading = true;
+                        state.readiness_error = None;
+                        state.status = "Checking Wabbajack readiness...".to_string();
+                        (
+                            path,
+                            (!state.hm_profile.trim().is_empty())
+                                .then(|| state.hm_profile.trim().to_string()),
+                            if state.hm_game_dir.trim().is_empty() {
+                                fallback_game_dir
+                            } else {
+                                Some(PathBuf::from(state.hm_game_dir.trim()))
+                            },
+                        )
+                    } else {
+                        self.status_message = "No Wabbajack installer view is active".to_string();
+                        return Task::none();
+                    };
+                return Task::perform(
+                    async move { assess_wabbajack_readiness_for_ui(path, profile_name, game_dir).await },
+                    Message::WabbajackReadinessLoaded,
+                );
+            }
+            Message::WabbajackReadinessLoaded(result) => {
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.readiness_loading = false;
+                    match result {
+                        Ok(report) => {
+                            let ready = report.install_ready;
+                            let hard_count = report.hard_blockers.len();
+                            let manual_count = report.manual_downloads.len();
+                            state.readiness = Some(report);
+                            state.readiness_error = None;
+                            state.status = if ready {
+                                "Ready for Wabbajack install".to_string()
+                            } else if hard_count > 0 {
+                                format!("{hard_count} readiness blocker(s) must be fixed")
+                            } else {
+                                format!("{manual_count} manual archive(s) must be imported")
+                            };
+                            state.log_lines.push(state.status.clone());
+                        }
+                        Err(error) => {
+                            state.readiness = None;
+                            state.readiness_error = Some(error.clone());
+                            state.status = format!("Readiness check failed: {error}");
+                            state.log_lines.push(state.status.clone());
+                        }
+                    }
+                }
+            }
+            Message::WabbajackImportArchives => {
+                let manifest_path = if let View::WabbajackInstaller(ref state) = self.active_view {
+                    let Some(path) = state.file_path.clone() else {
+                        self.status_message =
+                            "Select a .wabbajack file before importing archives".to_string();
+                        return Task::none();
+                    };
+                    path
+                } else {
+                    self.status_message = "No Wabbajack installer view is active".to_string();
+                    return Task::none();
+                };
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.archive_import_status =
+                        Some("Waiting for archive selection...".to_string());
+                }
+                return Task::perform(
+                    async move {
+                        let files = rfd::AsyncFileDialog::new()
+                            .set_title("Import Wabbajack manual archives")
+                            .pick_files()
+                            .await
+                            .map(|handles| {
+                                handles
+                                    .into_iter()
+                                    .map(|handle| handle.path().to_path_buf())
+                                    .collect::<Vec<_>>()
+                            });
+                        let Some(files) = files else {
+                            return Err("Import cancelled".to_string());
+                        };
+                        if files.is_empty() {
+                            return Err("No archives selected".to_string());
+                        }
+                        import_wabbajack_archives_for_ui(manifest_path, files).await
+                    },
+                    Message::WabbajackArchivesImported,
+                );
+            }
+            Message::WabbajackArchivesImported(result) => {
+                let mut should_recheck = false;
+                if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    match result {
+                        Ok(results) => {
+                            let accepted = results
+                                .iter()
+                                .filter(|result| {
+                                    matches!(
+                                        result.status,
+                                        modde_sources::wabbajack::import::ArchiveImportStatus::Imported
+                                            | modde_sources::wabbajack::import::ArchiveImportStatus::AlreadyPresent
+                                    )
+                                })
+                                .count();
+                            let rejected = results.len().saturating_sub(accepted);
+                            state.archive_import_results = results;
+                            state.archive_import_status = Some(format!(
+                                "Imported {accepted} archive(s); {rejected} rejected by hash"
+                            ));
+                            state
+                                .log_lines
+                                .push(state.archive_import_status.clone().unwrap_or_default());
+                            should_recheck = true;
+                        }
+                        Err(error) => {
+                            state.archive_import_status = Some(error.clone());
+                            state.status = error;
+                        }
+                    }
+                }
+                if should_recheck {
+                    return self.update(Message::WabbajackCheckReadiness);
                 }
             }
             Message::WabbajackGenerateHmSnippet => {
@@ -1725,10 +1959,15 @@ impl Modde {
                 let manifest =
                     modde_sources::wabbajack::runner::parse_wabbajack_manifest(&path).ok();
                 self.wabbajack_manifest = manifest;
+                let mut should_recheck = false;
                 if let View::WabbajackInstaller(ref mut state) = self.active_view {
                     state.file_path = Some(path.clone());
                     state.downloaded_path = Some(path.clone());
                     state.manual_source = path.display().to_string();
+                    state.readiness = None;
+                    state.readiness_error = None;
+                    state.archive_import_results.clear();
+                    state.archive_import_status = None;
                     state.progress = 0.0;
                     state.status = format!("Selected: {}", path.display());
                     state
@@ -1742,8 +1981,12 @@ impl Modde {
                         state.hm_game_dir_user_edited = false;
                         prefill_wabbajack_game_dir(&self.settings, state);
                     }
+                    should_recheck = true;
                 }
                 self.status_message = format!("Wabbajack file loaded: {}", path.display());
+                if should_recheck {
+                    return self.update(Message::WabbajackCheckReadiness);
+                }
             }
             Message::WabbajackProgress(progress) => {
                 if let View::WabbajackInstaller(ref mut state) = self.active_view {
@@ -1755,41 +1998,90 @@ impl Modde {
                 let current_game_dir = self.current_game_dir();
                 let (path, profile_name, game_dir) =
                     if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                        if let Some(blocker) = state.install_blocker() {
+                            self.status_message = blocker.clone();
+                            state.status = blocker;
+                            return Task::none();
+                        }
                         let Some(path) = state.file_path.clone() else {
                             self.status_message = "No wabbajack file selected".to_string();
                             return Task::none();
                         };
                         state.status = "Starting installation...".to_string();
+                        state.installing = true;
+                        state.install_phase = "Starting".to_string();
+                        state.install_current_item.clear();
                         state.log_lines.push("Installation started".to_string());
                         state.progress = 0.0;
                         (
                             path,
-                            self.active_profile.clone().or_else(|| {
-                                (!state.hm_profile.is_empty()).then(|| state.hm_profile.clone())
-                            }),
-                            current_game_dir,
+                            (!state.hm_profile.trim().is_empty())
+                                .then(|| state.hm_profile.trim().to_string())
+                                .or_else(|| self.active_profile.clone()),
+                            if state.hm_game_dir.trim().is_empty() {
+                                current_game_dir
+                            } else {
+                                Some(PathBuf::from(state.hm_game_dir.trim()))
+                            },
                         )
                     } else {
                         self.status_message = "No wabbajack file selected".to_string();
                         return Task::none();
                     };
                 let db = self.db.clone();
-                return Task::perform(
-                    async move { run_wabbajack_install_for_ui(db, path, profile_name, game_dir).await },
-                    Message::WabbajackInstallComplete,
+                return Task::run(
+                    run_wabbajack_install_for_ui_stream(db, path, profile_name, game_dir),
+                    Message::WabbajackInstallEvent,
                 );
             }
+            Message::WabbajackInstallEvent(event) => match event {
+                WabbajackInstallEvent::Progress(progress) => {
+                    if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                        let line = format_install_progress(&progress);
+                        apply_wabbajack_progress_state(state, &progress, line.clone());
+                        state.log_lines.push(line);
+                    }
+                }
+                WabbajackInstallEvent::Complete(result) => {
+                    if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                        state.installing = false;
+                        match result {
+                            Ok(summary) => {
+                                state.progress = 1.0;
+                                state.install_phase = "Complete".to_string();
+                                state.install_current_item.clear();
+                                state.status = summary.status_message.clone();
+                                state.log_lines.push(summary.status_message.clone());
+                                self.status_message = summary.status_message;
+                                return self.reload_profile();
+                            }
+                            Err(error) => {
+                                state.install_phase = "Failed".to_string();
+                                state.install_current_item.clear();
+                                state.status = format!("Install failed: {error}");
+                                state.log_lines.push(state.status.clone());
+                                self.status_message = state.status.clone();
+                            }
+                        }
+                    }
+                }
+            },
             Message::WabbajackInstallComplete(result) => {
                 if let View::WabbajackInstaller(ref mut state) = self.active_view {
+                    state.installing = false;
                     match result {
                         Ok((summary, lines)) => {
                             state.progress = 1.0;
+                            state.install_phase = "Complete".to_string();
+                            state.install_current_item.clear();
                             state.status = summary.clone();
                             state.log_lines.extend(lines);
                             self.status_message = summary;
                             return self.reload_profile();
                         }
                         Err(e) => {
+                            state.install_phase = "Failed".to_string();
+                            state.install_current_item.clear();
                             state.status = format!("Install failed: {e}");
                             state.log_lines.push(state.status.clone());
                             self.status_message = state.status.clone();

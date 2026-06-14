@@ -479,9 +479,55 @@ pub struct WabbajackInstallerState {
     pub hm_snippet: String,
     pub downloaded_path: Option<PathBuf>,
     pub file_path: Option<PathBuf>,
+    pub readiness: Option<modde_sources::wabbajack::readiness::WabbajackReadinessReport>,
+    pub readiness_loading: bool,
+    pub readiness_error: Option<String>,
+    pub installing: bool,
+    pub install_phase: String,
+    pub install_current_item: String,
+    pub archive_import_results: Vec<modde_sources::wabbajack::import::ArchiveImportResult>,
+    pub archive_import_status: Option<String>,
     pub progress: f32,
     pub status: String,
     pub log_lines: Vec<String>,
+}
+
+impl WabbajackInstallerState {
+    #[must_use]
+    pub fn install_blocker(&self) -> Option<String> {
+        if self.installing {
+            return Some("A Wabbajack install is already running.".to_string());
+        }
+        if self.file_path.is_none() {
+            return Some(
+                "Select or download a local .wabbajack file before installing.".to_string(),
+            );
+        }
+        if self.readiness_loading {
+            return Some("Wait for the readiness check to finish before installing.".to_string());
+        }
+        if let Some(error) = &self.readiness_error {
+            return Some(format!("Fix the readiness check error first: {error}"));
+        }
+        let Some(readiness) = &self.readiness else {
+            return Some("Run a readiness check before installing.".to_string());
+        };
+        if !readiness.hard_blockers.is_empty() {
+            return Some("Resolve the hard blockers before installing.".to_string());
+        }
+        if !readiness.manual_downloads.is_empty() {
+            return Some("Import the required manual archives before installing.".to_string());
+        }
+        if !readiness.install_ready {
+            return Some("Resolve the readiness blockers before installing.".to_string());
+        }
+        None
+    }
+
+    #[must_use]
+    pub fn can_install(&self) -> bool {
+        self.install_blocker().is_none()
+    }
 }
 
 pub(super) fn prefill_wabbajack_game_dir(

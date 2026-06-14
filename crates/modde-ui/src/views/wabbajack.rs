@@ -21,7 +21,7 @@ pub fn view<'a>(
     current_game_id: Option<&'a str>,
 ) -> Element<'a, Message> {
     let title_bar = row![
-        text("Wabbajack Explorer").size(20),
+        text("Wabbajack Installer").size(20),
         iced::widget::space::horizontal(),
         button(text("Refresh").size(12))
             .padding([4, 10])
@@ -200,10 +200,9 @@ fn manual_tab<'a>(
                 .padding([6, 12])
                 .on_action_maybe(
                     state
-                        .file_path
-                        .as_ref()
-                        .map(|_| ButtonAction::WabbajackStartInstall),
-                    "Select or download a local .wabbajack file before installing.",
+                        .can_install()
+                        .then_some(ButtonAction::WabbajackStartInstall),
+                    "Resolve readiness blockers before installing.",
                 ),
         ]
         .spacing(8),
@@ -255,7 +254,7 @@ fn detail_panel<'a>(
     manifest: Option<&'a WabbajackManifest>,
     entry: Option<&'a WabbajackCatalogEntry>,
 ) -> container::Container<'a, Message> {
-    let mut details = column![text("Details").size(16)].spacing(6);
+    let mut details = column![text("Selected Modlist").size(16)].spacing(8);
     if let Some(entry) = entry {
         details = details
             .push(text(&entry.title).size(15))
@@ -317,6 +316,247 @@ fn detail_panel<'a>(
         || "No local file selected".to_string(),
         |p| p.display().to_string(),
     );
+
+    details = details
+        .push(iced::widget::rule::horizontal(1))
+        .push(text(file).size(11))
+        .push(action_controls(state))
+        .push(target_controls(state))
+        .push(readiness_panel(state))
+        .push(missing_archives_panel(state))
+        .push(progress_panel(state))
+        .push(hm_controls(state));
+
+    container(scrollable(details).height(Length::Fill))
+        .padding(10)
+        .height(Length::Fill)
+        .style(container::rounded_box)
+}
+
+fn action_controls<'a>(state: &'a WabbajackInstallerState) -> Element<'a, Message> {
+    let recheck_action = state
+        .file_path
+        .as_ref()
+        .map(|_| ButtonAction::WabbajackCheckReadiness);
+    let import_action = state
+        .file_path
+        .as_ref()
+        .map(|_| ButtonAction::WabbajackImportArchives);
+    let install_action = state
+        .can_install()
+        .then_some(ButtonAction::WabbajackStartInstall);
+
+    column![
+        row![
+            button(text("Download").size(12))
+                .style(button::primary)
+                .padding([4, 10])
+                .on_action(ButtonAction::WabbajackDownloadSelected),
+            button(text("Recheck").size(12))
+                .style(button::secondary)
+                .padding([4, 10])
+                .on_action_maybe(
+                    recheck_action,
+                    "Select or download a local .wabbajack file before checking readiness.",
+                ),
+            button(text("Import archives").size(12))
+                .style(button::secondary)
+                .padding([4, 10])
+                .on_action_maybe(
+                    import_action,
+                    "Select a .wabbajack file before importing manual archives.",
+                ),
+            button(text("Install").size(12))
+                .style(button::success)
+                .padding([4, 10])
+                .on_action_maybe(
+                    install_action,
+                    "Resolve readiness blockers before installing."
+                ),
+        ]
+        .spacing(6)
+        .align_y(Alignment::Center),
+        state.install_blocker().map_or_else(
+            || text("Ready to install.").size(11).color(color!(0x66CC66)),
+            |blocker| text(blocker).size(11).color(color!(0xCCAA66)),
+        ),
+    ]
+    .spacing(4)
+    .into()
+}
+
+fn target_controls<'a>(state: &'a WabbajackInstallerState) -> Element<'a, Message> {
+    column![
+        text("Install Target").size(13),
+        text_input("profile", &state.hm_profile)
+            .on_input(Message::WabbajackHmProfileChanged)
+            .padding(5),
+        text_input("game", &state.hm_game)
+            .on_input(Message::WabbajackHmGameChanged)
+            .padding(5),
+        text_input("gameDir (optional)", &state.hm_game_dir)
+            .on_input(Message::WabbajackHmGameDirChanged)
+            .padding(5),
+    ]
+    .spacing(5)
+    .into()
+}
+
+fn readiness_panel<'a>(state: &'a WabbajackInstallerState) -> Element<'a, Message> {
+    let mut panel = column![text("Readiness").size(13)].spacing(4);
+    if state.readiness_loading {
+        panel = panel.push(text("Checking selected Wabbajack file...").size(11));
+    } else if let Some(error) = &state.readiness_error {
+        panel = panel.push(
+            text(format!("Readiness check failed: {error}"))
+                .size(11)
+                .color(color!(0xFF6666)),
+        );
+    } else if let Some(report) = &state.readiness {
+        let ready_text = if report.install_ready {
+            "Ready for validated staging/deploy"
+        } else {
+            "Not ready to install"
+        };
+        let ready_color = if report.install_ready {
+            color!(0x66CC66)
+        } else {
+            color!(0xFFAA44)
+        };
+        panel = panel
+            .push(text(ready_text).size(12).color(ready_color))
+            .push(
+                text(format!(
+                    "{} archive(s), {} directive(s), game {}",
+                    report.archives, report.directives, report.normalized_game
+                ))
+                .size(11),
+            )
+            .push(
+                text(format!(
+                    "Staging: {} ({})",
+                    report.staging.layout_action, report.staging.path
+                ))
+                .size(11),
+            )
+            .push(
+                text(format!(
+                    "Game-file sources: {}/{} present",
+                    report.game_file_sources.present, report.game_file_sources.total
+                ))
+                .size(11),
+            )
+            .push(
+                text(format!(
+                    "Nexus: {}",
+                    if !report.nexus_required {
+                        "not required"
+                    } else if report.nexus_available {
+                        "configured"
+                    } else {
+                        "missing API key"
+                    }
+                ))
+                .size(11),
+            );
+
+        for blocker in report.hard_blockers.iter().take(5) {
+            panel = panel.push(
+                text(format!("Blocker: {blocker}"))
+                    .size(11)
+                    .color(color!(0xFF6666)),
+            );
+        }
+        for warning in report.warnings.iter().take(5) {
+            panel = panel.push(
+                text(format!("Warning: {warning}"))
+                    .size(11)
+                    .color(color!(0xCCAA66)),
+            );
+        }
+    } else {
+        panel = panel
+            .push(text("Select or download a .wabbajack file to run readiness checks.").size(11));
+    }
+    container(panel)
+        .padding(8)
+        .width(Length::Fill)
+        .style(container::rounded_box)
+        .into()
+}
+
+fn missing_archives_panel<'a>(state: &'a WabbajackInstallerState) -> Element<'a, Message> {
+    let mut panel = column![text("Missing Manual Archives").size(13)].spacing(4);
+    if let Some(status) = &state.archive_import_status {
+        panel = panel.push(text(status).size(11).color(color!(0x88CCFF)));
+    }
+    if !state.archive_import_results.is_empty() {
+        for result in state.archive_import_results.iter().rev().take(5) {
+            panel = panel.push(
+                text(format!(
+                    "{}: {:?} ({:016x})",
+                    result.source_path.display(),
+                    result.status,
+                    result.computed_xxh64
+                ))
+                .size(10),
+            );
+        }
+    }
+    if let Some(report) = &state.readiness {
+        if report.manual_downloads.is_empty() {
+            panel = panel.push(
+                text("No unresolved manual archives.")
+                    .size(11)
+                    .color(color!(0x66CC66)),
+            );
+        } else {
+            for archive in report.manual_downloads.iter().take(8) {
+                panel = panel.push(
+                    container(
+                        column![
+                            text(&archive.name).size(11),
+                            text(format!("hash {}", archive.hash))
+                                .size(10)
+                                .color(color!(0x888888)),
+                            row![
+                                button(text("Open URL").size(11))
+                                    .style(button::secondary)
+                                    .padding([3, 8])
+                                    .on_action(ButtonAction::WabbajackOpenUrl(archive.url.clone())),
+                                text("Download it, then use Import archives.").size(10),
+                            ]
+                            .spacing(6)
+                            .align_y(Alignment::Center),
+                        ]
+                        .spacing(2),
+                    )
+                    .padding(6)
+                    .width(Length::Fill)
+                    .style(container::rounded_box),
+                );
+            }
+            if report.manual_downloads.len() > 8 {
+                panel = panel.push(
+                    text(format!(
+                        "... and {} more manual archive(s)",
+                        report.manual_downloads.len() - 8
+                    ))
+                    .size(10),
+                );
+            }
+        }
+    } else {
+        panel = panel.push(text("Run readiness to list manual archives.").size(11));
+    }
+    container(panel)
+        .padding(8)
+        .width(Length::Fill)
+        .style(container::rounded_box)
+        .into()
+}
+
+fn progress_panel<'a>(state: &'a WabbajackInstallerState) -> Element<'a, Message> {
     let pct = state.progress * 100.0;
     let log_content = if state.log_lines.is_empty() {
         column![text("Waiting for activity...").size(11)]
@@ -330,19 +570,27 @@ fn detail_panel<'a>(
                 col.push(text(line).size(11))
             })
     };
-
-    details = details
-        .push(iced::widget::rule::horizontal(1))
-        .push(text(file).size(11))
-        .push(progress_bar(0.0..=100.0, pct).girth(10))
-        .push(hm_controls(state))
-        .push(text("Log").size(13))
-        .push(container(scrollable(log_content).height(Length::Fixed(160.0))).padding(6));
-
-    container(details)
-        .padding(10)
-        .height(Length::Fill)
-        .style(container::rounded_box)
+    container(
+        column![
+            text("Install Progress").size(13),
+            text(if state.install_phase.is_empty() {
+                "Idle".to_string()
+            } else if state.install_current_item.is_empty() {
+                state.install_phase.clone()
+            } else {
+                format!("{}: {}", state.install_phase, state.install_current_item)
+            })
+            .size(11),
+            progress_bar(0.0..=100.0, pct).girth(10),
+            text("Log").size(12),
+            container(scrollable(log_content).height(Length::Fixed(140.0))).padding(6),
+        ]
+        .spacing(4),
+    )
+    .padding(8)
+    .width(Length::Fill)
+    .style(container::rounded_box)
+    .into()
 }
 
 fn hm_controls<'a>(state: &'a WabbajackInstallerState) -> Element<'a, Message> {
@@ -361,15 +609,9 @@ fn hm_controls<'a>(state: &'a WabbajackInstallerState) -> Element<'a, Message> {
 
     column![
         text("Home Manager").size(13),
-        text_input("profile", &state.hm_profile)
-            .on_input(Message::WabbajackHmProfileChanged)
-            .padding(5),
-        text_input("game", &state.hm_game)
-            .on_input(Message::WabbajackHmGameChanged)
-            .padding(5),
-        text_input("gameDir (optional)", &state.hm_game_dir)
-            .on_input(Message::WabbajackHmGameDirChanged)
-            .padding(5),
+        text("Uses the install target fields above.")
+            .size(11)
+            .color(color!(0x888888)),
         row![
             button(text("Generate").size(12))
                 .padding([4, 8])

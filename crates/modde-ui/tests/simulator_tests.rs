@@ -167,6 +167,173 @@ fn wabbajack_shows_generated_hm_snippet_preview() {
         .expect("should show generated snippet preview");
 }
 
+fn wabbajack_readiness_report(
+    install_ready: bool,
+    manual_downloads: Vec<modde_sources::wabbajack::readiness::WabbajackManualArchive>,
+) -> modde_sources::wabbajack::readiness::WabbajackReadinessReport {
+    modde_sources::wabbajack::readiness::WabbajackReadinessReport {
+        manifest_path: "/tmp/list.wabbajack".to_string(),
+        name: "Test List".to_string(),
+        author: "tester".to_string(),
+        version: "1.0".to_string(),
+        game: "SkyrimSpecialEdition".to_string(),
+        normalized_game: "skyrim-se".to_string(),
+        profile_name: "test-list".to_string(),
+        store_path: "/tmp/store".to_string(),
+        archives: 1,
+        directives: 2,
+        archive_states: Default::default(),
+        directive_types: Default::default(),
+        archive_extensions: Default::default(),
+        downloadable_archives: 1,
+        store_present: 0,
+        store_missing: Vec::new(),
+        missing_nexus_archives: Vec::new(),
+        game_file_sources: modde_sources::wabbajack::readiness::WabbajackGameFileSourceReport {
+            total: 0,
+            present: 0,
+            missing: Vec::new(),
+            mismatched: Vec::new(),
+        },
+        staging: modde_sources::wabbajack::readiness::WabbajackStagingReport {
+            path: "/tmp/staging/test-list".to_string(),
+            exists: false,
+            compatible_layout: false,
+            archive_batch_sentinels: 0,
+            archive_batch_total: 0,
+            create_bsa_sentinels: 0,
+            create_bsa_total: 0,
+            layout_action: "create".to_string(),
+        },
+        rar_enabled: true,
+        nexus_required: false,
+        nexus_available: true,
+        hard_blockers: Vec::new(),
+        warnings: Vec::new(),
+        manual_downloads,
+        install_ready,
+    }
+}
+
+#[test]
+fn wabbajack_installer_renders_guided_sections() {
+    let state = WabbajackInstallerState::default();
+    let manifest = None;
+    let available_games = vec![("skyrim-se".to_string(), "Skyrim SE".to_string())];
+    let mut ui = simulator(modde_ui::views::wabbajack::view(
+        &state,
+        &manifest,
+        &available_games,
+        Some("skyrim-se"),
+    ));
+
+    ui.find("Wabbajack Installer").expect("title");
+    ui.find("Install Target").expect("target section");
+    ui.find("Readiness").expect("readiness section");
+    ui.find("Missing Manual Archives")
+        .expect("manual archive section");
+    ui.find("Install Progress").expect("progress section");
+}
+
+#[test]
+fn wabbajack_ready_install_button_emits_start() {
+    let state = WabbajackInstallerState {
+        file_path: Some(PathBuf::from("/tmp/list.wabbajack")),
+        readiness: Some(wabbajack_readiness_report(true, Vec::new())),
+        ..Default::default()
+    };
+    let manifest = None;
+    let available_games = vec![("skyrim-se".to_string(), "Skyrim SE".to_string())];
+    let mut ui = simulator(modde_ui::views::wabbajack::view(
+        &state,
+        &manifest,
+        &available_games,
+        Some("skyrim-se"),
+    ));
+
+    ui.find("Ready for validated staging/deploy")
+        .expect("ready status");
+    ui.click("Install").expect("install button");
+    let messages: Vec<_> = ui.into_messages().collect();
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::WabbajackStartInstall)),
+        "ready install should emit WabbajackStartInstall, got: {messages:?}",
+    );
+}
+
+#[test]
+fn wabbajack_missing_manual_archives_block_install_and_offer_actions() {
+    let manual = modde_sources::wabbajack::readiness::WabbajackManualArchive {
+        hash: "0000000000001234".to_string(),
+        name: "manual.7z".to_string(),
+        url: "https://example.test/manual.7z".to_string(),
+        prompt: "download it".to_string(),
+        store_path: "/tmp/store/0000000000001234.archive".to_string(),
+    };
+    let state = WabbajackInstallerState {
+        file_path: Some(PathBuf::from("/tmp/list.wabbajack")),
+        readiness: Some(wabbajack_readiness_report(false, vec![manual])),
+        ..Default::default()
+    };
+    let manifest = None;
+    let available_games = vec![("skyrim-se".to_string(), "Skyrim SE".to_string())];
+    let mut ui = simulator(modde_ui::views::wabbajack::view(
+        &state,
+        &manifest,
+        &available_games,
+        Some("skyrim-se"),
+    ));
+
+    ui.find("manual.7z").expect("manual archive row");
+    ui.click("Open URL").expect("open URL button");
+    ui.click("Import archives").expect("import button");
+    ui.click("Install")
+        .expect("disabled install button remains visible");
+    let messages: Vec<_> = ui.into_messages().collect();
+    assert!(
+        messages.iter().any(|m| {
+            matches!(m, Message::WabbajackOpenUrl(url) if url == "https://example.test/manual.7z")
+        }),
+        "manual archive should expose Open URL, got: {messages:?}",
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::WabbajackImportArchives)),
+        "manual archive should expose import action, got: {messages:?}",
+    );
+    assert!(
+        !messages
+            .iter()
+            .any(|m| matches!(m, Message::WabbajackStartInstall)),
+        "install should not emit while manual archives are missing, got: {messages:?}",
+    );
+}
+
+#[test]
+fn wabbajack_live_progress_is_visible() {
+    let state = WabbajackInstallerState {
+        install_phase: "Applying".to_string(),
+        install_current_item: "directive 4/10".to_string(),
+        progress: 0.4,
+        log_lines: vec!["Applying directives: 4/10".to_string()],
+        ..Default::default()
+    };
+    let manifest = None;
+    let available_games = vec![("skyrim-se".to_string(), "Skyrim SE".to_string())];
+    let mut ui = simulator(modde_ui::views::wabbajack::view(
+        &state,
+        &manifest,
+        &available_games,
+        Some("skyrim-se"),
+    ));
+
+    ui.find("Applying: directive 4/10").expect("progress phase");
+    ui.find("Applying directives: 4/10").expect("progress log");
+}
+
 // ─── Mod List View ────────────────────────────────────────────
 
 /// Helper macro that declares filter state bindings at the caller's scope

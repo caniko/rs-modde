@@ -4,7 +4,7 @@ use iced_test::core::widget::Operation;
 use iced_test::core::{Event, Font, Point, Settings, Size, mouse};
 use iced_test::selector;
 use iced_test::selector::Bounded;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn test_app() -> Modde {
     Modde {
@@ -1331,6 +1331,164 @@ fn wabbajack_game_dir_manual_edit_is_not_overwritten() {
     };
     assert_eq!(state.hm_game_dir, "/custom/skyrim");
     assert!(state.hm_game_dir_user_edited);
+}
+
+fn ready_wabbajack_report() -> modde_sources::wabbajack::readiness::WabbajackReadinessReport {
+    modde_sources::wabbajack::readiness::WabbajackReadinessReport {
+        manifest_path: "/tmp/list.wabbajack".to_string(),
+        name: "Test List".to_string(),
+        author: "tester".to_string(),
+        version: "1.0".to_string(),
+        game: "SkyrimSpecialEdition".to_string(),
+        normalized_game: "skyrim-se".to_string(),
+        profile_name: "test-list".to_string(),
+        store_path: "/tmp/store".to_string(),
+        archives: 0,
+        directives: 0,
+        archive_states: Default::default(),
+        directive_types: Default::default(),
+        archive_extensions: Default::default(),
+        downloadable_archives: 0,
+        store_present: 0,
+        store_missing: Vec::new(),
+        manual_downloads: Vec::new(),
+        missing_nexus_archives: Vec::new(),
+        game_file_sources: modde_sources::wabbajack::readiness::WabbajackGameFileSourceReport {
+            total: 0,
+            present: 0,
+            missing: Vec::new(),
+            mismatched: Vec::new(),
+        },
+        staging: modde_sources::wabbajack::readiness::WabbajackStagingReport {
+            path: "/tmp/staging/test-list".to_string(),
+            exists: false,
+            compatible_layout: false,
+            archive_batch_sentinels: 0,
+            archive_batch_total: 0,
+            create_bsa_sentinels: 0,
+            create_bsa_total: 0,
+            layout_action: "create".to_string(),
+        },
+        rar_enabled: true,
+        nexus_required: false,
+        nexus_available: true,
+        hard_blockers: Vec::new(),
+        warnings: Vec::new(),
+        install_ready: true,
+    }
+}
+
+#[test]
+fn wabbajack_file_selection_starts_readiness_check() {
+    let mut app = test_app();
+    app.active_view = View::WabbajackInstaller(WabbajackInstallerState::default());
+
+    let _ = app.update(Message::WabbajackFileSelected(PathBuf::from(
+        "/tmp/list.wabbajack",
+    )));
+
+    let View::WabbajackInstaller(state) = &app.active_view else {
+        panic!("expected Wabbajack installer view");
+    };
+    assert_eq!(
+        state.file_path.as_deref(),
+        Some(Path::new("/tmp/list.wabbajack"))
+    );
+    assert!(state.readiness_loading);
+    assert_eq!(state.status, "Checking Wabbajack readiness...");
+}
+
+#[test]
+fn wabbajack_target_changes_recheck_without_overwriting_manual_game_dir() {
+    let mut app = test_app();
+    app.settings
+        .set_game_path(&GameId::from("skyrim-se"), PathBuf::from("/games/skyrim"));
+    app.active_view = View::WabbajackInstaller(WabbajackInstallerState {
+        file_path: Some(PathBuf::from("/tmp/list.wabbajack")),
+        hm_game: "skyrim-se".to_string(),
+        hm_game_dir: "/custom/skyrim".to_string(),
+        hm_game_dir_user_edited: true,
+        ..Default::default()
+    });
+
+    let _ = app.update(Message::WabbajackHmGameChanged("skyrim-se".to_string()));
+
+    let View::WabbajackInstaller(state) = &app.active_view else {
+        panic!("expected Wabbajack installer view");
+    };
+    assert_eq!(state.hm_game_dir, "/custom/skyrim");
+    assert!(state.hm_game_dir_user_edited);
+    assert!(state.readiness_loading);
+}
+
+#[test]
+fn wabbajack_start_install_requires_readiness_report() {
+    let mut app = test_app();
+    app.active_view = View::WabbajackInstaller(WabbajackInstallerState {
+        file_path: Some(PathBuf::from("/tmp/list.wabbajack")),
+        ..Default::default()
+    });
+
+    let task = app.update(Message::WabbajackStartInstall);
+
+    let View::WabbajackInstaller(state) = &app.active_view else {
+        panic!("expected Wabbajack installer view");
+    };
+    assert_eq!(task.units(), 0);
+    assert!(!state.installing);
+    assert_eq!(state.status, "Run a readiness check before installing.");
+}
+
+#[test]
+fn wabbajack_start_install_uses_panel_target_when_ready() {
+    let mut app = test_app();
+    app.active_profile = Some("active-profile".to_string());
+    app.active_view = View::WabbajackInstaller(WabbajackInstallerState {
+        file_path: Some(PathBuf::from("/tmp/list.wabbajack")),
+        hm_profile: "panel-profile".to_string(),
+        hm_game_dir: "/panel/game".to_string(),
+        readiness: Some(ready_wabbajack_report()),
+        ..Default::default()
+    });
+
+    let task = app.update(Message::WabbajackStartInstall);
+
+    let View::WabbajackInstaller(state) = &app.active_view else {
+        panic!("expected Wabbajack installer view");
+    };
+    assert_eq!(task.units(), 1);
+    assert!(state.installing);
+    assert_eq!(state.install_phase, "Starting");
+    assert_eq!(state.hm_profile, "panel-profile");
+    assert_eq!(state.hm_game_dir, "/panel/game");
+}
+
+#[test]
+fn wabbajack_live_progress_event_updates_state_and_log() {
+    let mut app = test_app();
+    app.active_view = View::WabbajackInstaller(WabbajackInstallerState::default());
+
+    let _ = app.update(Message::WabbajackInstallEvent(
+        WabbajackInstallEvent::Progress(
+            modde_sources::wabbajack::installer::InstallProgress::Applying {
+                directive_index: 3,
+                total: 10,
+            },
+        ),
+    ));
+
+    let View::WabbajackInstaller(state) = &app.active_view else {
+        panic!("expected Wabbajack installer view");
+    };
+    assert_eq!(state.install_phase, "Applying");
+    assert_eq!(state.install_current_item, "directive 4/10");
+    assert!((state.progress - 0.4).abs() < f32::EPSILON);
+    assert!(
+        state
+            .log_lines
+            .iter()
+            .any(|line| line == "Applying directives: 4/10")
+    );
 }
 
 #[test]

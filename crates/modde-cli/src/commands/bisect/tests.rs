@@ -1,0 +1,312 @@
+use super::*;
+use std::path::PathBuf;
+
+use modde_core::profile::{Profile, ProfileSource};
+use modde_core::{
+    BisectOracle, BisectSaveSafety, BisectStatus, GameId, NewBisectSession, NewBisectStep,
+};
+use modde_core::PerformanceSample;
+
+use super::flow::{render_history, validate_retry};
+use super::perf::{perf_regression_verdict, PerfRegressionConfig, PerfRegressionVerdict};
+
+fn config() -> PerfRegressionConfig {
+    PerfRegressionConfig {
+        p99_frame_time_ratio: 1.15,
+        one_percent_low_fps_ratio: 0.85,
+        alpha: 0.05,
+        min_samples: 30,
+    }
+}
+
+fn samples(values: &[f64]) -> Vec<PerformanceSample> {
+    values
+        .iter()
+        .enumerate()
+        .map(|(idx, fps)| PerformanceSample {
+            elapsed_seconds: Some(31.0 + idx as f64),
+            fps: *fps,
+            frame_time_ms: Some(1000.0 / fps),
+            cpu_load: None,
+            gpu_load: None,
+        })
+        .collect()
+}
+
+fn verdict(base: &[f64], candidate: &[f64]) -> PerfRegressionVerdict {
+    let base_samples = samples(base);
+    let candidate_samples = samples(candidate);
+    let base_summary =
+        modde_core::performance::summarize_samples_with_warmup(&base_samples, 0.0);
+    let candidate_summary =
+        modde_core::performance::summarize_samples_with_warmup(&candidate_samples, 0.0);
+    perf_regression_verdict(
+        &base_summary,
+        &candidate_summary,
+        &base_samples,
+        &candidate_samples,
+        config(),
+    )
+}
+
+#[test]
+fn perf_verdict_identical_runs_do_not_regress() {
+    let values = vec![60.0; 60];
+    assert!(!verdict(&values, &values).regressed);
+}
+
+#[test]
+fn perf_verdict_high_variance_runs_do_not_false_positive() {
+    let base = (0..60)
+        .map(|idx| if idx % 2 == 0 { 40.0 } else { 80.0 })
+        .collect::<Vec<_>>();
+    let mut candidate = base.clone();
+    candidate.rotate_left(1);
+    assert!(!verdict(&base, &candidate).regressed);
+}
+
+#[test]
+fn perf_verdict_clear_low_variance_drop_regresses() {
+    let base = vec![60.0; 60];
+    let candidate = vec![45.0; 60];
+    assert!(verdict(&base, &candidate).regressed);
+}
+
+// ── History + retry (DB-seeded) ──────────────────────────────
+
+use modde_core::ModdeDb;
+use modde_core::profile::EnabledMod;
+
+fn enabled_mod(mod_id: &str) -> EnabledMod {
+    EnabledMod {
+        mod_id: mod_id.to_string(),
+        enabled: true,
+        ..EnabledMod::default()
+    }
+}
+
+fn test_profile() -> Profile {
+    Profile {
+        id: None,
+        name: "bisect-source".to_string(),
+        game_id: GameId::from("skyrim-se"),
+        source: ProfileSource::Manual,
+        mods: vec![
+            enabled_mod("mod-a"),
+            enabled_mod("mod-b"),
+            enabled_mod("mod-c"),
+            enabled_mod("mod-d"),
+        ],
+        overrides: PathBuf::from("/tmp/overrides"),
+        load_order_rules: Default::default(),
+        load_order_lock: None,
+    }
+}
+
+fn new_step(session_id: &str, step_index: usize, half: (&[&str], &[&str])) -> NewBisectStep {
+    let (enabled, disabled) = half;
+    NewBisectStep {
+        session_id: session_id.to_string(),
+        step_index,
+        candidate_profile: format!("__bisect_{session_id}_{step_index}"),
+        candidate_mod_ids: enabled.iter().map(ToString::to_string).collect(),
+        enabled_mod_ids: enabled.iter().map(ToString::to_string).collect(),
+        disabled_mod_ids: disabled.iter().map(ToString::to_string).collect(),
+    }
+}
+
+/// Seed an in-memory DB with one bisect session for `test_profile`.
+async fn seed_session(db: &ModdeDb, session_id: &str) {
+    let profile_id = db.create_profile(&test_profile()).await.expect("profile");
+    db.create_bisect_session(&NewBisectSession {
+        session_id: session_id.to_string(),
+        game_id: GameId::from("skyrim-se"),
+        source_profile_id: profile_id,
+        source_profile_name: "bisect-source".to_string(),
+        oracle: BisectOracle::Manual,
+        suspect_mod_ids: vec![
+            "mod-a".to_string(),
+            "mod-b".to_string(),
+            "mod-c".to_string(),
+            "mod-d".to_string(),
+        ],
+        save_safety: BisectSaveSafety::Refuse,
+        keep_profiles: false,
+    })
+    .await
+    .expect("session");
+}
+
+#[tokio::test]
+async fn history_lists_steps_halves_results_and_signals() {
+    let db = ModdeDb::open_memory().await.expect("db");
+    let sid = "b-history";
+    seed_session(&db, sid).await;
+
+    // Two completed steps with observed signals…
+    let step1 = db
+        .create_bisect_step(&new_step(
+            sid,
+            1,
+            (&["mod-a", "mod-b"], &["mod-c", "mod-d"]),
+        ))
+        .await
+        .expect("step 1");
+    db.complete_bisect_step(
+        step1,
+        BisectResult::Good,
+        Some("no new crash log observed"),
+        None,
+    )
+    .await
+    .expect("complete step 1");
+    let step2 = db
+        .create_bisect_step(&new_step(
+            sid,
+            2,
+            (&["mod-c"], &["mod-a", "mod-b", "mod-d"]),
+        ))
+        .await
+        .expect("step 2");
+    db.complete_bisect_step(
+        step2,
+        BisectResult::Bad,
+        Some("new crash log: /tmp/crash.log"),
+        Some("crashed at the main menu"),
+    )
+    .await
+    .expect("complete step 2");
+    // …plus one still-pending candidate.
+    let step3 = db
+        .create_bisect_step(&new_step(
+            sid,
+            3,
+            (&["mod-d"], &["mod-a", "mod-b", "mod-c"]),
+        ))
+        .await
+        .expect("step 3");
+    db.update_bisect_session_state(
+        sid,
+        BisectStatus::Waiting,
+        &["mod-c".to_string(), "mod-d".to_string()],
+        &["mod-a".to_string(), "mod-b".to_string()],
+        &[],
+        Some(step3),
+        Some(&format!("__bisect_{sid}_3")),
+    )
+    .await
+    .expect("update session");
+
+    let session = db.load_bisect_session(sid).await.expect("load session");
+    let steps = db.list_bisect_steps(sid).await.expect("list steps");
+    let rendered = render_history(&session, &steps);
+
+    assert!(rendered.contains("Bisect session: b-history"));
+    assert!(rendered.contains("Status: waiting"));
+    assert!(rendered.contains("Current suspects: mod-c, mod-d"));
+    // Step indices + results.
+    assert!(rendered.contains("#1 __bisect_b-history_1 result=good"));
+    assert!(rendered.contains("#2 __bisect_b-history_2 result=bad"));
+    assert!(rendered.contains("#3 __bisect_b-history_3 result=pending"));
+    // Enabled/disabled halves.
+    assert!(rendered.contains("  enabled half: mod-a, mod-b"));
+    assert!(rendered.contains("  disabled half: mod-c, mod-d"));
+    assert!(rendered.contains("  enabled half: mod-c\n"));
+    assert!(rendered.contains("  disabled half: mod-a, mod-b, mod-d"));
+    // Observed signals + notes; the pending step has neither.
+    assert!(rendered.contains("  signal: no new crash log observed"));
+    assert!(rendered.contains("  signal: new crash log: /tmp/crash.log"));
+    assert!(rendered.contains("  notes: crashed at the main menu"));
+    let step3_block = rendered
+        .split("#3 ")
+        .nth(1)
+        .expect("step 3 section present");
+    assert!(!step3_block.contains("signal:"));
+    assert!(!step3_block.contains("notes:"));
+}
+
+#[tokio::test]
+async fn retry_validation_rejects_session_without_pending_candidate() {
+    let db = ModdeDb::open_memory().await.expect("db");
+    let sid = "b-retry-none";
+    seed_session(&db, sid).await;
+
+    let session = db.load_bisect_session(sid).await.expect("load session");
+    let err = validate_retry(&session).expect_err("no candidate must be rejected");
+    assert!(
+        err.to_string().contains("no pending candidate to retry"),
+        "unexpected error: {err}"
+    );
+}
+
+#[tokio::test]
+async fn retry_validation_accepts_waiting_session_with_pending_candidate() {
+    let db = ModdeDb::open_memory().await.expect("db");
+    let sid = "b-retry-ok";
+    seed_session(&db, sid).await;
+    let step = db
+        .create_bisect_step(&new_step(
+            sid,
+            1,
+            (&["mod-a", "mod-b"], &["mod-c", "mod-d"]),
+        ))
+        .await
+        .expect("step");
+    let candidate = format!("__bisect_{sid}_1");
+    db.update_bisect_session_state(
+        sid,
+        BisectStatus::Waiting,
+        &[
+            "mod-a".to_string(),
+            "mod-b".to_string(),
+            "mod-c".to_string(),
+            "mod-d".to_string(),
+        ],
+        &[],
+        &[],
+        Some(step),
+        Some(&candidate),
+    )
+    .await
+    .expect("update session");
+
+    let session = db.load_bisect_session(sid).await.expect("load session");
+    let validated = validate_retry(&session).expect("waiting session must validate");
+    assert_eq!(validated, candidate);
+}
+
+#[tokio::test]
+async fn retry_validation_rejects_candidate_when_not_waiting() {
+    let db = ModdeDb::open_memory().await.expect("db");
+    let sid = "b-retry-stale";
+    seed_session(&db, sid).await;
+    let step = db
+        .create_bisect_step(&new_step(
+            sid,
+            1,
+            (&["mod-a", "mod-b"], &["mod-c", "mod-d"]),
+        ))
+        .await
+        .expect("step");
+    // Candidate name recorded but the session is back to Active — e.g. a
+    // crash-oracle run that already auto-marked the step.
+    db.update_bisect_session_state(
+        sid,
+        BisectStatus::Active,
+        &["mod-a".to_string(), "mod-b".to_string()],
+        &[],
+        &[],
+        Some(step),
+        Some(&format!("__bisect_{sid}_1")),
+    )
+    .await
+    .expect("update session");
+
+    let session = db.load_bisect_session(sid).await.expect("load session");
+    let err = validate_retry(&session).expect_err("non-waiting session must be rejected");
+    assert!(
+        err.to_string()
+            .contains("is not waiting on a pending candidate (status: active)"),
+        "unexpected error: {err}"
+    );
+}

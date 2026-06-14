@@ -59,6 +59,8 @@ pub enum ButtonAction {
     WabbajackTabChanged(WabbajackTab),
     OpenWabbajackFile,
     WabbajackDownloadSelected,
+    WabbajackCheckReadiness,
+    WabbajackImportArchives,
     WabbajackStartInstall,
     WabbajackSelectEntry(usize),
     WabbajackOpenUrl(String),
@@ -210,6 +212,12 @@ impl ButtonActionDescription for ButtonAction {
             ButtonAction::OpenWabbajackFile => "Choose a local .wabbajack file from disk.",
             ButtonAction::WabbajackDownloadSelected => {
                 "Download the selected or entered Wabbajack modlist file."
+            }
+            ButtonAction::WabbajackCheckReadiness => {
+                "Check whether the selected Wabbajack file is ready to install."
+            }
+            ButtonAction::WabbajackImportArchives => {
+                "Import downloaded manual archives by exact Wabbajack hash."
             }
             ButtonAction::WabbajackStartInstall => {
                 "Install the currently selected local Wabbajack file."
@@ -430,6 +438,8 @@ impl From<ButtonAction> for Message {
             ButtonAction::WabbajackTabChanged(tab) => Message::WabbajackTabChanged(tab),
             ButtonAction::OpenWabbajackFile => Message::OpenWabbajackFile,
             ButtonAction::WabbajackDownloadSelected => Message::WabbajackDownloadSelected,
+            ButtonAction::WabbajackCheckReadiness => Message::WabbajackCheckReadiness,
+            ButtonAction::WabbajackImportArchives => Message::WabbajackImportArchives,
             ButtonAction::WabbajackStartInstall => Message::WabbajackStartInstall,
             ButtonAction::WabbajackSelectEntry(index) => Message::WabbajackSelectEntry(index),
             ButtonAction::WabbajackOpenUrl(url) => Message::WabbajackOpenUrl(url),
@@ -622,6 +632,8 @@ mod tests {
             ),
             ("Select File", ButtonAction::OpenWabbajackFile),
             ("Download", ButtonAction::WabbajackDownloadSelected),
+            ("Recheck", ButtonAction::WabbajackCheckReadiness),
+            ("Import archives", ButtonAction::WabbajackImportArchives),
             ("Install", ButtonAction::WabbajackStartInstall),
             ("Entry", ButtonAction::WabbajackSelectEntry(0)),
             (

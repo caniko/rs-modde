@@ -157,6 +157,17 @@ pub struct ProfileWriteOutcome {
 }
 
 #[derive(Debug, Clone)]
+pub struct WabbajackInstallUiSummary {
+    pub status_message: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum WabbajackInstallEvent {
+    Progress(modde_sources::wabbajack::installer::InstallProgress),
+    Complete(Result<WabbajackInstallUiSummary, String>),
+}
+
+#[derive(Debug, Clone)]
 pub enum ExperimentWriteKind {
     Try,
     Rollback,
@@ -647,6 +658,14 @@ pub enum Message {
     WabbajackHmGameDirChanged(String),
     WabbajackDownloadSelected,
     WabbajackDownloadComplete(Result<PathBuf, String>),
+    WabbajackCheckReadiness,
+    WabbajackReadinessLoaded(
+        Result<modde_sources::wabbajack::readiness::WabbajackReadinessReport, String>,
+    ),
+    WabbajackImportArchives,
+    WabbajackArchivesImported(
+        Result<Vec<modde_sources::wabbajack::import::ArchiveImportResult>, String>,
+    ),
     WabbajackGenerateHmSnippet,
     WabbajackHmSnippetGenerated(Result<String, String>),
     WabbajackCopyHmSnippet,
@@ -657,6 +676,7 @@ pub enum Message {
     WabbajackFileSelected(PathBuf),
     WabbajackProgress(f32),
     WabbajackStartInstall,
+    WabbajackInstallEvent(WabbajackInstallEvent),
     WabbajackInstallComplete(Result<(String, Vec<String>), String>),
     WabbajackLog(String),
 

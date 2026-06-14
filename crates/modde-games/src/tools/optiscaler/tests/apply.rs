@@ -1,0 +1,150 @@
+use super::*;
+use crate::tools::optiscaler::archive::{is_optiscaler_payload_file, optiscaler_payload_dest};
+
+#[test]
+fn optiscaler_fp8_variant_copies_selected_fsr4_dll() {
+    let source = tempfile::tempdir().expect("source");
+    let game = tempfile::tempdir().expect("game");
+    std::fs::write(source.path().join("OptiScaler.dll"), b"dll").expect("source dll");
+    std::fs::write(source.path().join("OptiScaler.ini"), "[FSR]\n").expect("source ini");
+    std::fs::create_dir_all(source.path().join(FSR4_LATEST_DIR)).expect("latest dir");
+    std::fs::write(
+        source.path().join(FSR4_LATEST_DIR).join(FSR4_DLL_NAME),
+        b"fp8",
+    )
+    .expect("fp8 dll");
+    let mut config = OptiScaler.default_config();
+    config.set("source_mode", serde_json::json!("local_dir"));
+    config.set(
+        "local_source_dir",
+        serde_json::json!(source.path().display().to_string()),
+    );
+    config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_LATEST_FP8));
+
+    let applied = OptiScaler.apply(game.path(), &config).expect("apply");
+
+    assert_eq!(
+        std::fs::read(game.path().join(FSR4_DLL_NAME)).expect("deployed FSR4"),
+        b"fp8"
+    );
+    assert!(applied.files.contains(&PathBuf::from(FSR4_DLL_NAME)));
+}
+
+#[test]
+fn optiscaler_int8_variant_copies_int8_and_ignores_fp8_env() {
+    let source = tempfile::tempdir().expect("source");
+    let game = tempfile::tempdir().expect("game");
+    std::fs::write(source.path().join("OptiScaler.dll"), b"dll").expect("source dll");
+    std::fs::write(source.path().join("OptiScaler.ini"), "[FSR]\n").expect("source ini");
+    std::fs::create_dir_all(source.path().join(FSR4_INT8_DIR)).expect("int8 dir");
+    std::fs::write(
+        source.path().join(FSR4_INT8_DIR).join(FSR4_DLL_NAME),
+        b"int8",
+    )
+    .expect("int8 dll");
+    let mut config = OptiScaler.default_config();
+    config.set("source_mode", serde_json::json!("local_dir"));
+    config.set(
+        "local_source_dir",
+        serde_json::json!(source.path().display().to_string()),
+    );
+    config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_INT8_402));
+    config.set("emulate_fp8", serde_json::json!(true));
+
+    OptiScaler.apply(game.path(), &config).expect("apply");
+
+    assert_eq!(
+        std::fs::read(game.path().join(FSR4_DLL_NAME)).expect("deployed FSR4"),
+        b"int8"
+    );
+    assert!(OptiScaler.env_vars(&config).is_empty());
+}
+
+#[test]
+fn optiscaler_missing_optipatcher_is_reported_in_preview() {
+    let source = tempfile::tempdir().expect("source");
+    let game = tempfile::tempdir().expect("game");
+    std::fs::write(source.path().join("OptiScaler.dll"), b"dll").expect("source dll");
+    std::fs::write(source.path().join("OptiScaler.ini"), "[Plugins]\n").expect("source ini");
+    let mut config = OptiScaler.default_config();
+    config.set("source_mode", serde_json::json!("local_dir"));
+    config.set(
+        "local_source_dir",
+        serde_json::json!(source.path().display().to_string()),
+    );
+    config.set("enable_optipatcher", serde_json::json!(true));
+
+    let preview = OptiScaler
+        .preview_apply_for(game.path(), None, &config)
+        .expect("preview");
+
+    let optipatcher_rel = PathBuf::from("plugins").join(OPTIPATCHER_ASSET);
+    assert!(
+        preview
+            .missing_inputs
+            .iter()
+            .any(|input| input.contains("OptiPatcher.asi"))
+            || preview.changed_files.contains(&optipatcher_rel)
+            || preview.unchanged_files.contains(&optipatcher_rel)
+    );
+}
+
+#[test]
+fn optiscaler_uses_bundled_optipatcher_from_source_plugins() {
+    let source = tempfile::tempdir().expect("source");
+    let game = tempfile::tempdir().expect("game");
+    std::fs::write(source.path().join("OptiScaler.dll"), b"dll").expect("source dll");
+    std::fs::write(source.path().join("OptiScaler.ini"), "[Plugins]\n").expect("source ini");
+    std::fs::create_dir_all(source.path().join("plugins")).expect("plugins dir");
+    std::fs::write(
+        source.path().join("plugins").join(OPTIPATCHER_ASSET),
+        b"bundled asi",
+    )
+    .expect("source optipatcher");
+    let mut config = OptiScaler.default_config();
+    config.set("source_mode", serde_json::json!("local_dir"));
+    config.set(
+        "local_source_dir",
+        serde_json::json!(source.path().display().to_string()),
+    );
+    config.set("enable_optipatcher", serde_json::json!(true));
+
+    OptiScaler.apply(game.path(), &config).expect("apply");
+
+    assert_eq!(
+        std::fs::read(game.path().join("plugins").join(OPTIPATCHER_ASSET))
+            .expect("deployed optipatcher"),
+        b"bundled asi"
+    );
+}
+
+#[test]
+fn optiscaler_archive_payload_keeps_optipatcher_in_plugins() {
+    assert!(is_optiscaler_payload_file("optipatcher.asi"));
+    assert_eq!(
+        optiscaler_payload_dest(
+            Path::new("/cache"),
+            Path::new("plugins/OptiPatcher.asi"),
+            std::ffi::OsStr::new("OptiPatcher.asi"),
+        ),
+        PathBuf::from("/cache/plugins/OptiPatcher.asi")
+    );
+}
+
+#[test]
+fn optiscaler_fp8_env_only_for_latest_fp8_emulation() {
+    let mut config = OptiScaler.default_config();
+    config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_LATEST_FP8));
+    config.set("emulate_fp8", serde_json::json!(true));
+
+    assert_eq!(
+        OptiScaler.env_vars(&config).as_slice(),
+        [(
+            FP8_EMULATION_ENV_KEY.to_string(),
+            FP8_EMULATION_ENV_VALUE.to_string()
+        )]
+    );
+
+    config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_INT8_402));
+    assert!(OptiScaler.env_vars(&config).is_empty());
+}
