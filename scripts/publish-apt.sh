@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a signed apt repository tree from release/*.deb and push it to
+# Build a signed apt repository tree from `$RELEASE_DIR`/*.deb and push it to
 # caniko/apt-modde over SSH for Codeberg Pages serving.
 #
 # The script is idempotent for a given tag: rebuilding the same set of .deb
@@ -26,7 +26,7 @@
 # - When all inputs are present, the script:
 #     1. Imports the secret key into a throwaway GNUPGHOME.
 #     2. Loads the SSH deploy key into a throwaway ssh-agent.
-#     3. Stages every release/*.deb into a fresh reprepro tree under work/apt.
+#     3. Stages every `$RELEASE_DIR`/*.deb into a fresh reprepro tree under work/apt.
 #     4. Commits dists/ + pool/ + key.gpg.asc to the apt repo and force-pushes
 #        the Pages-serving branch with lease protection.
 set -euo pipefail
@@ -34,6 +34,7 @@ set -euo pipefail
 VERSION="${VERSION:?VERSION must be set to the release tag}"
 APT_REPO_REMOTE="${APT_REPO_REMOTE:-ssh://git@codeberg.org/caniko/apt-modde.git}"
 APT_REPO_BRANCH="${APT_REPO_BRANCH:-pages}"
+RELEASE_DIR="${RELEASE_DIR:-release}"
 
 if [ -z "${APT_REPO_GPG_KEY:-}" ]; then
   echo "error: APT_REPO_GPG_KEY is unset; required upstream producer: apt repository signing-key bootstrap." >&2
@@ -46,10 +47,10 @@ if [ -z "${APT_REPO_SSH_KEY:-}" ]; then
   exit 1
 fi
 
-debs=(release/*.deb)
+debs=("$RELEASE_DIR"/*.deb)
 if [ ! -e "${debs[0]}" ]; then
-  echo "error: no .deb files in release/; required upstream producer: Build Debian packages." >&2
-  echo "validation: ls -l release/*.deb" >&2
+  echo "error: no .deb files in ${RELEASE_DIR}/; required upstream producer: Build Debian packages." >&2
+  echo "validation: ls -l ${RELEASE_DIR}/*.deb" >&2
   exit 1
 fi
 
@@ -60,7 +61,9 @@ if [ ! -s dist/apt/key.gpg.asc ]; then
   exit 1
 fi
 
-work="$(mktemp -d)"
+apt_work_parent="${MODDE_LOCAL_RELEASE_WORKDIR:-/tmp}"
+mkdir -p "$apt_work_parent"
+work="$(mktemp -d "$apt_work_parent/apt.XXXXXX")"
 trap 'rm -rf "$work"; [ -n "${SSH_AGENT_PID:-}" ] && ssh-agent -k >/dev/null 2>&1 || true' EXIT
 chmod 700 "$work"
 

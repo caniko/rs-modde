@@ -47,7 +47,7 @@ assert_file dist/aur/modde-bin/PKGBUILD "AUR binary package template"
 assert_file dist/aur/modde-bin/.SRCINFO "AUR binary package metadata"
 assert_file dist/aur/modde-git/PKGBUILD "AUR development package template"
 assert_file dist/aur/modde-git/.SRCINFO "AUR development package metadata"
-assert_file modde.spec "COPR SRPM spec"
+assert_file dist/rpm/modde.spec "COPR SRPM spec"
 
 grep -q "linuxDistributionSupport" flake.nix || \
   die "flake.nix does not define linuxDistributionSupport; required upstream producer: release configuration"

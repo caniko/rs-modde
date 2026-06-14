@@ -29,7 +29,7 @@ workspace = true
 
 [package.metadata.release]
 pre-release-replacements = [
-  { file = "../../modde.spec", search = "^Version:\\s+.*$", replace = "Version:        {{version}}", exactly = 1 },
+  { file = "../../dist/rpm/modde.spec", search = "^Version:\\s+.*$", replace = "Version:        {{version}}", exactly = 1 },
 ]
 
 [package.metadata.deb]

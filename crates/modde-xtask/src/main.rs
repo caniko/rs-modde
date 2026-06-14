@@ -145,12 +145,12 @@ fn project() -> ProjectConfig {
             packages: Vec::new(),
             all_features: false,
         },
-        spec_file: Some(root.join("modde.spec")),
+        spec_file: Some(root.join("dist/rpm/modde.spec")),
         copr: Some(CoprConfig {
             source_archive_url_template:
                 "https://codeberg.org/caniko/rs-modde/archive/v{version}.tar.gz".into(),
-            srpm_dir: root.join("srpms"),
-            vendor_tarball: root.join("vendor.tar.gz"),
+            srpm_dir: root.join("target/modde-release/root-artifacts/srpms"),
+            vendor_tarball: root.join("target/modde-release/root-artifacts/vendor.tar.gz"),
         }),
         docs: vec![DocsSite::mdbook("docs", root.join("docs"))],
         nix_packages: vec![

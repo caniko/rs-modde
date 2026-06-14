@@ -190,3 +190,52 @@ require_local_secret_for_publish() {
   printf '  validate: %s\n' "$validation" >&2
   return 1
 }
+
+release_manifest_init() {
+  local version="$1"
+  local generator="$2"
+  local release_dir="${RELEASE_DIR:-release}"
+  mkdir -p "$release_dir"
+  jq -n --arg version "$version" --arg generator "$generator" \
+    '{version: $version, artifacts: [], skipped: [], generated_by: $generator}' \
+    > "$release_dir/artifacts.json.tmp"
+  mv "$release_dir/artifacts.json.tmp" "$release_dir/artifacts.json"
+}
+
+release_manifest_add_file() {
+  local path="$1"
+  local producer="$2"
+  local release_dir="${RELEASE_DIR:-release}"
+  [ -f "$path" ] || return 0
+  local sha256
+  sha256="$(sha256sum "$path" | awk '{print $1}')"
+  jq --arg path "$path" --arg sha256 "$sha256" --arg producer "$producer" \
+    '.artifacts = (((.artifacts // []) | map(select(.path != $path))) + [{path: $path, sha256: $sha256, producer: $producer}])' \
+    "$release_dir/artifacts.json" > "$release_dir/artifacts.json.tmp"
+  mv "$release_dir/artifacts.json.tmp" "$release_dir/artifacts.json"
+}
+
+release_manifest_skip() {
+  local name="$1"
+  local reason="$2"
+  local release_dir="${RELEASE_DIR:-release}"
+  jq --arg name "$name" --arg reason "$reason" \
+    '.skipped = (((.skipped // []) | map(select(.name != $name))) + [{name: $name, reason: $reason}])' \
+    "$release_dir/artifacts.json" > "$release_dir/artifacts.json.tmp"
+  mv "$release_dir/artifacts.json.tmp" "$release_dir/artifacts.json"
+}
+
+release_manifest_collect_release_files() {
+  local producer="$1"
+  local release_dir="${RELEASE_DIR:-release}"
+  local file
+  shopt -s nullglob
+  for file in "$release_dir"/*; do
+    [ -f "$file" ] || continue
+    case "$file" in
+      "$release_dir/artifacts.json" | "$release_dir/artifacts.json.tmp") continue ;;
+    esac
+    release_manifest_add_file "$file" "$producer"
+  done
+  shopt -u nullglob
+}

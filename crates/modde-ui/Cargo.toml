@@ -52,6 +52,11 @@ assets = [
     "644",
   ],
   [
+    "../../dist/assets/logo/logo.svg",
+    "usr/share/icons/hicolor/scalable/apps/com.tartanoglu.modde.svg",
+    "644",
+  ],
+  [
     "../../LICENSE",
     "usr/share/doc/modde-ui/copyright",
     "644",

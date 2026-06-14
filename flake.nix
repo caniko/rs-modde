@@ -26,7 +26,7 @@
     };
 
     simit = {
-      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=72e15e50f22a6bb3e2e693d86fbce1f4fedf8d08";
+      url = "git+https://codeberg.org/caniko/simit?ref=ci-release-publisher-maturation&rev=296c6b87e7bf09b5fe8a6c888586b1709dc1d036";
       inputs.rs-harbor.follows = "rs-harbor";
       inputs.nixpkgs.follows = "rs-harbor/nixpkgs";
       inputs.rust-overlay.follows = "rs-harbor/rust-overlay";
@@ -252,6 +252,7 @@
             ./docs/capability-matrix.toml
             ./docs/src/reference/parity.md
             ./docs/src/games/supported-games.md
+            ./dist/assets/logo/logo.svg
             ./website/static
             ./website/plinth-project.toml
           ];
@@ -308,6 +309,7 @@
                   --set-default SSL_CERT_FILE "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" \
                   --set-default NIX_SSL_CERT_FILE "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
               done
+              install -Dm0644 ${./dist/assets/logo/logo.svg} "$out/share/icons/hicolor/scalable/apps/com.tartanoglu.modde.svg"
             '';
 
             meta = with pkgs.lib; {
@@ -548,6 +550,7 @@
                       "install -Dm0755 target/release/modde-ui \${FLATPAK_DEST}/bin/modde-ui"
                       "install -Dm0644 dist/modde-ui.desktop \${FLATPAK_DEST}/share/applications/\${FLATPAK_ID}.desktop"
                       "install -Dm0644 dist/com.tartanoglu.modde.png \${FLATPAK_DEST}/share/icons/hicolor/512x512/apps/\${FLATPAK_ID}.png"
+                      "install -Dm0644 dist/assets/logo/logo.svg \${FLATPAK_DEST}/share/icons/hicolor/scalable/apps/\${FLATPAK_ID}.svg"
                       "install -Dm0644 dist/com.tartanoglu.modde.metainfo.xml \${FLATPAK_DEST}/share/metainfo/\${FLATPAK_ID}.metainfo.xml"
                     ];
                     sources = [
@@ -1574,76 +1577,101 @@
           };
         };
 
-        devShells = rs-harbor.lib.mkDevShells {
-          inherit pkgs cross;
-          inherit (toolchain) craneLib;
-          pkgConfigDeps = buildInputs;
+        devShells =
+          (rs-harbor.lib.mkDevShells {
+            inherit pkgs cross;
+            inherit (toolchain) craneLib;
+            pkgConfigDeps = buildInputs;
 
-          packages = with pkgs;
-            [
-              appstream
-              cargo-about
-              cargo-audit
-              cargo-cyclonedx
-              cargo-deb
-              cargo-deny
-              cargo-llvm-cov
-              cargo-nextest
-              cargo-sbom
-              coprCli
-              cosign
-              curl
-              debootstrap
-              dnf5
-              dpkg
-              file
-              findutils
-              flatpak
-              flatpak-builder
-              forgejo-cli
-              git
-              gnugrep
-              gnupg
-              gnutar
-              grype
-              gzip
-              jq
-              minisign
-              nodejs
-              openssh
-              osslsigncode
-              pacman
-              podman
-              pre-commit
-              qemu
-              reprepro
-              rpm
-              rust-analyzer
-              stdenv.cc
-              toolchain.rustToolchain
-              simitCli
-              plinthProject
-              visualRubric
-              alejandra
-              just
-              _7zz
-              unrar
-              mdbook
-              prettier
-              taplo
-              unzip
-              util-linux
-              wineWow64Packages.stable
-              wget
-              zip
-            ]
-            ++ nativeBuildInputs
-            ++ buildInputs;
+            packages = with pkgs;
+              [
+                appstream
+                cargo-about
+                cargo-audit
+                cargo-cyclonedx
+                cargo-deb
+                cargo-deny
+                cargo-llvm-cov
+                cargo-nextest
+                cargo-sbom
+                coprCli
+                cosign
+                curl
+                debootstrap
+                dnf5
+                dpkg
+                file
+                findutils
+                flatpak
+                flatpak-builder
+                forgejo-cli
+                git
+                gnugrep
+                gnupg
+                gnutar
+                grype
+                gzip
+                jq
+                minisign
+                nodejs
+                openssh
+                osslsigncode
+                pacman
+                podman
+                pre-commit
+                qemu
+                reprepro
+                rpm
+                rust-analyzer
+                stdenv.cc
+                toolchain.rustToolchain
+                simitCli
+                plinthProject
+                visualRubric
+                alejandra
+                just
+                _7zz
+                unrar
+                mdbook
+                prettier
+                taplo
+                unzip
+                util-linux
+                wineWow64Packages.stable
+                wget
+                zip
+              ]
+              ++ nativeBuildInputs
+              ++ buildInputs;
 
-          extraEnv = lib.optionalAttrs pkgs.stdenv.isLinux {
-            LD_LIBRARY_PATH = linuxLdPath;
+            extraEnv = lib.optionalAttrs pkgs.stdenv.isLinux {
+              LD_LIBRARY_PATH = linuxLdPath;
+            };
+          })
+          // {
+            docs = pkgs.mkShell {
+              packages = with pkgs;
+                [
+                  cargo-deny
+                  cargo-nextest
+                  git
+                  mdbook
+                  plinthProject
+                  pre-commit
+                  rust-analyzer
+                  stdenv.cc
+                  toolchain.rustToolchain
+                  visualRubric
+                  jq
+                  taplo
+                ]
+                ++ nativeBuildInputs
+                ++ buildInputs;
+              shellHook = lib.optionalString pkgs.stdenv.isLinux ''
+                export LD_LIBRARY_PATH="${linuxLdPath}"
+              '';
+            };
           };
-        };
 
         apps.deploy-pages = {
           type = "app";
@@ -1891,19 +1919,19 @@
         };
 
         # Release artifact signing/verification via the rs-harbor binding.
-        # `minisign -S/-V` over release/SHA256SUMS.txt against keys/minisign.pub —
+        # `minisign -S/-V` over target/modde-release/root-artifacts/release/SHA256SUMS.txt against keys/minisign.pub —
         # the same operation scripts/smoke/smoke-signatures.sh and the
         # simit-generated release.yml perform, exposed as reusable apps.
         #   MINISIGN_SECRET_KEY=… MINISIGN_PASSWORD=… nix run .#sign-release
         #   nix run .#verify-release
         apps.sign-release = rs-harbor.lib.mkMinisignSign {
           inherit pkgs;
-          files = ["release/SHA256SUMS.txt"];
+          files = ["target/modde-release/root-artifacts/release/SHA256SUMS.txt"];
         };
 
         apps.verify-release = rs-harbor.lib.mkMinisignVerify {
           inherit pkgs;
-          files = ["release/SHA256SUMS.txt"];
+          files = ["target/modde-release/root-artifacts/release/SHA256SUMS.txt"];
           publicKeyFile = "keys/minisign.pub";
         };
       });
@@ -1979,6 +2007,7 @@
         inherit mkOutputs;
       };
       simitConfig = {
+        release.publish.enforcement = "activated-remote";
         release.smoke.command = "nix run .#release-smoke --";
         release.codeberg = {
           repo = "caniko/rs-modde";
@@ -1995,9 +2024,9 @@
             ''
               nix develop -c bash <<'SBOM'
               set -euo pipefail
-              cargo about generate --output-file release/THIRD_PARTY_LICENSES.html about-template.hbs
-              cargo sbom --output-format cyclone_dx_json_1_5 > "release/modde-''${VERSION}.cdx.json"
-              cargo sbom --output-format spdx_json_2_3 > "release/modde-''${VERSION}.spdx.json"
+              cargo about generate --config dist/licenses/about.toml --output-file target/modde-release/root-artifacts/release/THIRD_PARTY_LICENSES.html dist/licenses/about-template.hbs
+              cargo sbom --output-format cyclone_dx_json_1_5 > "target/modde-release/root-artifacts/release/modde-''${VERSION}.cdx.json"
+              cargo sbom --output-format spdx_json_2_3 > "target/modde-release/root-artifacts/release/modde-''${VERSION}.spdx.json"
               SBOM
             ''
           ];
@@ -2008,51 +2037,51 @@
                 if [ -f "''${result_dir}/bin/.''${binary}-wrapped" ]; then cp "''${result_dir}/bin/.''${binary}-wrapped" "$destination"; else cp "''${result_dir}/bin/''${binary}" "$destination"; fi
               }
 
-              nix build .#modde --out-link linux-result
-              mkdir -p release/linux-x86_64
-              copy_nix_binary linux-result modde release/linux-x86_64/modde
-              copy_nix_binary linux-result modde-ui release/linux-x86_64/modde-ui
-              tar czf "release/modde-''${VERSION}-x86_64-linux.tar.gz" -C release/linux-x86_64 modde modde-ui
-              cp release/linux-x86_64/modde "release/modde-''${VERSION}-x86_64-linux"
-              cp release/linux-x86_64/modde-ui "release/modde-ui-''${VERSION}-x86_64-linux"
+              nix build .#modde --out-link target/modde-release/root-artifacts/linux-result
+              mkdir -p target/modde-release/root-artifacts/release/linux-x86_64
+              copy_nix_binary target/modde-release/root-artifacts/linux-result modde target/modde-release/root-artifacts/release/linux-x86_64/modde
+              copy_nix_binary target/modde-release/root-artifacts/linux-result modde-ui target/modde-release/root-artifacts/release/linux-x86_64/modde-ui
+              tar czf "target/modde-release/root-artifacts/release/modde-''${VERSION}-x86_64-linux.tar.gz" -C target/modde-release/root-artifacts/release/linux-x86_64 modde modde-ui
+              cp target/modde-release/root-artifacts/release/linux-x86_64/modde "target/modde-release/root-artifacts/release/modde-''${VERSION}-x86_64-linux"
+              cp target/modde-release/root-artifacts/release/linux-x86_64/modde-ui "target/modde-release/root-artifacts/release/modde-ui-''${VERSION}-x86_64-linux"
 
-              nix build .#modde-aarch64-linux --out-link aarch64-linux-result
-              mkdir -p release/linux-aarch64
-              copy_nix_binary aarch64-linux-result modde release/linux-aarch64/modde
-              copy_nix_binary aarch64-linux-result modde-ui release/linux-aarch64/modde-ui
-              tar czf "release/modde-''${VERSION}-aarch64-linux.tar.gz" -C release/linux-aarch64 modde modde-ui
-              cp release/linux-aarch64/modde "release/modde-''${VERSION}-aarch64-linux"
-              cp release/linux-aarch64/modde-ui "release/modde-ui-''${VERSION}-aarch64-linux"
+              nix build .#modde-aarch64-linux --out-link target/modde-release/root-artifacts/aarch64-linux-result
+              mkdir -p target/modde-release/root-artifacts/release/linux-aarch64
+              copy_nix_binary target/modde-release/root-artifacts/aarch64-linux-result modde target/modde-release/root-artifacts/release/linux-aarch64/modde
+              copy_nix_binary target/modde-release/root-artifacts/aarch64-linux-result modde-ui target/modde-release/root-artifacts/release/linux-aarch64/modde-ui
+              tar czf "target/modde-release/root-artifacts/release/modde-''${VERSION}-aarch64-linux.tar.gz" -C target/modde-release/root-artifacts/release/linux-aarch64 modde modde-ui
+              cp target/modde-release/root-artifacts/release/linux-aarch64/modde "target/modde-release/root-artifacts/release/modde-''${VERSION}-aarch64-linux"
+              cp target/modde-release/root-artifacts/release/linux-aarch64/modde-ui "target/modde-release/root-artifacts/release/modde-ui-''${VERSION}-aarch64-linux"
 
-              nix build .#modde-windows --out-link windows-result
-              mkdir -p release/windows-x86_64
-              cp windows-result/bin/modde.exe windows-result/bin/modde-ui.exe release/windows-x86_64/
-              if [ -f windows-result/bin/libmcfgthread-2.dll ]; then cp windows-result/bin/libmcfgthread-2.dll release/windows-x86_64/; fi
+              nix build .#modde-windows --out-link target/modde-release/root-artifacts/windows-result
+              mkdir -p target/modde-release/root-artifacts/release/windows-x86_64
+              cp target/modde-release/root-artifacts/windows-result/bin/modde.exe target/modde-release/root-artifacts/windows-result/bin/modde-ui.exe target/modde-release/root-artifacts/release/windows-x86_64/
+              if [ -f target/modde-release/root-artifacts/windows-result/bin/libmcfgthread-2.dll ]; then cp target/modde-release/root-artifacts/windows-result/bin/libmcfgthread-2.dll target/modde-release/root-artifacts/release/windows-x86_64/; fi
               # Windows tar.gz/zip and individual signed .exe assets are produced
               # by the Authenticode signing step, after the .exe files are signed.
 
-              nix build .#modde-darwin-x86_64 --out-link darwin-x86-result
-              mkdir -p release/darwin-x86_64
-              cp darwin-x86-result/bin/modde darwin-x86-result/bin/modde-ui release/darwin-x86_64/
-              tar czf "release/modde-''${VERSION}-x86_64-darwin.tar.gz" -C release/darwin-x86_64 modde modde-ui
+              nix build .#modde-darwin-x86_64 --out-link target/modde-release/root-artifacts/darwin-x86-result
+              mkdir -p target/modde-release/root-artifacts/release/darwin-x86_64
+              cp target/modde-release/root-artifacts/darwin-x86-result/bin/modde target/modde-release/root-artifacts/darwin-x86-result/bin/modde-ui target/modde-release/root-artifacts/release/darwin-x86_64/
+              tar czf "target/modde-release/root-artifacts/release/modde-''${VERSION}-x86_64-darwin.tar.gz" -C target/modde-release/root-artifacts/release/darwin-x86_64 modde modde-ui
 
-              nix build .#modde-darwin-aarch64 --out-link darwin-arm-result
-              mkdir -p release/darwin-aarch64
-              cp darwin-arm-result/bin/modde darwin-arm-result/bin/modde-ui release/darwin-aarch64/
-              tar czf "release/modde-''${VERSION}-aarch64-darwin.tar.gz" -C release/darwin-aarch64 modde modde-ui
+              nix build .#modde-darwin-aarch64 --out-link target/modde-release/root-artifacts/darwin-arm-result
+              mkdir -p target/modde-release/root-artifacts/release/darwin-aarch64
+              cp target/modde-release/root-artifacts/darwin-arm-result/bin/modde target/modde-release/root-artifacts/darwin-arm-result/bin/modde-ui target/modde-release/root-artifacts/release/darwin-aarch64/
+              tar czf "target/modde-release/root-artifacts/release/modde-''${VERSION}-aarch64-darwin.tar.gz" -C target/modde-release/root-artifacts/release/darwin-aarch64 modde modde-ui
 
-              nix build .#appimage-ui --out-link appimage-ui-result
-              cp appimage-ui-result "release/modde-ui-''${VERSION}-x86_64.AppImage"
-              nix build .#appimage-cli --out-link appimage-cli-result
-              cp appimage-cli-result "release/modde-''${VERSION}-x86_64.AppImage"
+              nix build .#appimage-ui --out-link target/modde-release/root-artifacts/appimage-ui-result
+              cp target/modde-release/root-artifacts/appimage-ui-result "target/modde-release/root-artifacts/release/modde-ui-''${VERSION}-x86_64.AppImage"
+              nix build .#appimage-cli --out-link target/modde-release/root-artifacts/appimage-cli-result
+              cp target/modde-release/root-artifacts/appimage-cli-result "target/modde-release/root-artifacts/release/modde-''${VERSION}-x86_64.AppImage"
 
-              git archive --format=tar.gz --prefix=rs-modde/ -o "release/rs-modde-''${VERSION}.tar.gz" HEAD
-              source_sha256="$(sha256sum "release/rs-modde-''${VERSION}.tar.gz" | awk '{print $1}')"
-              nix build .#flatpak-manifest --out-link flatpak-result
-              cp flatpak-result release/com.tartanoglu.modde.json
-              sed -i "s/@SOURCE_TARBALL_SHA256@/''${source_sha256}/" release/com.tartanoglu.modde.json
-              nix run .#flatpak-cargo-generator -- Cargo.lock -o release/cargo-sources.json
-              cp srpms/*.src.rpm release/ 2>/dev/null || true
+              git archive --format=tar.gz --prefix=rs-modde/ -o "target/modde-release/root-artifacts/release/rs-modde-''${VERSION}.tar.gz" HEAD
+              source_sha256="$(sha256sum "target/modde-release/root-artifacts/release/rs-modde-''${VERSION}.tar.gz" | awk '{print $1}')"
+              nix build .#flatpak-manifest --out-link target/modde-release/root-artifacts/flatpak-result
+              cp target/modde-release/root-artifacts/flatpak-result target/modde-release/root-artifacts/release/com.tartanoglu.modde.json
+              sed -i "s/@SOURCE_TARBALL_SHA256@/''${source_sha256}/" target/modde-release/root-artifacts/release/com.tartanoglu.modde.json
+              nix run .#flatpak-cargo-generator -- Cargo.lock -o target/modde-release/root-artifacts/release/cargo-sources.json
+              cp target/modde-release/root-artifacts/srpms/*.src.rpm target/modde-release/root-artifacts/release/ 2>/dev/null || true
             ''
           ];
         };
@@ -2060,7 +2089,7 @@
           cache = "canix";
           url = "https://attic.candee.baby";
           token_name = "rs-modde";
-          result_links = ["linux-result" "aarch64-linux-result" "windows-result" "darwin-x86-result" "darwin-arm-result" "appimage-ui-result" "appimage-cli-result" "flatpak-result"];
+          result_links = ["target/modde-release/root-artifacts/linux-result" "target/modde-release/root-artifacts/aarch64-linux-result" "target/modde-release/root-artifacts/windows-result" "target/modde-release/root-artifacts/darwin-x86-result" "target/modde-release/root-artifacts/darwin-arm-result" "target/modde-release/root-artifacts/appimage-ui-result" "target/modde-release/root-artifacts/appimage-cli-result" "target/modde-release/root-artifacts/flatpak-result"];
         };
         release.announce = {};
         release.windows_signing = {
@@ -2135,6 +2164,10 @@
               dest = "usr/share/icons/hicolor/512x512/apps/com.tartanoglu.modde.png";
             }
             {
+              source = "dist/assets/logo/logo.svg";
+              dest = "usr/share/icons/hicolor/scalable/apps/com.tartanoglu.modde.svg";
+            }
+            {
               source = "dist/com.tartanoglu.modde.metainfo.xml";
               dest = "usr/share/metainfo/com.tartanoglu.modde.metainfo.xml";
             }
@@ -2143,12 +2176,13 @@
         };
         copr = {
           name = "modde";
+          spec_path = "dist/rpm/modde.spec";
           summary = "Cross-platform game mod manager";
           description = "modde is a cross-platform game mod manager with CLI and GUI interfaces.\nIt supports Nexus Mods, Wabbajack modlists, FOMOD installers, and BAIN\npackages for games like Skyrim, Fallout, Starfield, and Cyberpunk 2077.";
           license = "GPL-3.0-only";
           download_repo = "caniko/rs-modde";
           nix_tool = ".#copr-cli";
-          build_requires = ["rust >= 1.85" "cargo" "gcc" "pkg-config" "openssl-devel" "dbus-devel" "wayland-devel" "libxkbcommon-devel" "vulkan-loader-devel"];
+          build_requires = ["rust >= 1.93" "cargo" "gcc" "pkg-config" "openssl-devel" "dbus-devel" "wayland-devel" "libxkbcommon-devel" "vulkan-loader-devel"];
           binaries = ["modde" "modde-ui"];
           project = "caniko/rs-modde";
           login_secret = "COPR_LOGIN";

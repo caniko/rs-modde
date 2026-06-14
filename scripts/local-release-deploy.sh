@@ -13,6 +13,16 @@ fi
 repo="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$repo"
 
+release_root="${MODDE_LOCAL_RELEASE_ROOT:-$repo/target/modde-release/$version}"
+release_dir="${MODDE_LOCAL_RELEASE_DIR:-$release_root/release}"
+work_dir="${MODDE_LOCAL_RELEASE_WORKDIR:-$release_root/work}"
+srpm_dir="$work_dir/srpms"
+release_env_file="$work_dir/release-env"
+release_json_file="$work_dir/release.json"
+mkdir -p "$release_dir" "$work_dir" "$srpm_dir"
+export RELEASE_DIR="$release_dir"
+export MODDE_LOCAL_RELEASE_WORKDIR="$work_dir"
+
 missing=()
 warnings=()
 published=()
@@ -31,6 +41,9 @@ record_published() {
 record_skipped() {
   skipped+=("$1")
   printf 'skipped: %s\n' "$1" >&2
+  if [ -f "$release_dir/artifacts.json" ]; then
+    release_manifest_skip "$1" "$1"
+  fi
 }
 
 run_publisher() {
@@ -52,7 +65,7 @@ is_prerelease() {
 }
 
 write_release_env() {
-  cat > release-env <<EOF
+  cat > "$release_env_file" <<EOF
 VERSION='$version'
 IS_PRERELEASE='$(if is_prerelease; then printf true; else printf false; fi)'
 EOF
@@ -70,7 +83,7 @@ require_tool_for_publish() {
 
 artifact_sha() {
   local artifact="$1"
-  awk -v a="$artifact" '$2 == a { print $1 }' release/SHA256SUMS.txt
+  awk -v a="$artifact" '$2 == a { print $1 }' "$release_dir/SHA256SUMS.txt"
 }
 
 have_artifact() {
@@ -78,41 +91,58 @@ have_artifact() {
   [ -s "$path" ]
 }
 
-build_non_macos_artifacts() {
+build_darwin_artifact() {
+  local attr="$1" arch="$2" out_link="$3"
+  local archive="$release_dir/modde-${version}-${arch}-darwin.tar.gz"
+  if have_artifact "$archive"; then
+    printf 'already-current: %s Darwin artifact exists\n' "$arch"
+    return 0
+  fi
+
+  nix build ".#${attr}" --out-link "$out_link"
+  mkdir -p "$release_dir/darwin-${arch}"
+  copy_nix_binary "$out_link" modde "$release_dir/darwin-${arch}/modde"
+  copy_nix_binary "$out_link" modde-ui "$release_dir/darwin-${arch}/modde-ui"
+  tar czf "$archive" -C "$release_dir/darwin-${arch}" modde modde-ui
+}
+
+build_release_artifacts() {
   write_release_env
   export VERSION="$version"
 
   cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses
 
-  mkdir -p srpms release
+  mkdir -p "$srpm_dir" "$release_dir"
   shopt -s nullglob
-  local existing_srpms=(srpms/*.src.rpm)
+  local existing_srpms=("$srpm_dir"/*.src.rpm)
   shopt -u nullglob
   if [ "${#existing_srpms[@]}" -eq 0 ]; then
-    git archive --format=tar.gz --prefix=rs-modde/ -o "rs-modde-${version}.tar.gz" HEAD
-    tmp_vendor="$(mktemp -d)"
+    local source_tarball="$work_dir/rs-modde-${version}.tar.gz"
+    git archive --format=tar.gz --prefix=rs-modde/ -o "$source_tarball" HEAD
+    tmp_vendor="$(mktemp -d "$work_dir/vendor.XXXXXX")"
     trap 'rm -rf "$tmp_vendor"' RETURN
-    tar xf "rs-modde-${version}.tar.gz" -C "$tmp_vendor"
-    (cd "$tmp_vendor/rs-modde" && cargo vendor vendor > "$repo/cargo-vendor-config.toml")
-    tar czf vendor.tar.gz -C "$tmp_vendor/rs-modde" vendor
+    tar xf "$source_tarball" -C "$tmp_vendor"
+    (cd "$tmp_vendor/rs-modde" && cargo vendor vendor > "$work_dir/cargo-vendor-config.toml")
+    tar czf "$work_dir/vendor.tar.gz" -C "$tmp_vendor/rs-modde" vendor
     local spec_dir spec
-    spec_dir="$(mktemp -d)"
-    spec="${spec_dir}/modde.spec"
+    spec_dir="$(mktemp -d "$work_dir/spec.XXXXXX")"
+    spec="${spec_dir}/dist/rpm/modde.spec"
     trap 'rm -rf "$spec_dir"; rm -rf "$tmp_vendor"' RETURN
-    sed "0,/^Version:.*$/s//Version:        ${version}/" modde.spec > "$spec"
-    rpmbuild -bs "$spec" --define "_sourcedir $(pwd)" --define "_srcrpmdir $(pwd)/srpms"
+    mkdir -p "$(dirname "$spec")"
+    sed "0,/^Version:.*$/s//Version:        ${version}/" dist/rpm/modde.spec > "$spec"
+    rpmbuild -bs "$spec" --define "_sourcedir $work_dir" --define "_srcrpmdir $srpm_dir"
   else
     printf 'already-current: SRPM artifact exists\n'
   fi
 
-  if ! have_artifact release/THIRD_PARTY_LICENSES.html; then
-    cargo about generate --output-file release/THIRD_PARTY_LICENSES.html about-template.hbs
+  if ! have_artifact "$release_dir/THIRD_PARTY_LICENSES.html"; then
+    cargo about generate --config dist/licenses/about.toml --output-file "$release_dir/THIRD_PARTY_LICENSES.html" dist/licenses/about-template.hbs
   fi
-  if ! have_artifact "release/modde-${version}.cdx.json"; then
-    cargo sbom --output-format cyclone_dx_json_1_5 > "release/modde-${version}.cdx.json"
+  if ! have_artifact "$release_dir/modde-${version}.cdx.json"; then
+    cargo sbom --output-format cyclone_dx_json_1_5 > "$release_dir/modde-${version}.cdx.json"
   fi
-  if ! have_artifact "release/modde-${version}.spdx.json"; then
-    cargo sbom --output-format spdx_json_2_3 > "release/modde-${version}.spdx.json"
+  if ! have_artifact "$release_dir/modde-${version}.spdx.json"; then
+    cargo sbom --output-format spdx_json_2_3 > "$release_dir/modde-${version}.spdx.json"
   fi
 
   copy_nix_binary() {
@@ -124,105 +154,112 @@ build_non_macos_artifacts() {
     fi
   }
 
-  if ! have_artifact "release/modde-${version}-x86_64-linux.tar.gz"; then
-    nix build .#modde --out-link linux-result
-    mkdir -p release/linux-x86_64
-    copy_nix_binary linux-result modde release/linux-x86_64/modde
-    copy_nix_binary linux-result modde-ui release/linux-x86_64/modde-ui
-    tar czf "release/modde-${version}-x86_64-linux.tar.gz" -C release/linux-x86_64 modde modde-ui
-    cp release/linux-x86_64/modde "release/modde-${version}-x86_64-linux"
-    cp release/linux-x86_64/modde-ui "release/modde-ui-${version}-x86_64-linux"
+  if ! have_artifact "$release_dir/modde-${version}-x86_64-linux.tar.gz"; then
+    nix build .#modde --out-link "$work_dir/linux-result"
+    mkdir -p "$release_dir/linux-x86_64"
+    copy_nix_binary "$work_dir/linux-result" modde "$release_dir/linux-x86_64/modde"
+    copy_nix_binary "$work_dir/linux-result" modde-ui "$release_dir/linux-x86_64/modde-ui"
+    tar czf "$release_dir/modde-${version}-x86_64-linux.tar.gz" -C "$release_dir/linux-x86_64" modde modde-ui
+    cp "$release_dir/linux-x86_64/modde" "$release_dir/modde-${version}-x86_64-linux"
+    cp "$release_dir/linux-x86_64/modde-ui" "$release_dir/modde-ui-${version}-x86_64-linux"
   else
     printf 'already-current: x86_64 Linux artifacts exist\n'
   fi
 
   if [ "${MODDE_LOCAL_DEPLOY_SKIP_AARCH64:-0}" = "1" ]; then
     record_skipped "aarch64 Linux artifact build skipped by MODDE_LOCAL_DEPLOY_SKIP_AARCH64=1"
-  elif ! have_artifact "release/modde-${version}-aarch64-linux.tar.gz"; then
-    nix build .#modde-aarch64-linux --out-link aarch64-linux-result
-    mkdir -p release/linux-aarch64
-    copy_nix_binary aarch64-linux-result modde release/linux-aarch64/modde
-    copy_nix_binary aarch64-linux-result modde-ui release/linux-aarch64/modde-ui
-    tar czf "release/modde-${version}-aarch64-linux.tar.gz" -C release/linux-aarch64 modde modde-ui
-    cp release/linux-aarch64/modde "release/modde-${version}-aarch64-linux"
-    cp release/linux-aarch64/modde-ui "release/modde-ui-${version}-aarch64-linux"
+  elif ! have_artifact "$release_dir/modde-${version}-aarch64-linux.tar.gz"; then
+    nix build .#modde-aarch64-linux --out-link "$work_dir/aarch64-linux-result"
+    mkdir -p "$release_dir/linux-aarch64"
+    copy_nix_binary "$work_dir/aarch64-linux-result" modde "$release_dir/linux-aarch64/modde"
+    copy_nix_binary "$work_dir/aarch64-linux-result" modde-ui "$release_dir/linux-aarch64/modde-ui"
+    tar czf "$release_dir/modde-${version}-aarch64-linux.tar.gz" -C "$release_dir/linux-aarch64" modde modde-ui
+    cp "$release_dir/linux-aarch64/modde" "$release_dir/modde-${version}-aarch64-linux"
+    cp "$release_dir/linux-aarch64/modde-ui" "$release_dir/modde-ui-${version}-aarch64-linux"
   else
     printf 'already-current: aarch64 Linux artifacts exist\n'
   fi
 
-  if ! have_artifact "release/modde-${version}-x86_64-windows.zip"; then
-    nix build .#modde-windows --out-link windows-result
-    mkdir -p release/windows-x86_64
-    cp windows-result/bin/modde.exe windows-result/bin/modde-ui.exe release/windows-x86_64/
-    if [ -f windows-result/bin/libmcfgthread-2.dll ]; then
-      cp windows-result/bin/libmcfgthread-2.dll release/windows-x86_64/
+  if ! have_artifact "$release_dir/modde-${version}-x86_64-windows.zip"; then
+    nix build .#modde-windows --out-link "$work_dir/windows-result"
+    mkdir -p "$release_dir/windows-x86_64"
+    cp "$work_dir/windows-result/bin/modde.exe" "$work_dir/windows-result/bin/modde-ui.exe" "$release_dir/windows-x86_64/"
+    if [ -f "$work_dir/windows-result/bin/libmcfgthread-2.dll" ]; then
+      cp "$work_dir/windows-result/bin/libmcfgthread-2.dll" "$release_dir/windows-x86_64/"
     fi
   else
     printf 'already-current: Windows archive exists\n'
   fi
 
-  if ! have_artifact "release/modde-ui-${version}-x86_64.AppImage"; then
-    nix build .#appimage-ui --out-link appimage-ui-result
-    cp appimage-ui-result "release/modde-ui-${version}-x86_64.AppImage"
+  if ! have_artifact "$release_dir/modde-ui-${version}-x86_64.AppImage"; then
+    nix build .#appimage-ui --out-link "$work_dir/appimage-ui-result"
+    cp "$work_dir/appimage-ui-result" "$release_dir/modde-ui-${version}-x86_64.AppImage"
   fi
-  if ! have_artifact "release/modde-${version}-x86_64.AppImage"; then
-    nix build .#appimage-cli --out-link appimage-cli-result
-    cp appimage-cli-result "release/modde-${version}-x86_64.AppImage"
+  if ! have_artifact "$release_dir/modde-${version}-x86_64.AppImage"; then
+    nix build .#appimage-cli --out-link "$work_dir/appimage-cli-result"
+    cp "$work_dir/appimage-cli-result" "$release_dir/modde-${version}-x86_64.AppImage"
   fi
 
-  if ! have_artifact "release/rs-modde-${version}.tar.gz"; then
-    git archive --format=tar.gz --prefix=rs-modde/ -o "release/rs-modde-${version}.tar.gz" HEAD
+  if ! have_artifact "$release_dir/rs-modde-${version}.tar.gz"; then
+    git archive --format=tar.gz --prefix=rs-modde/ -o "$release_dir/rs-modde-${version}.tar.gz" HEAD
   fi
-  if ! have_artifact release/com.tartanoglu.modde.json; then
-    source_sha256="$(sha256sum "release/rs-modde-${version}.tar.gz" | awk '{print $1}')"
-    nix build .#flatpak-manifest --out-link flatpak-result
-    cp flatpak-result release/com.tartanoglu.modde.json
-    sed -i "s/@SOURCE_TARBALL_SHA256@/${source_sha256}/" release/com.tartanoglu.modde.json
+  if ! have_artifact "$release_dir/com.tartanoglu.modde.json"; then
+    source_sha256="$(sha256sum "$release_dir/rs-modde-${version}.tar.gz" | awk '{print $1}')"
+    nix build .#flatpak-manifest --out-link "$work_dir/flatpak-result"
+    cp "$work_dir/flatpak-result" "$release_dir/com.tartanoglu.modde.json"
+    sed -i "s/@SOURCE_TARBALL_SHA256@/${source_sha256}/" "$release_dir/com.tartanoglu.modde.json"
   fi
-  if ! have_artifact release/cargo-sources.json; then
-    nix run .#flatpak-cargo-generator -- Cargo.lock -o release/cargo-sources.json
+  if ! have_artifact "$release_dir/cargo-sources.json"; then
+    nix run .#flatpak-cargo-generator -- Cargo.lock -o "$release_dir/cargo-sources.json"
   fi
-  cp srpms/*.src.rpm release/ 2>/dev/null || true
+  cp "$srpm_dir"/*.src.rpm "$release_dir"/ 2>/dev/null || true
 
-  if ! have_artifact "release/modde_${version}_amd64.deb" || ! have_artifact "release/modde-ui_${version}_amd64.deb"; then
-    if ! bash scripts/build-deb.sh "$version" release; then
+  if ! have_artifact "$release_dir/modde_${version}_amd64.deb" || ! have_artifact "$release_dir/modde-ui_${version}_amd64.deb"; then
+    if ! bash scripts/build-deb.sh "$version" "$release_dir"; then
       record_skipped "deb artifacts unavailable; APT publish will be skipped unless existing .deb artifacts are present"
     fi
   else
     printf 'already-current: Debian artifacts exist\n'
   fi
 
-  if [ ! -d release/windows-x86_64 ]; then
+  if [ ! -d "$release_dir/windows-x86_64" ]; then
     record_skipped "Windows artifacts absent; Chocolatey/Scoop/Winget will be skipped"
-  elif [ -n "${WINDOWS_SIGNING_PFX:-}" ] && [ -n "${WINDOWS_SIGNING_PASS:-}" ] && [ ! -s "release/modde-${version}-x86_64-windows.zip" ]; then
-    pfx_file="$(mktemp)"
-    pass_file="$(mktemp)"
+  elif [ -n "${WINDOWS_SIGNING_PFX:-}" ] && [ -n "${WINDOWS_SIGNING_PASS:-}" ] && [ ! -s "$release_dir/modde-${version}-x86_64-windows.zip" ]; then
+    pfx_file="$(mktemp "$work_dir/windows-signing-pfx.XXXXXX")"
+    pass_file="$(mktemp "$work_dir/windows-signing-pass.XXXXXX")"
     trap 'rm -f "$pfx_file" "$pass_file"' RETURN
     printf '%s' "$WINDOWS_SIGNING_PFX" | base64 --decode > "$pfx_file"
     printf '%s' "$WINDOWS_SIGNING_PASS" > "$pass_file"
-    for exe in release/windows-x86_64/modde.exe release/windows-x86_64/modde-ui.exe; do
+    for exe in "$release_dir/windows-x86_64/modde.exe" "$release_dir/windows-x86_64/modde-ui.exe"; do
       osslsigncode sign -pkcs12 "$pfx_file" -readpass "$pass_file" -h sha256 \
         -n 'modde' -i 'https://modde.tartanoglu.com' -ts 'http://timestamp.digicert.com' \
         -in "$exe" -out "${exe}.signed"
       osslsigncode verify -in "${exe}.signed"
       mv "${exe}.signed" "$exe"
     done
-  elif [ ! -s "release/modde-${version}-x86_64-windows.zip" ]; then
+  elif [ ! -s "$release_dir/modde-${version}-x86_64-windows.zip" ]; then
     record_skipped "windows authenticode signing credentials absent; publishing unsigned Windows artifacts"
   fi
-  if [ -d release/windows-x86_64 ] && [ ! -s "release/modde-${version}-x86_64-windows.zip" ]; then
-    for exe in release/windows-x86_64/modde.exe release/windows-x86_64/modde-ui.exe; do
+  if [ -d "$release_dir/windows-x86_64" ] && [ ! -s "$release_dir/modde-${version}-x86_64-windows.zip" ]; then
+    for exe in "$release_dir/windows-x86_64/modde.exe" "$release_dir/windows-x86_64/modde-ui.exe"; do
       test -s "$exe"
     done
-    tar czf "release/modde-${version}-x86_64-windows.tar.gz" -C release/windows-x86_64 modde.exe modde-ui.exe
-    zip_out="$PWD/release/modde-${version}-x86_64-windows.zip"
-    (cd release/windows-x86_64 && zip -q "$zip_out" modde.exe modde-ui.exe)
-    cp release/windows-x86_64/modde.exe "release/modde-${version}-x86_64-windows.exe"
-    cp release/windows-x86_64/modde-ui.exe "release/modde-ui-${version}-x86_64-windows.exe"
+    tar czf "$release_dir/modde-${version}-x86_64-windows.tar.gz" -C "$release_dir/windows-x86_64" modde.exe modde-ui.exe
+    zip_out="$release_dir/modde-${version}-x86_64-windows.zip"
+    (cd "$release_dir/windows-x86_64" && zip -q "$zip_out" modde.exe modde-ui.exe)
+    cp "$release_dir/windows-x86_64/modde.exe" "$release_dir/modde-${version}-x86_64-windows.exe"
+    cp "$release_dir/windows-x86_64/modde-ui.exe" "$release_dir/modde-ui-${version}-x86_64-windows.exe"
+  fi
+
+  if [ "${MODDE_LOCAL_DEPLOY_SKIP_DARWIN:-0}" = "1" ]; then
+    record_skipped "Darwin artifact build skipped by MODDE_LOCAL_DEPLOY_SKIP_DARWIN=1; Homebrew will be skipped"
+  else
+    build_darwin_artifact modde-darwin-x86_64 x86_64 "$work_dir/darwin-x86-result"
+    build_darwin_artifact modde-darwin-aarch64 aarch64 "$work_dir/darwin-arm-result"
   fi
 
   (
-    cd release
+    cd "$release_dir"
     shopt -s nullglob
     : > SHA256SUMS.txt
     for file in *.tar.gz *.zip *.AppImage *.deb *.src.rpm *.cdx.json *.spdx.json; do
@@ -236,42 +273,42 @@ build_non_macos_artifacts() {
   test -n "${MINISIGN_SECRET_KEY:-}"
   test -n "${MINISIGN_PASSWORD:-}"
   umask 077
-  minisign_key="$(mktemp)"
+  minisign_key="$(mktemp "$work_dir/minisign.XXXXXX")"
   trap 'rm -f "$minisign_key"' RETURN
   printf '%s' "$MINISIGN_SECRET_KEY" > "$minisign_key"
-  printf '%s\n' "$MINISIGN_PASSWORD" | minisign -S -s "$minisign_key" -m release/SHA256SUMS.txt -x release/SHA256SUMS.txt.minisig
-  minisign -V -m release/SHA256SUMS.txt -x release/SHA256SUMS.txt.minisig -p keys/minisign.pub
+  printf '%s\n' "$MINISIGN_PASSWORD" | minisign -S -s "$minisign_key" -m "$release_dir/SHA256SUMS.txt" -x "$release_dir/SHA256SUMS.txt.minisig"
+  minisign -V -m "$release_dir/SHA256SUMS.txt" -x "$release_dir/SHA256SUMS.txt.minisig" -p keys/minisign.pub
 
   if [ -n "${COSIGN_PRIVATE_KEY:-}" ]; then
-    cosign_key="$(mktemp)"
+    cosign_key="$(mktemp "$work_dir/cosign.XXXXXX")"
     trap 'rm -f "$cosign_key"' RETURN
     printf '%s' "$COSIGN_PRIVATE_KEY" > "$cosign_key"
     shopt -s nullglob
-    for file in release/*.tar.gz release/*.zip release/*.AppImage release/*.deb release/*.src.rpm release/*.exe; do
+    for file in "$release_dir"/*.tar.gz "$release_dir"/*.zip "$release_dir"/*.AppImage "$release_dir"/*.deb "$release_dir"/*.src.rpm "$release_dir"/*.exe; do
       cosign sign-blob --yes --key "$cosign_key" --bundle "${file}.cosign.bundle" "$file"
     done
   else
     record_skipped "cosign unavailable locally; minisign checksums are authoritative for local deploy"
   fi
+  release_manifest_collect_release_files "rs-modde-local-build"
 
   if [ -z "${FLATHUB_TOKEN:-}" ]; then
-    MODDE_FLATPAK_MANIFEST_ONLY=1 run_non_macos_smoke
+    MODDE_FLATPAK_MANIFEST_ONLY=1 run_release_smoke
   else
-    run_non_macos_smoke
+    run_release_smoke
   fi
 }
 
-run_non_macos_smoke() {
+run_release_smoke() {
   local smoke_failed=0
   for script in scripts/smoke/smoke-*.sh; do
     case "$(basename "$script")" in
-      smoke-darwin-tarball.sh) continue ;;
       smoke-srpm.sh)
         record_skipped "SRPM local Fedora rebuild skipped during deploy; COPR remote build validates the SRPM"
         continue
         ;;
     esac
-    bash "$script" "$version" release || smoke_failed=1
+    bash "$script" "$version" "$release_dir" || smoke_failed=1
   done
   return "$smoke_failed"
 }
@@ -285,14 +322,14 @@ publish_codeberg_release() {
   local codeberg_repo="${CODEBERG_REPO:-caniko/rs-modde}"
   local payload status release_id asset_id file name
   payload="$(jq -n --arg tag "$version" --arg name "$version" --arg branch "trunk" --argjson prerelease "$(if is_prerelease; then printf true; else printf false; fi)" --rawfile body CHANGELOG.md '{tag_name: $tag, target_commitish: $branch, name: $name, body: $body, draft: false, prerelease: $prerelease}')"
-  status="$(curl -sS -o release.json -w '%{http_code}' -H "Authorization: token ${CODEBERG_TOKEN}" -H 'Content-Type: application/json' -d "$payload" "${api}/repos/${codeberg_repo}/releases")"
+  status="$(curl -sS -o "$release_json_file" -w '%{http_code}' -H "Authorization: token ${CODEBERG_TOKEN}" -H 'Content-Type: application/json' -d "$payload" "${api}/repos/${codeberg_repo}/releases")"
   if [ "$status" = "409" ]; then
-    curl -sS --fail -H "Authorization: token ${CODEBERG_TOKEN}" "${api}/repos/${codeberg_repo}/releases/tags/${version}" > release.json
+    curl -sS --fail -H "Authorization: token ${CODEBERG_TOKEN}" "${api}/repos/${codeberg_repo}/releases/tags/${version}" > "$release_json_file"
   elif [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
-    cat release.json
+    cat "$release_json_file"
     return 1
   fi
-  release_id="$(jq -r '.id' release.json)"
+  release_id="$(jq -r '.id' "$release_json_file")"
   test "$release_id" != "null"
   shopt -s nullglob
   while IFS= read -r file; do
@@ -303,7 +340,65 @@ publish_codeberg_release() {
       curl -sS --fail -X DELETE -H "Authorization: token ${CODEBERG_TOKEN}" "${api}/repos/${codeberg_repo}/releases/${release_id}/assets/${asset_id}"
     fi
     curl -sS --fail -H "Authorization: token ${CODEBERG_TOKEN}" -H 'Content-Type: application/octet-stream' --data-binary "@${file}" "${api}/repos/${codeberg_repo}/releases/${release_id}/assets?name=${name}" > /dev/null
-  done < <(printf '%s\n' release/* | LC_ALL=C sort -u)
+  done < <(printf '%s\n' "$release_dir"/* | LC_ALL=C sort -u)
+}
+
+publish_homebrew() {
+  is_prerelease && { record_skipped "Homebrew prerelease"; return 0; }
+  require_local_secret_for_publish "Homebrew" HOMEBREW_TAP_TOKEN \
+    'export HOMEBREW_TAP_TOKEN for codeberg.org/caniko/homebrew-modde or add a canix runtime secret for it' \
+    'git -c credential.helper='\''!f() { echo username=x-access-token; echo "password=$HOMEBREW_TAP_TOKEN"; }; f'\'' ls-remote https://codeberg.org/caniko/homebrew-modde.git HEAD' || return 0
+
+  local artifact
+  for artifact in \
+    "$release_dir/modde-${version}-aarch64-darwin.tar.gz" \
+    "$release_dir/modde-${version}-x86_64-darwin.tar.gz" \
+    "$release_dir/modde-${version}-aarch64-linux.tar.gz" \
+    "$release_dir/modde-${version}-x86_64-linux.tar.gz"; do
+    if ! have_artifact "$artifact"; then
+      record_skipped "Homebrew missing required artifact ${artifact}"
+      return 0
+    fi
+  done
+
+  local credential_helper='!f() { echo username=x-access-token; echo "password=$HOMEBREW_TAP_TOKEN"; }; f'
+  local homebrew_tap="$work_dir/homebrew-tap"
+  rm -rf "$homebrew_tap"
+  git -c credential.helper="$credential_helper" clone "${HOMEBREW_TAP_URL:-https://codeberg.org/caniko/homebrew-modde.git}" "$homebrew_tap"
+  (
+    cd "$homebrew_tap"
+    git config credential.helper "$credential_helper"
+    git config user.email 'release-bot@localhost'
+    git config user.name 'release bot'
+    git remote set-head origin -a
+    default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's|^origin/||')"
+    git checkout "$default_branch"
+  )
+
+  nix run '.#rs-harbor' -- brew bump \
+    --name modde \
+    --version "$version" \
+    --description 'Cross-platform game mod manager' \
+    --homepage 'https://modde.tartanoglu.com' \
+    --license GPL-3.0-only \
+    --archive "darwin_arm=https://codeberg.org/caniko/rs-modde/releases/download/${version}/modde-${version}-aarch64-darwin.tar.gz,$release_dir/modde-${version}-aarch64-darwin.tar.gz" \
+    --archive "darwin_intel=https://codeberg.org/caniko/rs-modde/releases/download/${version}/modde-${version}-x86_64-darwin.tar.gz,$release_dir/modde-${version}-x86_64-darwin.tar.gz" \
+    --archive "linux_arm=https://codeberg.org/caniko/rs-modde/releases/download/${version}/modde-${version}-aarch64-linux.tar.gz,$release_dir/modde-${version}-aarch64-linux.tar.gz" \
+    --archive "linux_intel=https://codeberg.org/caniko/rs-modde/releases/download/${version}/modde-${version}-x86_64-linux.tar.gz,$release_dir/modde-${version}-x86_64-linux.tar.gz" \
+    --binary modde \
+    --binary modde-ui \
+    --tap "$homebrew_tap"
+
+  (
+    cd "$homebrew_tap"
+    if [ -z "$(git status --porcelain -- Formula/modde.rb)" ]; then
+      printf 'already-current: Homebrew tap\n'
+      exit 0
+    fi
+    git add Formula/modde.rb
+    git commit -m "modde ${version}"
+    git push origin "HEAD:${default_branch}"
+  )
 }
 
 publish_apt() {
@@ -315,10 +410,10 @@ publish_apt() {
     '/data/nvme0/can/Projects/canix/age/secrets/modules/repos/apt/modde_apt_repo_ssh_key.age' \
     'ssh -i <(printf %s "$APT_REPO_SSH_KEY") -T git@codeberg.org' || return 0
   shopt -s nullglob
-  local debs=(release/*.deb)
+  local debs=("$release_dir"/*.deb)
   shopt -u nullglob
   [ "${#debs[@]}" -gt 0 ] || { record_skipped "APT missing .deb artifacts"; return 0; }
-  VERSION="$version" APT_REPO_BRANCH="${APT_REPO_BRANCH:-pages}" ./scripts/publish-apt.sh
+  VERSION="$version" RELEASE_DIR="$release_dir" APT_REPO_BRANCH="${APT_REPO_BRANCH:-pages}" ./scripts/publish-apt.sh
 }
 
 publish_aur() {
@@ -342,35 +437,36 @@ publish_aur() {
   export GIT_SSH_COMMAND="ssh -i $aur_key -o IdentitiesOnly=yes"
   publish_pkg() {
     local pkg="$1" repo_url="ssh://aur@aur.archlinux.org/${pkg}.git"
-    rm -rf "aur-${pkg}"
-    if ! git clone "$repo_url" "aur-${pkg}"; then
-      mkdir "aur-${pkg}"
-      git -C "aur-${pkg}" init
-      git -C "aur-${pkg}" remote add origin "$repo_url"
+    local aur_checkout="$work_dir/aur-${pkg}"
+    rm -rf "$aur_checkout"
+    if ! git clone "$repo_url" "$aur_checkout"; then
+      mkdir "$aur_checkout"
+      git -C "$aur_checkout" init
+      git -C "$aur_checkout" remote add origin "$repo_url"
     fi
-    git -C "aur-${pkg}" checkout -B master
-    cp "dist/aur/${pkg}/PKGBUILD" "aur-${pkg}/PKGBUILD"
+    git -C "$aur_checkout" checkout -B master
+    cp "dist/aur/${pkg}/PKGBUILD" "$aur_checkout/PKGBUILD"
     case "$pkg" in
       modde)
-        sed -i -e "s/^pkgver=.*/pkgver=${version}/" -e 's/^pkgrel=.*/pkgrel=1/' "aur-${pkg}/PKGBUILD"
-        awk -v sha="$source_sha" '/^sha256sums=/{print "sha256sums=(\047" sha "\047)"; next} {print}' "aur-${pkg}/PKGBUILD" > "aur-${pkg}/PKGBUILD.new"
-        mv "aur-${pkg}/PKGBUILD.new" "aur-${pkg}/PKGBUILD"
+        sed -i -e "s/^pkgver=.*/pkgver=${version}/" -e 's/^pkgrel=.*/pkgrel=1/' "$aur_checkout/PKGBUILD"
+        awk -v sha="$source_sha" '/^sha256sums=/{print "sha256sums=(\047" sha "\047)"; next} {print}' "$aur_checkout/PKGBUILD" > "$aur_checkout/PKGBUILD.new"
+        mv "$aur_checkout/PKGBUILD.new" "$aur_checkout/PKGBUILD"
         ;;
       modde-bin)
-        sed -i -e "s/^pkgver=.*/pkgver=${version}/" -e 's/^pkgrel=.*/pkgrel=1/' "aur-${pkg}/PKGBUILD"
-        awk -v b="$bin_sha" -v s="$source_sha" '/^sha256sums=/{print "sha256sums=(\047" b "\047"; print "            \047" s "\047)"; skip=1; next} skip && /^[[:space:]]*\047/{next} {skip=0; print}' "aur-${pkg}/PKGBUILD" > "aur-${pkg}/PKGBUILD.new"
-        mv "aur-${pkg}/PKGBUILD.new" "aur-${pkg}/PKGBUILD"
+        sed -i -e "s/^pkgver=.*/pkgver=${version}/" -e 's/^pkgrel=.*/pkgrel=1/' "$aur_checkout/PKGBUILD"
+        awk -v b="$bin_sha" -v s="$source_sha" '/^sha256sums=/{print "sha256sums=(\047" b "\047"; print "            \047" s "\047)"; skip=1; next} skip && /^[[:space:]]*\047/{next} {skip=0; print}' "$aur_checkout/PKGBUILD" > "$aur_checkout/PKGBUILD.new"
+        mv "$aur_checkout/PKGBUILD.new" "$aur_checkout/PKGBUILD"
         ;;
       modde-git) ;;
     esac
-    (cd "aur-${pkg}" && makepkg --config "$makepkg_conf" --printsrcinfo > .SRCINFO)
-    git -C "aur-${pkg}" add PKGBUILD .SRCINFO
-    if git -C "aur-${pkg}" diff --cached --quiet; then
+    (cd "$aur_checkout" && makepkg --config "$makepkg_conf" --printsrcinfo > .SRCINFO)
+    git -C "$aur_checkout" add PKGBUILD .SRCINFO
+    if git -C "$aur_checkout" diff --cached --quiet; then
       printf 'already-current: AUR %s\n' "$pkg"
       return 0
     fi
-    git -C "aur-${pkg}" -c user.email='release-bot@localhost' -c user.name='release bot' commit -m "$version"
-    git -C "aur-${pkg}" push origin HEAD:master
+    git -C "$aur_checkout" -c user.email='release-bot@localhost' -c user.name='release bot' commit -m "$version"
+    git -C "$aur_checkout" push origin HEAD:master
   }
   for pkg in modde modde-bin modde-git; do publish_pkg "$pkg"; done
 }
@@ -380,11 +476,11 @@ publish_copr() {
   require_local_secret_for_publish "COPR" COPR_USERNAME '/data/nvme0/can/Projects/canix/age/secrets/modules/repos/coppr/username' 'test -n "$COPR_USERNAME"' || return 0
   require_local_secret_for_publish "COPR" COPR_TOKEN 'canix runtime secret can_coppr_token' 'test -n "$COPR_TOKEN"' || return 0
   shopt -s nullglob
-  local srpms=(srpms/*.src.rpm)
+  local srpms=("$srpm_dir"/*.src.rpm)
   shopt -u nullglob
   [ "${#srpms[@]}" -gt 0 ] || { record_skipped "COPR missing SRPM"; return 0; }
   local copr_config copr_name project chroot_args=()
-  copr_config="$(mktemp -d)"
+  copr_config="$(mktemp -d "$work_dir/copr-config.XXXXXX")"
   cat > "$copr_config/copr" <<EOF
 [copr-cli]
 login = ${COPR_LOGIN}
@@ -408,14 +504,14 @@ EOF
       --instructions 'Install with: sudo dnf copr enable caniko/rs-modde && sudo dnf install modde modde-ui'
   fi
 
-  XDG_CONFIG_HOME="$copr_config" nix run .#copr-cli -- build --nowait "$project" srpms/*.src.rpm
+  XDG_CONFIG_HOME="$copr_config" nix run .#copr-cli -- build --nowait "$project" "$srpm_dir"/*.src.rpm
   rm -rf "$copr_config"
 }
 
 publish_chocolatey() {
   is_prerelease && { record_skipped "Chocolatey prerelease"; return 0; }
   require_local_secret_for_publish "Chocolatey" CHOCOLATEY_API_KEY 'canix runtime secret can_choco_api_key' 'test -n "$CHOCOLATEY_API_KEY"' || return 0
-  test -s "release/modde-${version}-x86_64-windows.zip" || { record_skipped "Chocolatey missing Windows zip"; return 0; }
+  test -s "$release_dir/modde-${version}-x86_64-windows.zip" || { record_skipped "Chocolatey missing Windows zip"; return 0; }
   local choco_push_source
   if [ "${CHOCO_PUSH_SOURCE+x}" = x ]; then
     choco_push_source="$CHOCO_PUSH_SOURCE"
@@ -429,14 +525,17 @@ publish_chocolatey() {
   fi
   if simit dist chocolatey bump \
       --version "$version" \
-      --package-dir chocolatey-package \
-      --archive "x64=release/modde-${version}-x86_64-windows.zip" \
+      --package-dir "$work_dir/chocolatey-package" \
+      --archive "x64=$release_dir/modde-${version}-x86_64-windows.zip" \
       --choco-name modde \
       --choco-id modde \
-      --choco-title modde \
+      --choco-title 'modde game mod manager' \
       --choco-authors 'Can H. Tartanoglu' \
       --choco-description 'Cross-platform game mod manager' \
       --choco-project-url 'https://modde.tartanoglu.com' \
+      --choco-license-url 'https://codeberg.org/caniko/rs-modde/raw/branch/trunk/LICENSE' \
+      --choco-tags 'modde modding game-mods nexus-mods wabbajack' \
+      --choco-release-notes-url "https://codeberg.org/caniko/rs-modde/releases/tag/${version}" \
       --choco-download-repo 'caniko/rs-modde' \
       --choco-archive-pattern 'modde-{version}-{arch}-windows.zip' \
       --push \
@@ -462,15 +561,16 @@ publish_scoop() {
   is_prerelease && { record_skipped "Scoop prerelease"; return 0; }
   require_local_secret_for_publish "Scoop" SCOOP_BUCKET_TOKEN 'export SCOOP_BUCKET_TOKEN for codeberg.org/caniko/scoop-modde' 'test -n "$SCOOP_BUCKET_TOKEN"' || return 0
   local zip_name="modde-${version}-x86_64-windows.zip"
-  test -s "release/${zip_name}" || { record_skipped "Scoop missing Windows zip"; return 0; }
+  test -s "$release_dir/${zip_name}" || { record_skipped "Scoop missing Windows zip"; return 0; }
   local sha256
   sha256="$(artifact_sha "$zip_name")"
   test -n "$sha256"
   local credential_helper='!f() { echo username=x-access-token; echo "password=$SCOOP_BUCKET_TOKEN"; }; f'
-  rm -rf scoop-bucket
-  git -c credential.helper="$credential_helper" clone "${SCOOP_BUCKET_URL:-https://codeberg.org/caniko/scoop-modde.git}" scoop-bucket
+  local scoop_bucket="$work_dir/scoop-bucket"
+  rm -rf "$scoop_bucket"
+  git -c credential.helper="$credential_helper" clone "${SCOOP_BUCKET_URL:-https://codeberg.org/caniko/scoop-modde.git}" "$scoop_bucket"
   (
-    cd scoop-bucket
+    cd "$scoop_bucket"
     git config credential.helper "$credential_helper"
     git config user.email 'release-bot@localhost'
     git config user.name 'release bot'
@@ -479,8 +579,8 @@ publish_scoop() {
     git checkout "$default_branch"
     mkdir -p bucket
     cd ..
-    sed -e "s|{{VERSION}}|${version}|g" -e "s|{{SHA256}}|${sha256}|g" dist/scoop/modde.json > scoop-bucket/bucket/modde.json
-    cd scoop-bucket
+    sed -e "s|{{VERSION}}|${version}|g" -e "s|{{SHA256}}|${sha256}|g" "$repo/dist/scoop/modde.json" > "$scoop_bucket/bucket/modde.json"
+    cd "$scoop_bucket"
     if [ -z "$(git status --porcelain -- bucket/modde.json)" ]; then
       printf 'already-current: Scoop bucket\n'
       exit 0
@@ -494,18 +594,19 @@ publish_scoop() {
 publish_flathub() {
   is_prerelease && { record_skipped "Flathub prerelease"; return 0; }
   require_local_secret_for_publish "Flathub" FLATHUB_TOKEN 'export FLATHUB_TOKEN for github.com/flathub/com.tartanoglu.modde' 'test -n "$FLATHUB_TOKEN"' || return 0
-  test -s release/com.tartanoglu.modde.json || { record_skipped "Flathub missing manifest"; return 0; }
-  test -s release/cargo-sources.json || { record_skipped "Flathub missing cargo sources"; return 0; }
+  test -s "$release_dir/com.tartanoglu.modde.json" || { record_skipped "Flathub missing manifest"; return 0; }
+  test -s "$release_dir/cargo-sources.json" || { record_skipped "Flathub missing cargo sources"; return 0; }
   local credential_helper='!f() { echo username=x-access-token; echo "password=$FLATHUB_TOKEN"; }; f'
-  rm -rf flathub-repo
-  git -c credential.helper="$credential_helper" clone https://github.com/flathub/com.tartanoglu.modde.git flathub-repo
+  local flathub_repo="$work_dir/flathub-repo"
+  rm -rf "$flathub_repo"
+  git -c credential.helper="$credential_helper" clone https://github.com/flathub/com.tartanoglu.modde.git "$flathub_repo"
   (
-    cd flathub-repo
+    cd "$flathub_repo"
     git config credential.helper "$credential_helper"
     git config user.email 'release-bot@localhost'
     git config user.name 'release bot'
     git checkout -B "release/${version}"
-    cp ../release/com.tartanoglu.modde.json ../release/cargo-sources.json .
+    cp "$release_dir/com.tartanoglu.modde.json" "$release_dir/cargo-sources.json" .
     if [ -z "$(git status --porcelain -- com.tartanoglu.modde.json cargo-sources.json)" ]; then
       printf 'already-current: Flathub manifest\n'
       exit 0
@@ -531,9 +632,9 @@ publish_winget() {
   is_prerelease && { record_skipped "Winget prerelease"; return 0; }
   require_local_secret_for_publish "Winget" WINGET_PAT 'export WINGET_PAT for github.com/microsoft/winget-pkgs' 'test -n "$WINGET_PAT"' || return 0
   local zip_name="modde-${version}-x86_64-windows.zip"
-  test -s "release/${zip_name}" || { record_skipped "Winget missing Windows zip"; return 0; }
+  test -s "$release_dir/${zip_name}" || { record_skipped "Winget missing Windows zip"; return 0; }
   local zip_url="https://codeberg.org/caniko/rs-modde/releases/download/${version}/${zip_name}"
-  tmpdir="$(mktemp -d)"
+  tmpdir="$(mktemp -d "$work_dir/winget.XXXXXX")"
   trap 'rm -rf "$tmpdir"' RETURN
   export WINEPREFIX="$tmpdir/wine" WINEDEBUG=-all TERM=xterm
   release_json="$(curl -fsSL https://api.github.com/repos/microsoft/winget-create/releases/latest)"
@@ -552,14 +653,17 @@ print_summary() {
   if [ "${#failed[@]}" -eq 0 ]; then printf '  - none\n'; else printf '  - %s\n' "${failed[@]}"; fi
   printf 'policy:\n'
   printf '  - crates.io publish remains CI-only\n'
-  printf '  - Homebrew is skipped while macOS artifacts are disabled\n'
+  printf '  - macOS artifacts are ad-hoc signed and not notarized\n'
 }
 
-nix run "$repo#local-check-release" -- "$version"
+if [ "${SIMIT_LOCAL_RELEASE_CHECK_DONE:-0}" != "1" ]; then
+  nix run "$repo#local-check-release" -- "$version"
+fi
 load_canix_release_inputs
-build_non_macos_artifacts
+build_release_artifacts
 
 run_publisher "Codeberg release" publish_codeberg_release
+run_publisher "Homebrew tap" publish_homebrew
 run_publisher "APT repository" publish_apt
 run_publisher "AUR packages" publish_aur
 run_publisher "COPR" publish_copr
@@ -567,7 +671,6 @@ run_publisher "Chocolatey" publish_chocolatey
 run_publisher "Scoop" publish_scoop
 run_publisher "Flathub" publish_flathub
 run_publisher "Winget" publish_winget
-record_skipped "Homebrew disabled while macOS artifacts are skipped"
 record_skipped "crates.io publish remains CI-only"
 
 print_summary

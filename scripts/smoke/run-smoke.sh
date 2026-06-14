@@ -7,12 +7,13 @@ if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
 fi
 
 VERSION="$1"
-RELEASE_DIR="${2:-release}"
+RELEASE_DIR_INPUT="${2:-release}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+mkdir -p "$RELEASE_DIR_INPUT"
+RELEASE_DIR="$(cd "$RELEASE_DIR_INPUT" && pwd)"
 REPORT="${RELEASE_DIR}/smoke-report.txt"
 TMP_REPORT="${REPORT}.tmp"
 
-mkdir -p "$RELEASE_DIR"
 rm -f "$TMP_REPORT"
 
 log() {

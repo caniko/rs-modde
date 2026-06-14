@@ -1,11 +1,38 @@
-/target
+# Editor and temporary files
 *.swp
 *.swo
 *~
+
+# Rust and coverage output
+/target
 *.wabbajack
 *.profraw
+
+# Local environment and Nix build outputs
 .direnv/
+.flatpak-builder/
 result*
+*-result
+
+# Local release and package-manager artifacts
+target/modde-release/root-artifacts/
+
+# Legacy root outputs from manual or CI-style release commands
+release/
+release-env
+release.json
+release-publisher-state.env
+attic-paths.txt
+vendor.tar.gz
+cargo-vendor-config.toml
+rs-modde-*.tar.gz
+srpms/
+aur-modde*/
+chocolatey-package/
+copr-build-*/
+flathub-repo/
+
+# Generated docs and website output
 docs/book/
 website/data/
 website/public/

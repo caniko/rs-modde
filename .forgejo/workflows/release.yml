@@ -93,16 +93,6 @@ jobs:
           CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
           MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
           MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
-          MODDE_APT_REPO_GPG_KEY: ${{ secrets.MODDE_APT_REPO_GPG_KEY }}
-          MODDE_APT_REPO_GPG_KEY_ID: ${{ vars.MODDE_APT_REPO_GPG_KEY_ID }}
-          MODDE_APT_REPO_GPG_FINGERPRINT: ${{ vars.MODDE_APT_REPO_GPG_FINGERPRINT }}
-          MODDE_APT_REPO_GPG_PUBLIC_KEY: ${{ vars.MODDE_APT_REPO_GPG_PUBLIC_KEY }}
-          MODDE_APT_REPO_SSH_KEY: ${{ secrets.MODDE_APT_REPO_SSH_KEY }}
-          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
-          COPR_LOGIN: ${{ secrets.COPR_LOGIN }}
-          COPR_USERNAME: ${{ vars.COPR_USERNAME }}
-          COPR_TOKEN: ${{ secrets.COPR_TOKEN }}
-          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
         run: |
           set -euo pipefail
           . ./release-env
@@ -114,30 +104,6 @@ jobs:
           require_credential 'global/user secret' 'CODEBERG_TOKEN' "${CODEBERG_TOKEN:-}"
           require_credential 'repo secret' 'MINISIGN_SECRET_KEY' "${MINISIGN_SECRET_KEY:-}"
           require_credential 'repo secret' 'MINISIGN_PASSWORD' "${MINISIGN_PASSWORD:-}"
-          if [ "${IS_PRERELEASE}" != "true" ]; then
-            require_credential 'repo secret' 'MODDE_APT_REPO_GPG_KEY' "${MODDE_APT_REPO_GPG_KEY:-}"
-          fi
-          if [ "${IS_PRERELEASE}" != "true" ]; then
-            require_credential 'repo variable' 'MODDE_APT_REPO_GPG_KEY_ID' "${MODDE_APT_REPO_GPG_KEY_ID:-}"
-          fi
-          if [ "${IS_PRERELEASE}" != "true" ]; then
-            require_credential 'repo variable' 'MODDE_APT_REPO_GPG_FINGERPRINT' "${MODDE_APT_REPO_GPG_FINGERPRINT:-}"
-          fi
-          if [ "${IS_PRERELEASE}" != "true" ]; then
-            require_credential 'repo variable' 'MODDE_APT_REPO_GPG_PUBLIC_KEY' "${MODDE_APT_REPO_GPG_PUBLIC_KEY:-}"
-          fi
-          if [ "${IS_PRERELEASE}" != "true" ]; then
-            require_credential 'repo secret' 'MODDE_APT_REPO_SSH_KEY' "${MODDE_APT_REPO_SSH_KEY:-}"
-          fi
-          if [ "${IS_PRERELEASE}" != "true" ]; then
-            require_credential 'global/user secret' 'AUR_SSH_KEY' "${AUR_SSH_KEY:-}"
-          fi
-          require_credential 'global/user secret' 'COPR_LOGIN' "${COPR_LOGIN:-}"
-          require_credential 'global/user variable' 'COPR_USERNAME' "${COPR_USERNAME:-}"
-          require_credential 'global/user secret' 'COPR_TOKEN' "${COPR_TOKEN:-}"
-          if [ "${IS_PRERELEASE}" != "true" ]; then
-            require_credential 'global/user secret' 'CHOCOLATEY_API_KEY' "${CHOCOLATEY_API_KEY:-}"
-          fi
           if [ -n "$missing" ]; then
             printf 'Missing release credentials:%s\n' "$missing" >&2
             exit 1
@@ -151,11 +117,11 @@ jobs:
           printf '%s\n' "$MINISIGN_PASSWORD" | \
             nix shell nixpkgs#minisign -c minisign -S -s "$minisign_key" -m "$minisign_probe" -x "$minisign_sig"
           nix shell nixpkgs#minisign -c minisign -V -m "$minisign_probe" -x "$minisign_sig" -p keys/minisign.pub
-      - name: Rewrite modde.spec Version
+      - name: Rewrite dist/rpm/modde.spec Version
         run: |
           . ./release-env
-          sed -i "0,/^Version:.*$/s//Version:        ${VERSION}/" modde.spec
-          grep '^Version:' modde.spec
+          sed -i "0,/^Version:.*$/s//Version:        ${VERSION}/" dist/rpm/modde.spec
+          grep '^Version:' dist/rpm/modde.spec
       - name: Check supply-chain policy
         run: |
           nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#cargo-deny -c cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses
@@ -170,7 +136,7 @@ jobs:
           ( cd rs-modde && cargo vendor vendor > ../cargo-vendor-config.toml )
           tar czf vendor.tar.gz -C rs-modde vendor
           rm -rf srpms && mkdir -p srpms
-          rpmbuild -bs modde.spec --define "_sourcedir $(pwd)" --define "_srcrpmdir $(pwd)/srpms"
+          rpmbuild -bs dist/rpm/modde.spec --define "_sourcedir $(pwd)" --define "_srcrpmdir $(pwd)/srpms"
           set -- srpms/*.src.rpm; test "$#" -eq 1; ls -l "$1"
           SCRIPT
       - name: Generate supply-chain reports
@@ -181,9 +147,9 @@ jobs:
           mkdir -p release
           nix develop -c bash <<'SBOM'
           set -euo pipefail
-          cargo about generate --output-file release/THIRD_PARTY_LICENSES.html about-template.hbs
-          cargo sbom --output-format cyclone_dx_json_1_5 > "release/modde-${VERSION}.cdx.json"
-          cargo sbom --output-format spdx_json_2_3 > "release/modde-${VERSION}.spdx.json"
+          cargo about generate --config dist/licenses/about.toml --output-file target/modde-release/root-artifacts/release/THIRD_PARTY_LICENSES.html dist/licenses/about-template.hbs
+          cargo sbom --output-format cyclone_dx_json_1_5 > "target/modde-release/root-artifacts/release/modde-${VERSION}.cdx.json"
+          cargo sbom --output-format spdx_json_2_3 > "target/modde-release/root-artifacts/release/modde-${VERSION}.spdx.json"
           SBOM
           
       - name: Build release artifacts
@@ -197,51 +163,51 @@ jobs:
             if [ -f "${result_dir}/bin/.${binary}-wrapped" ]; then cp "${result_dir}/bin/.${binary}-wrapped" "$destination"; else cp "${result_dir}/bin/${binary}" "$destination"; fi
           }
           
-          nix build .#modde --out-link linux-result
-          mkdir -p release/linux-x86_64
-          copy_nix_binary linux-result modde release/linux-x86_64/modde
-          copy_nix_binary linux-result modde-ui release/linux-x86_64/modde-ui
-          tar czf "release/modde-${VERSION}-x86_64-linux.tar.gz" -C release/linux-x86_64 modde modde-ui
-          cp release/linux-x86_64/modde "release/modde-${VERSION}-x86_64-linux"
-          cp release/linux-x86_64/modde-ui "release/modde-ui-${VERSION}-x86_64-linux"
+          nix build .#modde --out-link target/modde-release/root-artifacts/linux-result
+          mkdir -p target/modde-release/root-artifacts/release/linux-x86_64
+          copy_nix_binary target/modde-release/root-artifacts/linux-result modde target/modde-release/root-artifacts/release/linux-x86_64/modde
+          copy_nix_binary target/modde-release/root-artifacts/linux-result modde-ui target/modde-release/root-artifacts/release/linux-x86_64/modde-ui
+          tar czf "target/modde-release/root-artifacts/release/modde-${VERSION}-x86_64-linux.tar.gz" -C target/modde-release/root-artifacts/release/linux-x86_64 modde modde-ui
+          cp target/modde-release/root-artifacts/release/linux-x86_64/modde "target/modde-release/root-artifacts/release/modde-${VERSION}-x86_64-linux"
+          cp target/modde-release/root-artifacts/release/linux-x86_64/modde-ui "target/modde-release/root-artifacts/release/modde-ui-${VERSION}-x86_64-linux"
           
-          nix build .#modde-aarch64-linux --out-link aarch64-linux-result
-          mkdir -p release/linux-aarch64
-          copy_nix_binary aarch64-linux-result modde release/linux-aarch64/modde
-          copy_nix_binary aarch64-linux-result modde-ui release/linux-aarch64/modde-ui
-          tar czf "release/modde-${VERSION}-aarch64-linux.tar.gz" -C release/linux-aarch64 modde modde-ui
-          cp release/linux-aarch64/modde "release/modde-${VERSION}-aarch64-linux"
-          cp release/linux-aarch64/modde-ui "release/modde-ui-${VERSION}-aarch64-linux"
+          nix build .#modde-aarch64-linux --out-link target/modde-release/root-artifacts/aarch64-linux-result
+          mkdir -p target/modde-release/root-artifacts/release/linux-aarch64
+          copy_nix_binary target/modde-release/root-artifacts/aarch64-linux-result modde target/modde-release/root-artifacts/release/linux-aarch64/modde
+          copy_nix_binary target/modde-release/root-artifacts/aarch64-linux-result modde-ui target/modde-release/root-artifacts/release/linux-aarch64/modde-ui
+          tar czf "target/modde-release/root-artifacts/release/modde-${VERSION}-aarch64-linux.tar.gz" -C target/modde-release/root-artifacts/release/linux-aarch64 modde modde-ui
+          cp target/modde-release/root-artifacts/release/linux-aarch64/modde "target/modde-release/root-artifacts/release/modde-${VERSION}-aarch64-linux"
+          cp target/modde-release/root-artifacts/release/linux-aarch64/modde-ui "target/modde-release/root-artifacts/release/modde-ui-${VERSION}-aarch64-linux"
           
-          nix build .#modde-windows --out-link windows-result
-          mkdir -p release/windows-x86_64
-          cp windows-result/bin/modde.exe windows-result/bin/modde-ui.exe release/windows-x86_64/
-          if [ -f windows-result/bin/libmcfgthread-2.dll ]; then cp windows-result/bin/libmcfgthread-2.dll release/windows-x86_64/; fi
+          nix build .#modde-windows --out-link target/modde-release/root-artifacts/windows-result
+          mkdir -p target/modde-release/root-artifacts/release/windows-x86_64
+          cp target/modde-release/root-artifacts/windows-result/bin/modde.exe target/modde-release/root-artifacts/windows-result/bin/modde-ui.exe target/modde-release/root-artifacts/release/windows-x86_64/
+          if [ -f target/modde-release/root-artifacts/windows-result/bin/libmcfgthread-2.dll ]; then cp target/modde-release/root-artifacts/windows-result/bin/libmcfgthread-2.dll target/modde-release/root-artifacts/release/windows-x86_64/; fi
           # Windows tar.gz/zip and individual signed .exe assets are produced
           # by the Authenticode signing step, after the .exe files are signed.
           
-          nix build .#modde-darwin-x86_64 --out-link darwin-x86-result
-          mkdir -p release/darwin-x86_64
-          cp darwin-x86-result/bin/modde darwin-x86-result/bin/modde-ui release/darwin-x86_64/
-          tar czf "release/modde-${VERSION}-x86_64-darwin.tar.gz" -C release/darwin-x86_64 modde modde-ui
+          nix build .#modde-darwin-x86_64 --out-link target/modde-release/root-artifacts/darwin-x86-result
+          mkdir -p target/modde-release/root-artifacts/release/darwin-x86_64
+          cp target/modde-release/root-artifacts/darwin-x86-result/bin/modde target/modde-release/root-artifacts/darwin-x86-result/bin/modde-ui target/modde-release/root-artifacts/release/darwin-x86_64/
+          tar czf "target/modde-release/root-artifacts/release/modde-${VERSION}-x86_64-darwin.tar.gz" -C target/modde-release/root-artifacts/release/darwin-x86_64 modde modde-ui
           
-          nix build .#modde-darwin-aarch64 --out-link darwin-arm-result
-          mkdir -p release/darwin-aarch64
-          cp darwin-arm-result/bin/modde darwin-arm-result/bin/modde-ui release/darwin-aarch64/
-          tar czf "release/modde-${VERSION}-aarch64-darwin.tar.gz" -C release/darwin-aarch64 modde modde-ui
+          nix build .#modde-darwin-aarch64 --out-link target/modde-release/root-artifacts/darwin-arm-result
+          mkdir -p target/modde-release/root-artifacts/release/darwin-aarch64
+          cp target/modde-release/root-artifacts/darwin-arm-result/bin/modde target/modde-release/root-artifacts/darwin-arm-result/bin/modde-ui target/modde-release/root-artifacts/release/darwin-aarch64/
+          tar czf "target/modde-release/root-artifacts/release/modde-${VERSION}-aarch64-darwin.tar.gz" -C target/modde-release/root-artifacts/release/darwin-aarch64 modde modde-ui
           
-          nix build .#appimage-ui --out-link appimage-ui-result
-          cp appimage-ui-result "release/modde-ui-${VERSION}-x86_64.AppImage"
-          nix build .#appimage-cli --out-link appimage-cli-result
-          cp appimage-cli-result "release/modde-${VERSION}-x86_64.AppImage"
+          nix build .#appimage-ui --out-link target/modde-release/root-artifacts/appimage-ui-result
+          cp target/modde-release/root-artifacts/appimage-ui-result "target/modde-release/root-artifacts/release/modde-ui-${VERSION}-x86_64.AppImage"
+          nix build .#appimage-cli --out-link target/modde-release/root-artifacts/appimage-cli-result
+          cp target/modde-release/root-artifacts/appimage-cli-result "target/modde-release/root-artifacts/release/modde-${VERSION}-x86_64.AppImage"
           
-          git archive --format=tar.gz --prefix=rs-modde/ -o "release/rs-modde-${VERSION}.tar.gz" HEAD
-          source_sha256="$(sha256sum "release/rs-modde-${VERSION}.tar.gz" | awk '{print $1}')"
-          nix build .#flatpak-manifest --out-link flatpak-result
-          cp flatpak-result release/com.tartanoglu.modde.json
-          sed -i "s/@SOURCE_TARBALL_SHA256@/${source_sha256}/" release/com.tartanoglu.modde.json
-          nix run .#flatpak-cargo-generator -- Cargo.lock -o release/cargo-sources.json
-          cp srpms/*.src.rpm release/ 2>/dev/null || true
+          git archive --format=tar.gz --prefix=rs-modde/ -o "target/modde-release/root-artifacts/release/rs-modde-${VERSION}.tar.gz" HEAD
+          source_sha256="$(sha256sum "target/modde-release/root-artifacts/release/rs-modde-${VERSION}.tar.gz" | awk '{print $1}')"
+          nix build .#flatpak-manifest --out-link target/modde-release/root-artifacts/flatpak-result
+          cp target/modde-release/root-artifacts/flatpak-result target/modde-release/root-artifacts/release/com.tartanoglu.modde.json
+          sed -i "s/@SOURCE_TARBALL_SHA256@/${source_sha256}/" target/modde-release/root-artifacts/release/com.tartanoglu.modde.json
+          nix run .#flatpak-cargo-generator -- Cargo.lock -o target/modde-release/root-artifacts/release/cargo-sources.json
+          cp target/modde-release/root-artifacts/srpms/*.src.rpm target/modde-release/root-artifacts/release/ 2>/dev/null || true
           
       - name: Build Debian packages
         run: |
@@ -399,14 +365,14 @@ jobs:
             exit 0
           fi
           nix path-info -r \
-            ./linux-result \
-            ./aarch64-linux-result \
-            ./windows-result \
-            ./darwin-x86-result \
-            ./darwin-arm-result \
-            ./appimage-ui-result \
-            ./appimage-cli-result \
-            ./flatpak-result \
+            ./target/modde-release/root-artifacts/linux-result \
+            ./target/modde-release/root-artifacts/aarch64-linux-result \
+            ./target/modde-release/root-artifacts/windows-result \
+            ./target/modde-release/root-artifacts/darwin-x86-result \
+            ./target/modde-release/root-artifacts/darwin-arm-result \
+            ./target/modde-release/root-artifacts/appimage-ui-result \
+            ./target/modde-release/root-artifacts/appimage-cli-result \
+            ./target/modde-release/root-artifacts/flatpak-result \
             > attic-paths.txt
           nix profile install nixpkgs#attic-client
           if ! attic login canix https://attic.candee.baby "$(cat "$attic_token")"; then
@@ -417,6 +383,54 @@ jobs:
             echo "::warning::Attic push failed; continuing release without optional Nix closure cache push."
             exit 0
           fi
+      - name: Probe downstream publisher state
+        run: |
+          set -euo pipefail
+          . ./release-env
+          : > release-publisher-state.env
+          write_state() {
+            channel="$1"; state="$2"; detail="$3"
+            var="PUBLISH_$(printf '%s' "$channel" | tr '[:lower:]-' '[:upper:]_')_STATE"
+            printf '%s=%s\n' "$var" "$state" >> release-publisher-state.env
+            printf '%-10s %s %s\n' "$channel" "$state" "$detail"
+          }
+          public_git_url() {
+            case "$1" in
+              ssh://git@codeberg.org/*) path="${1#ssh://git@codeberg.org/}"; printf 'https://codeberg.org/%s\n' "$path" ;;
+              git@codeberg.org:*) path="${1#git@codeberg.org:}"; printf 'https://codeberg.org/%s\n' "$path" ;;
+              *) printf '%s\n' "$1" ;;
+            esac
+          }
+          probe_git_file() {
+            repo="$1"; ref="$2"; path="$3"
+            tmp="$(mktemp -d)"
+            trap 'rm -rf "$tmp"' RETURN
+            git clone --depth 1 --branch "$ref" "$(public_git_url "$repo")" "$tmp/repo" >/dev/null 2>&1 && test -e "$tmp/repo/$path"
+          }
+          probe_git_tree() {
+            repo="$1"; ref="$2"; path_a="$3"; path_b="$4"; tmp="$(mktemp -d)"
+            trap 'rm -rf "$tmp"' RETURN
+            git clone --depth 1 --branch "$ref" "$(public_git_url "$repo")" "$tmp/repo" >/dev/null 2>&1 && test -e "$tmp/repo/$path_a" && test -e "$tmp/repo/$path_b"
+          }
+          active_or_soft() {
+            channel="$1"; detail="$2"; shift 2
+            if "$@"; then write_state "$channel" active-required "$detail"; else write_state "$channel" inactive-soft "$detail"; fi
+          }
+          stable_or_state() {
+            channel="$1"; detail="$2"; shift 2
+            if [ "$IS_PRERELEASE" = "true" ]; then write_state "$channel" skipped-prerelease "$detail"; else active_or_soft "$channel" "$detail" "$@"; fi
+          }
+          stable_or_state apt 'ssh://git@codeberg.org/caniko/apt-modde.git pages' probe_git_tree 'ssh://git@codeberg.org/caniko/apt-modde.git' 'pages' dists pool
+          stable_or_state aur 'modde' bash -c 'git ls-remote --exit-code '\''https://aur.archlinux.org/modde.git'\'' HEAD >/dev/null 2>&1 && git ls-remote --exit-code '\''https://aur.archlinux.org/modde-bin.git'\'' HEAD >/dev/null 2>&1 && git ls-remote --exit-code '\''https://aur.archlinux.org/modde-git.git'\'' HEAD >/dev/null 2>&1'
+          COPR_PROBE_PROJECT='caniko/rs-modde'
+          if [ "$IS_PRERELEASE" = "true" ]; then COPR_PROBE_PROJECT='caniko/rs-modde-testing'; fi
+          active_or_soft copr "$COPR_PROBE_PROJECT" curl -fsSL "https://copr.fedorainfracloud.org/coprs/${COPR_PROBE_PROJECT}/"
+          export CHOCO_FILTER="$(printf 'Id eq '\''modde'\'' and IsLatestVersion' | jq -sRr @uri)"
+          stable_or_state chocolatey 'modde' bash -c 'curl -fsSL "https://community.chocolatey.org/api/v2/Packages()?%24filter=${CHOCO_FILTER}" | grep -q "<entry>"'
+          stable_or_state homebrew 'https://codeberg.org/caniko/homebrew-modde.git' probe_git_file 'https://codeberg.org/caniko/homebrew-modde.git' HEAD 'Formula/modde.rb'
+          stable_or_state scoop 'https://codeberg.org/caniko/scoop-modde.git' probe_git_file 'https://codeberg.org/caniko/scoop-modde.git' HEAD 'bucket/modde.json'
+          stable_or_state flathub 'flathub/com.tartanoglu.modde' curl -fsSL 'https://api.github.com/repos/flathub/com.tartanoglu.modde'
+          stable_or_state winget 'Caniko.Modde' curl -fsSL 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/c/Caniko/Modde'
       - name: Publish APT repository
         env:
           APT_REPO_GPG_KEY: ${{ secrets.MODDE_APT_REPO_GPG_KEY }}
@@ -430,8 +444,17 @@ jobs:
           set -euo pipefail
           . ./release-env
           if [ "$IS_PRERELEASE" = "true" ]; then echo "Prerelease ${VERSION}; skipping APT repository publish."; exit 0; fi
-          if [ -z "${APT_REPO_GPG_KEY:-}" ] || [ -z "${APT_REPO_GPG_KEY_ID:-}" ] || [ -z "${APT_REPO_SSH_KEY:-}" ]; then echo '::warning::apt secrets unset; skipping.'; exit 0; fi
-          debs=(release/*.deb); if [ ! -e "${debs[0]}" ]; then echo '::warning::no .deb to publish'; exit 0; fi
+          if [ -f release-publisher-state.env ]; then . ./release-publisher-state.env; fi
+          publisher_missing() {
+            channel="$1"; message="$2"
+            var="PUBLISH_$(printf '%s' "$channel" | tr '[:lower:]-' '[:upper:]_')_STATE"
+            state="${!var:-inactive-soft}"
+            if [ "$state" = active-required ]; then echo "::error::${channel}: ${message}" >&2; exit 1; fi
+            echo "::warning::${channel}: ${message}; bootstrap channel is inactive, skipping." >&2
+            exit 0
+          }
+          if [ -z "${APT_REPO_GPG_KEY:-}" ] || [ -z "${APT_REPO_GPG_KEY_ID:-}" ] || [ -z "${APT_REPO_SSH_KEY:-}" ]; then publisher_missing apt 'apt secrets unset'; fi
+          debs=(release/*.deb); if [ ! -e "${debs[0]}" ]; then publisher_missing apt 'no .deb to publish'; fi
           nix shell nixpkgs#reprepro nixpkgs#gnupg nixpkgs#openssh nixpkgs#git -c bash <<'SCRIPT'
           set -euo pipefail
           work="$(mktemp -d)"; chmod 700 "$work"
@@ -491,7 +514,16 @@ jobs:
           set -euo pipefail
           . ./release-env
           if [ "$IS_PRERELEASE" = "true" ]; then echo "Prerelease ${VERSION}; skipping AUR packages."; exit 0; fi
-          test -n "${AUR_SSH_KEY:-}"
+          if [ -f release-publisher-state.env ]; then . ./release-publisher-state.env; fi
+          publisher_missing() {
+            channel="$1"; message="$2"
+            var="PUBLISH_$(printf '%s' "$channel" | tr '[:lower:]-' '[:upper:]_')_STATE"
+            state="${!var:-inactive-soft}"
+            if [ "$state" = active-required ]; then echo "::error::${channel}: ${message}" >&2; exit 1; fi
+            echo "::warning::${channel}: ${message}; bootstrap channel is inactive, skipping." >&2
+            exit 0
+          }
+          if [ -z "${AUR_SSH_KEY:-}" ]; then publisher_missing aur 'AUR_SSH_KEY unset'; fi
           nix shell nixpkgs#git nixpkgs#openssh nixpkgs#pacman -c bash <<'SCRIPT'
           set -euo pipefail
           . ./release-env
@@ -536,9 +568,18 @@ jobs:
           set -euo pipefail
           . ./release-env
           if [ "$IS_PRERELEASE" = "true" ]; then echo "Prerelease ${VERSION}; skipping Flathub update."; exit 0; fi
-          if [ -z "${FLATHUB_TOKEN:-}" ]; then echo 'FLATHUB_TOKEN unset; skipping.'; exit 0; fi
-          test -s release/com.tartanoglu.modde.json
-          test -s release/cargo-sources.json
+          if [ -f release-publisher-state.env ]; then . ./release-publisher-state.env; fi
+          publisher_missing() {
+            channel="$1"; message="$2"
+            var="PUBLISH_$(printf '%s' "$channel" | tr '[:lower:]-' '[:upper:]_')_STATE"
+            state="${!var:-inactive-soft}"
+            if [ "$state" = active-required ]; then echo "::error::${channel}: ${message}" >&2; exit 1; fi
+            echo "::warning::${channel}: ${message}; bootstrap channel is inactive, skipping." >&2
+            exit 0
+          }
+          if [ -z "${FLATHUB_TOKEN:-}" ]; then publisher_missing flathub 'FLATHUB_TOKEN unset'; fi
+          test -s release/com.tartanoglu.modde.json || publisher_missing flathub 'missing release/com.tartanoglu.modde.json'
+          test -s release/cargo-sources.json || publisher_missing flathub 'missing release/cargo-sources.json'
           nix shell nixpkgs#curl nixpkgs#git nixpkgs#jq -c bash <<'SCRIPT'
           set -euo pipefail
           . ./release-env
@@ -563,9 +604,18 @@ jobs:
           set -euo pipefail
           . ./release-env
           if [ "$IS_PRERELEASE" = "true" ]; then echo "Prerelease ${VERSION}; skipping winget manifest update."; exit 0; fi
-          if [ -z "${WINGET_PAT:-}" ]; then echo 'WINGET_PAT unset; skipping.'; exit 0; fi
+          if [ -f release-publisher-state.env ]; then . ./release-publisher-state.env; fi
+          publisher_missing() {
+            channel="$1"; message="$2"
+            var="PUBLISH_$(printf '%s' "$channel" | tr '[:lower:]-' '[:upper:]_')_STATE"
+            state="${!var:-inactive-soft}"
+            if [ "$state" = active-required ]; then echo "::error::${channel}: ${message}" >&2; exit 1; fi
+            echo "::warning::${channel}: ${message}; bootstrap channel is inactive, skipping." >&2
+            exit 0
+          }
+          if [ -z "${WINGET_PAT:-}" ]; then publisher_missing winget 'WINGET_PAT unset'; fi
           ZIP_NAME="modde-${VERSION}-x86_64-windows.zip"; ZIP_URL="https://codeberg.org/caniko/rs-modde/releases/download/${VERSION}/${ZIP_NAME}"
-          test -s "release/${ZIP_NAME}"
+          test -s "release/${ZIP_NAME}" || publisher_missing winget "missing release/${ZIP_NAME}"
           export ZIP_URL VERSION WINGET_PAT
           nix shell nixpkgs#curl nixpkgs#jq nixpkgs#unzip nixpkgs#wineWow64Packages.stable nixpkgs#util-linux -c bash <<'SCRIPT'
           set -euo pipefail
@@ -584,7 +634,20 @@ jobs:
           set -euo pipefail
           . ./release-env
           if [ "$IS_PRERELEASE" = "true" ]; then echo "Prerelease ${VERSION}; skipping Homebrew tap update."; exit 0; fi
-          if [ -z "${HOMEBREW_TAP_TOKEN:-}" ]; then echo 'HOMEBREW_TAP_TOKEN unset; skipping.'; exit 0; fi
+          if [ -f release-publisher-state.env ]; then . ./release-publisher-state.env; fi
+          publisher_missing() {
+            channel="$1"; message="$2"
+            var="PUBLISH_$(printf '%s' "$channel" | tr '[:lower:]-' '[:upper:]_')_STATE"
+            state="${!var:-inactive-soft}"
+            if [ "$state" = active-required ]; then echo "::error::${channel}: ${message}" >&2; exit 1; fi
+            echo "::warning::${channel}: ${message}; bootstrap channel is inactive, skipping." >&2
+            exit 0
+          }
+          if [ -z "${HOMEBREW_TAP_TOKEN:-}" ]; then publisher_missing homebrew 'HOMEBREW_TAP_TOKEN unset'; fi
+          test -s release/modde-${VERSION}-aarch64-darwin.tar.gz || publisher_missing homebrew 'missing release/modde-${VERSION}-aarch64-darwin.tar.gz'
+          test -s release/modde-${VERSION}-x86_64-darwin.tar.gz || publisher_missing homebrew 'missing release/modde-${VERSION}-x86_64-darwin.tar.gz'
+          test -s release/modde-${VERSION}-aarch64-linux.tar.gz || publisher_missing homebrew 'missing release/modde-${VERSION}-aarch64-linux.tar.gz'
+          test -s release/modde-${VERSION}-x86_64-linux.tar.gz || publisher_missing homebrew 'missing release/modde-${VERSION}-x86_64-linux.tar.gz'
           credential_helper='!f() { echo username=x-access-token; echo "password=$HOMEBREW_TAP_TOKEN"; }; f'
           rm -rf tap; git -c credential.helper="$credential_helper" clone "$HOMEBREW_TAP_URL" tap
           cd tap; git config credential.helper "$credential_helper"; git config user.email 'ci@localhost'; git config user.name 'release bot'
@@ -613,8 +676,17 @@ jobs:
           set -euo pipefail
           . ./release-env
           if [ "$IS_PRERELEASE" = "true" ]; then echo "Prerelease ${VERSION}; skipping Scoop bucket update."; exit 0; fi
-          if [ -z "${SCOOP_BUCKET_TOKEN:-}" ]; then echo 'SCOOP_BUCKET_TOKEN unset; skipping.'; exit 0; fi
-          ZIP_NAME="modde-${VERSION}-x86_64-windows.zip"; test -s "release/${ZIP_NAME}"; test -s dist/scoop/modde.json
+          if [ -f release-publisher-state.env ]; then . ./release-publisher-state.env; fi
+          publisher_missing() {
+            channel="$1"; message="$2"
+            var="PUBLISH_$(printf '%s' "$channel" | tr '[:lower:]-' '[:upper:]_')_STATE"
+            state="${!var:-inactive-soft}"
+            if [ "$state" = active-required ]; then echo "::error::${channel}: ${message}" >&2; exit 1; fi
+            echo "::warning::${channel}: ${message}; bootstrap channel is inactive, skipping." >&2
+            exit 0
+          }
+          if [ -z "${SCOOP_BUCKET_TOKEN:-}" ]; then publisher_missing scoop 'SCOOP_BUCKET_TOKEN unset'; fi
+          ZIP_NAME="modde-${VERSION}-x86_64-windows.zip"; test -s "release/${ZIP_NAME}" || publisher_missing scoop "missing release/${ZIP_NAME}"; test -s dist/scoop/modde.json || publisher_missing scoop 'missing dist/scoop/modde.json'
           SHA256="$(awk -v a="$ZIP_NAME" '$2 == a { print $1 }' release/SHA256SUMS.txt)"; test -n "$SHA256"
           credential_helper='!f() { echo username=x-access-token; echo "password=$SCOOP_BUCKET_TOKEN"; }; f'
           rm -rf scoop-bucket; git -c credential.helper="$credential_helper" clone "$SCOOP_BUCKET_URL" scoop-bucket
@@ -633,7 +705,17 @@ jobs:
           . ./release-env
           COPR_PROJECT="caniko/rs-modde"
           if [ "$IS_PRERELEASE" = "true" ]; then COPR_PROJECT="caniko/rs-modde-testing"; fi
-          if [ -z "$COPR_LOGIN" ] || [ -z "$COPR_USERNAME" ] || [ -z "$COPR_TOKEN" ]; then echo 'COPR credentials unset; skipping.'; exit 0; fi
+          if [ -f release-publisher-state.env ]; then . ./release-publisher-state.env; fi
+          publisher_missing() {
+            channel="$1"; message="$2"
+            var="PUBLISH_$(printf '%s' "$channel" | tr '[:lower:]-' '[:upper:]_')_STATE"
+            state="${!var:-inactive-soft}"
+            if [ "$state" = active-required ]; then echo "::error::${channel}: ${message}" >&2; exit 1; fi
+            echo "::warning::${channel}: ${message}; bootstrap channel is inactive, skipping." >&2
+            exit 0
+          }
+          if [ -z "$COPR_LOGIN" ] || [ -z "$COPR_USERNAME" ] || [ -z "$COPR_TOKEN" ]; then publisher_missing copr 'COPR credentials unset'; fi
+          srpms=(srpms/*.src.rpm); if [ ! -e "${srpms[0]}" ]; then publisher_missing copr 'no SRPM to publish'; fi
           mkdir -p ~/.config
           cat > ~/.config/copr <<EOF
           [copr-cli]
@@ -652,8 +734,17 @@ jobs:
           set -euo pipefail
           . ./release-env
           if [ "$IS_PRERELEASE" = "true" ]; then echo "Prerelease ${VERSION}; skipping Chocolatey package update."; exit 0; fi
-          if [ -z "${CHOCOLATEY_API_KEY:-}" ]; then echo 'CHOCOLATEY_API_KEY unset; skipping.'; exit 0; fi
-          ZIP="release/modde-${VERSION}-x86_64-windows.zip"; test -s "$ZIP"
+          if [ -f release-publisher-state.env ]; then . ./release-publisher-state.env; fi
+          publisher_missing() {
+            channel="$1"; message="$2"
+            var="PUBLISH_$(printf '%s' "$channel" | tr '[:lower:]-' '[:upper:]_')_STATE"
+            state="${!var:-inactive-soft}"
+            if [ "$state" = active-required ]; then echo "::error::${channel}: ${message}" >&2; exit 1; fi
+            echo "::warning::${channel}: ${message}; bootstrap channel is inactive, skipping." >&2
+            exit 0
+          }
+          if [ -z "${CHOCOLATEY_API_KEY:-}" ]; then publisher_missing chocolatey 'CHOCOLATEY_API_KEY unset'; fi
+          ZIP="release/modde-${VERSION}-x86_64-windows.zip"; test -s "$ZIP" || publisher_missing chocolatey "missing $ZIP"
           nix shell github:caniko/nixpkgs/add-chocolatey-scoop#chocolatey git+https://codeberg.org/caniko/simit -c simit dist chocolatey bump \
             --version "$VERSION" \
             --package-dir chocolatey-package \

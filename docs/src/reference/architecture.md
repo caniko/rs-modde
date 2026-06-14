@@ -546,7 +546,7 @@ uploading every file under `release/`.
 
 **xtask is a thin per-project binary over a shared library.** Reusable build-tooling logic
 lives in `harbor-xtask` (in rs-harbor); modde ships a thin `modde-xtask` binary, invoked as
-`cargo xtask`, that wires the project-specific bindings — the RPM spec path (`modde.spec`),
+`cargo xtask`, that wires the project-specific bindings — the RPM spec path (`dist/rpm/modde.spec`),
 the COPR vendor tarball, the docs bindings, the Nix package names
 (`modde` / `site` / `modde-windows` / `appimage-*` / `flatpak-manifest`), and
 `cargo xtask gui`. The shared rs-harbor CLI deliberately does **not** grow top-level

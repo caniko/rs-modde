@@ -10,12 +10,20 @@ fi
 repo="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$repo"
 
+release_root="${MODDE_LOCAL_RELEASE_ROOT:-$repo/target/modde-release/$version}"
+release_dir="${MODDE_LOCAL_RELEASE_DIR:-$release_root/release}"
+work_dir="${MODDE_LOCAL_RELEASE_WORKDIR:-$release_root/work}"
+mkdir -p "$release_dir" "$work_dir"
+export RELEASE_DIR="$release_dir"
+export MODDE_LOCAL_RELEASE_WORKDIR="$work_dir"
+
 missing=()
 warnings=()
 repo_secret_names=""
 repo_variable_names=""
 
 . "$repo/scripts/release-local-env.sh"
+release_manifest_init "$version" "rs-modde release-local-check"
 
 check_minisign_probe() {
   test -s keys/minisign.pub || missing+=("file:keys/minisign.pub")
@@ -69,8 +77,8 @@ check_workflow_contract() {
     && ok "workflow uses local COPR CLI flake app" \
     || missing+=("workflow:local COPR CLI app")
 
-  grep -F './linux-result \' .forgejo/workflows/release.yml >/dev/null \
-    && grep -F './flatpak-result \' .forgejo/workflows/release.yml >/dev/null \
+  grep -F 'target/modde-release/root-artifacts/linux-result \' .forgejo/workflows/release.yml >/dev/null \
+    && grep -F 'target/modde-release/root-artifacts/flatpak-result \' .forgejo/workflows/release.yml >/dev/null \
     && ok "workflow passes local result paths to nix path-info for Attic" \
     || missing+=("workflow:Attic local result paths")
 
@@ -98,6 +106,21 @@ check_workflow_contract() {
   grep -F 'wine cannot execute' scripts/smoke/smoke-windows-zip.sh >/dev/null \
     && ok "smoke treats unavailable Wine runtime execution as a runner limitation" \
     || missing+=("smoke:Wine runtime fallback")
+
+  grep -F 'smoke-darwin-tarball.sh) continue' scripts/local-release-deploy.sh >/dev/null \
+    && missing+=("local-deploy:Darwin smoke must run by default") \
+    || ok "local deploy includes Darwin tarball smoke"
+
+  grep -F 'Homebrew disabled while macOS artifacts are skipped' scripts/local-release-deploy.sh >/dev/null \
+    && missing+=("local-deploy:Homebrew must not be globally disabled") \
+    || ok "local deploy no longer hard-disables Homebrew"
+
+  grep -F 'publish_homebrew()' scripts/local-release-deploy.sh >/dev/null \
+    && grep -F 'HOMEBREW_TAP_TOKEN' scripts/local-release-deploy.sh >/dev/null \
+    && grep -F "modde-\${version}-aarch64-darwin.tar.gz" scripts/local-release-deploy.sh >/dev/null \
+    && grep -F "modde-\${version}-x86_64-darwin.tar.gz" scripts/local-release-deploy.sh >/dev/null \
+    && ok "local deploy has credential-gated Homebrew publisher with Darwin artifacts" \
+    || missing+=("local-deploy:Homebrew publisher with Darwin artifact gates")
 }
 
 load_canix_release_inputs
@@ -105,7 +128,7 @@ load_canix_release_inputs
 for tool in \
   bash git curl jq cargo rustc cargo-deny cargo-about cargo-sbom cargo-cyclonedx \
   cargo-deb dpkg-deb rpmbuild minisign cosign reprepro fj \
-  gpg ssh node npm copr-cli simit; do
+  file gpg ssh node npm copr-cli simit; do
   need_tool "$tool"
 done
 need_chocolatey_tool
@@ -139,6 +162,7 @@ optional_env SCOOP_BUCKET_TOKEN
 check_workflow_contract
 check_minisign_probe
 check_cosign_degrade
+release_manifest_collect_release_files "existing-release-artifact"
 
 if [ "${#missing[@]}" -ne 0 ]; then
   printf 'missing required local release parity inputs for %s:\n' "$version" >&2
