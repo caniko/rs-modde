@@ -24,7 +24,7 @@ assert_optional_glob() {
   local pattern="$1"
   local producer="$2"
 
-  if ! compgen -G "$pattern" > /dev/null; then
+  if ! glob_exists "$pattern"; then
     die "missing artifact matching ${pattern}; required upstream producer: ${producer}"
   fi
 }
@@ -33,7 +33,7 @@ warn_missing_glob() {
   local pattern="$1"
   local producer="$2"
 
-  if ! compgen -G "$pattern" > /dev/null; then
+  if ! glob_exists "$pattern"; then
     warn "missing artifact matching ${pattern}; ${producer} did not produce a runner-usable release asset in this environment"
   fi
 }
@@ -64,7 +64,11 @@ if [ ! -s dist/apt/key.gpg.asc ]; then
 fi
 
 assert_optional_glob "${RELEASE_DIR}/modde-${VERSION}-x86_64-linux.tar.gz" "Build release artifacts tarball output"
-assert_optional_glob "${RELEASE_DIR}/modde-${VERSION}-aarch64-linux.tar.gz" "Build release artifacts aarch64 tarball output"
+if [ "${MODDE_LOCAL_DEPLOY_SKIP_AARCH64:-0}" = "1" ]; then
+  warn "aarch64 Linux tarball absent because MODDE_LOCAL_DEPLOY_SKIP_AARCH64=1"
+else
+  assert_optional_glob "${RELEASE_DIR}/modde-${VERSION}-aarch64-linux.tar.gz" "Build release artifacts aarch64 tarball output"
+fi
 warn_missing_glob "${RELEASE_DIR}/modde-${VERSION}-x86_64.AppImage" "Build release artifacts appimage-cli output"
 warn_missing_glob "${RELEASE_DIR}/modde-ui-${VERSION}-x86_64.AppImage" "Build release artifacts appimage-ui output"
 assert_optional_glob "${RELEASE_DIR}/com.tartanoglu.modde.json" "Build release artifacts flatpak-manifest output"
@@ -72,13 +76,13 @@ assert_optional_glob "${RELEASE_DIR}/cargo-sources.json" "flatpak-cargo-generato
 assert_optional_glob "${RELEASE_DIR}/rs-modde-${VERSION}.tar.gz" "Build release artifacts source archive"
 
 debs=()
-mapfile -t debs < <(compgen -G "${RELEASE_DIR}"/*.deb | sort || true)
+collect_glob debs "${RELEASE_DIR}/*.deb"
 if [ "${#debs[@]}" -eq 0 ]; then
   warn "no .deb artifacts found; Debian-family release channel remains gated off until Build Debian packages produces .deb files"
 fi
 
 srpms=()
-mapfile -t srpms < <(compgen -G "${RELEASE_DIR}"/*.src.rpm | sort || true)
+collect_glob srpms "${RELEASE_DIR}/*.src.rpm"
 if [ "${#srpms[@]}" -eq 0 ]; then
   die "missing .src.rpm artifact; required upstream producer: Build SRPM for COPR"
 fi

@@ -9,10 +9,14 @@ License:        GPL-3.0-only
 URL:            https://codeberg.org/caniko/rs-modde
 Source0:        %{url}/archive/v%{version}.tar.gz#/rs-modde-%{version}.tar.gz
 Source1:        vendor.tar.gz
+Source2:        cargo-vendor-config.toml
+
+%global debug_package %{nil}
 
 BuildRequires:  rust >= 1.93
 BuildRequires:  cargo
 BuildRequires:  gcc
+BuildRequires:  gcc-c++
 BuildRequires:  pkg-config
 BuildRequires:  openssl-devel
 BuildRequires:  dbus-devel
@@ -29,13 +33,7 @@ packages for games like Skyrim, Fallout, Starfield, and Cyberpunk 2077.
 %autosetup -n rs-modde -p1
 tar xf %{SOURCE1}
 mkdir -p .cargo
-cat > .cargo/config.toml << 'EOF'
-[source.crates-io]
-replace-with = "vendored-sources"
-
-[source.vendored-sources]
-directory = "vendor"
-EOF
+cp %{SOURCE2} .cargo/config.toml
 
 %build
 cargo build --release --locked --bin modde --bin modde-ui
@@ -49,3 +47,7 @@ install -Dm755 target/release/modde-ui %{buildroot}%{_bindir}/modde-ui
 %doc README.md CHANGELOG.md
 %{_bindir}/modde
 %{_bindir}/modde-ui
+
+%changelog
+* Sun Jun 14 2026 caniko <caniko@tartanoglu.com> - 0.4.0-1
+- Release modde 0.4.0

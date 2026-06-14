@@ -25,7 +25,7 @@ find_one() {
   local producer="${3:-the release artifact producer}"
 
   local matches=()
-  mapfile -t matches < <(compgen -G "${dir}/${pattern}" | sort || true)
+  collect_glob matches "${dir}/${pattern}"
 
   if [ "${#matches[@]}" -eq 0 ]; then
     die "missing artifact matching ${dir}/${pattern}; required upstream producer: ${producer}"
@@ -45,7 +45,7 @@ find_many() {
   local producer="${3:-the release artifact producer}"
 
   local matches=()
-  mapfile -t matches < <(compgen -G "${dir}/${pattern}" | sort || true)
+  collect_glob matches "${dir}/${pattern}"
 
   if [ "${#matches[@]}" -eq 0 ]; then
     die "missing artifacts matching ${dir}/${pattern}; required upstream producer: ${producer}"
@@ -55,16 +55,44 @@ find_many() {
 }
 
 collect_many() {
-  local -n out="$1"
+  local -n __modde_collect_many_out="$1"
   local dir="$2"
   local pattern="$3"
   local producer="${4:-the release artifact producer}"
 
-  mapfile -t out < <(compgen -G "${dir}/${pattern}" | sort || true)
+  collect_glob __modde_collect_many_out "${dir}/${pattern}"
 
-  if [ "${#out[@]}" -eq 0 ]; then
+  if [ "${#__modde_collect_many_out[@]}" -eq 0 ]; then
     die "missing artifacts matching ${dir}/${pattern}; required upstream producer: ${producer}"
   fi
+}
+
+collect_glob() {
+  local -n __modde_collect_glob_out="$1"
+  local pattern="$2"
+
+  __modde_collect_glob_out=()
+  local globbed=()
+  shopt -s nullglob
+  # shellcheck disable=SC2206
+  globbed=( $pattern )
+  shopt -u nullglob
+  local existing=()
+  local candidate
+  for candidate in "${globbed[@]}"; do
+    [ -e "$candidate" ] || continue
+    existing+=("$candidate")
+  done
+  if [ "${#existing[@]}" -gt 0 ]; then
+    mapfile -t __modde_collect_glob_out < <(printf '%s\n' "${existing[@]}" | sort)
+  fi
+}
+
+glob_exists() {
+  local pattern="$1"
+  local matches=()
+  collect_glob matches "$pattern"
+  [ "${#matches[@]}" -gt 0 ]
 }
 
 assert_version_output() {

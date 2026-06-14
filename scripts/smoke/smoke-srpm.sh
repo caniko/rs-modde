@@ -33,7 +33,7 @@ if podman run --rm \
     registry.fedoraproject.org/fedora:latest \
     bash -lc "
     set -euo pipefail
-    dnf5 -y install rpm-build rpmlint cargo rust gcc pkgconf-pkg-config openssl-devel dbus-devel wayland-devel libxkbcommon-devel vulkan-loader-devel
+    dnf5 -y install rpm-build rpmlint cargo rust gcc gcc-c++ pkgconf-pkg-config openssl-devel dbus-devel wayland-devel libxkbcommon-devel vulkan-loader-devel
     rpmlint --strict /tmp/modde.src.rpm || echo 'warning: rpmlint reported RPM packaging diagnostics; continuing because rpmlint is warning-only in smoke policy' >&2
     rpmbuild --rebuild /tmp/modde.src.rpm --define '_topdir /tmp/rpmbuild'
     dnf5 -y install /tmp/rpmbuild/RPMS/*/*.rpm

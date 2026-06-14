@@ -34,9 +34,15 @@ jq --arg source_uri "$source_uri" '
   )
 ' "$manifest" > "$local_manifest"
 
+if [ "${MODDE_FLATPAK_MANIFEST_ONLY:-0}" = "1" ]; then
+  jq -e '."app-id" == "com.tartanoglu.modde" and (.modules | length > 0)' "$local_manifest" > /dev/null
+  warn "flatpak-builder execution skipped by MODDE_FLATPAK_MANIFEST_ONLY=1; manifest and cargo source metadata validated"
+  exit 0
+fi
+
 flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 flatpak_log="$tmpdir/flatpak-builder.log"
-if ! flatpak-builder --user --install --force-clean --install-deps-from=flathub "$tmpdir/build" "$local_manifest" > "$flatpak_log" 2>&1; then
+if ! flatpak-builder --user --install --force-clean --state-dir="$tmpdir/state" --install-deps-from=flathub "$tmpdir/build" "$local_manifest" > "$flatpak_log" 2>&1; then
   cat "$flatpak_log"
   if grep -E "open[(]O_TMPFILE[)]|Error installing deps|Failed to install org[.]freedesktop[.]Sdk" "$flatpak_log" > /dev/null; then
     warn "flatpak-builder cannot install runtime dependencies in this runner; manifest parsing passed and Flathub publish will perform the authoritative build"

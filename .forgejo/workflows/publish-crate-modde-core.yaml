@@ -81,8 +81,8 @@ jobs:
       - name: Test
         run: nix develop -c cargo test -p modde-core
 
-      - name: Install cargo-deny
-        run: nix develop -c cargo install cargo-deny --locked --version 0.18.3
+      - name: Check cargo-deny tool
+        run: nix develop -c command -v cargo-deny
 
       - name: Deny dependency policy
         run: nix develop -c cargo deny check bans licenses sources

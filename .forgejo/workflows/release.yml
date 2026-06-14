@@ -167,7 +167,7 @@ jobs:
           nix shell nixpkgs#rpm nixpkgs#cargo nixpkgs#rustc -c bash <<'SCRIPT'
           set -euo pipefail
           tar xf rs-modde-*.tar.gz
-          ( cd rs-modde && cargo vendor )
+          ( cd rs-modde && cargo vendor vendor > ../cargo-vendor-config.toml )
           tar czf vendor.tar.gz -C rs-modde vendor
           rm -rf srpms && mkdir -p srpms
           rpmbuild -bs modde.spec --define "_sourcedir $(pwd)" --define "_srcrpmdir $(pwd)/srpms"
@@ -179,11 +179,8 @@ jobs:
           . ./release-env
           export VERSION IS_PRERELEASE
           mkdir -p release
-          nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#gcc -c bash <<'SBOM'
+          nix develop -c bash <<'SBOM'
           set -euo pipefail
-          export CARGO_INSTALL_ROOT="$PWD/.cargo-tools"; export PATH="$CARGO_INSTALL_ROOT/bin:$PATH"
-          cargo install --locked cargo-about --version 0.9.0 --features cli
-          cargo install --locked cargo-sbom --version 0.10.0
           cargo about generate --output-file release/THIRD_PARTY_LICENSES.html about-template.hbs
           cargo sbom --output-format cyclone_dx_json_1_5 > "release/modde-${VERSION}.cdx.json"
           cargo sbom --output-format spdx_json_2_3 > "release/modde-${VERSION}.spdx.json"
@@ -252,38 +249,7 @@ jobs:
           . ./release-env
           export VERSION IS_PRERELEASE
           mkdir -p release
-          if ! nix shell nixpkgs#debootstrap nixpkgs#util-linux nixpkgs#cargo nixpkgs#rustc -c bash <<'SCRIPT'
-          set -euo pipefail
-          if [ "$(id -u)" -eq 0 ]; then
-            priv() { "$@"; }
-          elif command -v sudo >/dev/null 2>&1; then
-            priv() { sudo "$@"; }
-          else
-            echo "::warning::Building Debian release packages requires root privileges or sudo in the release runner image" >&2
-            exit 70
-          fi
-          root="$(mktemp -d)"
-          cargo_bin="$(readlink -f "$(command -v cargo)")"; cargo_dir="$(dirname "$cargo_bin")"
-          cleanup() { set +e; priv umount "$root/work" 2>/dev/null; priv umount "$root/nix/store" 2>/dev/null; priv rm -rf "$root"; }
-          trap cleanup EXIT
-          probe="$root/test-dev-null"; : > "$probe"
-          if ! priv mount --bind /dev/null "$probe"; then
-            echo "::warning::Debian package build requires a runner container with mount-capable chroot support; continuing without .deb artifacts." >&2
-            exit 70
-          fi
-          priv umount "$probe"; rm -f "$probe"
-          priv debootstrap --variant=minbase bookworm "$root" http://deb.debian.org/debian
-          priv mkdir -p "$root/work" "$root/nix/store"
-          priv mount --bind /nix/store "$root/nix/store"
-          priv mount --bind "$PWD" "$root/work"
-          priv chroot "$root" apt-get update
-          priv chroot "$root" apt-get install -y --no-install-recommends \
-            ca-certificates gcc libdbus-1-dev libsqlite3-dev libssl-dev libvulkan-dev libwayland-dev libxkbcommon-dev pkg-config
-          priv chroot "$root" env PATH="${cargo_dir}:/usr/sbin:/usr/bin:/bin" CARGO_HOME=/tmp/cargo-home CARGO_TARGET_DIR=/tmp/cargo-tools-target "$cargo_bin" install cargo-deb --locked --version 2.5.0
-          priv chroot "$root" env PATH="/tmp/cargo-home/bin:${cargo_dir}:/usr/sbin:/usr/bin:/bin" HOME=/tmp CARGO_HOME=/tmp/cargo-home SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt CC=/usr/bin/gcc PKG_CONFIG=/usr/bin/pkg-config "$cargo_bin" deb -p modde-cli --output "/work/release/modde_${VERSION}_amd64.deb"
-          priv chroot "$root" env PATH="/tmp/cargo-home/bin:${cargo_dir}:/usr/sbin:/usr/bin:/bin" HOME=/tmp CARGO_HOME=/tmp/cargo-home SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt CC=/usr/bin/gcc PKG_CONFIG=/usr/bin/pkg-config "$cargo_bin" deb -p modde-ui --output "/work/release/modde-ui_${VERSION}_amd64.deb"
-          priv chown "$(id -u):$(id -g)" release/*.deb
-          SCRIPT
+          if ! nix develop -c bash scripts/build-deb.sh "$VERSION" release
           then
             echo "::warning::Debian package build failed; continuing without .deb release assets and APT publish."
           fi

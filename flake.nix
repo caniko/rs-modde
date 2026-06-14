@@ -26,7 +26,7 @@
     };
 
     simit = {
-      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=1722643898e9469d9a4eb870108247ad99496c76";
+      url = "git+https://codeberg.org/caniko/simit.git?ref=refs/heads/trunk&rev=72e15e50f22a6bb3e2e693d86fbce1f4fedf8d08";
       inputs.rs-harbor.follows = "rs-harbor";
       inputs.nixpkgs.follows = "rs-harbor/nixpkgs";
       inputs.rust-overlay.follows = "rs-harbor/rust-overlay";
@@ -1583,13 +1583,16 @@
             [
               appstream
               cargo-about
+              cargo-audit
               cargo-cyclonedx
               cargo-deb
               cargo-deny
               cargo-llvm-cov
+              cargo-nextest
               cargo-sbom
               coprCli
               cosign
+              curl
               debootstrap
               dnf5
               dpkg
@@ -1609,21 +1612,30 @@
               nodejs
               openssh
               osslsigncode
+              pacman
               podman
+              pre-commit
               qemu
               reprepro
               rpm
+              rust-analyzer
+              stdenv.cc
               toolchain.rustToolchain
               simitCli
               plinthProject
               visualRubric
+              alejandra
               just
               _7zz
               unrar
               mdbook
+              prettier
+              taplo
               unzip
               util-linux
               wineWow64Packages.stable
+              wget
+              zip
             ]
             ++ nativeBuildInputs
             ++ buildInputs;
@@ -1687,6 +1699,43 @@
           program = "${lib.getExe coprCli}";
         };
 
+        apps.local-check-fast = {
+          type = "app";
+          program = let
+            script = pkgs.writeShellApplication {
+              name = "local-check-fast";
+              runtimeInputs = with pkgs; [
+                cargo-deny
+                coreutils
+                git
+                gnugrep
+                jq
+                nix
+                simitCli
+                toolchain.rustToolchain
+              ];
+              text = ''
+                repo="''${MODDE_SOURCE_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+                cd "$repo"
+                if [ -z "''${MODDE_LOCAL_CHECK_IN_DEVSHELL:-}" ]; then
+                  exec nix develop "$repo" -c env MODDE_LOCAL_CHECK_IN_DEVSHELL=1 "$0" "$@"
+                fi
+
+                simit init release --check
+                simit init ci --platform forgejo --runtime nix --check
+                nix flake check --keep-going
+                cargo test --workspace --all-features
+                cargo clippy --workspace --all-targets --all-features -- --deny warnings
+                cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses
+
+                for package in modde-core modde-sources modde-games modde-ui modde-cli; do
+                  cargo package -p "$package" --allow-dirty --list >/dev/null
+                done
+              '';
+            };
+          in "${script}/bin/local-check-fast";
+        };
+
         apps.release-local-check = {
           type = "app";
           program = let
@@ -1730,6 +1779,115 @@
               '';
             };
           in "${script}/bin/release-local-check";
+        };
+
+        apps.local-check-release = {
+          type = "app";
+          program = let
+            script = pkgs.writeShellApplication {
+              name = "local-check-release";
+              runtimeInputs = with pkgs; [
+                coreutils
+                git
+              ];
+              text = ''
+                version="''${1:-}"
+                if [ -z "$version" ]; then
+                  echo "usage: local-check-release <version>" >&2
+                  exit 2
+                fi
+
+                ${self.apps.${system}.local-check-fast.program}
+                exec ${self.apps.${system}.release-local-check.program} "$version"
+              '';
+            };
+          in "${script}/bin/local-check-release";
+        };
+
+        apps.build-deb = {
+          type = "app";
+          program = let
+            script = pkgs.writeShellApplication {
+              name = "build-deb";
+              runtimeInputs = with pkgs; [
+                cargo-deb
+                coreutils
+                dpkg
+                git
+                gnugrep
+                nix
+                toolchain.rustToolchain
+              ];
+              text = ''
+                repo="''${MODDE_SOURCE_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+                cd "$repo"
+                if [ -z "''${MODDE_BUILD_DEB_IN_DEVSHELL:-}" ]; then
+                  exec nix develop "$repo" -c env MODDE_BUILD_DEB_IN_DEVSHELL=1 "$0" "$@"
+                fi
+
+                exec bash "$repo/scripts/build-deb.sh" "$@"
+              '';
+            };
+          in "${script}/bin/build-deb";
+        };
+
+        apps.local-release-deploy = {
+          type = "app";
+          program = let
+            script = pkgs.writeShellApplication {
+              name = "local-release-deploy";
+              runtimeInputs = with pkgs; [
+                appstream
+                cargo-about
+                cargo-cyclonedx
+                cargo-deb
+                cargo-deny
+                cargo-sbom
+                coprCli
+                coreutils
+                cosign
+                curl
+                debootstrap
+                dnf5
+                dpkg
+                file
+                findutils
+                flatpak
+                flatpak-builder
+                forgejo-cli
+                git
+                gnugrep
+                gnupg
+                gnutar
+                gzip
+                jq
+                minisign
+                nix
+                nodejs
+                openssh
+                osslsigncode
+                pacman
+                qemu
+                reprepro
+                rpm
+                toolchain.rustToolchain
+                unzip
+                util-linux
+                wineWow64Packages.stable
+                wget
+                zip
+              ];
+              text = ''
+                repo="''${MODDE_SOURCE_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+                cd "$repo"
+                if [ -z "''${MODDE_LOCAL_DEPLOY_IN_DEVSHELL:-}" ]; then
+                  exec nix develop "$repo" -c env MODDE_LOCAL_DEPLOY_IN_DEVSHELL=1 "$0" "$@"
+                fi
+
+                exec bash "$repo/scripts/local-release-deploy.sh" "$@"
+              '';
+            };
+          in "${script}/bin/local-release-deploy";
         };
 
         # Release artifact signing/verification via the rs-harbor binding.
@@ -1835,11 +1993,8 @@
           checksum_globs = ["*.tar.gz" "*.zip" "*.AppImage" "*.deb" "*.src.rpm" "*.cdx.json" "*.spdx.json"];
           sbom_commands = [
             ''
-              nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#gcc -c bash <<'SBOM'
+              nix develop -c bash <<'SBOM'
               set -euo pipefail
-              export CARGO_INSTALL_ROOT="$PWD/.cargo-tools"; export PATH="$CARGO_INSTALL_ROOT/bin:$PATH"
-              cargo install --locked cargo-about --version 0.9.0 --features cli
-              cargo install --locked cargo-sbom --version 0.10.0
               cargo about generate --output-file release/THIRD_PARTY_LICENSES.html about-template.hbs
               cargo sbom --output-format cyclone_dx_json_1_5 > "release/modde-''${VERSION}.cdx.json"
               cargo sbom --output-format spdx_json_2_3 > "release/modde-''${VERSION}.spdx.json"
