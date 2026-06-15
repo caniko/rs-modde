@@ -4,10 +4,10 @@ index 0bd09f5..1d26826 100644
 +++ b/src/commands/copr.rs
 @@ -8,6 +8,6 @@ use crate::config::{CoprOverrides, ProjectConfig, ResolvedCopr};
  use crate::render::{copr_makefile, rpm_spec};
- 
+
 -pub const MAKEFILE_PATH: &str = ".copr/Makefile";
 +pub const MAKEFILE_PATH: &str = "dist/copr/Makefile";
- 
+
  pub fn run(command: CoprCommand) -> Result<()> {
      match command.action {
 diff --git a/src/readme_badges.rs b/src/readme_badges.rs
@@ -84,7 +84,7 @@ index 89cfc1a..0924f6d 100644
 +    let makefile = read(&project.path().join("dist/copr/Makefile"));
      assert!(makefile.contains("srpm:"));
      assert!(makefile.contains("cargo vendor"));
- 
+
      let stdout = String::from_utf8(output.stdout).unwrap();
      assert!(stdout.contains("Initialised COPR packaging"));
 -    assert!(stdout.contains("git add demo.spec .copr/Makefile"));
