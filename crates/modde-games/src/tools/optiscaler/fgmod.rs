@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use super::*;
 
 /// Build fgmod DLL restore commands for the launch wrapper.

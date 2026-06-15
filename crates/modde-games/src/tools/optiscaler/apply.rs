@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use super::config::optiscaler_config_reset_reason;
 use super::*;
 

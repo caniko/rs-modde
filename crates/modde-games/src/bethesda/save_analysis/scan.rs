@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use super::*;
 
 pub(super) fn validate_save_header(bytes: &[u8], expected_magic: &[u8]) -> Result<()> {

@@ -1,4 +1,5 @@
 //! Native Bethesda ESP/ESM/ESL record parsing and conservative `FormID`
+#![allow(clippy::wildcard_imports)]
 //! reference validation.
 //!
 //! The parser handles the Creation Engine container format directly: TES4

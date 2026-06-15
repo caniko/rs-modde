@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use super::*;
 
 pub fn managed_manifest_json(game_dir: &Path, applied: &AppliedFiles) -> serde_json::Value {

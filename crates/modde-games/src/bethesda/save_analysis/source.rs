@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use super::*;
 
 pub(super) fn collect_mod_dependency_source(mod_dir: &Path) -> Result<ModDependencySource> {

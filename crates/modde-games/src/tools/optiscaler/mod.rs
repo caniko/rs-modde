@@ -1,4 +1,5 @@
 //! `OptiScaler` — DLSS/FSR/XeSS upscaling and frame generation replacement.
+#![allow(clippy::wildcard_imports)]
 //!
 //! `OptiScaler` hooks into a game via proxy DLLs (typically `dxgi.dll` or
 //! `winmm.dll`). Some games need additional DLLs like `nvngx.dll`.

@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use super::*;
 
 pub fn extract_optiscaler_archive_flat(archive_path: &Path, dest_dir: &Path) -> Result<()> {

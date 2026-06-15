@@ -1,4 +1,5 @@
 //! Read-only Bethesda save dependency analysis for pre-removal gates.
+#![allow(clippy::wildcard_imports)]
 //!
 //! This intentionally does not rewrite or clean saves. It validates the save
 //! header, extracts plugin/script symbols from the binary payload, and matches

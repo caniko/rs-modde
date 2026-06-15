@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use super::config::{flatten_ini_overrides, set_ini_value};
 use super::*;
 

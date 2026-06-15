@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use super::*;
 
 pub(super) fn unsupported_record_types(docs: &[PluginDocument]) -> Vec<String> {
