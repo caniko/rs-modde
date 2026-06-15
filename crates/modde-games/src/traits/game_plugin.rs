@@ -78,7 +78,7 @@ pub trait GamePlugin: Send + Sync {
     /// (e.g. user-config dirs for INI tweak packs). Default: none, in
     /// which case the installer only ever stages into the game install
     /// dir. The order is significant: when the analyzer needs to pick
-    /// a default target for a given [`DeployTargetKind`] it takes the
+    /// a default target for a given [`super::DeployTargetKind`] it takes the
     /// first one of that kind.
     fn deploy_targets(&self) -> &'static [DeployTarget] {
         &[]

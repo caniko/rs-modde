@@ -7,6 +7,7 @@ use std::{env, time::Duration};
 use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
+use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 #[cfg(feature = "remote-telemetry")]
 use tracing_subscriber::prelude::*;

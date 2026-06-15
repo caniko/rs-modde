@@ -42,7 +42,7 @@ impl std::fmt::Display for ToolSelectOption {
     }
 }
 
-/// One user-facing setting exposed by a [`GameTool`].
+/// One user-facing setting exposed by a [`super::GameTool`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToolSettingSpec {
     pub key: &'static str,

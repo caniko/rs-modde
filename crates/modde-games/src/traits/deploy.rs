@@ -1,4 +1,4 @@
-/// Classes of filesystem roots a [`GamePlugin`] can advertise as
+/// Classes of filesystem roots a [`super::GamePlugin`] can advertise as
 /// deployment destinations *outside* the game install dir.
 ///
 /// New variants extend the installer's routing without requiring it to
@@ -20,11 +20,11 @@ pub enum DeployTargetKind {
     Custom,
 }
 
-/// A named alternate deployment root advertised by a [`GamePlugin`].
+/// A named alternate deployment root advertised by a [`super::GamePlugin`].
 ///
 /// The installer pipeline keys mods to a target by `id`; the plugin
 /// resolves `id` → real path at deploy time via
-/// [`GamePlugin::resolve_deploy_target`]. Resolution is deferred so
+/// [`super::GamePlugin::resolve_deploy_target`]. Resolution is deferred so
 /// plugins can incorporate runtime context (Wine prefix, Steam
 /// `compatdata`, XDG dirs) without baking a path into a static.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

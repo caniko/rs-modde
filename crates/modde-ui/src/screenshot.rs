@@ -331,6 +331,6 @@ fn base_demo_app(opts: &ShotOptions) -> Modde {
 mod fixtures;
 
 use self::fixtures::{
-    demo_profile, demo_profile_summary, populate_browse_nexus, populate_downloads,
-    populate_fomod_wizard, populate_mod_list, populate_tools,
+    populate_browse_nexus, populate_downloads, populate_fomod_wizard, populate_mod_list,
+    populate_tools,
 };

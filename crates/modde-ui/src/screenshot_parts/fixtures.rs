@@ -1,7 +1,7 @@
 #![allow(clippy::wildcard_imports)]
 use super::*;
 
-fn demo_profile() -> Profile {
+pub fn demo_profile() -> Profile {
     let mods = vec![
         demo_mod("skyui", "SkyUI", Some("5.2.0"), None, None, Some(12_604)),
         demo_mod(
@@ -109,7 +109,7 @@ fn disabled_mod(
     }
 }
 
-fn populate_mod_list(app: &mut Modde) {
+pub fn populate_mod_list(app: &mut Modde) {
     let profile = demo_profile();
     app.mod_id_filter_keys = modde_core::filter::mod_id_filter_keys(&profile.mods);
     app.active_profile = Some(profile.name.clone());
@@ -120,7 +120,7 @@ fn populate_mod_list(app: &mut Modde) {
     app.status_message = "Loaded profile 'Demo' (8 mods)".to_string();
 }
 
-fn demo_profile_summary() -> modde_core::profile::ProfileSummary {
+pub fn demo_profile_summary() -> modde_core::profile::ProfileSummary {
     modde_core::profile::ProfileSummary {
         id: 1,
         name: "Demo".to_string(),
@@ -130,7 +130,7 @@ fn demo_profile_summary() -> modde_core::profile::ProfileSummary {
     }
 }
 
-fn populate_downloads(app: &mut Modde) {
+pub fn populate_downloads(app: &mut Modde) {
     use modde_sources::queue::DownloadState;
 
     // Enqueue four tasks, then mutate each into a distinct state so the queue
@@ -245,7 +245,7 @@ const DEMO_FOMOD_XML: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 </config>
 "#;
 
-fn populate_fomod_wizard(app: &mut Modde) {
+pub fn populate_fomod_wizard(app: &mut Modde) {
     let config = fomod_oxide::ModuleConfig::parse(DEMO_FOMOD_XML)
         .expect("parse embedded demo FOMOD ModuleConfig");
     let installer = fomod_oxide::Installer::new(config);
@@ -277,7 +277,7 @@ fn populate_fomod_wizard(app: &mut Modde) {
     app.status_message = "FOMOD wizard started".to_string();
 }
 
-fn populate_tools(app: &mut Modde) {
+pub fn populate_tools(app: &mut Modde) {
     // A loaded profile gives the tools view a game label context.
     let profile = demo_profile();
     app.active_profile = Some(profile.name.clone());
@@ -337,7 +337,7 @@ fn demo_tool_state() -> crate::app::ToolState {
     }
 }
 
-fn populate_browse_nexus(app: &mut Modde) {
+pub fn populate_browse_nexus(app: &mut Modde) {
     // The browse view renders its game-picker + search chrome even without
     // fetched results, with a loaded profile providing the game domain.
     let profile = demo_profile();
