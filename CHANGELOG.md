@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-15
+
 ### Changed
 
 - **modde-games**: Split large monolithic files (`detection.rs`, `launcher.rs`,
@@ -28,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Lint**: Added `#![allow(clippy::wildcard_imports)]` and normalized import
   formatting across `modde-cli`, `modde-core`, and `modde-sources`.
+- **modde-ui**: Fixed private function visibility in `screenshot_parts/fixtures.rs`
+  and removed unused imports in `screenshot.rs`.
+- **modde-cli**: Added missing `std::path::PathBuf` import in `cli/runtime.rs`.
+- **modde-games**: Fixed broken intra-doc links in `tools/settings.rs`,
+  `traits/deploy.rs`, and `traits/game_plugin.rs` after module splits.
 
 ## [0.4.0] - 2026-06-13
 
@@ -215,7 +222,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Diagnostics**: Form 43 detection, missing master detection, shadowed mod detection, load order validation
 - **Nix**: Flake with binary, docs, and website outputs; home-manager module for declarative configuration
 
-[Unreleased]: https://codeberg.org/caniko/rs-modde/compare/0.4.0...HEAD
+[Unreleased]: https://codeberg.org/caniko/rs-modde/compare/0.5.0...HEAD
+[0.5.0]: https://codeberg.org/caniko/rs-modde/compare/0.4.0...0.5.0
 [0.4.0]: https://codeberg.org/caniko/rs-modde/compare/0.3.8...0.4.0
 [0.3.4]: https://codeberg.org/caniko/rs-modde/compare/0.3.3...0.3.4
 [0.3.3]: https://codeberg.org/caniko/rs-modde/compare/0.3.2...0.3.3
