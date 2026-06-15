@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use crate::views::selectable_text::text;
 use iced::widget::{button, column, container, pick_list, row, scrollable, text_input};
 use iced::{Alignment, Element, Length, color};

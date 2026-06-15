@@ -17,8 +17,13 @@ fn visible_buttons_do_not_use_raw_message_handlers() {
 #[test]
 fn described_button_path_uses_app_level_hover_toasts() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let action_button = fs::read_to_string(manifest_dir.join("src/action_button.rs"))
-        .expect("read action_button source");
+    let action_button = [
+        fs::read_to_string(manifest_dir.join("src/action_button.rs"))
+            .expect("read action_button source"),
+        fs::read_to_string(manifest_dir.join("src/action_button_parts/widgets.rs"))
+            .expect("read action_button widget source"),
+    ]
+    .join("\n");
     let app = fs::read_to_string(manifest_dir.join("src/app.rs")).expect("read app source");
 
     assert!(

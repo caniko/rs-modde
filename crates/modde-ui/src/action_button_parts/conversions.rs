@@ -1,0 +1,131 @@
+#![allow(clippy::wildcard_imports)]
+use super::*;
+
+impl From<ButtonAction> for Message {
+    fn from(action: ButtonAction) -> Self {
+        match action {
+            ButtonAction::SwitchView(view) => Message::SwitchView(view),
+            ButtonAction::ToggleSidebarGroup(group) => Message::ToggleSidebarGroup(group),
+            ButtonAction::DeleteProfile(name) => Message::DeleteProfile(name),
+            ButtonAction::OpenNewProfileDialog => Message::OpenNewProfileDialog,
+            ButtonAction::ForkProfile { source, new_name } => {
+                Message::ForkProfile { source, new_name }
+            }
+            ButtonAction::RollbackExperiment => Message::RollbackExperiment,
+            ButtonAction::CommitExperiment => Message::CommitExperiment,
+            ButtonAction::TryProfile => Message::TryProfile,
+            ButtonAction::OpenModPage => Message::OpenModPage,
+            ButtonAction::ModGalleryNext => Message::ModGalleryNext,
+            ButtonAction::ModEndorseToggle => Message::ModEndorseToggle,
+            ButtonAction::ModTrackToggle => Message::ModTrackToggle,
+            ButtonAction::RestoreSaveSnapshot(id) => Message::RestoreSaveSnapshot(id),
+            ButtonAction::AddMod => Message::AddMod,
+            ButtonAction::RemoveMod(index) => Message::RemoveMod(index),
+            ButtonAction::Deploy => Message::Deploy,
+            ButtonAction::ToggleFilterMode => Message::ToggleFilterMode,
+            ButtonAction::CycleFilter(kind) => Message::CycleFilter(kind),
+            ButtonAction::ClearFilters => Message::ClearFilters,
+            ButtonAction::ToggleCompactModList => Message::ToggleCompactModList,
+            ButtonAction::ToggleSeparator(cat_id) => Message::ToggleSeparator(cat_id),
+            ButtonAction::ReorderMod { mod_id, direction } => {
+                Message::ReorderMod { mod_id, direction }
+            }
+            ButtonAction::SelectMod(index) => Message::SelectMod(index),
+            ButtonAction::SearchCollections(query) => Message::SearchCollections(query),
+            ButtonAction::InstallCollection { slug, version } => {
+                Message::InstallCollection { slug, version }
+            }
+            ButtonAction::BrowseTabSwitched(tab) => Message::BrowseTabSwitched(tab),
+            ButtonAction::BrowseInstallMod {
+                game_domain,
+                mod_id,
+            } => Message::BrowseInstallMod {
+                game_domain,
+                mod_id,
+            },
+            ButtonAction::LoadWabbajackCatalog => Message::LoadWabbajackCatalog,
+            ButtonAction::WabbajackTabChanged(tab) => Message::WabbajackTabChanged(tab),
+            ButtonAction::OpenWabbajackFile => Message::OpenWabbajackFile,
+            ButtonAction::WabbajackDownloadSelected => Message::WabbajackDownloadSelected,
+            ButtonAction::WabbajackCheckReadiness => Message::WabbajackCheckReadiness,
+            ButtonAction::WabbajackImportArchives => Message::WabbajackImportArchives,
+            ButtonAction::WabbajackStartInstall => Message::WabbajackStartInstall,
+            ButtonAction::WabbajackSelectEntry(index) => Message::WabbajackSelectEntry(index),
+            ButtonAction::WabbajackOpenUrl(url) => Message::WabbajackOpenUrl(url),
+            ButtonAction::WabbajackGenerateHmSnippet => Message::WabbajackGenerateHmSnippet,
+            ButtonAction::WabbajackCopyHmSnippet => Message::WabbajackCopyHmSnippet,
+            ButtonAction::WabbajackSaveHmSnippet => Message::WabbajackSaveHmSnippet,
+            ButtonAction::FomodCancel => Message::FOMODCancel,
+            ButtonAction::FomodUndo => Message::FOMODUndo,
+            ButtonAction::FomodBack => Message::FOMODBack,
+            ButtonAction::FomodNext => Message::FOMODNext,
+            ButtonAction::PauseDownload(id) => Message::PauseDownload(id),
+            ButtonAction::ResumeDownload(id) => Message::ResumeDownload(id),
+            ButtonAction::CancelDownload(id) => Message::CancelDownload(id),
+            ButtonAction::RunDiagnostics => Message::RunDiagnostics,
+            ButtonAction::AnalyzeCrashLog => Message::AnalyzeCrashLog,
+            ButtonAction::ClearOverwrite => Message::ClearOverwrite,
+            ButtonAction::MoveOverwriteToMod(mod_id) => Message::MoveOverwriteToMod(mod_id),
+            ButtonAction::LoadSaveHistory => Message::LoadSaveHistory,
+            ButtonAction::ValidateNexusKey => Message::ValidateNexusKey,
+            ButtonAction::ToggleNexusApiKeyVisibility => Message::ToggleNexusApiKeyVisibility,
+            ButtonAction::ReplaceNexusApiKey => Message::ReplaceNexusApiKey,
+            ButtonAction::RemoveNexusConfigKey => Message::RemoveNexusConfigKey,
+            ButtonAction::BrowseGamePath => Message::BrowseGamePath,
+            ButtonAction::BrowseDownloadDir => Message::BrowseDownloadDir,
+            ButtonAction::CreateStockSnapshot => Message::CreateStockSnapshot,
+            ButtonAction::VerifyStockSnapshot => Message::VerifyStockSnapshot,
+            ButtonAction::RefreshTools => Message::RefreshTools,
+            ButtonAction::SelectToolTab(tool_id) => Message::SelectToolTab(tool_id),
+            ButtonAction::UpdateToolSetting {
+                tool_id,
+                key,
+                value,
+            } => Message::UpdateToolSetting {
+                tool_id,
+                key,
+                value,
+            },
+            ButtonAction::ToggleToolAdvancedSettings => Message::ToggleToolAdvancedSettings,
+            ButtonAction::ApplyTool(tool_id) => Message::ApplyTool(tool_id),
+            ButtonAction::RevertTool(tool_id) => Message::RevertTool(tool_id),
+            ButtonAction::ActivateOptiScaler => Message::ActivateOptiScaler,
+            ButtonAction::DeactivateOptiScaler => Message::DeactivateOptiScaler,
+            ButtonAction::AdoptOptiScaler => Message::AdoptOptiScaler,
+            ButtonAction::RestoreOptiScalerBackup => Message::RestoreOptiScalerBackup,
+            ButtonAction::ResetOptiScalerConfig => Message::ResetOptiScalerConfig,
+            ButtonAction::RestoreToolSettings { tool_id, node_id } => {
+                Message::RestoreToolSettings { tool_id, node_id }
+            }
+            ButtonAction::RefreshOptiScalerReleases => Message::RefreshOptiScalerReleases,
+            ButtonAction::InstallOptiScalerRelease => Message::InstallOptiScalerRelease,
+            ButtonAction::RefreshProtonVersions => Message::RefreshProtonVersions,
+            ButtonAction::InstallProtonVersion => Message::InstallProtonVersion,
+            ButtonAction::OpenExecutableEditor => Message::OpenExecutableEditor,
+            ButtonAction::RefreshExecutables => Message::RefreshExecutables,
+            ButtonAction::ClearExecutableDraft => Message::ClearExecutableDraft,
+            ButtonAction::EditExecutable(name) => Message::EditExecutable(name),
+            ButtonAction::SaveExecutable => Message::SaveExecutable,
+            ButtonAction::RemoveExecutable(name) => Message::RemoveExecutable(name),
+            ButtonAction::RunExecutable(name) => Message::RunExecutable(name),
+            ButtonAction::BrowseExecutablePath => Message::BrowseExecutablePath,
+            ButtonAction::BrowseExecutableWorkingDir => Message::BrowseExecutableWorkingDir,
+            ButtonAction::WindowMinimize => Message::WindowMinimize,
+            ButtonAction::WindowToggleMaximize => Message::WindowToggleMaximize,
+            ButtonAction::WindowClose => Message::WindowClose,
+            ButtonAction::CancelNewProfileDialog => Message::CancelNewProfileDialog,
+            ButtonAction::SubmitNewProfileDialog => Message::SubmitNewProfileDialog,
+            ButtonAction::GamePathDialogBrowse => Message::GamePathDialogBrowse,
+            ButtonAction::CancelGamePathDialog => Message::CancelGamePathDialog,
+            ButtonAction::OpenAddCustomGame => Message::OpenAddCustomGame,
+            ButtonAction::BrowseAddCustomGameInstallPath => Message::BrowseAddCustomGameInstallPath,
+            ButtonAction::AddCustomGameSubmit => Message::AddCustomGameSubmit,
+            ButtonAction::AddCustomGameCancel => Message::AddCustomGameCancel,
+            ButtonAction::OpenManageCustomGames => Message::OpenManageCustomGames,
+            ButtonAction::CloseManageCustomGames => Message::CloseManageCustomGames,
+            ButtonAction::RemoveCustomGame(id) => Message::RemoveCustomGame(id),
+            ButtonAction::OpenUpdateReleasePage => Message::OpenUpdateReleasePage,
+            ButtonAction::DismissUpdateBanner => Message::DismissUpdateBanner,
+        }
+    }
+}

@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use std::collections::HashSet;
 use std::fmt;
 

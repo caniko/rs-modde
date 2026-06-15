@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Keyboard shortcut definitions for modde.
 //!
 //! Shortcuts are defined as static mappings. The app's subscription
