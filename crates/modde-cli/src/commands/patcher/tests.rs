@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use super::*;
 use std::collections::{HashMap, HashSet};
 use std::fs;

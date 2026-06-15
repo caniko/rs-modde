@@ -259,7 +259,6 @@ fn read_pg_password_file(path: &Path) -> Result<String> {
     Ok(pw.trim().to_string())
 }
 
-
 mod bisect;
 mod connection;
 mod crash;

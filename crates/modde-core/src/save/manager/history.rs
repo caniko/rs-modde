@@ -11,7 +11,7 @@ use crate::error::{CoreError, Result};
 use crate::resolver::GameId;
 use crate::save::{FingerprintCheck, SaveFingerprint, SaveSnapshot};
 
-impl<'a> SaveManager<'a> {
+impl SaveManager<'_> {
     pub fn history(
         game_id: &GameId,
         profile_name: &str,

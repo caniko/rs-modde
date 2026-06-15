@@ -82,7 +82,6 @@ impl Drop for EnvRestore {
     }
 }
 
-
 fn sample_profile(name: &str, game_id: &str) -> Profile {
     Profile {
         id: None,
@@ -115,6 +114,6 @@ fn sample_profile(name: &str, game_id: &str) -> Profile {
 }
 
 mod patcher;
-mod profile;
 #[cfg(feature = "postgres")]
 mod postgres;
+mod profile;

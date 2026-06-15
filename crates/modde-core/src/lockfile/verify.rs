@@ -1,5 +1,5 @@
-use super::generated::stage_generated_dir;
 use super::files::verify_locked_file;
+use super::generated::stage_generated_dir;
 use super::signatures::verify_signatures;
 use super::validation::validate_lock;
 use super::{ModdeLock, VerifyReport};

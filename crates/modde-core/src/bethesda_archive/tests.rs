@@ -40,8 +40,7 @@ fn build_test_bsa_with_version_and_flags(
     let mut buf = Vec::new();
     let folder_count = folders.len() as u32;
     let file_count: u32 = folders.iter().map(|(_, files)| files.len() as u32).sum();
-    let total_folder_name_len: u32 =
-        folders.iter().map(|(name, _)| name.len() as u32 + 2).sum();
+    let total_folder_name_len: u32 = folders.iter().map(|(name, _)| name.len() as u32 + 2).sum();
     let total_file_name_len: u32 = folders
         .iter()
         .flat_map(|(_, files)| files.iter())
@@ -157,9 +156,7 @@ fn build_test_ba2(files: &[(&str, &[u8], bool)]) -> Vec<u8> {
         buf.extend_from_slice(&0u32.to_le_bytes());
         buf.extend_from_slice(&0u32.to_le_bytes());
         buf.extend_from_slice(&running_offset.to_le_bytes());
-        buf.extend_from_slice(
-            &(if *compressed { payload.len() as u32 } else { 0 }).to_le_bytes(),
-        );
+        buf.extend_from_slice(&(if *compressed { payload.len() as u32 } else { 0 }).to_le_bytes());
         buf.extend_from_slice(&(data.len() as u32).to_le_bytes());
         buf.extend_from_slice(&0xBAADF00Du32.to_le_bytes());
         running_offset += payload.len() as u64;

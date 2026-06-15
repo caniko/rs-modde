@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};

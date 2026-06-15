@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Command mutation classification and lazy update notices.
 
 use super::args::*;
@@ -163,7 +164,6 @@ pub(super) fn maybe_print_product_update_notice() {
         Err(error) => tracing::debug!(%error, "product update check failed"),
     }
 }
-
 
 #[cfg(test)]
 mod tests;

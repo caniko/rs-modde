@@ -6,7 +6,7 @@ use super::helpers::{sanitize_branch_name, vault_signature};
 use crate::error::{CoreError, Result};
 use crate::resolver::GameId;
 
-impl<'a> SaveManager<'a> {
+impl SaveManager<'_> {
     pub fn init_vault(game_id: &GameId) -> Result<Repository> {
         let vault_path = crate::paths::save_vault_dir(game_id);
         if vault_path.join(".git").exists() {

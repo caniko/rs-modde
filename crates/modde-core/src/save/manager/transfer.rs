@@ -12,7 +12,7 @@ use crate::error::{CoreError, Result};
 use crate::resolver::GameId;
 use crate::save::SaveFingerprint;
 
-impl<'a> SaveManager<'a> {
+impl SaveManager<'_> {
     pub fn capture_with_fingerprint(
         &self,
         game_id: &GameId,

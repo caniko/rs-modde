@@ -5,7 +5,7 @@ use crate::db::SaveEntry;
 use crate::error::Result;
 use crate::resolver::GameId;
 
-impl<'a> SaveManager<'a> {
+impl SaveManager<'_> {
     pub async fn detect_unadopted(
         &self,
         game_id: &GameId,

@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Async CLI command dispatcher.
 
 use anyhow::Result;
@@ -429,5 +430,4 @@ pub(super) fn dispatch_async(cli: Cli) -> Result<()> {
         }
         Ok(())
     })
-
 }

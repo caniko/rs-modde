@@ -1,7 +1,8 @@
 //! Executable launch targets, performance runs, and UI test cleanup.
+#![allow(clippy::wildcard_imports)]
 
-use super::*;
 use super::rows::*;
+use super::*;
 
 impl ModdeDb {
     pub async fn save_executable_config(&self, executable: &ExecutableConfigRow) -> Result<()> {

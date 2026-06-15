@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Wabbajack readiness assessment reporting.
 
 use super::*;

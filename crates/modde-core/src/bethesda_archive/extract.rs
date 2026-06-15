@@ -5,7 +5,10 @@ use flate2::read::ZlibDecoder;
 
 use super::{ArchiveFileEntry, ArchiveFormat, read_u8, read_u32_le};
 
-pub(super) fn extract_entry(file: &mut (impl Read + Seek), entry: &ArchiveFileEntry) -> Result<Vec<u8>> {
+pub(super) fn extract_entry(
+    file: &mut (impl Read + Seek),
+    entry: &ArchiveFileEntry,
+) -> Result<Vec<u8>> {
     match entry.format {
         ArchiveFormat::Bsa => extract_bsa_entry(file, entry),
         ArchiveFormat::Ba2Gnrl => extract_ba2_gnrl_entry(file, entry),

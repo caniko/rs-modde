@@ -20,7 +20,6 @@ use crate::InstallSource;
 use crate::commands::wabbajack::{acquire_missing, acquire_status_label};
 
 /// Build a shared HTTP client with sensible timeouts for mod downloads.
-
 mod archives;
 mod collection;
 mod launcher;
@@ -30,12 +29,12 @@ mod wabbajack;
 #[cfg(test)]
 mod tests;
 
-use archives::{build_http_client, download_file, extract_archive, fetch_collection, parse_nexus_url};
-use collection::handle_nexus_collection;
 pub use archives::find_fomod_config;
-pub use launcher::{
-    configure_wine_overrides, deploy_mo2_to_game, print_tool_environment_report,
+use archives::{
+    build_http_client, download_file, extract_archive, fetch_collection, parse_nexus_url,
 };
+use collection::handle_nexus_collection;
+pub use launcher::{configure_wine_overrides, deploy_mo2_to_game, print_tool_environment_report};
 use single_mod::handle_single_mod;
 use wabbajack::handle_wabbajack;
 

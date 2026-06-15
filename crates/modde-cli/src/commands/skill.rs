@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use std::fs;
 use std::path::{Path, PathBuf};
 

@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Tests for [`command_mutates_state`].
 //!
 //! Goal: lock in which commands push a refresh signal to running

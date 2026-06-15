@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Nexus Collection install workflow.
 
 use super::*;

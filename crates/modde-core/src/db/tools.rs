@@ -1,7 +1,8 @@
 //! Tool settings and applied-file state.
+#![allow(clippy::wildcard_imports)]
 
-use super::*;
 use super::rows::*;
+use super::*;
 
 impl ModdeDb {
     pub async fn save_tool_config(

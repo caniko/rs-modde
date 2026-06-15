@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Manual archive links and missing-archive impact reporting.
 
 use super::*;

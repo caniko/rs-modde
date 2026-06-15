@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use super::*;
 use crate::nexus::graphql_url;
 

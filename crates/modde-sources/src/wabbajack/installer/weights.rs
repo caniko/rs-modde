@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use super::*;
 
 /// Best-effort estimate of the peak resident bytes a directive will need

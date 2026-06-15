@@ -9,12 +9,12 @@ use anyhow::{Context, Result};
 use modde_core::bisect::apply_result;
 use modde_core::profile::{ActivateResult, Profile, ProfileManager};
 use modde_core::save::SaveFingerprint;
-use modde_core::{
-    BisectResult, BisectSaveSafety, BisectSession, BisectStatus, GameId,
-};
+use modde_core::{BisectResult, BisectSaveSafety, BisectSession, BisectStatus, GameId};
 
-use crate::commands::{compute_fingerprint, load_plugin_order, resolve_save_dir, supports_save_profiles};
 use crate::commands::deploy;
+use crate::commands::{
+    compute_fingerprint, load_plugin_order, resolve_save_dir, supports_save_profiles,
+};
 
 pub(super) async fn create_candidate_profile(
     pm: &ProfileManager,
@@ -182,7 +182,10 @@ pub(super) async fn complete_and_advance(
     Ok(())
 }
 
-pub(super) async fn finish_without_candidate(pm: &ProfileManager, session: &BisectSession) -> Result<()> {
+pub(super) async fn finish_without_candidate(
+    pm: &ProfileManager,
+    session: &BisectSession,
+) -> Result<()> {
     let status = if session.suspect_mod_ids.is_empty() {
         BisectStatus::Inconclusive
     } else {
@@ -205,7 +208,10 @@ pub(super) async fn finish_without_candidate(pm: &ProfileManager, session: &Bise
     print_completion_if_any(pm, &updated).await
 }
 
-pub(super) async fn print_completion_if_any(pm: &ProfileManager, session: &BisectSession) -> Result<()> {
+pub(super) async fn print_completion_if_any(
+    pm: &ProfileManager,
+    session: &BisectSession,
+) -> Result<()> {
     match session.status {
         BisectStatus::Complete if session.suspect_mod_ids.len() == 1 => {
             let profile = pm
@@ -251,7 +257,10 @@ pub(super) async fn cleanup_candidates(pm: &ProfileManager, session: &BisectSess
     Ok(())
 }
 
-pub(super) async fn restore_source_profile(pm: &ProfileManager, session: &BisectSession) -> Result<()> {
+pub(super) async fn restore_source_profile(
+    pm: &ProfileManager,
+    session: &BisectSession,
+) -> Result<()> {
     let save_dir = resolve_save_dir(session.game_id.as_str());
     let fp = compute_fingerprint(pm, &session.source_profile_name, session.game_id.as_str()).await;
     let _ = pm
@@ -265,7 +274,11 @@ pub(super) async fn restore_source_profile(pm: &ProfileManager, session: &Bisect
     Ok(())
 }
 
-pub(super) async fn analyze_crash_log(pm: &ProfileManager, profile: &Profile, log_path: &Path) -> Result<()> {
+pub(super) async fn analyze_crash_log(
+    pm: &ProfileManager,
+    profile: &Profile,
+    log_path: &Path,
+) -> Result<()> {
     let raw = std::fs::read_to_string(log_path)
         .with_context(|| format!("failed to read crash log {}", log_path.display()))?;
     let profile_id = profile.id.ok_or_else(|| {

@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Archive, Nexus collection, and installer utility helpers.
 
 use super::*;

@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Wabbajack catalog search, download, and Home Manager snippet commands.
 
 use super::*;

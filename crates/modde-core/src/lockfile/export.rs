@@ -3,12 +3,11 @@ use std::collections::HashSet;
 use super::files::{group_installed_files, lock_store_file};
 use super::generated::{lock_patchers, lock_tool_outputs, lock_wabbajack_manifest};
 use super::helpers::{
-    current_utc_timestamp, hidden_file_lock, incomplete_reason, nexus_provenance,
-    plugin_entry_lock,
+    current_utc_timestamp, hidden_file_lock, incomplete_reason, nexus_provenance, plugin_entry_lock,
 };
 use super::validation::validate_payload;
 use super::{
-    ExportOptions, LockPayload, LockProfile, LockedMod, LOCK_FORMAT_VERSION, LOCK_KIND, ModdeLock,
+    ExportOptions, LOCK_FORMAT_VERSION, LOCK_KIND, LockPayload, LockProfile, LockedMod, ModdeLock,
 };
 use crate::db::ModdeDb;
 use crate::error::{CoreError, Result};

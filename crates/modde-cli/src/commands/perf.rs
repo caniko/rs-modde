@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};

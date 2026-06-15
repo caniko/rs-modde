@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 pub mod backup;
 pub mod bisect;
 pub mod collisions;

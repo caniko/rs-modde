@@ -1,4 +1,4 @@
-//! SQLite schema constants for the migration ladder.
+//! `SQLite` schema constants for the migration ladder.
 
 pub(super) const SCHEMA_V1: &str = "
 PRAGMA journal_mode = WAL;

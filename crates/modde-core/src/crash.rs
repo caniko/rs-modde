@@ -4,10 +4,9 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 mod parser;
 use parser::{
-    crash_logger_section, net_script_framework_section, normalize_path, parse_with_sections, sha256_hex,
-    trainwreck_section,
+    crash_logger_section, net_script_framework_section, normalize_path, parse_with_sections,
+    sha256_hex, trainwreck_section,
 };
-
 
 use crate::PluginEntry;
 use crate::installer::StagedFile;
@@ -409,7 +408,6 @@ fn upsert_suspect(
         line: token.line,
     });
 }
-
 
 #[cfg(test)]
 mod tests;

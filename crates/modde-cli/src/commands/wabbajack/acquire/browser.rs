@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Chromium browser-controller acquisition flow.
 
 use super::*;

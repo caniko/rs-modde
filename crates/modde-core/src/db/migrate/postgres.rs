@@ -1,4 +1,4 @@
-//! PostgreSQL end-state schema and migration entrypoint.
+//! `PostgreSQL` end-state schema and migration entrypoint.
 
 use tracing::info;
 

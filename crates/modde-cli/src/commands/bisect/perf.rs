@@ -7,10 +7,7 @@ use anyhow::{Context, Result};
 
 use modde_core::performance::{DEFAULT_WARMUP_SECONDS, mod_snapshot};
 use modde_core::profile::{Profile, ProfileManager};
-use modde_core::{
-    GameId, NewPerformanceRun, PerformanceSample, PerformanceSummary,
-};
-
+use modde_core::{GameId, NewPerformanceRun, PerformanceSample, PerformanceSummary};
 
 pub(super) async fn run_perf_candidate(
     pm: &ProfileManager,

@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Selective archive extraction: pull a chosen set of entries out of `zip`,
 //! `7z`, Bethesda (`BSA`/`BA2`), and (optionally) `rar` archives in one pass,
 //! validating sizes and rejecting unsafe entry paths.

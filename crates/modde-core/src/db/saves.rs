@@ -1,4 +1,5 @@
 //! Save assignments, active profile state, experiments, and stock snapshots.
+#![allow(clippy::wildcard_imports)]
 
 use super::*;
 

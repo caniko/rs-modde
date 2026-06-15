@@ -14,15 +14,13 @@ pub use llm::explain_with_openai_compatible_chat;
 use evidence::{build_evidence, collision_summaries};
 
 #[cfg(test)]
-use evidence::{MAX_EVIDENCE_STRING_CHARS, cap_evidence_string};
-#[cfg(test)]
-use llm::trim_doctor_context;
-#[cfg(test)]
 use crate::crash::{CrashEvidence, CrashTokenKind};
 #[cfg(test)]
 use crate::settings::DoctorLlmSettings;
-
-
+#[cfg(test)]
+use evidence::{MAX_EVIDENCE_STRING_CHARS, cap_evidence_string};
+#[cfg(test)]
+use llm::trim_doctor_context;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DoctorProfileModSnapshot {

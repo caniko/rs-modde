@@ -8,7 +8,6 @@ use crate::profile::{EnabledMod, LoadOrderLock, LockReason, Profile};
 mod duplicates;
 pub use duplicates::{DuplicateReport, ModFootprint, detect_stale_duplicates};
 
-
 /// Canonical `mod_id` derivation for a Wabbajack archive entry.
 ///
 /// Used by **both** the scanner and the Wabbajack installer so that a

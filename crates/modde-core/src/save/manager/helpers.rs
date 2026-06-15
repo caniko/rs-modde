@@ -39,7 +39,11 @@ pub(in crate::save) fn count_tree_entries(repo: &Repository, tree: &git2::Tree) 
 }
 
 /// Recursively collect file paths in a git tree.
-pub(in crate::save) fn collect_tree_paths(repo: &Repository, tree: &git2::Tree, prefix: &str) -> Vec<String> {
+pub(in crate::save) fn collect_tree_paths(
+    repo: &Repository,
+    tree: &git2::Tree,
+    prefix: &str,
+) -> Vec<String> {
     let mut paths = Vec::new();
     for entry in tree {
         let name = entry.name().unwrap_or("");

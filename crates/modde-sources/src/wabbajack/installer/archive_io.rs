@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use super::*;
 
 /// Compute the storage path for an archive by its hash.

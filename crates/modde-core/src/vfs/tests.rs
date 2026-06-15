@@ -12,7 +12,10 @@ fn make_resolved(order: Vec<&str>) -> ResolvedLoadOrder {
 }
 
 /// Helper: construct a `Built` farm directly for testing.
-pub(super) fn test_farm(staging_dir: PathBuf, links: HashMap<String, PathBuf>) -> SymlinkFarm<Built> {
+pub(super) fn test_farm(
+    staging_dir: PathBuf,
+    links: HashMap<String, PathBuf>,
+) -> SymlinkFarm<Built> {
     SymlinkFarm::from_links(staging_dir, links)
 }
 

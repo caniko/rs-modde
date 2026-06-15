@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use super::*;
 use std::io::Write as _;
 
@@ -68,8 +69,7 @@ fn parse_nexus_url_invalid_missing_mods_segment() {
 
 #[test]
 fn parse_nexus_url_invalid_extra_path_segments() {
-    let result =
-        parse_nexus_url("https://www.nexusmods.com/skyrimspecialedition/mods/12345/files");
+    let result = parse_nexus_url("https://www.nexusmods.com/skyrimspecialedition/mods/12345/files");
     assert!(result.is_err());
 }
 
@@ -166,8 +166,8 @@ fn create_test_zip(dir: &Path, name: &str, entries: &[(&str, &[u8])]) -> PathBuf
     let zip_path = dir.join(name);
     let file = std::fs::File::create(&zip_path).unwrap();
     let mut writer = zip::ZipWriter::new(file);
-    let options = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Stored);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
     for (entry_name, content) in entries {
         writer.start_file(entry_name.to_string(), options).unwrap();

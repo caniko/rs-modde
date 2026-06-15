@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Wabbajack missing-archive acquisition commands.
 
 use super::*;

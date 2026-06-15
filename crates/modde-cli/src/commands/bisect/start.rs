@@ -6,10 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use modde_core::profile::{Profile, ProfileManager, ProfileSource};
-use modde_core::{
-    BisectOracle, BisectSaveSafety, GameId,
-    NewBisectSession,
-};
+use modde_core::{BisectOracle, BisectSaveSafety, GameId, NewBisectSession};
 
 use crate::commands::crash;
 

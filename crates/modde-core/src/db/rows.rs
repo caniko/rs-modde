@@ -1,4 +1,5 @@
 //! Row mapping and persistence encoding helpers.
+#![allow(clippy::wildcard_imports)]
 
 use super::*;
 

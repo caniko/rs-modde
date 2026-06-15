@@ -10,14 +10,13 @@ use modde_core::{
     BisectOracle, BisectResult, BisectSession, BisectStatus, BisectStep, NewBisectStep,
 };
 
-
 use super::BisectResultArg;
 use super::candidate::{
     analyze_crash_log, cleanup_candidates, complete_and_advance, create_candidate_profile,
     enforce_save_safety, finish_without_candidate, launch_candidate, newest_file_after,
     print_completion_if_any, restore_source_profile,
 };
-use super::perf::{perf_regression_verdict, run_perf_candidate, PerfRegressionConfig};
+use super::perf::{PerfRegressionConfig, perf_regression_verdict, run_perf_candidate};
 use super::start::bisect_dependency_map;
 
 pub async fn handle_run(session_id: String) -> Result<()> {

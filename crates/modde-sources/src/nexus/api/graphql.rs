@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use super::*;
 use crate::nexus::graphql::{
     GqlCollectionTile, GqlModTile, ModFeedKind, browse_feed, collections_feed,

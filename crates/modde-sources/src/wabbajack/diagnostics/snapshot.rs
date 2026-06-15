@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use super::*;
 
 pub(super) fn unix_ms() -> u128 {

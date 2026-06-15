@@ -2,7 +2,9 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 
-use super::helpers::{canonical_payload_bytes, current_utc_timestamp, decode_array, key_id, sha256_hex};
+use super::helpers::{
+    canonical_payload_bytes, current_utc_timestamp, decode_array, key_id, sha256_hex,
+};
 use super::validation::validate_lock;
 use super::{LockSignature, ModdeLock, PublicKeyFile, SecretKeyFile};
 use crate::error::{CoreError, Result};

@@ -19,7 +19,7 @@ fn parse_real_wabbajack_file() {
         return;
     }
 
-    let file = std::fs::File::open(&wj_path).unwrap();
+    let file = std::fs::File::open(wj_path).unwrap();
     let mut archive = zip::ZipArchive::new(file).unwrap();
 
     let json_str = {
@@ -35,7 +35,7 @@ fn parse_real_wabbajack_file() {
     };
 
     let manifest: WabbajackManifest =
-        serde_json::from_str(&json_str).expect("failed to parse 3077.wabbajack manifest");
+        serde_json::from_str(&json_str).expect("failed to parse MODDE_3077_WABBAJACK manifest");
 
     assert_eq!(manifest.name, "3077_v2");
     assert_eq!(manifest.author, "Ultra Place");

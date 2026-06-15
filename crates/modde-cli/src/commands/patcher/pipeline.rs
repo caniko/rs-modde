@@ -4,20 +4,15 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-
-
-
 use anyhow::{Context, Result};
 
 use modde_core::profile::{Profile, ProfileManager};
-use modde_core::{
-    ModdeDb, PatcherStageRow, PatcherStageSettings, paths,
-};
+use modde_core::{ModdeDb, PatcherStageRow, PatcherStageSettings, paths};
 
 use super::fs_ops::{
-    compute_next_manifest, copy_dir_recursive, install_managed_output,
-    patcher_cache_key, patcher_time_id, remove_dir_if_exists, remove_rel_paths,
-    require_profile_id, snapshot_dir, stage_generated_dir, write_load_order,
+    compute_next_manifest, copy_dir_recursive, install_managed_output, patcher_cache_key,
+    patcher_time_id, remove_dir_if_exists, remove_rel_paths, require_profile_id, snapshot_dir,
+    stage_generated_dir, write_load_order,
 };
 use super::process::{run_command_stage, run_synthesis_stage};
 

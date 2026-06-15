@@ -22,14 +22,16 @@ pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 17;
 
 // ── SQLite schema constants (verbatim from the original rusqlite layer) ──────
 
-
-mod sqlite_schema;
 #[cfg(feature = "postgres")]
 mod postgres;
+mod sqlite_schema;
 
 #[cfg(feature = "postgres")]
 pub(crate) use postgres::migrate_postgres;
-use sqlite_schema::*;
+use sqlite_schema::{
+    SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V8, SCHEMA_V9, SCHEMA_V10, SCHEMA_V11, SCHEMA_V12,
+    SCHEMA_V13, SCHEMA_V14, SCHEMA_V15, SCHEMA_V16, SCHEMA_V17,
+};
 
 async fn sqlite_user_version(pool: &sqlx::SqlitePool) -> Result<i64> {
     use sqlx::Row;

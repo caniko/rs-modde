@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Wabbajack diagnostics summary rendering.
 
 use super::*;

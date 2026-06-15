@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Launcher integration and MO2 staging deployment helpers.
 
 use super::*;

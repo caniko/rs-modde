@@ -1,14 +1,15 @@
+#![allow(clippy::wildcard_imports)]
 use super::*;
 use std::path::PathBuf;
 
+use modde_core::PerformanceSample;
 use modde_core::profile::{Profile, ProfileSource};
 use modde_core::{
     BisectOracle, BisectSaveSafety, BisectStatus, GameId, NewBisectSession, NewBisectStep,
 };
-use modde_core::PerformanceSample;
 
 use super::flow::{render_history, validate_retry};
-use super::perf::{perf_regression_verdict, PerfRegressionConfig, PerfRegressionVerdict};
+use super::perf::{PerfRegressionConfig, PerfRegressionVerdict, perf_regression_verdict};
 
 fn config() -> PerfRegressionConfig {
     PerfRegressionConfig {
@@ -36,8 +37,7 @@ fn samples(values: &[f64]) -> Vec<PerformanceSample> {
 fn verdict(base: &[f64], candidate: &[f64]) -> PerfRegressionVerdict {
     let base_samples = samples(base);
     let candidate_samples = samples(candidate);
-    let base_summary =
-        modde_core::performance::summarize_samples_with_warmup(&base_samples, 0.0);
+    let base_summary = modde_core::performance::summarize_samples_with_warmup(&base_samples, 0.0);
     let candidate_summary =
         modde_core::performance::summarize_samples_with_warmup(&candidate_samples, 0.0);
     perf_regression_verdict(

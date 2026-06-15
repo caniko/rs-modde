@@ -10,9 +10,7 @@ use anyhow::{Context, Result};
 use modde_core::fs::{is_cross_device_error, walk_files_relative};
 use modde_core::hash::sha256_hex;
 use modde_core::profile::{Profile, ProfileManager};
-use modde_core::{
-    ModdeDb, PatcherStageRow, paths,
-};
+use modde_core::{ModdeDb, PatcherStageRow, paths};
 
 use crate::commands::load_plugin_order;
 

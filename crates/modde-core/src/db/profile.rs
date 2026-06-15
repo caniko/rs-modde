@@ -1,7 +1,8 @@
 //! Profile rows, summaries, and profile state snapshots.
+#![allow(clippy::wildcard_imports)]
 
-use super::*;
 use super::rows::*;
+use super::*;
 
 impl ModdeDb {
     pub async fn create_profile(&self, profile: &Profile) -> Result<i64> {

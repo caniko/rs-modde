@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 

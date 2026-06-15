@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Shared Wabbajack readiness assessment for CLI and GUI flows.
 
 use std::collections::BTreeMap;
@@ -40,6 +41,7 @@ impl WabbajackReadinessOptions {
 }
 
 /// Readiness report consumed by both the CLI and GUI.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WabbajackReadinessReport {
     pub manifest_path: String,
@@ -380,14 +382,11 @@ async fn assess_game_file_sources(
         let exact_path = game_dir.join(&normalized);
         let path = if exact_path.exists() {
             exact_path
+        } else if let Ok(path) = find_path_case_insensitive(game_dir, &normalized) {
+            path
         } else {
-            match find_path_case_insensitive(game_dir, &normalized) {
-                Ok(path) => path,
-                Err(_) => {
-                    missing.push(rel.to_string());
-                    continue;
-                }
-            }
+            missing.push(rel.to_string());
+            continue;
         };
 
         match modde_core::hash::hash_file_xxh64(&path).await {

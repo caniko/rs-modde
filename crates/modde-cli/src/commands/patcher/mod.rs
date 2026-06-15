@@ -13,8 +13,6 @@ pub use handlers::{
     handle_run, handle_run_stage, handle_set_enabled, handle_validate, run_enabled_for_deploy,
 };
 
-
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct FileFingerprint {
     sha256: String,

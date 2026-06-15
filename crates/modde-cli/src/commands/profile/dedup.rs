@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Profile duplicate-pruning workflow.
 
 use super::*;

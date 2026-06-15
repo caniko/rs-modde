@@ -94,7 +94,10 @@ pub(in crate::lockfile) fn sha256_hex(bytes: &[u8]) -> String {
     out
 }
 
-pub(in crate::lockfile) fn decode_array<const N: usize>(encoded: &str, label: &str) -> Result<[u8; N]> {
+pub(in crate::lockfile) fn decode_array<const N: usize>(
+    encoded: &str,
+    label: &str,
+) -> Result<[u8; N]> {
     let bytes = BASE64.decode(encoded.trim()).map_err(|error| {
         CoreError::Validation(format!("invalid base64 {label}: {error}").into())
     })?;

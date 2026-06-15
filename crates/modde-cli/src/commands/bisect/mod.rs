@@ -12,9 +12,10 @@ mod start;
 #[cfg(test)]
 mod tests;
 
-pub use flow::{handle_abort, handle_history, handle_mark, handle_retry, handle_run, handle_status};
+pub use flow::{
+    handle_abort, handle_history, handle_mark, handle_retry, handle_run, handle_status,
+};
 pub use start::handle_start;
-
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum BisectOracleArg {

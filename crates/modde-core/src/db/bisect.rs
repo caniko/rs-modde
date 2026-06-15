@@ -1,7 +1,8 @@
 //! Bisect sessions and TOML profile import helpers.
+#![allow(clippy::wildcard_imports)]
 
-use super::*;
 use super::rows::*;
+use super::*;
 
 impl ModdeDb {
     pub async fn create_bisect_session(&self, session: &NewBisectSession) -> Result<()> {
@@ -280,7 +281,11 @@ impl ModdeDb {
         Ok(())
     }
 
-    pub(super) async fn insert_rules(&self, profile_id: i64, rules: &[LoadOrderRule]) -> Result<()> {
+    pub(super) async fn insert_rules(
+        &self,
+        profile_id: i64,
+        rules: &[LoadOrderRule],
+    ) -> Result<()> {
         for rule in rules {
             let (rule_type, mod_a, mod_b) = match rule {
                 LoadOrderRule::LoadAfter { mod_id, after } => {

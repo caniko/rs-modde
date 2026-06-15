@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Single Nexus mod install workflow.
 
 use super::*;

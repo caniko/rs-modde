@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Top-level CLI command dispatcher.
 
 use anyhow::Result;
@@ -5,7 +6,6 @@ use anyhow::Result;
 use crate::commands;
 
 use super::args::*;
-
 
 mod async_dispatch;
 

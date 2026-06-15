@@ -13,7 +13,6 @@ use super::{compute_fingerprint, resolve_save_dir, supports_save_profiles};
 use crate::cli::args::ProfileAction;
 
 /// Human-readable byte size (KB/MB/GB) for `lock-info` output.
-
 mod dedup;
 
 use dedup::dedup;

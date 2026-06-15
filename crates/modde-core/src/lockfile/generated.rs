@@ -5,11 +5,14 @@ use super::validation::validate_relative_path;
 use super::{LockProfile, PatcherStageLock, ToolOutputLock, WabbajackManifestLock};
 use crate::db::ModdeDb;
 use crate::error::{CoreError, Result};
-use crate::{hash, paths};
 use crate::profile::{Profile, ProfileSource};
 use crate::resolver::GameId;
+use crate::{hash, paths};
 
-pub(in crate::lockfile) async fn lock_patchers(db: &ModdeDb, profile: &Profile) -> Result<Vec<PatcherStageLock>> {
+pub(in crate::lockfile) async fn lock_patchers(
+    db: &ModdeDb,
+    profile: &Profile,
+) -> Result<Vec<PatcherStageLock>> {
     let profile_id = profile.id.ok_or_else(|| {
         CoreError::Validation(format!("profile '{}' is not persisted", profile.name).into())
     })?;
@@ -55,7 +58,10 @@ pub(in crate::lockfile) async fn lock_patchers(db: &ModdeDb, profile: &Profile) 
     Ok(locked)
 }
 
-pub(in crate::lockfile) async fn lock_tool_outputs(db: &ModdeDb, game_id: &GameId) -> Result<Vec<ToolOutputLock>> {
+pub(in crate::lockfile) async fn lock_tool_outputs(
+    db: &ModdeDb,
+    game_id: &GameId,
+) -> Result<Vec<ToolOutputLock>> {
     let rows = db.load_all_applied_file_rows(game_id).await?;
     let mut outputs = Vec::with_capacity(rows.len());
     for row in rows {
@@ -76,7 +82,9 @@ pub(in crate::lockfile) async fn lock_tool_outputs(db: &ModdeDb, game_id: &GameI
     Ok(outputs)
 }
 
-pub(in crate::lockfile) async fn lock_wabbajack_manifest(source: &ProfileSource) -> Result<Option<WabbajackManifestLock>> {
+pub(in crate::lockfile) async fn lock_wabbajack_manifest(
+    source: &ProfileSource,
+) -> Result<Option<WabbajackManifestLock>> {
     let ProfileSource::Wabbajack { manifest_hash } = source else {
         return Ok(None);
     };
@@ -96,10 +104,7 @@ pub(in crate::lockfile) async fn lock_wabbajack_manifest(source: &ProfileSource)
     }
 }
 
-pub(in crate::lockfile) fn stage_generated_dir(
-    profile: &LockProfile,
-    stage_name: &str,
-) -> PathBuf {
+pub(in crate::lockfile) fn stage_generated_dir(profile: &LockProfile, stage_name: &str) -> PathBuf {
     paths::generated_dir()
         .join(&profile.game_id)
         .join(&profile.name)

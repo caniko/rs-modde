@@ -6,9 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use modde_core::profile::{Profile, ProfileManager};
-use modde_core::{
-    CommandSettings, PatcherStageRow, PatcherStageSettings, SynthesisCliSettings,
-};
+use modde_core::{CommandSettings, PatcherStageRow, PatcherStageSettings, SynthesisCliSettings};
 
 use crate::commands::load_profile_or_default;
 

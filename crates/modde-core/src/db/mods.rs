@@ -1,7 +1,8 @@
 //! Mod metadata, hidden files, plugin order, categories, installs, and crash logs.
+#![allow(clippy::wildcard_imports)]
 
-use super::*;
 use super::rows::*;
+use super::*;
 
 impl ModdeDb {
     pub async fn hide_file(&self, profile_id: i64, mod_id: &ModId, rel_path: &str) -> Result<()> {
@@ -463,5 +464,4 @@ impl ModdeDb {
             )
             .await
     }
-
 }

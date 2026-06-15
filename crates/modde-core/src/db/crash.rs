@@ -1,4 +1,5 @@
 //! Crash-log persistence rows.
+#![allow(clippy::wildcard_imports)]
 
 use super::*;
 

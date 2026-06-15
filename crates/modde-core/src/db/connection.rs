@@ -1,4 +1,5 @@
 //! Database connection constructors and health checks.
+#![allow(clippy::wildcard_imports)]
 
 use super::*;
 
@@ -94,5 +95,4 @@ impl ModdeDb {
     }
 
     // ── Profile CRUD ──────────────────────────────────────────────
-
 }

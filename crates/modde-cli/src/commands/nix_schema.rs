@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::fs;

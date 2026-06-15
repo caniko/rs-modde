@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 

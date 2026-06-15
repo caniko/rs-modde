@@ -83,7 +83,10 @@ pub async fn explain_with_openai_compatible_chat(
     Ok(validate_explanation(parsed, &context.evidence))
 }
 
-pub(in crate::doctor) fn trim_doctor_context(mut context: DoctorContext, max_bytes: usize) -> Result<DoctorContext> {
+pub(in crate::doctor) fn trim_doctor_context(
+    mut context: DoctorContext,
+    max_bytes: usize,
+) -> Result<DoctorContext> {
     if context.evidence.is_empty() {
         context.evidence = build_evidence(&context);
     }

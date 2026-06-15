@@ -2,9 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{
-    ActivateResult, ActiveProfileInfo, ForkOptions, Profile, validate_profile_name,
-};
+use super::{ActivateResult, ActiveProfileInfo, ForkOptions, Profile, validate_profile_name};
 use crate::db::{ModdeDb, ProfileSummary};
 use crate::error::{CoreError, Result};
 use crate::resolver::GameId;

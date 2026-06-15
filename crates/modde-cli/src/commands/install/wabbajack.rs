@@ -1,3 +1,4 @@
+#![allow(clippy::wildcard_imports)]
 //! Wabbajack install handoff and progress reporting.
 
 use tokio::sync::mpsc;

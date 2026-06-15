@@ -1,7 +1,8 @@
 //! Patcher stage configuration and generated-output rows.
+#![allow(clippy::wildcard_imports)]
 
-use super::*;
 use super::rows::*;
+use super::*;
 
 impl ModdeDb {
     pub async fn save_patcher_stage(&self, stage: &PatcherStageRow) -> Result<()> {

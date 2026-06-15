@@ -1,12 +1,12 @@
-use super::{
-    DoctorCollisionSummary, DoctorContext, DoctorEvidence,
-};
+use super::{DoctorCollisionSummary, DoctorContext, DoctorEvidence};
 use crate::crash::{CrashEvidence, CrashTokenKind};
 use crate::{CollisionReport, CollisionSeverity};
 
 pub(in crate::doctor) const MAX_EVIDENCE_STRING_CHARS: usize = 100;
 
-pub(in crate::doctor) fn collision_summaries(report: &CollisionReport) -> Vec<DoctorCollisionSummary> {
+pub(in crate::doctor) fn collision_summaries(
+    report: &CollisionReport,
+) -> Vec<DoctorCollisionSummary> {
     report
         .pairs
         .iter()

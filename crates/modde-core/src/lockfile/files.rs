@@ -1,14 +1,16 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use super::LockedFile;
+use super::validation::validate_relative_path;
 use crate::error::{CoreError, Result};
 use crate::hash;
 use crate::installer::StagedFile;
 use crate::paths;
-use super::LockedFile;
-use super::validation::validate_relative_path;
 
-pub(in crate::lockfile) fn group_installed_files(files: Vec<(String, StagedFile)>) -> BTreeMap<String, Vec<StagedFile>> {
+pub(in crate::lockfile) fn group_installed_files(
+    files: Vec<(String, StagedFile)>,
+) -> BTreeMap<String, Vec<StagedFile>> {
     let mut grouped: BTreeMap<String, Vec<StagedFile>> = BTreeMap::new();
     for (mod_id, file) in files {
         grouped.entry(mod_id).or_default().push(file);
@@ -16,7 +18,10 @@ pub(in crate::lockfile) fn group_installed_files(files: Vec<(String, StagedFile)
     grouped
 }
 
-pub(in crate::lockfile) async fn lock_store_file(mod_id: &str, file: &StagedFile) -> Result<LockedFile> {
+pub(in crate::lockfile) async fn lock_store_file(
+    mod_id: &str,
+    file: &StagedFile,
+) -> Result<LockedFile> {
     validate_relative_path(&file.rel_path)?;
     validate_relative_path(&file.origin_rel_path)?;
     let path = paths::store_dir().join(mod_id).join(&file.rel_path);
