@@ -26,7 +26,7 @@
     };
 
     simit = {
-      url = "git+https://codeberg.org/caniko/simit?ref=ci-release-publisher-maturation&rev=296c6b87e7bf09b5fe8a6c888586b1709dc1d036";
+      url = "git+https://codeberg.org/caniko/simit?ref=ci-release-publisher-maturation&rev=3b479581bdd29b307fcd79dfa95351f4d0fd2440";
       inputs.rs-harbor.follows = "rs-harbor";
       inputs.nixpkgs.follows = "rs-harbor/nixpkgs";
       inputs.rust-overlay.follows = "rs-harbor/rust-overlay";
@@ -89,7 +89,9 @@
         inherit (toolchain) craneLib;
         cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         moddeVersion = cargoToml.workspace.package.version or cargoToml.package.version;
-        simitPackage = simit.packages.${system}.default;
+        simitPackage = simit.packages.${system}.default.overrideAttrs (old: {
+          patches = (old.patches or []) ++ [./nix/patches/simit-dist-copr-makefile.patch];
+        });
         plinthProject = plinth.packages.${system}.plinth-project;
         visualRubric = visual-rubric.packages.${system}.default;
         simitCli = pkgs.writeShellApplication {

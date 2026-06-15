@@ -1,0 +1,104 @@
+diff --git a/src/commands/copr.rs b/src/commands/copr.rs
+index 0bd09f5..1d26826 100644
+--- a/src/commands/copr.rs
++++ b/src/commands/copr.rs
+@@ -8,6 +8,6 @@ use crate::config::{CoprOverrides, ProjectConfig, ResolvedCopr};
+ use crate::render::{copr_makefile, rpm_spec};
+ 
+-pub const MAKEFILE_PATH: &str = ".copr/Makefile";
++pub const MAKEFILE_PATH: &str = "dist/copr/Makefile";
+ 
+ pub fn run(command: CoprCommand) -> Result<()> {
+     match command.action {
+diff --git a/src/readme_badges.rs b/src/readme_badges.rs
+index 5900c42..c410cb0 100644
+--- a/src/readme_badges.rs
++++ b/src/readme_badges.rs
+@@ -184,7 +184,7 @@ fn badges(
+             "COPR",
+             "configured",
+             "3f51b5",
+-            Some(".copr/Makefile".to_owned()),
++            Some(crate::commands::copr::MAKEFILE_PATH.to_owned()),
+         ));
+     }
+     if config.apt.is_some() {
+diff --git a/src/render/release_workflow.rs b/src/render/release_workflow.rs
+index f63f0c8..d2e65c2 100644
+--- a/src/render/release_workflow.rs
++++ b/src/render/release_workflow.rs
+@@ -898,13 +898,13 @@ fn push_copr_srpm_build(w: &mut String, copr: &ResolvedCopr) {
+         repo = copr.repo
+     )
+     .expect("write");
+-    w.push_str("          rm -rf srpms && mkdir -p srpms\n");
++    w.push_str("          rm -rf target/modde-release/root-artifacts/srpms && mkdir -p target/modde-release/root-artifacts/srpms\n");
+     writeln!(
+         w,
+-        "          rpmbuild -bs {spec} --define \"_sourcedir $(pwd)\" --define \"_srcrpmdir $(pwd)/srpms\"",
++        "          rpmbuild -bs {spec} --define \"_sourcedir $(pwd)\" --define \"_srcrpmdir $(pwd)/target/modde-release/root-artifacts/srpms\"",
+         spec = copr.spec_path
+     )
+     .expect("write");
+-    w.push_str("          set -- srpms/*.src.rpm; test \"$#\" -eq 1; ls -l \"$1\"\n");
++    w.push_str("          set -- target/modde-release/root-artifacts/srpms/*.src.rpm; test \"$#\" -eq 1; ls -l \"$1\"\n");
+     w.push_str("          SCRIPT\n");
+ }
+@@ -1501,7 +1501,7 @@ fn push_copr_publish(
+     if activated_remote {
+         push_active_or_skip_prelude(w);
+         w.push_str("          if [ -z \"$COPR_LOGIN\" ] || [ -z \"$COPR_USERNAME\" ] || [ -z \"$COPR_TOKEN\" ]; then publisher_missing copr 'COPR credentials unset'; fi\n");
+-        w.push_str("          srpms=(srpms/*.src.rpm); if [ ! -e \"${srpms[0]}\" ]; then publisher_missing copr 'no SRPM to publish'; fi\n");
++        w.push_str("          srpms=(target/modde-release/root-artifacts/srpms/*.src.rpm); if [ ! -e \"${srpms[0]}\" ]; then publisher_missing copr 'no SRPM to publish'; fi\n");
+     } else {
+         w.push_str("          if [ -z \"$COPR_LOGIN\" ] || [ -z \"$COPR_USERNAME\" ] || [ -z \"$COPR_TOKEN\" ]; then echo 'COPR credentials unset; skipping.'; exit 0; fi\n");
+     }
+@@ -1510,7 +1510,7 @@ fn push_copr_publish(
+     w.push_str("          chmod 600 ~/.config/copr\n");
+     writeln!(
+         w,
+-        "          nix run {} -- build --nowait \"${{COPR_PROJECT}}\" srpms/*.src.rpm",
++        "          nix run {} -- build --nowait \"${{COPR_PROJECT}}\" target/modde-release/root-artifacts/srpms/*.src.rpm",
+         copr.nix_tool
+     )
+     .expect("write");
+@@ -2284,7 +2284,7 @@ mod tests {
+         assert!(workflow.contains("cargo vendor vendor > ../cargo-vendor-config.toml"));
+         assert!(
+             workflow.contains(
+-                "nix run .#copr-cli -- build --nowait \"${COPR_PROJECT}\" srpms/*.src.rpm"
++                "nix run .#copr-cli -- build --nowait \"${COPR_PROJECT}\" target/modde-release/root-artifacts/srpms/*.src.rpm"
+             )
+         );
+         assert!(workflow.contains("COPR_PROJECT=\"caniko/rs-modde\""));
+diff --git a/tests/init_copr.rs b/tests/init_copr.rs
+index 89cfc1a..0924f6d 100644
+--- a/tests/init_copr.rs
++++ b/tests/init_copr.rs
+@@ -69,13 +69,13 @@ fn bootstraps_fresh_copr_files() {
+     assert!(spec.contains("%global crate demo\n"));
+     assert!(spec.contains("Version:        0.1.0\n"));
+     assert!(spec.contains("BuildRequires:  rust >= 1.85\n"));
+     assert!(spec.contains("install -Dm755 target/release/demo %{buildroot}%{_bindir}/demo\n"));
+-    let makefile = read(&project.path().join(".copr/Makefile"));
++    let makefile = read(&project.path().join("dist/copr/Makefile"));
+     assert!(makefile.contains("srpm:"));
+     assert!(makefile.contains("cargo vendor"));
+ 
+     let stdout = String::from_utf8(output.stdout).unwrap();
+     assert!(stdout.contains("Initialised COPR packaging"));
+-    assert!(stdout.contains("git add demo.spec .copr/Makefile"));
++    assert!(stdout.contains("git add demo.spec dist/copr/Makefile"));
+     assert!(stdout.contains("copr-cli build <owner>/<project> <srpm>"));
+ }
+@@ -118,9 +118,9 @@ fn print_matches_checked_files_without_writing_files() {
+     );
+     let stdout = String::from_utf8(output.stdout).unwrap();
+     assert!(stdout.contains("==> demo.spec"));
+     assert!(stdout.contains("%global crate demo\n"));
+-    assert!(stdout.contains("==> .copr/Makefile"));
++    assert!(stdout.contains("==> dist/copr/Makefile"));
+     assert!(stdout.contains("cargo vendor"));
+     assert!(!project.path().join("demo.spec").exists());
+     assert!(!project.path().join(".copr").exists());
+ }

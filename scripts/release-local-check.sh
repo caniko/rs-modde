@@ -73,7 +73,7 @@ check_workflow_contract() {
     && ok "workflow keeps missing cosign fallback warning-only" \
     || missing+=("workflow:cosign warning-only fallback")
 
-  grep -F 'nix run .#copr-cli -- build --nowait "${COPR_PROJECT}" srpms/*.src.rpm' .forgejo/workflows/release.yml >/dev/null \
+  grep -F 'nix run .#copr-cli -- build --nowait "${COPR_PROJECT}" target/modde-release/root-artifacts/srpms/*.src.rpm' .forgejo/workflows/release.yml >/dev/null \
     && ok "workflow uses local COPR CLI flake app" \
     || missing+=("workflow:local COPR CLI app")
 

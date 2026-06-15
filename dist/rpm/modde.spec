@@ -1,5 +1,4 @@
 %global crate modde
-%global debug_package %{nil}
 
 Name:           modde
 Version:        0.4.0
@@ -39,11 +38,6 @@ directory = "vendor"
 EOF
 
 %build
-CARGO_PROFILE_RELEASE_LTO=false \
-CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
-CARGO_PROFILE_RELEASE_DEBUG=0 \
-CARGO_PROFILE_RELEASE_STRIP=symbols \
-RUSTFLAGS="-C codegen-units=16 -C debuginfo=0 -C strip=symbols" \
 cargo build --release --locked
 
 %install
