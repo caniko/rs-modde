@@ -11,6 +11,8 @@ changelog is the authoritative release history.
 
 ### Changed
 
+- Split `app.rs`, `action_button.rs`, `screenshot.rs`, `sidebar.rs`,
+  `tools.rs`, `wabbajack.rs`, and their tests into focused submodules.
 - Profile, tool, and settings writes now run off the iced render thread.
 - Release workflow changes are tracked in the workspace changelog.
 

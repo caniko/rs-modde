@@ -11,6 +11,8 @@ changelog is the authoritative release history.
 
 ### Changed
 
+- Split `detection.rs`, `launcher.rs`, `registry.rs`, `tools/mod.rs`,
+  `tools/mangohud.rs`, and `traits.rs` into focused submodules.
 - Launcher integration was updated for the async database backend.
 
 ## [0.2.0] - 2026-05-19

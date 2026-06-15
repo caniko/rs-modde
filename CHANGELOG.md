@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **modde-games**: Split large monolithic files (`detection.rs`, `launcher.rs`,
+  `registry.rs`, `tools/mod.rs`, `tools/mangohud.rs`, `traits.rs`) into focused
+  submodules.
+- **modde-oracle**: Split monolithic `lib.rs` into dedicated modules for
+  aggregate, app, error, postgres, rate_limit, store, and tests.
+- **modde-ui**: Split large files (`app.rs`, `update.rs`, `action_button.rs`,
+  `screenshot.rs`, `sidebar.rs`, `tools.rs`, `wabbajack.rs`, `tests.rs`) into
+  focused submodules.
+
+### CI
+
+- **Release**: Relocated COPR Makefile from `.copr/Makefile` to
+  `dist/copr/Makefile`, simplified the Makefile build, removed `debug_package`
+  and cargo profile overrides from RPM spec, added APT signing key.
+
+### Fixed
+
+- **Lint**: Added `#![allow(clippy::wildcard_imports)]` and normalized import
+  formatting across `modde-cli`, `modde-core`, and `modde-sources`.
+
 ## [0.4.0] - 2026-06-13
 
 ### Added
