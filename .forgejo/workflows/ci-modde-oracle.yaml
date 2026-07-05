@@ -59,10 +59,8 @@ jobs:
         run: echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
 
       - name: Test
-        run: nix develop -c cargo test -p modde-core
+        run: nix develop -c cargo test -p modde-oracle
 
-      - name: Package crate
-        run: nix develop -c cargo package -p modde-core
   codeberg-small:
     needs: [atlas-nix-trusted]
     runs-on: codeberg-small
@@ -81,4 +79,4 @@ jobs:
         run: nix develop -c command -v cargo-deny
 
       - name: Clippy
-        run: nix develop -c cargo clippy -p modde-core --all-targets -- --deny warnings
+        run: nix develop -c cargo clippy -p modde-oracle --all-targets -- --deny warnings
