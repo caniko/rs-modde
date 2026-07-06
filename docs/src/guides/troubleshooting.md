@@ -525,7 +525,7 @@ See [Data management](data-management.md) for other export/backup paths.
 
 ## Build / `openssl-sys` failures (build-host issue)
 
-**Symptom:** A `cargo build`, `cargo install modde-cli`, or `cargo test` fails in
+**Symptom:** A `cargo build`, `cargo install modde`, or `cargo test` fails in
 `openssl-sys` with something like `Could not find directory of OpenSSL
 installation`, or fails to *link* with errors mentioning `wayland`, `xkbcommon`,
 or `vulkan`.

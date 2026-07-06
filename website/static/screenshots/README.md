@@ -9,7 +9,7 @@ modde dev screenshot --all --out website/static/screenshots
 modde dev screenshot --screen mod-list --out website/static/screenshots/mod-list.png
 ```
 
-(Build with `cargo run -p modde-cli --features screenshot -- dev screenshot ...`.)
+(Build with `cargo run -p modde --features screenshot -- dev screenshot ...`.)
 
 Served at `https://modde.tartanoglu.com/screenshots/` and referenced by the landing page and
 by `dist/com.tartanoglu.modde.metainfo.xml` (Flathub/AppStream). Regenerate

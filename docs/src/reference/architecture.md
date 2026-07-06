@@ -38,7 +38,7 @@ and its per-archive batching, the inline-zip index, the byte LRU cache, and the
 streaming verify path. It depends on `modde-core` for the manifest model, hashing, and
 the link/store helpers.
 
-**`modde-cli`** is the command surface (`modde`). Each subcommand is a thin handler that
+**`modde`** is the command surface. Each subcommand is a thin handler that
 wires user input to a core/games/sources call: `install`, `deploy`, `profile`, `scan`,
 `exec`, `tool`, `save`, `wabbajack`, `loot`, `game`, and friends. It owns argument
 parsing and human-readable reporting but very little logic of its own — the goal is that
@@ -52,7 +52,7 @@ factored into the core rather than duplicated.
 
 ```text
         ┌────────────┐      ┌────────────┐
-        │  modde-cli │      │  modde-ui  │      front-ends
+        │   modde    │      │  modde-ui  │      front-ends
         └─────┬──────┘      └─────┬──────┘
               │                   │
               ├───────────────────┤

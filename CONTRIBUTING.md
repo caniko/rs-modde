@@ -289,7 +289,7 @@ withdrawal first if users may already have downloaded artifacts.
 VERSION=0.2.1
 ```
 
-- crates.io: `cargo yank --version "$VERSION" -p modde-cli`; repeat for every published crate at that version.
+- crates.io: `cargo yank --version "$VERSION" -p modde`; repeat for every published crate at that version.
 - Codeberg release: delete or mark the release draft-only from the Codeberg UI, then delete the tag only if the tag itself is invalid: `git push origin ":refs/tags/${VERSION}"`.
 - Homebrew tap: in `caniko/homebrew-modde`, revert the formula bump commit with `git revert <commit> && git push`.
 - Debian / Ubuntu apt (once the channel is live): publish a corrected stable release to `https://modde.rs/apt/`, or temporarily remove the affected `.deb` entries from the served APT tree and force-push the rebuilt `pages` branch.

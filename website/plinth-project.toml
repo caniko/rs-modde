@@ -187,7 +187,7 @@ command = "nix run codeberg:caniko/rs-modde"
 label = "Cargo CLI"
 audience = "Rust users"
 href = "/docs/getting-started/installation.html#cargo"
-command = "cargo install modde-cli"
+command = "cargo install modde"
 
 [[pages.sections.secondary_routes]]
 label = "Build from source"

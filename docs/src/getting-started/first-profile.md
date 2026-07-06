@@ -37,10 +37,10 @@ download, Cargo, or, if you use Nix, the flake. Every channel ships both the
 yay -S modde-bin
 
 # Fedora / RHEL (COPR)
-sudo dnf copr enable caniko/rs-modde && sudo dnf install modde modde-ui
+sudo dnf copr enable caniko/rs-modde && sudo dnf install modde
 
 # Debian / Ubuntu (apt) — see Installation for the keyring setup
-sudo apt install modde modde-ui
+sudo apt install modde
 
 # macOS (Homebrew)
 brew tap caniko/modde https://codeberg.org/caniko/homebrew-modde
@@ -50,7 +50,7 @@ brew install modde
 winget install Caniko.Modde
 
 # Any platform with Cargo (builds the CLI from source)
-cargo install modde-cli
+cargo install modde
 ```
 
 If you use Nix, modde is also a flake — `nix run codeberg:caniko/rs-modde -- detect`

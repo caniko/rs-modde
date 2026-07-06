@@ -17,7 +17,7 @@ already published:
 | **Windows** | Experimental staged outputs | winget, Scoop, Chocolatey, and zip are not generally published yet |
 
 When a binary package is published it includes both `modde` and `modde-ui`;
-`cargo install modde-cli` builds the CLI only. After installing, jump to the
+`cargo install modde` builds the CLI only. After installing, jump to the
 [Quick start](quick-start.md).
 
 ## Linux
@@ -60,7 +60,7 @@ tags are signed by the maintainer GPG key
 
 ```bash
 sudo dnf copr enable caniko/rs-modde
-sudo dnf install modde modde-ui
+sudo dnf install modde
 ```
 
 Planned channel. COPR builds RPMs from the signed release source. Prerelease
@@ -74,7 +74,7 @@ curl -fsSL https://modde.rs/apt/key.gpg.asc | sudo gpg --dearmor -o /etc/apt/key
 echo "deb [signed-by=/etc/apt/keyrings/modde.gpg] https://modde.rs/apt/ stable main" \
   | sudo tee /etc/apt/sources.list.d/modde.list
 sudo apt update
-sudo apt install modde modde-ui
+sudo apt install modde
 ```
 
 Planned channel. The repository is signed with a dedicated key (fingerprint
@@ -201,7 +201,7 @@ modde publishes its CLI crate to crates.io. This builds the `modde` binary from
 source (the GUI lives in a separate crate that is not published to crates.io):
 
 ```bash
-cargo install modde-cli
+cargo install modde
 ```
 
 Because it compiles locally, you need a build environment:

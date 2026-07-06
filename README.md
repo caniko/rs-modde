@@ -1,7 +1,7 @@
 # modde
 
 <!-- simit:badges:start -->
-![CI](https://img.shields.io/badge/CI-drift-2088ff) [![Nix](https://img.shields.io/badge/Nix-managed-5277c3)](flake.nix) [![docs](https://img.shields.io/badge/docs-enabled-6f42c1)](docs) [![crates.io](https://img.shields.io/badge/crates.io-ready-f46623)](https://crates.io/crates/modde-cli) [![release](https://img.shields.io/badge/release-configured-2ea44f)](.forgejo/workflows/release.yml) [![artifacts](https://img.shields.io/badge/artifacts-configured-2ea44f)](.forgejo/workflows/release.yml) [![Homebrew](https://img.shields.io/badge/Homebrew-configured-2ea44f)](https://codeberg.org/caniko/homebrew-modde.git) [![Chocolatey](https://img.shields.io/badge/Chocolatey-configured-7b3f99)](https://community.chocolatey.org/) [![Scoop](https://img.shields.io/badge/Scoop-configured-2ea44f)](https://codeberg.org/caniko/scoop-modde.git) [![AUR](https://img.shields.io/badge/AUR-configured-1793d1)](dist/aur) [![COPR](https://img.shields.io/badge/COPR-configured-3f51b5)](.copr/Makefile) [![apt](https://img.shields.io/badge/apt-configured-a81d33)](dist/apt/conf/distributions) [![Flatpak](https://img.shields.io/badge/Flatpak-configured-4a86cf)](https://github.com/flathub/com.tartanoglu.modde) [![winget](https://img.shields.io/badge/winget-configured-0078d4)](https://github.com/microsoft/winget-pkgs/tree/master/manifests/c/Caniko/Modde)
+![CI](https://img.shields.io/badge/CI-drift-2088ff) [![Nix](https://img.shields.io/badge/Nix-managed-5277c3)](flake.nix) [![docs](https://img.shields.io/badge/docs-enabled-6f42c1)](docs) [![crates.io](https://img.shields.io/badge/crates.io-ready-f46623)](https://crates.io/crates/modde) [![release](https://img.shields.io/badge/release-configured-2ea44f)](.forgejo/workflows/release.yml) [![artifacts](https://img.shields.io/badge/artifacts-configured-2ea44f)](.forgejo/workflows/release.yml) [![Homebrew](https://img.shields.io/badge/Homebrew-configured-2ea44f)](https://codeberg.org/caniko/homebrew-modde.git) [![Chocolatey](https://img.shields.io/badge/Chocolatey-configured-7b3f99)](https://community.chocolatey.org/) [![Scoop](https://img.shields.io/badge/Scoop-configured-2ea44f)](https://codeberg.org/caniko/scoop-modde.git) [![AUR](https://img.shields.io/badge/AUR-configured-1793d1)](dist/aur) [![COPR](https://img.shields.io/badge/COPR-configured-3f51b5)](.copr/Makefile) [![apt](https://img.shields.io/badge/apt-configured-a81d33)](dist/apt/conf/distributions) [![Flatpak](https://img.shields.io/badge/Flatpak-configured-4a86cf)](https://github.com/flathub/com.tartanoglu.modde) [![winget](https://img.shields.io/badge/winget-configured-0078d4)](https://github.com/microsoft/winget-pkgs/tree/master/manifests/c/Caniko/Modde)
 <!-- simit:badges:end -->
 
 A Linux-first game mod manager written in Rust, with experimental macOS and Windows builds. Provides mod management with virtual filesystem deployment, profile management, save versioning, and conflict detection.
@@ -56,7 +56,7 @@ The canonical status baseline for these claims lives in `docs/capability-matrix.
 | `modde-core`    | SQLite database, VFS/symlink farm, profiles & experiments, load-order resolver, collision detection, save vaults, installer pipeline, stock snapshots |
 | `modde-games`   | Game plugins for 15 titles across the Creation Engine, Gamebryo, REDengine, Unreal 4/5, Larian, SMAPI, and Bannerlord engines; the `GamePlugin` trait, launcher detection (Steam/Heroic), overlay tools, and user-defined games |
 | `modde-sources` | Download backends (Nexus REST + GraphQL, Wabbajack, GitHub, Direct, Google Drive, MEGA, MediaFire), archive extraction (zip/7z/rar/BSA/BA2), FOMOD, and partial BAIN support |
-| `modde-cli`     | 24+ top-level commands with 60+ subcommands covering detect, install, deploy, profiles, saves, tools, executables, and user-defined games           |
+| `modde`         | 24+ top-level commands with 60+ subcommands covering detect, install, deploy, profiles, saves, tools, executables, and user-defined games           |
 | `modde-ui`      | Iced GUI with Mod List, Browse Nexus, Collections, Wabbajack, Downloads, Data Files, Diagnostics, Tools, Executables, FOMOD wizard, and Settings views |
 
 ## Usage
@@ -122,14 +122,14 @@ yay -S modde-bin
 
 # Planned Fedora / RHEL (COPR)
 sudo dnf copr enable caniko/rs-modde
-sudo dnf install modde modde-ui
+sudo dnf install modde
 
 # Planned Debian / Ubuntu (apt)
 sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL https://modde.rs/apt/key.gpg.asc | sudo gpg --dearmor -o /etc/apt/keyrings/modde.gpg
 echo "deb [signed-by=/etc/apt/keyrings/modde.gpg] https://modde.rs/apt/ stable main" \
   | sudo tee /etc/apt/sources.list.d/modde.list
-sudo apt update && sudo apt install modde modde-ui
+sudo apt update && sudo apt install modde
 
 # Planned Flatpak (GUI)
 flatpak install flathub com.tartanoglu.modde
@@ -181,7 +181,7 @@ Both should report `Status : Valid`. On Linux you can verify the same files with
 ### Cargo
 
 ```bash
-cargo install modde-cli
+cargo install modde
 ```
 
 This builds the `modde` CLI from source (the GUI lives in a separate crate not
@@ -233,7 +233,7 @@ inputs.modde.url = "codeberg:caniko/rs-modde";
 
 ### Telemetry
 
-modde has a `remote-telemetry` Cargo feature in `modde-cli`. It is **opt-in**
+modde has a `remote-telemetry` Cargo feature in the `modde` crate. It is **opt-in**
 and off by default in published builds. Normal builds send nothing.
 
 When built with `remote-telemetry`, two independent remote paths can exist:
