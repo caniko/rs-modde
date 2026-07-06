@@ -1,1 +1,60 @@
-/nix/store/fpl1mldwjvpfbnmj37afyfcfg5vwz92c-pre-commit-config.json
+default_stages:
+  - pre-commit
+
+repos:
+  - repo: local
+    hooks:
+      - id: treefmt
+        name: treefmt
+        entry: nix fmt -- --fail-on-change
+        language: system
+        pass_filenames: false
+        stages:
+          - manual
+
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all -- --check
+        language: system
+        pass_filenames: false
+
+      - id: cargo-deny
+        name: cargo deny
+        entry: cargo deny check bans licenses sources
+        language: system
+        pass_filenames: false
+
+      - id: cargo-check
+        name: cargo check
+        entry: cargo check --workspace --all-features
+        language: system
+        pass_filenames: false
+        stages:
+          - pre-push
+          - manual
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --all-targets --all-features -- --deny warnings
+        language: system
+        pass_filenames: false
+        stages:
+          - pre-push
+          - manual
+
+      - id: nix-flake-check
+        name: nix flake check
+        entry: nix --extra-experimental-features 'nix-command flakes' flake check --cores 0 --max-jobs auto --no-update-lock-file
+        language: system
+        pass_filenames: false
+        stages:
+          - pre-push
+          - manual
+
+      - id: cargo-audit
+        name: cargo audit
+        entry: cargo audit
+        language: system
+        pass_filenames: false
+        stages:
+          - manual
