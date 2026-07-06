@@ -377,7 +377,7 @@ mod tests {
         assert_eq!(files.len(), 2);
         assert!(store.join("Data/foo.esp").exists());
         assert!(store.join("readme.md").exists());
-        assert!(plan.staged_files.len() == 2);
+        assert_eq!(plan.staged_files.len(), 2);
     }
 
     #[test]
