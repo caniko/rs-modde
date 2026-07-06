@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-83f3b4ca.js";
+            window.path_to_searchindex_js = "../searchindex-004d03ce.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-050961cc.js"></script>
@@ -212,7 +212,7 @@ native archive decompressors (zip, 7z, BSA, BA2, optional RAR), the Wabbajack in
 and its per-archive batching, the inline-zip index, the byte LRU cache, and the
 streaming verify path. It depends on <code>modde-core</code> for the manifest model, hashing, and
 the link/store helpers.</p>
-<p><strong><code>modde-cli</code></strong> is the command surface (<code>modde</code>). Each subcommand is a thin handler that
+<p><strong><code>modde</code></strong> is the command surface. Each subcommand is a thin handler that
 wires user input to a core/games/sources call: <code>install</code>, <code>deploy</code>, <code>profile</code>, <code>scan</code>,
 <code>exec</code>, <code>tool</code>, <code>save</code>, <code>wabbajack</code>, <code>loot</code>, <code>game</code>, and friends. It owns argument
 parsing and human-readable reporting but very little logic of its own — the goal is that
@@ -223,7 +223,7 @@ panel, the Executables view, and the install wizard against the same core APIs t
 uses. UI and CLI are two front-ends over one engine; shared flows (deploy, install) are
 factored into the core rather than duplicated.</p>
 <pre><code class="language-text">        ┌────────────┐      ┌────────────┐
-        │  modde-cli │      │  modde-ui  │      front-ends
+        │   modde    │      │  modde-ui  │      front-ends
         └─────┬──────┘      └─────┬──────┘
               │                   │
               ├───────────────────┤

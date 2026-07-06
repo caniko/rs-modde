@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-83f3b4ca.js";
+            window.path_to_searchindex_js = "searchindex-004d03ce.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-050961cc.js"></script>
@@ -251,7 +251,7 @@ already published:</p>
 </table>
 </div>
 <p>When a binary package is published it includes both <code>modde</code> and <code>modde-ui</code>;
-<code>cargo install modde-cli</code> builds the CLI only. After installing, jump to the
+<code>cargo install modde</code> builds the CLI only. After installing, jump to the
 <a href="#quick-start">Quick start</a>.</p>
 <h2 id="linux"><a class="header" href="#linux">Linux</a></h2>
 <p>Linux releases are gated by package family rather than by every downstream
@@ -289,7 +289,7 @@ tags are signed by the maintainer GPG key
 <a href="https://codeberg.org/caniko/rs-modde/src/branch/trunk/keys/maintainers.gpg"><code>keys/maintainers.gpg</code></a>.</p>
 <h3 id="fedora--rhel-copr"><a class="header" href="#fedora--rhel-copr">Fedora / RHEL (COPR)</a></h3>
 <pre><code class="language-bash">sudo dnf copr enable caniko/rs-modde
-sudo dnf install modde modde-ui
+sudo dnf install modde
 </code></pre>
 <p>Planned channel. COPR builds RPMs from the signed release source. Prerelease
 builds are intended for the separate <code>caniko/rs-modde-testing</code> project.</p>
@@ -299,7 +299,7 @@ curl -fsSL https://modde.rs/apt/key.gpg.asc | sudo gpg --dearmor -o /etc/apt/key
 echo "deb [signed-by=/etc/apt/keyrings/modde.gpg] https://modde.rs/apt/ stable main" \
   | sudo tee /etc/apt/sources.list.d/modde.list
 sudo apt update
-sudo apt install modde modde-ui
+sudo apt install modde
 </code></pre>
 <p>Planned channel. The repository is signed with a dedicated key (fingerprint
 <code>CCFE4A8461DF8778F5227684B6DB8F177A951E1B</code>), separate from the maintainer
@@ -379,7 +379,7 @@ Get-AuthenticodeSignature .\modde-ui.exe
 <h2 id="cargo"><a class="header" href="#cargo">Cargo</a></h2>
 <p>modde publishes its CLI crate to crates.io. This builds the <code>modde</code> binary from
 source (the GUI lives in a separate crate that is not published to crates.io):</p>
-<pre><code class="language-bash">cargo install modde-cli
+<pre><code class="language-bash">cargo install modde
 </code></pre>
 <p>Because it compiles locally, you need a build environment:</p>
 <ul>
@@ -834,10 +834,10 @@ download, Cargo, or, if you use Nix, the flake. Every channel ships both the
 yay -S modde-bin
 
 # Fedora / RHEL (COPR)
-sudo dnf copr enable caniko/rs-modde &amp;&amp; sudo dnf install modde modde-ui
+sudo dnf copr enable caniko/rs-modde &amp;&amp; sudo dnf install modde
 
 # Debian / Ubuntu (apt) — see Installation for the keyring setup
-sudo apt install modde modde-ui
+sudo apt install modde
 
 # macOS (Homebrew)
 brew tap caniko/modde https://codeberg.org/caniko/homebrew-modde
@@ -847,7 +847,7 @@ brew install modde
 winget install Caniko.Modde
 
 # Any platform with Cargo (builds the CLI from source)
-cargo install modde-cli
+cargo install modde
 </code></pre>
 <p>If you use Nix, modde is also a flake — <code>nix run codeberg:caniko/rs-modde -- detect</code>
 to try it without installing, or <code>nix profile install codeberg:caniko/rs-modde</code>
@@ -9464,7 +9464,7 @@ issues.</li>
 </code></pre>
 <p>See <a href="#data-instances--backups">Data management</a> for other export/backup paths.</p>
 <h2 id="build--openssl-sys-failures-build-host-issue"><a class="header" href="#build--openssl-sys-failures-build-host-issue">Build / <code>openssl-sys</code> failures (build-host issue)</a></h2>
-<p><strong>Symptom:</strong> A <code>cargo build</code>, <code>cargo install modde-cli</code>, or <code>cargo test</code> fails in
+<p><strong>Symptom:</strong> A <code>cargo build</code>, <code>cargo install modde</code>, or <code>cargo test</code> fails in
 <code>openssl-sys</code> with something like <code>Could not find directory of OpenSSL installation</code>, or fails to <em>link</em> with errors mentioning <code>wayland</code>, <code>xkbcommon</code>,
 or <code>vulkan</code>.</p>
 <p><strong>Cause:</strong> <strong>This is a build-host environment problem, not a modde bug.</strong> modde
@@ -10507,7 +10507,7 @@ invented fixtures:</p>
 <tbody>
 <tr><td>Sanitized real Crash Logger SSE fixture logs</td><td>Parser behavior should be locked against real log shape, not synthetic examples</td><td>A contributor with permission to share redacted Crash Logger SSE logs</td><td><code>nix develop . -c cargo test -p modde-core crash_logger</code></td></tr>
 <tr><td>Sanitized real Trainwreck fixture logs</td><td>Trainwreck-specific parsing needs real-world coverage before broad compatibility claims</td><td>A contributor with permission to share redacted Trainwreck logs</td><td><code>nix develop . -c cargo test -p modde-core trainwreck</code></td></tr>
-<tr><td>CLI text and JSON snapshot tests for <code>modde doctor crash</code></td><td>The command output is user-facing and should not drift accidentally</td><td>Add fixtures under the CLI test fixture tree once real logs are available</td><td><code>nix develop . -c cargo test -p modde-cli crash</code></td></tr>
+<tr><td>CLI text and JSON snapshot tests for <code>modde doctor crash</code></td><td>The command output is user-facing and should not drift accidentally</td><td>Add fixtures under the CLI test fixture tree once real logs are available</td><td><code>nix develop . -c cargo test -p modde crash</code></td></tr>
 <tr><td>Correlation matrix tests</td><td>Plugin, DLL, asset, no-match, disabled-mod, and inactive-profile cases need regression coverage</td><td>Local test databases built from sanitized fixture manifests</td><td><code>nix develop . -c cargo test -p modde-core crash::</code></td></tr>
 <tr><td>UI diagnostics crash-log tests</td><td>Import state and rendered suspect rows need coverage in the Iced diagnostics view</td><td>UI simulator tests using sanitized local fixture paths</td><td><code>nix develop . -c cargo test -p modde-ui diagnostics</code></td></tr>
 <tr><td>Full workspace verification after CLI async recursion is fixed</td><td>Current full CLI/workspace checks are blocked by unrelated deploy/patcher async recursion</td><td>Fix the recursion between <code>crates/modde-cli/src/commands/deploy.rs</code> and <code>crates/modde-cli/src/commands/patcher.rs</code></td><td><code>nix develop . -c cargo test --workspace</code></td></tr>
@@ -11916,7 +11916,7 @@ native archive decompressors (zip, 7z, BSA, BA2, optional RAR), the Wabbajack in
 and its per-archive batching, the inline-zip index, the byte LRU cache, and the
 streaming verify path. It depends on <code>modde-core</code> for the manifest model, hashing, and
 the link/store helpers.</p>
-<p><strong><code>modde-cli</code></strong> is the command surface (<code>modde</code>). Each subcommand is a thin handler that
+<p><strong><code>modde</code></strong> is the command surface. Each subcommand is a thin handler that
 wires user input to a core/games/sources call: <code>install</code>, <code>deploy</code>, <code>profile</code>, <code>scan</code>,
 <code>exec</code>, <code>tool</code>, <code>save</code>, <code>wabbajack</code>, <code>loot</code>, <code>game</code>, and friends. It owns argument
 parsing and human-readable reporting but very little logic of its own — the goal is that
@@ -11927,7 +11927,7 @@ panel, the Executables view, and the install wizard against the same core APIs t
 uses. UI and CLI are two front-ends over one engine; shared flows (deploy, install) are
 factored into the core rather than duplicated.</p>
 <pre><code class="language-text">        ┌────────────┐      ┌────────────┐
-        │  modde-cli │      │  modde-ui  │      front-ends
+        │   modde    │      │  modde-ui  │      front-ends
         └─────┬──────┘      └─────┬──────┘
               │                   │
               ├───────────────────┤

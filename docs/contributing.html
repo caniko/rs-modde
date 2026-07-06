@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-83f3b4ca.js";
+            window.path_to_searchindex_js = "searchindex-004d03ce.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-050961cc.js"></script>
@@ -208,7 +208,7 @@ invented fixtures:</p>
 <tbody>
 <tr><td>Sanitized real Crash Logger SSE fixture logs</td><td>Parser behavior should be locked against real log shape, not synthetic examples</td><td>A contributor with permission to share redacted Crash Logger SSE logs</td><td><code>nix develop . -c cargo test -p modde-core crash_logger</code></td></tr>
 <tr><td>Sanitized real Trainwreck fixture logs</td><td>Trainwreck-specific parsing needs real-world coverage before broad compatibility claims</td><td>A contributor with permission to share redacted Trainwreck logs</td><td><code>nix develop . -c cargo test -p modde-core trainwreck</code></td></tr>
-<tr><td>CLI text and JSON snapshot tests for <code>modde doctor crash</code></td><td>The command output is user-facing and should not drift accidentally</td><td>Add fixtures under the CLI test fixture tree once real logs are available</td><td><code>nix develop . -c cargo test -p modde-cli crash</code></td></tr>
+<tr><td>CLI text and JSON snapshot tests for <code>modde doctor crash</code></td><td>The command output is user-facing and should not drift accidentally</td><td>Add fixtures under the CLI test fixture tree once real logs are available</td><td><code>nix develop . -c cargo test -p modde crash</code></td></tr>
 <tr><td>Correlation matrix tests</td><td>Plugin, DLL, asset, no-match, disabled-mod, and inactive-profile cases need regression coverage</td><td>Local test databases built from sanitized fixture manifests</td><td><code>nix develop . -c cargo test -p modde-core crash::</code></td></tr>
 <tr><td>UI diagnostics crash-log tests</td><td>Import state and rendered suspect rows need coverage in the Iced diagnostics view</td><td>UI simulator tests using sanitized local fixture paths</td><td><code>nix develop . -c cargo test -p modde-ui diagnostics</code></td></tr>
 <tr><td>Full workspace verification after CLI async recursion is fixed</td><td>Current full CLI/workspace checks are blocked by unrelated deploy/patcher async recursion</td><td>Fix the recursion between <code>crates/modde-cli/src/commands/deploy.rs</code> and <code>crates/modde-cli/src/commands/patcher.rs</code></td><td><code>nix develop . -c cargo test --workspace</code></td></tr>

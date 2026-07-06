@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-83f3b4ca.js";
+            window.path_to_searchindex_js = "../searchindex-004d03ce.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-050961cc.js"></script>
@@ -211,10 +211,10 @@ download, Cargo, or, if you use Nix, the flake. Every channel ships both the
 yay -S modde-bin
 
 # Fedora / RHEL (COPR)
-sudo dnf copr enable caniko/rs-modde &amp;&amp; sudo dnf install modde modde-ui
+sudo dnf copr enable caniko/rs-modde &amp;&amp; sudo dnf install modde
 
 # Debian / Ubuntu (apt) — see Installation for the keyring setup
-sudo apt install modde modde-ui
+sudo apt install modde
 
 # macOS (Homebrew)
 brew tap caniko/modde https://codeberg.org/caniko/homebrew-modde
@@ -224,7 +224,7 @@ brew install modde
 winget install Caniko.Modde
 
 # Any platform with Cargo (builds the CLI from source)
-cargo install modde-cli
+cargo install modde
 </code></pre>
 <p>If you use Nix, modde is also a flake — <code>nix run codeberg:caniko/rs-modde -- detect</code>
 to try it without installing, or <code>nix profile install codeberg:caniko/rs-modde</code>

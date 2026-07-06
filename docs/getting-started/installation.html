@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-83f3b4ca.js";
+            window.path_to_searchindex_js = "../searchindex-004d03ce.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-050961cc.js"></script>
@@ -202,7 +202,7 @@ already published:</p>
 </table>
 </div>
 <p>When a binary package is published it includes both <code>modde</code> and <code>modde-ui</code>;
-<code>cargo install modde-cli</code> builds the CLI only. After installing, jump to the
+<code>cargo install modde</code> builds the CLI only. After installing, jump to the
 <a href="quick-start.html">Quick start</a>.</p>
 <h2 id="linux"><a class="header" href="#linux">Linux</a></h2>
 <p>Linux releases are gated by package family rather than by every downstream
@@ -240,7 +240,7 @@ tags are signed by the maintainer GPG key
 <a href="https://codeberg.org/caniko/rs-modde/src/branch/trunk/keys/maintainers.gpg"><code>keys/maintainers.gpg</code></a>.</p>
 <h3 id="fedora--rhel-copr"><a class="header" href="#fedora--rhel-copr">Fedora / RHEL (COPR)</a></h3>
 <pre><code class="language-bash">sudo dnf copr enable caniko/rs-modde
-sudo dnf install modde modde-ui
+sudo dnf install modde
 </code></pre>
 <p>Planned channel. COPR builds RPMs from the signed release source. Prerelease
 builds are intended for the separate <code>caniko/rs-modde-testing</code> project.</p>
@@ -250,7 +250,7 @@ curl -fsSL https://modde.rs/apt/key.gpg.asc | sudo gpg --dearmor -o /etc/apt/key
 echo "deb [signed-by=/etc/apt/keyrings/modde.gpg] https://modde.rs/apt/ stable main" \
   | sudo tee /etc/apt/sources.list.d/modde.list
 sudo apt update
-sudo apt install modde modde-ui
+sudo apt install modde
 </code></pre>
 <p>Planned channel. The repository is signed with a dedicated key (fingerprint
 <code>CCFE4A8461DF8778F5227684B6DB8F177A951E1B</code>), separate from the maintainer
@@ -330,7 +330,7 @@ Get-AuthenticodeSignature .\modde-ui.exe
 <h2 id="cargo"><a class="header" href="#cargo">Cargo</a></h2>
 <p>modde publishes its CLI crate to crates.io. This builds the <code>modde</code> binary from
 source (the GUI lives in a separate crate that is not published to crates.io):</p>
-<pre><code class="language-bash">cargo install modde-cli
+<pre><code class="language-bash">cargo install modde
 </code></pre>
 <p>Because it compiles locally, you need a build environment:</p>
 <ul>
