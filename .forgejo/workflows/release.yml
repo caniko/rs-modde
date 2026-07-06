@@ -135,9 +135,9 @@ jobs:
           tar xf rs-modde-*.tar.gz
           ( cd rs-modde && cargo vendor vendor > ../cargo-vendor-config.toml )
           tar czf vendor.tar.gz -C rs-modde vendor
-          rm -rf target/modde-release/root-artifacts/srpms && mkdir -p target/modde-release/root-artifacts/srpms
-          rpmbuild -bs dist/rpm/modde.spec --define "_sourcedir $(pwd)" --define "_srcrpmdir $(pwd)/target/modde-release/root-artifacts/srpms"
-          set -- target/modde-release/root-artifacts/srpms/*.src.rpm; test "$#" -eq 1; ls -l "$1"
+          rm -rf srpms && mkdir -p srpms
+          rpmbuild -bs dist/rpm/modde.spec --define "_sourcedir $(pwd)" --define "_srcrpmdir $(pwd)/srpms"
+          set -- srpms/*.src.rpm; test "$#" -eq 1; ls -l "$1"
           SCRIPT
       - name: Generate supply-chain reports
         run: |
@@ -339,7 +339,14 @@ jobs:
           nix shell nixpkgs#curl nixpkgs#jq -c bash <<'SCRIPT'
           set -euo pipefail
           . ./release-env
-          release_payload=$(jq -n --arg tag "$VERSION" --arg name "$VERSION" --arg branch "trunk" --argjson prerelease "$IS_PRERELEASE" --rawfile body CHANGELOG.md '{tag_name: $tag, target_commitish: $branch, name: $name, body: $body, draft: false, prerelease: $prerelease}')
+          awk -v version="$VERSION" '
+            $0 ~ "^## \\[" version "\\] - [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$" { found = 1; print; next }
+            found && /^## \[/ { exit }
+            found && /^\[[^]]+\]: / { exit }
+            found { print }
+            END { if (!found) exit 1 }
+          ' CHANGELOG.md > release-notes.md || { echo "CHANGELOG.md missing section for $VERSION" >&2; exit 1; }
+          release_payload=$(jq -n --arg tag "$VERSION" --arg name "$VERSION" --arg branch "trunk" --argjson prerelease "$IS_PRERELEASE" --rawfile body release-notes.md '{tag_name: $tag, target_commitish: $branch, name: $name, body: $body, draft: false, prerelease: $prerelease}')
           status=$(curl -sS -o release.json -w '%{http_code}' -H "Authorization: token ${CODEBERG_TOKEN}" -H 'Content-Type: application/json' -d "$release_payload" "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases")
           if [ "$status" = "409" ]; then
             curl -sS --fail -H "Authorization: token ${CODEBERG_TOKEN}" "${CODEBERG_API}/repos/${CODEBERG_REPO}/releases/tags/${VERSION}" > release.json
@@ -715,7 +722,7 @@ jobs:
             exit 0
           }
           if [ -z "$COPR_LOGIN" ] || [ -z "$COPR_USERNAME" ] || [ -z "$COPR_TOKEN" ]; then publisher_missing copr 'COPR credentials unset'; fi
-          srpms=(target/modde-release/root-artifacts/srpms/*.src.rpm); if [ ! -e "${srpms[0]}" ]; then publisher_missing copr 'no SRPM to publish'; fi
+          srpms=(srpms/*.src.rpm); if [ ! -e "${srpms[0]}" ]; then publisher_missing copr 'no SRPM to publish'; fi
           mkdir -p ~/.config
           cat > ~/.config/copr <<EOF
           [copr-cli]
@@ -725,7 +732,7 @@ jobs:
           copr_url = https://copr.fedorainfracloud.org
           EOF
           chmod 600 ~/.config/copr
-          nix run .#copr-cli -- build --nowait "${COPR_PROJECT}" target/modde-release/root-artifacts/srpms/*.src.rpm
+          nix run .#copr-cli -- build --nowait "${COPR_PROJECT}" srpms/*.src.rpm
       - name: Publish Chocolatey package
         env:
           CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
@@ -754,7 +761,14 @@ jobs:
             --choco-title 'modde' \
             --choco-authors 'Can H. Tartanoglu' \
             --choco-description 'Cross-platform game mod manager' \
+            --choco-summary 'Cross-platform game mod manager for Mod Organizer-style game modding workflows.' \
             --choco-project-url 'https://modde.tartanoglu.com' \
+            --choco-license-url 'https://codeberg.org/caniko/rs-modde/raw/branch/trunk/LICENSE' \
+            --choco-icon-url 'https://codeberg.org/caniko/rs-modde/raw/branch/trunk/dist/assets/logo/logo.png' \
+            --choco-package-source-url 'https://codeberg.org/caniko/rs-modde' \
+            --choco-docs-url 'https://modde.tartanoglu.com/docs/' \
+            --choco-bug-tracker-url 'https://codeberg.org/caniko/rs-modde/issues' \
+            --choco-project-source-url 'https://codeberg.org/caniko/rs-modde' \
             --choco-download-repo 'caniko/rs-modde' \
             --choco-archive-pattern 'modde-{version}-{arch}-windows.zip' \
             --push \

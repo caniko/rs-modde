@@ -11,25 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  atlas-nix-trusted:
+  test:
     runs-on: atlas-nix-trusted
-    env:
-      NIX_CONFIG: "experimental-features = nix-command flakes"
-      XDG_CACHE_HOME: "/tmp/.cache"
-      CARGO_HOME: "/tmp/.cargo"
-    steps:
-      - name: Checkout
-        uses: https://code.forgejo.org/actions/checkout@v4
-
-      - name: Add cargo bin to PATH
-        run: echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
-
-      - name: Check flake
-        run: nix flake check
-
-  codeberg-tiny:
-    needs: [atlas-nix-trusted]
-    runs-on: codeberg-tiny
     env:
       NIX_CONFIG: "experimental-features = nix-command flakes"
       XDG_CACHE_HOME: "/tmp/.cache"
@@ -44,39 +27,17 @@ jobs:
       - name: Format check
         run: nix develop -c cargo fmt --all -- --check
 
-  codeberg-medium:
-    needs: [atlas-nix-trusted]
-    runs-on: codeberg-medium
-    env:
-      NIX_CONFIG: "experimental-features = nix-command flakes"
-      XDG_CACHE_HOME: "/tmp/.cache"
-      CARGO_HOME: "/tmp/.cargo"
-    steps:
-      - name: Checkout
-        uses: https://code.forgejo.org/actions/checkout@v4
-
-      - name: Add cargo bin to PATH
-        run: echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+      - name: Check flake
+        run: nix flake check
 
       - name: Test
         run: nix develop -c cargo test -p modde-xtask
 
-  codeberg-small:
-    needs: [atlas-nix-trusted]
-    runs-on: codeberg-small
-    env:
-      NIX_CONFIG: "experimental-features = nix-command flakes"
-      XDG_CACHE_HOME: "/tmp/.cache"
-      CARGO_HOME: "/tmp/.cargo"
-    steps:
-      - name: Checkout
-        uses: https://code.forgejo.org/actions/checkout@v4
-
-      - name: Add cargo bin to PATH
-        run: echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
-
       - name: Check cargo-deny tool
         run: nix develop -c command -v cargo-deny
+
+      - name: Deny dependency policy
+        run: nix develop -c cargo deny check bans licenses sources
 
       - name: Clippy
         run: nix develop -c cargo clippy -p modde-xtask --all-targets -- --deny warnings
