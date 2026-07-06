@@ -2,7 +2,7 @@
 //! refreshing access tokens via the system keyring.
 
 use anyhow::Result;
-use keyring_core::Entry;
+use keyring::Entry;
 use tracing::info;
 
 /// Nexus `OAuth2` application credentials.
@@ -144,7 +144,6 @@ pub fn delete_token() -> Result<()> {
 }
 
 fn keyring_entry() -> Result<Entry> {
-    keyring::use_native_store(false)?;
     Ok(Entry::new("modde", "nexus-oauth-token")?)
 }
 

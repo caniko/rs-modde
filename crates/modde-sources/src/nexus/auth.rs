@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use keyring_core::{Entry, Error as KeyringError};
+use keyring::{Entry, Error as KeyringError};
 use modde_core::paths;
 use modde_core::settings::AppSettings;
 use reqwest::Client;
@@ -101,7 +101,6 @@ fn load_from_keyring() -> Option<String> {
 }
 
 fn keyring_entry(service: &str, key: &str) -> Result<Entry> {
-    keyring::use_native_store(false).context("failed to initialize system keyring store")?;
     Entry::new(service, key).context("failed to create keyring entry")
 }
 

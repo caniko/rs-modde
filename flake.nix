@@ -1,15 +1,6 @@
 {
   description = "modde — cross-platform game mod manager";
 
-  # Advertise the private macOS SDK Attic cache so darwin cross-compiles
-  # substitute the realized SDK from the pin instead of rebuilding it.
-  nixConfig = {
-    extra-substituters = ["https://attic.candee.baby/harbor-macos-sdk"];
-    extra-trusted-public-keys = [
-      "harbor-macos-sdk:ci7MNMkHDqdeTS4aKwzDNEJ1175AbpVUypTRjCJoHDk="
-    ];
-  };
-
   inputs = {
     rs-harbor.url = "git+https://codeberg.org/caniko/rs-harbor.git?ref=trunk";
 
@@ -2131,15 +2122,9 @@
           name = "modde";
           download_repo = "caniko/rs-modde";
           description = "Cross-platform game mod manager";
-          summary = "Cross-platform game mod manager for Mod Organizer-style game modding workflows.";
           project_url = "https://modde.tartanoglu.com";
           authors = "Can H. Tartanoglu";
           license_url = "https://codeberg.org/caniko/rs-modde/raw/branch/trunk/LICENSE";
-          icon_url = "https://codeberg.org/caniko/rs-modde/raw/branch/trunk/dist/assets/logo/logo.png";
-          package_source_url = "https://codeberg.org/caniko/rs-modde";
-          docs_url = "https://modde.tartanoglu.com/docs/";
-          bug_tracker_url = "https://codeberg.org/caniko/rs-modde/issues";
-          project_source_url = "https://codeberg.org/caniko/rs-modde";
           archive_pattern = "modde-{version}-{arch}-windows.zip";
           # Interim: pull choco + simit from the fork that ships the chocolatey
           # package (caniko/nixpkgs add-chocolatey-scoop). Drop the nixpkgs ref to
