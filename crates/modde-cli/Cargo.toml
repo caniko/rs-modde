@@ -1,5 +1,5 @@
 [package]
-name = "modde-cli"
+name = "modde"
 version.workspace = true
 description = "CLI interface for modde"
 edition.workspace = true
@@ -10,7 +10,7 @@ authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
 readme = "../../README.md"
-documentation = "https://docs.rs/modde-cli"
+documentation = "https://docs.rs/modde"
 include = [
   "../../LICENSE",
   "../../README.md",
@@ -35,7 +35,7 @@ pre-release-replacements = [
 [package.metadata.deb]
 name = "modde"
 maintainer = "Can H. Tartanoglu <caniko@codeberg.org>"
-depends = "libc6, libgcc-s1, libssl3, libdbus-1-3, libsqlite3-0"
+depends = "libc6, libgcc-s1, libssl3, libdbus-1-3, libsqlite3-0, libwayland-client0, libxkbcommon0, libvulkan1"
 section = "utils"
 priority = "optional"
 assets = [
@@ -43,6 +43,31 @@ assets = [
     "../../target/release/modde",
     "usr/bin/",
     "755",
+  ],
+  [
+    "../../target/release/modde-ui",
+    "usr/bin/",
+    "755",
+  ],
+  [
+    "../../dist/modde-ui.desktop",
+    "usr/share/applications/com.tartanoglu.modde.desktop",
+    "644",
+  ],
+  [
+    "../../dist/com.tartanoglu.modde.metainfo.xml",
+    "usr/share/metainfo/com.tartanoglu.modde.metainfo.xml",
+    "644",
+  ],
+  [
+    "../../dist/com.tartanoglu.modde.png",
+    "usr/share/icons/hicolor/512x512/apps/com.tartanoglu.modde.png",
+    "644",
+  ],
+  [
+    "../../dist/assets/logo/logo.svg",
+    "usr/share/icons/hicolor/scalable/apps/com.tartanoglu.modde.svg",
+    "644",
   ],
   [
     "../../LICENSE",

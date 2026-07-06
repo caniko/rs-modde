@@ -36,7 +36,7 @@ enum Cmd {
     FmtCheck,
     /// Run `cargo run -p modde-ui`.
     Gui,
-    /// Run `cargo run -p modde-cli -- ARGS`.
+    /// Run `cargo run -p modde -- ARGS`.
     Run {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
@@ -188,7 +188,7 @@ fn main() -> Result<()> {
         Cmd::Fmt => run_fmt(&cfg, FormatMode::Write),
         Cmd::FmtCheck => run_fmt(&cfg, FormatMode::Check),
         Cmd::Gui => run_cargo_package(&cfg, "modde-ui", &[]),
-        Cmd::Run { args } => run_cargo_package(&cfg, "modde-cli", &args),
+        Cmd::Run { args } => run_cargo_package(&cfg, "modde", &args),
         Cmd::Coverage(args) => {
             let mode = if args.ci {
                 CoverageMode::Ci {

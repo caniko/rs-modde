@@ -254,6 +254,9 @@
             ./docs/capability-matrix.toml
             ./docs/src/reference/parity.md
             ./docs/src/games/supported-games.md
+            ./dist/com.tartanoglu.modde.metainfo.xml
+            ./dist/com.tartanoglu.modde.png
+            ./dist/modde-ui.desktop
             ./dist/assets/logo/logo.svg
             ./website/static
             ./website/plinth-project.toml
@@ -288,7 +291,7 @@
           // {
             # Switch-time package builds should compile only the shipped
             # binaries. Full target/test coverage lives in checks.
-            cargoExtraArgs = "--locked --package modde-cli --package modde-ui --bins";
+            cargoExtraArgs = "--locked --package modde --package modde-ui --bins";
             doCheck = false;
           };
         oraclePackageArgs =
@@ -311,7 +314,10 @@
                   --set-default SSL_CERT_FILE "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" \
                   --set-default NIX_SSL_CERT_FILE "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
               done
+              install -Dm0644 ${./dist/modde-ui.desktop} "$out/share/applications/com.tartanoglu.modde.desktop"
+              install -Dm0644 ${./dist/com.tartanoglu.modde.png} "$out/share/icons/hicolor/512x512/apps/com.tartanoglu.modde.png"
               install -Dm0644 ${./dist/assets/logo/logo.svg} "$out/share/icons/hicolor/scalable/apps/com.tartanoglu.modde.svg"
+              install -Dm0644 ${./dist/com.tartanoglu.modde.metainfo.xml} "$out/share/metainfo/com.tartanoglu.modde.metainfo.xml"
             '';
 
             meta = with pkgs.lib; {
@@ -1758,7 +1764,7 @@
                 cargo clippy --workspace --all-targets --all-features -- --deny warnings
                 cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses
 
-                for package in modde-core modde-sources modde-games modde-ui modde-cli; do
+                for package in modde-core modde-sources modde-games modde-ui modde; do
                   cargo package -p "$package" --allow-dirty --list >/dev/null
                 done
               '';
@@ -2125,9 +2131,15 @@
           name = "modde";
           download_repo = "caniko/rs-modde";
           description = "Cross-platform game mod manager";
+          summary = "Cross-platform game mod manager for Mod Organizer-style game modding workflows.";
           project_url = "https://modde.tartanoglu.com";
           authors = "Can H. Tartanoglu";
           license_url = "https://codeberg.org/caniko/rs-modde/raw/branch/trunk/LICENSE";
+          icon_url = "https://codeberg.org/caniko/rs-modde/raw/branch/trunk/dist/assets/logo/logo.png";
+          package_source_url = "https://codeberg.org/caniko/rs-modde";
+          docs_url = "https://modde.tartanoglu.com/docs/";
+          bug_tracker_url = "https://codeberg.org/caniko/rs-modde/issues";
+          project_source_url = "https://codeberg.org/caniko/rs-modde";
           archive_pattern = "modde-{version}-{arch}-windows.zip";
           # Interim: pull choco + simit from the fork that ships the chocolatey
           # package (caniko/nixpkgs add-chocolatey-scoop). Drop the nixpkgs ref to
@@ -2145,6 +2157,7 @@
           license = "GPL-3.0-only";
           archive_pattern = "modde-{version}-{arch}-windows.zip";
           binaries = ["modde" "modde-ui"];
+          architectures.arm64 = false;
         };
         aur = {
           name = "modde";
@@ -2195,7 +2208,7 @@
           repo_url = "ssh://git@codeberg.org/caniko/apt-modde.git";
           label = "modde";
           # cargo-target=deb-name (cargo-deb names the file after [metadata.deb].name)
-          packages = ["modde-cli=modde" "modde-ui=modde-ui"];
+          packages = ["modde=modde"];
           build_deps = ["ca-certificates" "gcc" "libdbus-1-dev" "libsqlite3-dev" "libssl-dev" "libvulkan-dev" "libwayland-dev" "libxkbcommon-dev" "pkg-config"];
           gpg_key_secret = "MODDE_APT_REPO_GPG_KEY";
           gpg_key_id_secret = "MODDE_APT_REPO_GPG_KEY_ID";

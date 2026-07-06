@@ -7,6 +7,7 @@ use std::{env, time::Duration};
 use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
+#[cfg(feature = "remote-telemetry")]
 use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 #[cfg(feature = "remote-telemetry")]
@@ -200,7 +201,7 @@ fn start_heap_profiler(path: Option<&std::path::Path>) -> Result<Option<()>> {
 fn start_heap_profiler(path: Option<&std::path::Path>) -> Result<Option<()>> {
     if let Some(path) = path {
         anyhow::bail!(
-            "--heap-profile={} requires building modde-cli with `--features heap-profile`",
+            "--heap-profile={} requires building modde with `--features heap-profile`",
             path.display()
         );
     }

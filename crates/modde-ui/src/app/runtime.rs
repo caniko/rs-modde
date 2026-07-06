@@ -190,6 +190,22 @@ pub fn run() -> iced::Result {
         .title(Modde::title)
         .theme(Modde::theme)
         .subscription(Modde::subscription)
-        .decorations(false)
+        .window(window_settings())
         .run()
+}
+
+fn window_settings() -> window::Settings {
+    window::Settings {
+        decorations: false,
+        icon: Some(app_icon()),
+        ..window::Settings::default()
+    }
+}
+
+fn app_icon() -> window::Icon {
+    window::icon::from_file_data(
+        include_bytes!("../../../../dist/com.tartanoglu.modde.png"),
+        Some(image::ImageFormat::Png),
+    )
+    .expect("embedded modde app icon must be a valid PNG")
 }

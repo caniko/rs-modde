@@ -80,8 +80,7 @@ pub async fn try_report_compatibility_crash(report: &CrashCorrelationReport) -> 
 
 fn compatibility_oracle_enabled() -> bool {
     std::env::var("MODDE_COMPAT_ORACLE_OPT_IN")
-        .ok()
-        .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .is_ok_and(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
 }
 
 fn compatibility_oracle_endpoint() -> anyhow::Result<Option<url::Url>> {

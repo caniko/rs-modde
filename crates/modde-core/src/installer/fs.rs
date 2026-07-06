@@ -1,7 +1,7 @@
 //! Filesystem helpers shared by the install pipeline.
 //!
 //! `extract_archive` and `find_fomod_config` used to live in
-//! `modde-cli/src/commands/install.rs`. They are hoisted here so both the
+//! CLI install command. They are hoisted here so both the
 //! CLI and the UI install paths share a single implementation, and so the
 //! installer crate can probe extracted archives directly without reaching
 //! back into CLI code.

@@ -72,7 +72,7 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
             "Step {} of {}: {}",
             app.fomod_wizard_pos + 1,
             total_visible,
-            &step.name,
+            step.name,
         ))
         .size(18),
     );
@@ -154,7 +154,7 @@ pub fn view(app: &Modde) -> Element<'_, Message> {
                 };
 
                 let label = if let Some(badge) = type_badge {
-                    format!("{} {}", &plugin.name, badge)
+                    format!("{} {}", plugin.name, badge)
                 } else {
                     plugin.name.clone()
                 };

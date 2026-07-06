@@ -59,5 +59,4 @@ build_one() {
   printf 'built: %s\n' "$output"
 }
 
-build_one modde-cli modde
-build_one modde-ui modde-ui
+build_one modde modde

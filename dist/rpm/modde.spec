@@ -43,9 +43,17 @@ cargo build --release --locked
 %install
 install -Dm755 target/release/modde %{buildroot}%{_bindir}/modde
 install -Dm755 target/release/modde-ui %{buildroot}%{_bindir}/modde-ui
+install -Dm644 dist/modde-ui.desktop %{buildroot}%{_datadir}/applications/com.tartanoglu.modde.desktop
+install -Dm644 dist/com.tartanoglu.modde.png %{buildroot}%{_datadir}/icons/hicolor/512x512/apps/com.tartanoglu.modde.png
+install -Dm644 dist/assets/logo/logo.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/com.tartanoglu.modde.svg
+install -Dm644 dist/com.tartanoglu.modde.metainfo.xml %{buildroot}%{_datadir}/metainfo/com.tartanoglu.modde.metainfo.xml
 
 %files
 %license LICENSE
 %doc README.md CHANGELOG.md
 %{_bindir}/modde
 %{_bindir}/modde-ui
+%{_datadir}/applications/com.tartanoglu.modde.desktop
+%{_datadir}/icons/hicolor/512x512/apps/com.tartanoglu.modde.png
+%{_datadir}/icons/hicolor/scalable/apps/com.tartanoglu.modde.svg
+%{_datadir}/metainfo/com.tartanoglu.modde.metainfo.xml

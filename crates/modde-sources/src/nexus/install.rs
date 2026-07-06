@@ -1,6 +1,6 @@
 //! Reusable single-mod install pipeline.
 //!
-//! Shared between `modde-cli`'s `install mod` command and the
+//! Shared between `modde`'s `install mod` command and the
 //! `modde-ui` **Browse Nexus → Install** button. The caller is
 //! responsible for:
 //!

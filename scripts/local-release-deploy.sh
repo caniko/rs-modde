@@ -214,7 +214,7 @@ build_release_artifacts() {
   fi
   cp "$srpm_dir"/*.src.rpm "$release_dir"/ 2>/dev/null || true
 
-  if ! have_artifact "$release_dir/modde_${version}_amd64.deb" || ! have_artifact "$release_dir/modde-ui_${version}_amd64.deb"; then
+  if ! have_artifact "$release_dir/modde_${version}_amd64.deb"; then
     if ! bash scripts/build-deb.sh "$version" "$release_dir"; then
       record_skipped "deb artifacts unavailable; APT publish will be skipped unless existing .deb artifacts are present"
     fi
@@ -313,6 +313,20 @@ run_release_smoke() {
   return "$smoke_failed"
 }
 
+extract_release_notes() {
+  local notes_file="$1"
+  awk -v version="$version" '
+    $0 ~ "^## \\[" version "\\] - [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$" { found = 1; print; next }
+    found && /^## \[/ { exit }
+    found && /^\[[^]]+\]: / { exit }
+    found { print }
+    END { if (!found) exit 1 }
+  ' CHANGELOG.md > "$notes_file" || {
+    echo "CHANGELOG.md missing section for $version" >&2
+    return 1
+  }
+}
+
 publish_codeberg_release() {
   require_local_secret_for_publish "Codeberg release" CODEBERG_TOKEN \
     'Codeberg fj auth store or canix runtime secret can_codeberg_token' \
@@ -320,8 +334,10 @@ publish_codeberg_release() {
 
   local api="${CODEBERG_API:-https://codeberg.org/api/v1}"
   local codeberg_repo="${CODEBERG_REPO:-caniko/rs-modde}"
-  local payload status release_id asset_id file name
-  payload="$(jq -n --arg tag "$version" --arg name "$version" --arg branch "trunk" --argjson prerelease "$(if is_prerelease; then printf true; else printf false; fi)" --rawfile body CHANGELOG.md '{tag_name: $tag, target_commitish: $branch, name: $name, body: $body, draft: false, prerelease: $prerelease}')"
+  local payload status release_id asset_id file name release_notes_file
+  release_notes_file="$work_dir/release-notes.md"
+  extract_release_notes "$release_notes_file"
+  payload="$(jq -n --arg tag "$version" --arg name "$version" --arg branch "trunk" --argjson prerelease "$(if is_prerelease; then printf true; else printf false; fi)" --rawfile body "$release_notes_file" '{tag_name: $tag, target_commitish: $branch, name: $name, body: $body, draft: false, prerelease: $prerelease}')"
   status="$(curl -sS -o "$release_json_file" -w '%{http_code}' -H "Authorization: token ${CODEBERG_TOKEN}" -H 'Content-Type: application/json' -d "$payload" "${api}/repos/${codeberg_repo}/releases")"
   if [ "$status" = "409" ]; then
     curl -sS --fail -H "Authorization: token ${CODEBERG_TOKEN}" "${api}/repos/${codeberg_repo}/releases/tags/${version}" > "$release_json_file"
@@ -501,94 +517,57 @@ EOF
     XDG_CONFIG_HOME="$copr_config" nix run .#copr-cli -- create "$copr_name" \
       "${chroot_args[@]}" \
       --description 'modde release builds' \
-      --instructions 'Install with: sudo dnf copr enable caniko/rs-modde && sudo dnf install modde modde-ui'
+      --instructions 'Install with: sudo dnf copr enable caniko/rs-modde && sudo dnf install modde'
   fi
 
   XDG_CONFIG_HOME="$copr_config" nix run .#copr-cli -- build --nowait "$project" "$srpm_dir"/*.src.rpm
   rm -rf "$copr_config"
 }
 
-publish_chocolatey() {
-  is_prerelease && { record_skipped "Chocolatey prerelease"; return 0; }
-  require_local_secret_for_publish "Chocolatey" CHOCOLATEY_API_KEY 'canix runtime secret can_choco_api_key' 'test -n "$CHOCOLATEY_API_KEY"' || return 0
-  test -s "$release_dir/modde-${version}-x86_64-windows.zip" || { record_skipped "Chocolatey missing Windows zip"; return 0; }
-  local choco_push_source
-  if [ "${CHOCO_PUSH_SOURCE+x}" = x ]; then
-    choco_push_source="$CHOCO_PUSH_SOURCE"
-  else
-    choco_push_source="https://push.chocolatey.org/"
-  fi
-  export CHOCO_PUSH_SOURCE="$choco_push_source"
-  if chocolatey_version_exists "$version"; then
-    printf 'already-current: Chocolatey modde %s\n' "$version"
-    return 0
-  fi
-  if simit dist chocolatey bump \
-      --version "$version" \
-      --package-dir "$work_dir/chocolatey-package" \
-      --archive "x64=$release_dir/modde-${version}-x86_64-windows.zip" \
-      --choco-name modde \
-      --choco-id modde \
-      --choco-title 'modde game mod manager' \
-      --choco-authors 'Can H. Tartanoglu' \
-      --choco-description 'Cross-platform game mod manager' \
-      --choco-project-url 'https://modde.tartanoglu.com' \
-      --choco-license-url 'https://codeberg.org/caniko/rs-modde/raw/branch/trunk/LICENSE' \
-      --choco-tags 'modde modding game-mods nexus-mods wabbajack' \
-      --choco-release-notes-url "https://codeberg.org/caniko/rs-modde/releases/tag/${version}" \
-      --choco-download-repo 'caniko/rs-modde' \
-      --choco-archive-pattern 'modde-{version}-{arch}-windows.zip' \
-      --push \
-      --push-source "$CHOCO_PUSH_SOURCE" \
-      --api-key-env CHOCOLATEY_API_KEY; then
-    return 0
-  fi
-  if chocolatey_version_exists "$version"; then
-    printf 'already-current: Chocolatey modde %s\n' "$version"
-    return 0
-  fi
-  return 1
-}
-
-chocolatey_version_exists() {
-  local check_version="$1"
-  local filter
-  filter="$(printf "Id eq 'modde' and Version eq '%s'" "$check_version" | jq -sRr @uri)"
-  curl -fsSL "https://community.chocolatey.org/api/v2/Packages()?%24filter=${filter}" | grep -q '<entry>'
-}
-
-publish_scoop() {
-  is_prerelease && { record_skipped "Scoop prerelease"; return 0; }
-  require_local_secret_for_publish "Scoop" SCOOP_BUCKET_TOKEN 'export SCOOP_BUCKET_TOKEN for codeberg.org/caniko/scoop-modde' 'test -n "$SCOOP_BUCKET_TOKEN"' || return 0
+publish_windows_packagers() {
+  is_prerelease && { record_skipped "Windows packagers prerelease"; return 0; }
   local zip_name="modde-${version}-x86_64-windows.zip"
-  test -s "$release_dir/${zip_name}" || { record_skipped "Scoop missing Windows zip"; return 0; }
-  local sha256
-  sha256="$(artifact_sha "$zip_name")"
-  test -n "$sha256"
-  local credential_helper='!f() { echo username=x-access-token; echo "password=$SCOOP_BUCKET_TOKEN"; }; f'
-  local scoop_bucket="$work_dir/scoop-bucket"
-  rm -rf "$scoop_bucket"
-  git -c credential.helper="$credential_helper" clone "${SCOOP_BUCKET_URL:-https://codeberg.org/caniko/scoop-modde.git}" "$scoop_bucket"
-  (
-    cd "$scoop_bucket"
-    git config credential.helper "$credential_helper"
-    git config user.email 'release-bot@localhost'
-    git config user.name 'release bot'
-    git remote set-head origin -a
-    default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's|^origin/||')"
-    git checkout "$default_branch"
-    mkdir -p bucket
-    cd ..
-    sed -e "s|{{VERSION}}|${version}|g" -e "s|{{SHA256}}|${sha256}|g" "$repo/dist/scoop/modde.json" > "$scoop_bucket/bucket/modde.json"
-    cd "$scoop_bucket"
-    if [ -z "$(git status --porcelain -- bucket/modde.json)" ]; then
-      printf 'already-current: Scoop bucket\n'
-      exit 0
-    fi
-    git add bucket/modde.json
-    git commit -m "modde ${version}"
-    git push origin "HEAD:${default_branch}"
+  test -s "$release_dir/${zip_name}" || { record_skipped "Windows packagers missing Windows zip"; return 0; }
+
+  local simit_bin
+  simit_bin="${SIMIT_BIN:-simit}"
+  if ! "$simit_bin" dist windows publish --help | grep -q -- '--force-resubmit'; then
+    printf 'Windows package publishing requires a simit binary with `dist windows publish`; set SIMIT_BIN to the fixed simit binary or update the rs-modde simit flake input.\n' >&2
+    return 1
+  fi
+
+  local args=(
+    dist windows publish
+    --version "$version"
+    --archive "x64=$release_dir/${zip_name}"
+    --work-dir "$work_dir/windows-packagers"
   )
+
+  if require_local_secret_for_publish "Chocolatey" CHOCOLATEY_API_KEY 'canix runtime secret can_choco_api_key' 'test -n "$CHOCOLATEY_API_KEY"'; then
+    args+=(--chocolatey --choco-push-source "${CHOCO_PUSH_SOURCE:-https://push.chocolatey.org/}")
+    [ "${CHOCOLATEY_FORCE_RESUBMIT:-0}" = "1" ] && args+=(--force-resubmit)
+  else
+    record_skipped "Chocolatey missing API key"
+  fi
+
+  if require_local_secret_for_publish "Scoop" SCOOP_BUCKET_TOKEN 'export SCOOP_BUCKET_TOKEN for codeberg.org/caniko/scoop-modde' 'test -n "$SCOOP_BUCKET_TOKEN"'; then
+    args+=(--scoop --scoop-bucket-url "${SCOOP_BUCKET_URL:-https://codeberg.org/caniko/scoop-modde.git}" --scoop-bucket-token-env SCOOP_BUCKET_TOKEN)
+  else
+    record_skipped "Scoop missing bucket token"
+  fi
+
+  if require_local_secret_for_publish "Winget" WINGET_PAT 'export WINGET_PAT for github.com/microsoft/winget-pkgs' 'test -n "$WINGET_PAT"'; then
+    args+=(--winget)
+  else
+    record_skipped "Winget missing GitHub token"
+  fi
+
+  if [[ ! " ${args[*]} " =~ " --chocolatey " ]] && [[ ! " ${args[*]} " =~ " --scoop " ]] && [[ ! " ${args[*]} " =~ " --winget " ]]; then
+    record_skipped "Windows packagers missing publish credentials"
+    return 0
+  fi
+
+  "$simit_bin" "${args[@]}"
 }
 
 publish_flathub() {
@@ -628,21 +607,6 @@ publish_flathub() {
   fi
 }
 
-publish_winget() {
-  is_prerelease && { record_skipped "Winget prerelease"; return 0; }
-  require_local_secret_for_publish "Winget" WINGET_PAT 'export WINGET_PAT for github.com/microsoft/winget-pkgs' 'test -n "$WINGET_PAT"' || return 0
-  local zip_name="modde-${version}-x86_64-windows.zip"
-  test -s "$release_dir/${zip_name}" || { record_skipped "Winget missing Windows zip"; return 0; }
-  local zip_url="https://codeberg.org/caniko/rs-modde/releases/download/${version}/${zip_name}"
-  tmpdir="$(mktemp -d "$work_dir/winget.XXXXXX")"
-  trap 'rm -rf "$tmpdir"' RETURN
-  export WINEPREFIX="$tmpdir/wine" WINEDEBUG=-all TERM=xterm
-  release_json="$(curl -fsSL https://api.github.com/repos/microsoft/winget-create/releases/latest)"
-  url="$(printf '%s' "$release_json" | jq -r '.assets[] | select(.name == "wingetcreate.exe") | .browser_download_url' | head -n 1)"
-  curl -fsSL -o "$tmpdir/wingetcreate.exe" "$url"
-  wine "$tmpdir/wingetcreate.exe" update Caniko.Modde --version "$version" --urls "${zip_url}|x64" --token "$WINGET_PAT" --submit
-}
-
 print_summary() {
   printf '\nlocal release deploy summary for %s\n' "$version"
   printf 'published:\n'
@@ -667,10 +631,8 @@ run_publisher "Homebrew tap" publish_homebrew
 run_publisher "APT repository" publish_apt
 run_publisher "AUR packages" publish_aur
 run_publisher "COPR" publish_copr
-run_publisher "Chocolatey" publish_chocolatey
-run_publisher "Scoop" publish_scoop
+run_publisher "Windows packagers" publish_windows_packagers
 run_publisher "Flathub" publish_flathub
-run_publisher "Winget" publish_winget
 record_skipped "crates.io publish remains CI-only"
 
 print_summary
