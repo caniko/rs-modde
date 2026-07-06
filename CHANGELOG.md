@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-06
+
 ### Changed
 
 - **modde**: Renamed `modde-cli` crate to `modde` — the CLI binary is now built
@@ -254,7 +256,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Diagnostics**: Form 43 detection, missing master detection, shadowed mod detection, load order validation
 - **Nix**: Flake with binary, docs, and website outputs; home-manager module for declarative configuration
 
-[Unreleased]: https://codeberg.org/caniko/rs-modde/compare/0.5.0...HEAD
+[Unreleased]: https://codeberg.org/caniko/rs-modde/compare/0.6.0...HEAD
+[0.6.0]: https://codeberg.org/caniko/rs-modde/compare/0.5.0...0.6.0
 [0.5.0]: https://codeberg.org/caniko/rs-modde/compare/0.4.0...0.5.0
 [0.4.0]: https://codeberg.org/caniko/rs-modde/compare/0.3.8...0.4.0
 [0.3.4]: https://codeberg.org/caniko/rs-modde/compare/0.3.3...0.3.4
