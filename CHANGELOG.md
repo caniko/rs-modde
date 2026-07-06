@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **modde**: Renamed `modde-cli` crate to `modde` — the CLI binary is now built
+  from `crates/modde` and published to crates.io as `modde`. All internal and
+  documentation references updated.
+- **modde-ui**: Embedded app window icon from `dist/com.tartanoglu.modde.png`.
+
+### Added
+
+- **Packaging**: Desktop file, AppStream metainfo, and app icon installed for
+  Nix, RPM, and Debian packages; Chocolatey metadata extended with license,
+  icon, docs, bug tracker, and project source URLs.
+- **Release**: Release notes now extract only the current version's section
+  from CHANGELOG.md instead of posting the entire file.
+- **Release**: Windows packaging (Chocolatey, Scoop, Winget) delegated to
+  `simit dist windows publish`.
+
+### CI
+
+- **CI**: Consolidated per-crate CI workflows into single jobs on
+  `atlas-nix-trusted` (removed multi-tier `codeberg-tiny`/`codeberg-medium`/
+  `codeberg-small` orchestration).
+- **CI**: Replaced `publish-crate-modde-cli.yaml` with
+  `publish-crate-modde.yaml` targeting the renamed `modde` crate.
+- **Release**: SRPM artifacts stored at `srpms/` instead of
+  `target/modde-release/root-artifacts/srpms/`.
+
+### Fixed
+
+- **modde-games**: Use `Result::is_ok_and` over `ok().is_some_and` in Heroic
+  launcher detection.
+
 ## [0.5.0] - 2026-06-15
 
 ### Changed
