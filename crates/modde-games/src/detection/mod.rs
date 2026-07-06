@@ -133,8 +133,7 @@ fn heroic_command() -> Option<(String, Vec<String>)> {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()
-            .ok()
-            .is_some_and(|s| s.success())
+            .is_ok_and(|s| s.success())
         {
             return Some((
                 "flatpak".to_string(),
