@@ -205,6 +205,8 @@ jobs:
           nix run .#flatpak-cargo-generator -- Cargo.lock -o target/modde-release/root-artifacts/release/cargo-sources.json
           cp target/modde-release/root-artifacts/srpms/*.src.rpm target/modde-release/root-artifacts/release/ 2>/dev/null || true
           
+          rm -rf release
+          cp -a target/modde-release/root-artifacts/release ./release
       - name: Package Windows artifacts
         run: |
           set -euo pipefail
