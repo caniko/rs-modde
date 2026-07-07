@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-004d03ce.js";
+            window.path_to_searchindex_js = "../searchindex-313809ce.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-050961cc.js"></script>
@@ -289,12 +289,12 @@ and extract it:</p>
 brew install modde
 </code></pre>
 <p>Planned channel. The formula is intended to install both <code>modde</code> and <code>modde-ui</code>
-on Apple Silicon and Intel Macs (and Linux/Linuxbrew) once published.</p>
+on Apple Silicon Macs (and Linux/Linuxbrew) once published.</p>
 <h3 id="macos-direct-download"><a class="header" href="#macos-direct-download">macOS direct download</a></h3>
 <p>Experimental channel. modde’s macOS binaries are ad-hoc signed (no Apple Developer ID, no notarization).
 macOS quarantines downloaded binaries, so clear the quarantine attribute once after
 extracting:</p>
-<pre><code class="language-bash">tar xzf modde-&lt;version&gt;-aarch64-darwin.tar.gz   # or x86_64-darwin on Intel
+<pre><code class="language-bash">tar xzf modde-&lt;version&gt;-aarch64-darwin.tar.gz
 xattr -dr com.apple.quarantine modde modde-ui
 ./modde --help
 </code></pre>

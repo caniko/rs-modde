@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-004d03ce.js";
+            window.path_to_searchindex_js = "../searchindex-313809ce.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-050961cc.js"></script>
@@ -677,7 +677,7 @@ committed back to trunk.</p>
 hand-maintained because they model things the generic generators do not: the <code>.#flatpak-manifest</code>,
 <code>.#appimage-*</code>, <code>.#modde-windows</code>, and <code>.#docs</code> builds; the Attic closure push; the
 coverage gate (<code>cargo xtask coverage --ci</code>); cross-compilation (Windows, aarch64-linux,
-macOS x86_64/aarch64 via osxcross); the Rust-generated website and mdBook docs outputs; and the
+macOS aarch64 via osxcross); the Rust-generated website and mdBook docs outputs; and the
 self-hosted <code>atlas</code> runner. Running those checks would flag all of that intentional
 customization as drift. This is revisited only if simit becomes configurable enough to
 express those jobs, or rs-harbor publishes a helper that preserves them.</p>
@@ -702,8 +702,8 @@ Codeberg-namespace ID would tie identity to the forge host). It is encoded in
 output in <code>flake.nix</code>.</p>
 <p><strong>Distribution channels.</strong> A single release fans out from the
 <code>.forgejo/workflows/release.yml</code> run to every supported platform and channel:
-direct Codeberg release archives for Linux (x86_64, aarch64), macOS (x86_64,
-aarch64), and Windows (x86_64); Linux packages via the AUR, Fedora COPR, a signed
+direct Codeberg release archives for Linux (x86_64, aarch64), macOS (aarch64),
+and Windows (x86_64); Linux packages via the AUR, Fedora COPR, a signed
 apt repository, Flatpak, and AppImage; macOS via a Homebrew tap; Windows via winget,
 Scoop, and Chocolatey; the CLI crate to crates.io; and the Nix flake plus
 home-manager module. The authoritative per-channel commands live in the
