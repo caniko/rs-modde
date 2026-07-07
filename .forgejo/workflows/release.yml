@@ -147,6 +147,7 @@ jobs:
           mkdir -p release
           nix develop -c bash <<'SBOM'
           set -euo pipefail
+          mkdir -p target/modde-release/root-artifacts/release
           cargo about generate --config dist/licenses/about.toml --output-file target/modde-release/root-artifacts/release/THIRD_PARTY_LICENSES.html dist/licenses/about-template.hbs
           cargo sbom --output-format cyclone_dx_json_1_5 > "target/modde-release/root-artifacts/release/modde-${VERSION}.cdx.json"
           cargo sbom --output-format spdx_json_2_3 > "target/modde-release/root-artifacts/release/modde-${VERSION}.spdx.json"
