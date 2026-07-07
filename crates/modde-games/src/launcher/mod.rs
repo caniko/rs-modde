@@ -71,5 +71,6 @@ pub use environment::{
     ToolEnvironmentReport, apply_tool_environment_heroic, collect_tool_dll_overrides,
     collect_tool_env_vars, collect_tool_wrappers, generate_tool_configs,
 };
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 pub use wine::apply_wine_overrides;
 pub use wrapper::{generate_launch_wrapper, register_heroic_wrapper};

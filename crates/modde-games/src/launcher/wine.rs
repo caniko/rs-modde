@@ -1,10 +1,15 @@
 #![allow(clippy::wildcard_imports)]
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 use super::*;
 
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 use std::path::Path;
 
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 use anyhow::{Context, Result};
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 use serde_json::Value;
+#[cfg(all(target_os = "linux", feature = "linux-integrations"))]
 use tracing::{info, warn};
 
 /// Format a list of DLL names as a `WINEDLLOVERRIDES` value string.
