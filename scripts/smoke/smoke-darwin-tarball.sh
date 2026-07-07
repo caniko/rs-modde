@@ -41,5 +41,4 @@ check_darwin_tarball() {
   fi
 }
 
-check_darwin_tarball "x86_64" "x86_64"
 check_darwin_tarball "aarch64" "arm64"

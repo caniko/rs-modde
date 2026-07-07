@@ -45,6 +45,9 @@ need dpkg-deb
 
 mkdir -p "$release_dir"
 
+echo "building Debian package binaries"
+cargo build --release --locked --package modde --package modde-ui
+
 build_one() {
   local cargo_package="$1"
   local deb_name="$2"

@@ -369,14 +369,6 @@
             doCheck = false;
             postInstall = signDarwinBinaries;
           };
-        darwinCrossBuilderX86 =
-          if cross.osxcrossRustHelpers != null
-          then
-            cross.osxcrossRustHelpers.mkCrossBuilder {
-              inherit craneLib;
-              target = "x86_64-apple-darwin";
-            }
-          else null;
         darwinCrossBuilderArm =
           if cross.osxcrossRustHelpers != null
           then
@@ -385,7 +377,6 @@
               target = "aarch64-apple-darwin";
             }
           else null;
-        darwinX86Args = darwinArgs "modde-darwin-x86_64";
         darwinArmArgs = darwinArgs "modde-darwin-aarch64";
         aarch64LinuxBuildInputs = with pkgsAarch64Linux; [
           openssl
@@ -462,18 +453,6 @@
           // {
             cargoArtifacts = aarch64LinuxCargoArtifacts;
           });
-        darwinX86CargoArtifacts =
-          if darwinCrossBuilderX86 != null
-          then darwinCrossBuilderX86.buildDepsOnly darwinX86Args
-          else null;
-        modde-darwin-x86_64 =
-          if darwinCrossBuilderX86 != null
-          then
-            darwinCrossBuilderX86.buildPackage (darwinX86Args
-              // {
-                cargoArtifacts = darwinX86CargoArtifacts;
-              })
-          else mkDarwinUnavailable "modde-darwin-x86_64";
         darwinArmCargoArtifacts =
           if darwinCrossBuilderArm != null
           then darwinCrossBuilderArm.buildDepsOnly darwinArmArgs
@@ -582,10 +561,6 @@
                     url = archiveUrl "aarch64" "darwin";
                     sha256 = ":no_check";
                   };
-                  darwin_intel = {
-                    url = archiveUrl "x86_64" "darwin";
-                    sha256 = ":no_check";
-                  };
                   linux_arm = {
                     url = archiveUrl "aarch64" "linux";
                     sha256 = ":no_check";
@@ -616,7 +591,6 @@
             };
             inherit modde-aarch64-linux;
             inherit modde-darwin-aarch64;
-            inherit modde-darwin-x86_64;
             inherit modde-windows;
           };
 
@@ -2060,11 +2034,6 @@
               # Windows tar.gz/zip and individual signed .exe assets are produced
               # by the Authenticode signing step, after the .exe files are signed.
 
-              nix build .#modde-darwin-x86_64 --out-link target/modde-release/root-artifacts/darwin-x86-result
-              mkdir -p target/modde-release/root-artifacts/release/darwin-x86_64
-              cp target/modde-release/root-artifacts/darwin-x86-result/bin/modde target/modde-release/root-artifacts/darwin-x86-result/bin/modde-ui target/modde-release/root-artifacts/release/darwin-x86_64/
-              tar czf "target/modde-release/root-artifacts/release/modde-''${VERSION}-x86_64-darwin.tar.gz" -C target/modde-release/root-artifacts/release/darwin-x86_64 modde modde-ui
-
               nix build .#modde-darwin-aarch64 --out-link target/modde-release/root-artifacts/darwin-arm-result
               mkdir -p target/modde-release/root-artifacts/release/darwin-aarch64
               cp target/modde-release/root-artifacts/darwin-arm-result/bin/modde target/modde-release/root-artifacts/darwin-arm-result/bin/modde-ui target/modde-release/root-artifacts/release/darwin-aarch64/
@@ -2089,7 +2058,7 @@
           cache = "canix";
           url = "https://attic.candee.baby";
           token_name = "rs-modde";
-          result_links = ["target/modde-release/root-artifacts/linux-result" "target/modde-release/root-artifacts/aarch64-linux-result" "target/modde-release/root-artifacts/windows-result" "target/modde-release/root-artifacts/darwin-x86-result" "target/modde-release/root-artifacts/darwin-arm-result" "target/modde-release/root-artifacts/appimage-ui-result" "target/modde-release/root-artifacts/appimage-cli-result" "target/modde-release/root-artifacts/flatpak-result"];
+          result_links = ["target/modde-release/root-artifacts/linux-result" "target/modde-release/root-artifacts/aarch64-linux-result" "target/modde-release/root-artifacts/windows-result" "target/modde-release/root-artifacts/darwin-arm-result" "target/modde-release/root-artifacts/appimage-ui-result" "target/modde-release/root-artifacts/appimage-cli-result" "target/modde-release/root-artifacts/flatpak-result"];
         };
         release.announce = {};
         release.windows_signing = {
@@ -2118,6 +2087,7 @@
           homepage = "https://modde.tartanoglu.com";
           license = "GPL-3.0-only";
           archive_pattern = "modde-{version}-{arch}-{os}.tar.gz";
+          platforms.darwin_intel = false;
         };
         chocolatey = {
           name = "modde";

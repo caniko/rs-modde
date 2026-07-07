@@ -187,11 +187,6 @@ jobs:
           # Windows tar.gz/zip and individual signed .exe assets are produced
           # by the Authenticode signing step, after the .exe files are signed.
           
-          nix build .#modde-darwin-x86_64 --out-link target/modde-release/root-artifacts/darwin-x86-result
-          mkdir -p target/modde-release/root-artifacts/release/darwin-x86_64
-          cp target/modde-release/root-artifacts/darwin-x86-result/bin/modde target/modde-release/root-artifacts/darwin-x86-result/bin/modde-ui target/modde-release/root-artifacts/release/darwin-x86_64/
-          tar czf "target/modde-release/root-artifacts/release/modde-${VERSION}-x86_64-darwin.tar.gz" -C target/modde-release/root-artifacts/release/darwin-x86_64 modde modde-ui
-          
           nix build .#modde-darwin-aarch64 --out-link target/modde-release/root-artifacts/darwin-arm-result
           mkdir -p target/modde-release/root-artifacts/release/darwin-aarch64
           cp target/modde-release/root-artifacts/darwin-arm-result/bin/modde target/modde-release/root-artifacts/darwin-arm-result/bin/modde-ui target/modde-release/root-artifacts/release/darwin-aarch64/
@@ -219,6 +214,7 @@ jobs:
           if ! nix develop -c bash scripts/build-deb.sh "$VERSION" release
           then
             echo "::warning::Debian package build failed; continuing without .deb release assets and APT publish."
+            true
           fi
       - name: Sign Windows Authenticode artifacts
         env:
@@ -369,7 +365,6 @@ jobs:
             ./target/modde-release/root-artifacts/linux-result \
             ./target/modde-release/root-artifacts/aarch64-linux-result \
             ./target/modde-release/root-artifacts/windows-result \
-            ./target/modde-release/root-artifacts/darwin-x86-result \
             ./target/modde-release/root-artifacts/darwin-arm-result \
             ./target/modde-release/root-artifacts/appimage-ui-result \
             ./target/modde-release/root-artifacts/appimage-cli-result \
@@ -658,7 +653,6 @@ jobs:
           }
           if [ -z "${HOMEBREW_TAP_TOKEN:-}" ]; then publisher_missing homebrew 'HOMEBREW_TAP_TOKEN unset'; fi
           test -s release/modde-${VERSION}-aarch64-darwin.tar.gz || publisher_missing homebrew 'missing release/modde-${VERSION}-aarch64-darwin.tar.gz'
-          test -s release/modde-${VERSION}-x86_64-darwin.tar.gz || publisher_missing homebrew 'missing release/modde-${VERSION}-x86_64-darwin.tar.gz'
           test -s release/modde-${VERSION}-aarch64-linux.tar.gz || publisher_missing homebrew 'missing release/modde-${VERSION}-aarch64-linux.tar.gz'
           test -s release/modde-${VERSION}-x86_64-linux.tar.gz || publisher_missing homebrew 'missing release/modde-${VERSION}-x86_64-linux.tar.gz'
           credential_helper='!f() { echo username=x-access-token; echo "password=$HOMEBREW_TAP_TOKEN"; }; f'
@@ -672,7 +666,6 @@ jobs:
             --homepage 'https://modde.tartanoglu.com' \
             --license GPL-3.0-only \
             --archive "darwin_arm=https://codeberg.org/caniko/rs-modde/releases/download/${VERSION}/modde-${VERSION}-aarch64-darwin.tar.gz,release/modde-${VERSION}-aarch64-darwin.tar.gz" \
-            --archive "darwin_intel=https://codeberg.org/caniko/rs-modde/releases/download/${VERSION}/modde-${VERSION}-x86_64-darwin.tar.gz,release/modde-${VERSION}-x86_64-darwin.tar.gz" \
             --archive "linux_arm=https://codeberg.org/caniko/rs-modde/releases/download/${VERSION}/modde-${VERSION}-aarch64-linux.tar.gz,release/modde-${VERSION}-aarch64-linux.tar.gz" \
             --archive "linux_intel=https://codeberg.org/caniko/rs-modde/releases/download/${VERSION}/modde-${VERSION}-x86_64-linux.tar.gz,release/modde-${VERSION}-x86_64-linux.tar.gz" \
             --binary modde \

@@ -135,7 +135,7 @@ brew install modde
 ```
 
 Planned channel. The formula is intended to install both `modde` and `modde-ui`
-on Apple Silicon and Intel Macs (and Linux/Linuxbrew) once published.
+on Apple Silicon Macs (and Linux/Linuxbrew) once published.
 
 ### macOS direct download
 
@@ -144,7 +144,7 @@ macOS quarantines downloaded binaries, so clear the quarantine attribute once af
 extracting:
 
 ```bash
-tar xzf modde-<version>-aarch64-darwin.tar.gz   # or x86_64-darwin on Intel
+tar xzf modde-<version>-aarch64-darwin.tar.gz
 xattr -dr com.apple.quarantine modde modde-ui
 ./modde --help
 ```

@@ -254,7 +254,6 @@ build_release_artifacts() {
   if [ "${MODDE_LOCAL_DEPLOY_SKIP_DARWIN:-0}" = "1" ]; then
     record_skipped "Darwin artifact build skipped by MODDE_LOCAL_DEPLOY_SKIP_DARWIN=1; Homebrew will be skipped"
   else
-    build_darwin_artifact modde-darwin-x86_64 x86_64 "$work_dir/darwin-x86-result"
     build_darwin_artifact modde-darwin-aarch64 aarch64 "$work_dir/darwin-arm-result"
   fi
 
@@ -368,7 +367,6 @@ publish_homebrew() {
   local artifact
   for artifact in \
     "$release_dir/modde-${version}-aarch64-darwin.tar.gz" \
-    "$release_dir/modde-${version}-x86_64-darwin.tar.gz" \
     "$release_dir/modde-${version}-aarch64-linux.tar.gz" \
     "$release_dir/modde-${version}-x86_64-linux.tar.gz"; do
     if ! have_artifact "$artifact"; then
@@ -398,7 +396,6 @@ publish_homebrew() {
     --homepage 'https://modde.tartanoglu.com' \
     --license GPL-3.0-only \
     --archive "darwin_arm=https://codeberg.org/caniko/rs-modde/releases/download/${version}/modde-${version}-aarch64-darwin.tar.gz,$release_dir/modde-${version}-aarch64-darwin.tar.gz" \
-    --archive "darwin_intel=https://codeberg.org/caniko/rs-modde/releases/download/${version}/modde-${version}-x86_64-darwin.tar.gz,$release_dir/modde-${version}-x86_64-darwin.tar.gz" \
     --archive "linux_arm=https://codeberg.org/caniko/rs-modde/releases/download/${version}/modde-${version}-aarch64-linux.tar.gz,$release_dir/modde-${version}-aarch64-linux.tar.gz" \
     --archive "linux_intel=https://codeberg.org/caniko/rs-modde/releases/download/${version}/modde-${version}-x86_64-linux.tar.gz,$release_dir/modde-${version}-x86_64-linux.tar.gz" \
     --binary modde \

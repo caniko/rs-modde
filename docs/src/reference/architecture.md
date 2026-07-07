@@ -559,7 +559,7 @@ committed back to trunk.
 hand-maintained because they model things the generic generators do not: the `.#flatpak-manifest`,
 `.#appimage-*`, `.#modde-windows`, and `.#docs` builds; the Attic closure push; the
 coverage gate (`cargo xtask coverage --ci`); cross-compilation (Windows, aarch64-linux,
-macOS x86_64/aarch64 via osxcross); the Rust-generated website and mdBook docs outputs; and the
+macOS aarch64 via osxcross); the Rust-generated website and mdBook docs outputs; and the
 self-hosted `atlas` runner. Running those checks would flag all of that intentional
 customization as drift. This is revisited only if simit becomes configurable enough to
 express those jobs, or rs-harbor publishes a helper that preserves them.
@@ -587,8 +587,8 @@ output in `flake.nix`.
 
 **Distribution channels.** A single release fans out from the
 `.forgejo/workflows/release.yml` run to every supported platform and channel:
-direct Codeberg release archives for Linux (x86_64, aarch64), macOS (x86_64,
-aarch64), and Windows (x86_64); Linux packages via the AUR, Fedora COPR, a signed
+direct Codeberg release archives for Linux (x86_64, aarch64), macOS (aarch64),
+and Windows (x86_64); Linux packages via the AUR, Fedora COPR, a signed
 apt repository, Flatpak, and AppImage; macOS via a Homebrew tap; Windows via winget,
 Scoop, and Chocolatey; the CLI crate to crates.io; and the Nix flake plus
 home-manager module. The authoritative per-channel commands live in the

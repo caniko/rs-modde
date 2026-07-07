@@ -118,8 +118,8 @@ check_workflow_contract() {
   grep -F 'publish_homebrew()' scripts/local-release-deploy.sh >/dev/null \
     && grep -F 'HOMEBREW_TAP_TOKEN' scripts/local-release-deploy.sh >/dev/null \
     && grep -F "modde-\${version}-aarch64-darwin.tar.gz" scripts/local-release-deploy.sh >/dev/null \
-    && grep -F "modde-\${version}-x86_64-darwin.tar.gz" scripts/local-release-deploy.sh >/dev/null \
-    && ok "local deploy has credential-gated Homebrew publisher with Darwin artifacts" \
+    && ! grep -F "modde-\${version}-x86_64-" scripts/local-release-deploy.sh | grep -F "darwin.tar.gz" >/dev/null \
+    && ok "local deploy has credential-gated Homebrew publisher with arm64 Darwin artifacts" \
     || missing+=("local-deploy:Homebrew publisher with Darwin artifact gates")
 }
 

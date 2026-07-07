@@ -150,7 +150,7 @@ recommended live install path today. When a macOS release asset is published,
 clear the quarantine attribute once after extracting, then run normally:
 
 ```bash
-tar xzf modde-<version>-aarch64-darwin.tar.gz   # or x86_64-darwin on Intel
+tar xzf modde-<version>-aarch64-darwin.tar.gz
 xattr -dr com.apple.quarantine modde modde-ui
 ./modde --help
 ```
@@ -316,7 +316,7 @@ until the installation guide marks their channels live.
 | Platform | Architectures            | Status          |
 | -------- | ------------------------ | --------------- |
 | Linux    | x86_64, aarch64          | Fully supported |
-| macOS    | x86_64, aarch64          | Experimental CI build |
+| macOS    | aarch64                  | Experimental CI build |
 | Windows  | x86_64                   | Experimental CI build |
 
 ## CI
