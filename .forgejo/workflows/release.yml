@@ -216,6 +216,7 @@ jobs:
             echo "::warning::Debian package build failed; continuing without .deb release assets and APT publish."
             true
           fi
+          true
       - name: Sign Windows Authenticode artifacts
         env:
           WINDOWS_SIGNING_PFX: ${{ secrets.WINDOWS_SIGNING_PFX }}

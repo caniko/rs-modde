@@ -53,12 +53,13 @@ index f63f0c8..d2e65c2 100644
 +    w.push_str("          set -- target/modde-release/root-artifacts/srpms/*.src.rpm; test \"$#\" -eq 1; ls -l \"$1\"\n");
      w.push_str("          SCRIPT\n");
  }
-@@ -929,5 +929,6 @@ fn push_build_debs(w: &mut String, _apt: &ResolvedApt) {
+@@ -929,5 +929,7 @@ fn push_build_debs(w: &mut String, _apt: &ResolvedApt) {
      w.push_str("          if ! nix develop -c bash scripts/build-deb.sh \"$VERSION\" release\n");
      w.push_str("          then\n");
      w.push_str("            echo \"::warning::Debian package build failed; continuing without .deb release assets and APT publish.\"\n");
 +    w.push_str("            true\n");
      w.push_str("          fi\n");
++    w.push_str("          true\n");
  }
 @@ -1414,11 +1414,12 @@ fn push_publish_aur(w: &mut String, aur: &ResolvedAur, activated_remote: bool) {
          w.push_str("          test -n \"${AUR_SSH_KEY:-}\"\n");
@@ -114,7 +115,7 @@ index f63f0c8..d2e65c2 100644
          // APT deb build + reprepro publish
          assert!(workflow.contains("nix develop -c bash scripts/build-deb.sh \"$VERSION\" release"));
          assert!(workflow.contains("continuing without .deb release assets and APT publish."));
-+        assert!(workflow.contains("continuing without .deb release assets and APT publish.\"\n            true\n"));
++        assert!(workflow.contains("continuing without .deb release assets and APT publish.\"\n            true\n          fi\n          true\n"));
          assert!(!workflow.contains("debootstrap --variant=minbase"));
          assert!(!workflow.contains("nixpkgs#debootstrap"));
          assert!(!workflow.contains("priv chroot"));
