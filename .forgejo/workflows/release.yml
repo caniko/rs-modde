@@ -723,7 +723,8 @@ jobs:
           ZIP="release/modde-${VERSION}-x86_64-windows.zip"; test -s "$ZIP" || publisher_missing chocolatey "missing $ZIP"
           CHOCO_VERSION_FILTER="Id%20eq%20'modde'%20and%20Version%20eq%20'${VERSION}'"
           if curl -fsSL "https://community.chocolatey.org/api/v2/Packages()?%24filter=${CHOCO_VERSION_FILTER}" | grep -q "<entry>"; then echo "Chocolatey ${VERSION} already published; skipping."; exit 0; fi
-          nix develop -c nix shell github:caniko/nixpkgs/add-chocolatey-scoop#chocolatey -c simit dist chocolatey bump \
+          choco_log="$(mktemp)"; trap 'rm -f "$choco_log"' EXIT
+          if ! nix develop -c nix shell github:caniko/nixpkgs/add-chocolatey-scoop#chocolatey -c simit dist chocolatey bump \
             --version "$VERSION" \
             --package-dir chocolatey-package \
             --archive "x64=$ZIP" \
@@ -737,4 +738,10 @@ jobs:
             --choco-archive-pattern 'modde-{version}-{arch}-windows.zip' \
             --push \
             --push-source "$CHOCO_PUSH_SOURCE" \
-            --api-key-env CHOCOLATEY_API_KEY
+            --api-key-env CHOCOLATEY_API_KEY 2>&1 | tee "$choco_log"; then
+            if grep -q 'Chocolatey rejects duplicate version pushes' "$choco_log"; then
+              echo 'Chocolatey version already published; skipping duplicate push.'
+              exit 0
+            fi
+            exit 1
+          fi

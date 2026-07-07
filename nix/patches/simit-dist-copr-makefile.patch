@@ -177,19 +177,32 @@ index f63f0c8..d2e65c2 100644
      w.push_str("      - name: Publish Chocolatey package\n        env:\n");
      // Source the key from an Actions secret, unless the runner already provides
      // it in the job environment (e.g. a Forgejo runner credential).
-@@ -1859,9 +1843,11 @@ fn push_publish_chocolatey(
+@@ -1859,9 +1843,12 @@ fn push_publish_chocolatey(
      } else {
          writeln!(w, "          ZIP=\"release/{zip}\"; test -s \"$ZIP\"").expect("write");
      }
 +    writeln!(w, "          CHOCO_VERSION_FILTER=\"Id%20eq%20'{choco_id}'%20and%20Version%20eq%20'${{VERSION}}'\"").expect("write");
 +    w.push_str("          if curl -fsSL \"https://community.chocolatey.org/api/v2/Packages()?%24filter=${CHOCO_VERSION_FILTER}\" | grep -q \"<entry>\"; then echo \"Chocolatey ${VERSION} already published; skipping.\"; exit 0; fi\n");
++    w.push_str("          choco_log=\"$(mktemp)\"; trap 'rm -f \"$choco_log\"' EXIT\n");
      writeln!(
          w,
 -        "          nix shell {} -c simit dist chocolatey bump \\",
-+        "          nix develop -c nix shell {} -c simit dist chocolatey bump \\",
++        "          if ! nix develop -c nix shell {} -c simit dist chocolatey bump \\",
          chocolatey.nix_tool
      )
      .expect("write");
+@@ -1880,6 +1865,10 @@ fn push_publish_chocolatey(
+     push_choco_flag(w, "--choco-download-repo", &chocolatey.download_repo);
+     push_choco_flag(w, "--choco-archive-pattern", &chocolatey.archive_pattern);
+-    writeln!(w, "            --push \\\n            --push-source \"$CHOCO_PUSH_SOURCE\" \\\n            --api-key-env {key_env}").expect("write");
++    writeln!(w, "            --push \\\n            --push-source \"$CHOCO_PUSH_SOURCE\" \\\n            --api-key-env {key_env} 2>&1 | tee \"$choco_log\"; then").expect("write");
++    w.push_str("            if grep -q 'Chocolatey rejects duplicate version pushes' \"$choco_log\"; then\n");
++    w.push_str("              echo 'Chocolatey version already published; skipping duplicate push.'\n");
++    w.push_str("              exit 0\n");
++    w.push_str("            fi\n            exit 1\n          fi\n");
+ }
+ 
+ fn push_choco_flag(w: &mut String, flag: &str, value: &str) {
 @@ -2284,7 +2284,7 @@ mod tests {
          assert!(workflow.contains("cargo vendor vendor > ../cargo-vendor-config.toml"));
          assert!(
