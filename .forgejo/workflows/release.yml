@@ -211,10 +211,12 @@ jobs:
           . ./release-env
           export VERSION IS_PRERELEASE
           mkdir -p release
-          if ! nix develop -c bash scripts/build-deb.sh "$VERSION" release
-          then
+          set +e
+          nix develop -c bash scripts/build-deb.sh "$VERSION" release
+          deb_status=$?
+          set -e
+          if [ "$deb_status" -ne 0 ]; then
             echo "::warning::Debian package build failed; continuing without .deb release assets and APT publish."
-            true
           fi
           true
       - name: Sign Windows Authenticode artifacts
