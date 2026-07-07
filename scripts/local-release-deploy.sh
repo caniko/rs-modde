@@ -117,7 +117,7 @@ build_release_artifacts() {
   local existing_srpms=("$srpm_dir"/*.src.rpm)
   shopt -u nullglob
   if [ "${#existing_srpms[@]}" -eq 0 ]; then
-    local source_tarball="$work_dir/rs-modde-${version}.tar.gz"
+    local source_tarball="$work_dir/rs-modde-v${version}.tar.gz"
     git archive --format=tar.gz --prefix=rs-modde/ -o "$source_tarball" HEAD
     tmp_vendor="$(mktemp -d "$work_dir/vendor.XXXXXX")"
     trap 'rm -rf "$tmp_vendor"' RETURN

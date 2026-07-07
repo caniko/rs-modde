@@ -27,6 +27,15 @@ diff --git a/src/render/release_workflow.rs b/src/render/release_workflow.rs
 index f63f0c8..d2e65c2 100644
 --- a/src/render/release_workflow.rs
 +++ b/src/render/release_workflow.rs
+@@ -882,7 +882,7 @@ fn push_copr_srpm_build(w: &mut String, copr: &ResolvedCopr) {
+     w.push_str("      - name: Build SRPM for COPR\n        run: |\n          set -euo pipefail\n          . ./release-env\n");
+     writeln!(
+         w,
+-        "          git archive --format=tar.gz --prefix={repo}/ -o \"{repo}-${{VERSION}}.tar.gz\" HEAD",
++        "          git archive --format=tar.gz --prefix={repo}/ -o \"{repo}-v${{VERSION}}.tar.gz\" HEAD",
+         repo = copr.repo
+     )
+     .expect("write");
 @@ -898,13 +898,13 @@ fn push_copr_srpm_build(w: &mut String, copr: &ResolvedCopr) {
          repo = copr.repo
      )
