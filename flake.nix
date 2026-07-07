@@ -2097,10 +2097,10 @@
           authors = "Can H. Tartanoglu";
           license_url = "https://codeberg.org/caniko/rs-modde/raw/branch/trunk/LICENSE";
           archive_pattern = "modde-{version}-{arch}-windows.zip";
-          # Interim: pull choco + simit from the fork that ships the chocolatey
-          # package (caniko/nixpkgs add-chocolatey-scoop). Drop the nixpkgs ref to
+          # Interim: pull choco from the fork that ships the chocolatey package
+          # (caniko/nixpkgs add-chocolatey-scoop). Drop the nixpkgs ref to
           # plain `nixpkgs#chocolatey` once it lands upstream.
-          nix_tool = "github:caniko/nixpkgs/add-chocolatey-scoop#chocolatey git+https://codeberg.org/caniko/simit";
+          nix_tool = "github:caniko/nixpkgs/add-chocolatey-scoop#chocolatey";
           api_key_secret = "CHOCOLATEY_API_KEY";
           api_key_env = "CHOCOLATEY_API_KEY";
         };

@@ -174,7 +174,7 @@ index f63f0c8..d2e65c2 100644
      writeln!(
          w,
 -        "          nix shell {} -c simit dist chocolatey bump \\",
-+        "          nix shell nixpkgs#cargo {} -c simit dist chocolatey bump \\",
++        "          nix develop -c nix shell {} -c simit dist chocolatey bump \\",
          chocolatey.nix_tool
      )
      .expect("write");
@@ -235,7 +235,7 @@ index f63f0c8..d2e65c2 100644
          assert!(workflow.contains("/api/v1/statuses"));
          assert!(workflow.contains(
 -            "nix shell github:caniko/nixpkgs/add-chocolatey-scoop#chocolatey git+https://codeberg.org/caniko/simit -c simit dist chocolatey bump"
-+            "nix shell nixpkgs#cargo github:caniko/nixpkgs/add-chocolatey-scoop#chocolatey git+https://codeberg.org/caniko/simit -c simit dist chocolatey bump"
++            "nix develop -c nix shell github:caniko/nixpkgs/add-chocolatey-scoop#chocolatey git+https://codeberg.org/caniko/simit -c simit dist chocolatey bump"
          ));
          // Checksum step uses runner-compatible Bash glob enumeration, not find/xargs.
 @@ -2373,7 +2386,6 @@ mod tests {
