@@ -110,7 +110,7 @@ build_release_artifacts() {
   write_release_env
   export VERSION="$version"
 
-  cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses
+  cargo deny check -W unmaintained advisories bans sources licenses
 
   mkdir -p "$srpm_dir" "$release_dir"
   shopt -s nullglob

@@ -310,10 +310,10 @@ to interact with:
 - **`cargo deny` runs on every PR and on release.** CI runs
   `cargo deny check` (advisories, bans, sources, licenses) as a parallel CI job,
   and the release workflow runs
-  `cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses`
+  `cargo deny check -W unmaintained advisories bans sources licenses`
   before building. A known-vulnerable dependency fails the release; the only
-  escape is an explicit, commented `[advisories.ignore]` entry in `deny.toml`
-  documenting the temporary exception. Keep `vulnerability = "deny"` and
+  escape is an explicit, commented `[advisories].ignore` entry in `deny.toml`
+  documenting the temporary exception. Keep vulnerability advisories denied and
   `unmaintained = "warn"` so routine unmaintained-transitive warnings do not
   block PRs.
 - **SBOMs ship with every release.** The release generates both a CycloneDX JSON

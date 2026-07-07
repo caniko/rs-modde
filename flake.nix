@@ -1753,7 +1753,7 @@
                 nix flake check --keep-going
                 cargo test --workspace --all-features
                 cargo clippy --workspace --all-targets --all-features -- --deny warnings
-                cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses
+                cargo deny check -W unmaintained advisories bans sources licenses
 
                 for package in modde-core modde-sources modde-games modde-ui modde; do
                   cargo package -p "$package" --allow-dirty --list >/dev/null
@@ -2017,7 +2017,7 @@
           version_attr = "modde";
           substituters = ["https://attic.candee.baby/canix" "https://cache.nixos.org"];
           trusted_public_keys = ["canix:lPzPzKrmYqW5Rxa5r0uQWvCqD3S5nx0h2eCy7XD5JM8=" "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="];
-          supply_chain_command = "nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#cargo-deny -c cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses";
+          supply_chain_command = "nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#cargo-deny -c cargo deny check -W unmaintained advisories bans sources licenses";
           checksum_globs = ["*.tar.gz" "*.zip" "*.AppImage" "*.deb" "*.src.rpm" "*.cdx.json" "*.spdx.json"];
           sbom_commands = [
             ''

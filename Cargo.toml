@@ -26,7 +26,7 @@ categories = ["command-line-utilities", "game-development"]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "1.1"
-quick-xml = { version = "0.37", features = ["serialize"] }
+quick-xml = { version = "0.41", features = ["serialize"] }
 serde_yaml_ng = "0.10"
 
 # Async
@@ -151,7 +151,7 @@ sqlx = { version = "0.8", default-features = false, features = [
 # which otherwise pull libssh2-sys + openssl-sys; on the apple-darwin cross
 # target (darwinArgs.buildInputs=[]) openssl-sys has no OpenSSL to link and
 # fails. modde makes zero network git calls, so the transports are dead weight.
-git2 = { version = "0.20", default-features = false }
+git2 = { version = "0.21", default-features = false }
 
 # Image processing
 image = "0.25"
@@ -224,3 +224,6 @@ used_underscore_binding = "allow"
 lto = true
 codegen-units = 1
 strip = true
+
+[patch.crates-io]
+fomod-oxide = { git = "https://codeberg.org/caniko/rs-fomod-oxide.git", rev = "d1f53c4e61007a57c5ae5118e5937d4f592e1188" }

@@ -293,7 +293,7 @@ osv-scanner scan --sbom=modde-<version>.cdx.json
 osv-scanner scan --sbom=modde-<version>.spdx.json
 ```
 
-Release CI also runs `cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses`; vulnerable Rust dependencies fail the release unless an explicit `deny.toml` advisory ignore documents the temporary exception.
+Release CI also runs `cargo deny check -W unmaintained advisories bans sources licenses`; vulnerable Rust dependencies fail the release unless an explicit `deny.toml` advisory ignore documents the temporary exception.
 
 ## Announcement Credentials
 

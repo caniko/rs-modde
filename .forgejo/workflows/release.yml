@@ -124,7 +124,7 @@ jobs:
           grep '^Version:' dist/rpm/modde.spec
       - name: Check supply-chain policy
         run: |
-          nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#cargo-deny -c cargo deny check -D vulnerability -W unmaintained advisories bans sources licenses
+          nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#cargo-deny -c cargo deny check -W unmaintained advisories bans sources licenses
       - name: Build SRPM for COPR
         run: |
           set -euo pipefail

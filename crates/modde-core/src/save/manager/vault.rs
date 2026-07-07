@@ -97,7 +97,7 @@ impl SaveManager<'_> {
         let refname = branch
             .get()
             .name()
-            .ok_or_else(|| CoreError::SaveVaultError("invalid branch ref name".into()))?
+            .map_err(|e| CoreError::SaveVaultError(format!("invalid branch ref name: {e}")))?
             .to_string();
 
         let obj = repo
