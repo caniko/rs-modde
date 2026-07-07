@@ -213,34 +213,12 @@ jobs:
           mkdir -p release
           echo "::warning::Debian package build disabled on this Forgejo runner; continuing without .deb release assets and APT publish."
           true
-      - name: Sign Windows Authenticode artifacts
-        env:
-          WINDOWS_SIGNING_PFX: ${{ secrets.WINDOWS_SIGNING_PFX }}
-          WINDOWS_SIGNING_PASS: ${{ secrets.WINDOWS_SIGNING_PASS }}
-          WINDOWS_SIGNING_SUBJECT: ${{ secrets.WINDOWS_SIGNING_SUBJECT }}
+      - name: Package Windows artifacts
         run: |
           set -euo pipefail
           . ./release-env
           for exe in release/windows-x86_64/modde.exe release/windows-x86_64/modde-ui.exe; do test -s "$exe"; done
-          if [ -n "${WINDOWS_SIGNING_PFX:-}" ] && [ -n "${WINDOWS_SIGNING_PASS:-}" ]; then
-            nix shell nixpkgs#osslsigncode nixpkgs#openssl -c bash <<'SCRIPT'
-          set -euo pipefail
-          umask 077
-          pfx_file="$(mktemp)"; pass_file="$(mktemp)"
-          trap 'rm -f "$pfx_file" "$pass_file"' EXIT
-          printf '%s' "$WINDOWS_SIGNING_PFX" | base64 --decode > "$pfx_file"
-          printf '%s' "$WINDOWS_SIGNING_PASS" > "$pass_file"
-          for exe in release/windows-x86_64/modde.exe release/windows-x86_64/modde-ui.exe; do
-            osslsigncode sign -pkcs12 "$pfx_file" -readpass "$pass_file" -h sha256 \
-              -n 'modde' -i 'https://modde.tartanoglu.com' -ts 'http://timestamp.digicert.com' \
-              -in "$exe" -out "${exe}.signed"
-            osslsigncode verify -in "${exe}.signed"
-            mv "${exe}.signed" "$exe"
-          done
-          SCRIPT
-          else
-            echo '::warning::WINDOWS_SIGNING_PFX/PASS unset; publishing unsigned Windows EXEs.'
-          fi
+          echo '::warning::Windows Authenticode signing disabled on this Forgejo runner; publishing unsigned Windows EXEs.'
           tar czf "release/modde-${VERSION}-x86_64-windows.tar.gz" -C release/windows-x86_64 modde.exe modde-ui.exe
           zip_out="$PWD/release/modde-${VERSION}-x86_64-windows.zip"
           nix shell nixpkgs#zip -c bash -c 'cd "$1" && shift && zip -q "$1" "$@"' _ release/windows-x86_64 "$zip_out" modde.exe modde-ui.exe
