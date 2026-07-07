@@ -169,8 +169,20 @@ index f63f0c8..d2e65c2 100644
      let basenames = windows
          .binaries
          .iter()
-@@ -1862,7 +1845,7 @@ fn push_publish_chocolatey(
+@@ -1831,6 +1814,7 @@ fn push_publish_chocolatey(
+         .replace("{version}", "${VERSION}")
+         .replace("{arch}", "x86_64");
+     let key_env = &chocolatey.api_key_env;
++    let choco_id = chocolatey.id.replace('\'', "''");
+     w.push_str("      - name: Publish Chocolatey package\n        env:\n");
+     // Source the key from an Actions secret, unless the runner already provides
+     // it in the job environment (e.g. a Forgejo runner credential).
+@@ -1859,9 +1843,11 @@ fn push_publish_chocolatey(
+     } else {
+         writeln!(w, "          ZIP=\"release/{zip}\"; test -s \"$ZIP\"").expect("write");
      }
++    writeln!(w, "          CHOCO_VERSION_FILTER=\"Id%20eq%20'{choco_id}'%20and%20Version%20eq%20'${{VERSION}}'\"").expect("write");
++    w.push_str("          if curl -fsSL \"https://community.chocolatey.org/api/v2/Packages()?%24filter=${CHOCO_VERSION_FILTER}\" | grep -q \"<entry>\"; then echo \"Chocolatey ${VERSION} already published; skipping.\"; exit 0; fi\n");
      writeln!(
          w,
 -        "          nix shell {} -c simit dist chocolatey bump \\",

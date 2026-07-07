@@ -721,6 +721,8 @@ jobs:
           }
           if [ -z "${CHOCOLATEY_API_KEY:-}" ]; then publisher_missing chocolatey 'CHOCOLATEY_API_KEY unset'; fi
           ZIP="release/modde-${VERSION}-x86_64-windows.zip"; test -s "$ZIP" || publisher_missing chocolatey "missing $ZIP"
+          CHOCO_VERSION_FILTER="Id%20eq%20'modde'%20and%20Version%20eq%20'${VERSION}'"
+          if curl -fsSL "https://community.chocolatey.org/api/v2/Packages()?%24filter=${CHOCO_VERSION_FILTER}" | grep -q "<entry>"; then echo "Chocolatey ${VERSION} already published; skipping."; exit 0; fi
           nix develop -c nix shell github:caniko/nixpkgs/add-chocolatey-scoop#chocolatey -c simit dist chocolatey bump \
             --version "$VERSION" \
             --package-dir chocolatey-package \
