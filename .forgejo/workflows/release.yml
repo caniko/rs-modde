@@ -205,14 +205,6 @@ jobs:
           nix run .#flatpak-cargo-generator -- Cargo.lock -o target/modde-release/root-artifacts/release/cargo-sources.json
           cp target/modde-release/root-artifacts/srpms/*.src.rpm target/modde-release/root-artifacts/release/ 2>/dev/null || true
           
-      - name: Build Debian packages
-        run: |
-          set -euo pipefail
-          . ./release-env
-          export VERSION IS_PRERELEASE
-          mkdir -p release
-          echo "::warning::Debian package build disabled on this Forgejo runner; continuing without .deb release assets and APT publish."
-          true
       - name: Package Windows artifacts
         run: |
           set -euo pipefail

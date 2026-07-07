@@ -53,13 +53,15 @@ index f63f0c8..d2e65c2 100644
 +    w.push_str("          set -- target/modde-release/root-artifacts/srpms/*.src.rpm; test \"$#\" -eq 1; ls -l \"$1\"\n");
      w.push_str("          SCRIPT\n");
  }
-@@ -929,5 +929,3 @@ fn push_build_debs(w: &mut String, _apt: &ResolvedApt) {
+@@ -926,8 +926,4 @@ fn push_build_artifacts(w: &mut String, artifacts: &ArtifactsConfig) {
+ }
+ fn push_build_debs(w: &mut String, _apt: &ResolvedApt) {
+-    w.push_str("      - name: Build Debian packages\n        run: |\n          set -euo pipefail\n          . ./release-env\n          export VERSION IS_PRERELEASE\n          mkdir -p release\n");
 -    w.push_str("          if ! nix develop -c bash scripts/build-deb.sh \"$VERSION\" release\n");
 -    w.push_str("          then\n");
 -    w.push_str("            echo \"::warning::Debian package build failed; continuing without .deb release assets and APT publish.\"\n");
 -    w.push_str("          fi\n");
-+    w.push_str("          echo \"::warning::Debian package build disabled on this Forgejo runner; continuing without .deb release assets and APT publish.\"\n");
-+    w.push_str("          true\n");
++    w.push_str("");
  }
 @@ -1414,11 +1414,12 @@ fn push_publish_aur(w: &mut String, aur: &ResolvedAur, activated_remote: bool) {
          w.push_str("          test -n \"${AUR_SSH_KEY:-}\"\n");
@@ -170,13 +172,16 @@ index f63f0c8..d2e65c2 100644
              )
          );
          assert!(workflow.contains("COPR_PROJECT=\"caniko/rs-modde\""));
-@@ -2307,6 +2308,11 @@ mod tests {
-         // APT deb build + reprepro publish
+@@ -2304,9 +2305,13 @@ mod tests {
+                 "require_credential 'global/user secret' 'copr_token' \"${COPR_TOKEN:-}\""
+             )
+         );
+-        // APT deb build + reprepro publish
 -        assert!(workflow.contains("nix develop -c bash scripts/build-deb.sh \"$VERSION\" release"));
 -        assert!(workflow.contains("continuing without .deb release assets and APT publish."));
-+        assert!(workflow.contains("Debian package build disabled on this Forgejo runner; continuing without .deb release assets and APT publish."));
-+        assert!(workflow.contains("mkdir -p release\n          echo \"::warning::Debian package build disabled"));
-+        assert!(workflow.contains("APT publish."));
++        // APT publish remains guarded, but the patched Forgejo workflow omits the
++        // Debian build step because this runner fails at that step boundary.
++        assert!(!workflow.contains("nix develop -c bash scripts/build-deb.sh \"$VERSION\" release"));
 +        assert!(workflow.contains("Package Windows artifacts"));
 +        assert!(workflow.contains("Windows Authenticode signing disabled on this Forgejo runner; publishing unsigned Windows EXEs."));
 +        assert!(!workflow.contains("WINDOWS_SIGNING_PFX:"));
@@ -184,7 +189,7 @@ index f63f0c8..d2e65c2 100644
          assert!(!workflow.contains("debootstrap --variant=minbase"));
          assert!(!workflow.contains("nixpkgs#debootstrap"));
          assert!(!workflow.contains("priv chroot"));
-@@ -2339,7 +2340,14 @@ mod tests {
+@@ -2339,7 +2344,14 @@ mod tests {
          assert!(workflow.contains(
              "require_credential 'global/user secret' 'AUR_SSH_KEY' \"${AUR_SSH_KEY:-}\""
          ));
@@ -200,7 +205,7 @@ index f63f0c8..d2e65c2 100644
          assert!(
              workflow
                  .contains("for pkg in modde modde-bin modde-git; do publish_pkg \"$pkg\"; done")
-@@ -2354,7 +2362,8 @@ mod tests {
+@@ -2354,7 +2366,8 @@ mod tests {
          assert!(workflow.contains("skipping Homebrew tap update."));
          // Stage B channels
          assert!(workflow.contains("cargo sbom > release/sbom.json"));
@@ -210,6 +215,15 @@ index f63f0c8..d2e65c2 100644
          assert!(workflow.contains("zip_out=\"$PWD/release/modde-${VERSION}-x86_64-windows.zip\""));
          assert!(!workflow.contains("OLDPWD"));
          assert!(workflow.contains("require_credential 'global/user secret'"));
+@@ -2373,7 +2386,6 @@ mod tests {
+         assert!(workflow.contains("test -s SHA256SUMS.txt\n      - name: Sign checksums"));
+         // Order: codeberg before downstream, copr near the end
+         let pos = |needle: &str| workflow.find(needle).unwrap();
+-        assert!(pos("Build Debian packages") < pos("Publish Codeberg release"));
+-        assert!(pos("Publish Codeberg release") < pos("Publish APT repository"));
++        assert!(pos("Package Windows artifacts") < pos("Publish Codeberg release"));
+         assert!(pos("Publish AUR packages") < pos("Publish Homebrew tap"));
+         assert!(pos("Build SRPM for COPR") < pos("Build release artifacts"));
 diff --git a/tests/init_copr.rs b/tests/init_copr.rs
 index 89cfc1a..0924f6d 100644
 --- a/tests/init_copr.rs
