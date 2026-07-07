@@ -524,11 +524,23 @@ jobs:
             exit 0
           }
           if [ -z "${AUR_SSH_KEY:-}" ]; then publisher_missing aur 'AUR_SSH_KEY unset'; fi
-          nix shell nixpkgs#git nixpkgs#openssh nixpkgs#pacman -c bash <<'SCRIPT'
+          nix shell nixpkgs#git nixpkgs#openssh nixpkgs#pacman nixpkgs#shadow nixpkgs#util-linux -c bash <<'SCRIPT'
           set -euo pipefail
           . ./release-env
           AUR_HOST='aur.archlinux.org'; AUR_SSH="$HOME/.ssh/aur"
           MAKEPKG_CONF="$(dirname "$(dirname "$(command -v makepkg)")")/etc/makepkg.conf"; test -r "$MAKEPKG_CONF"
+          print_srcinfo() {
+            pkgdir="$1"
+            if [ "$(id -u)" -eq 0 ]; then
+              owner_uid="$(id -u)"; owner_gid="$(id -g)"
+              if ! id -u aurbuild >/dev/null 2>&1; then useradd -m -r -s /bin/sh aurbuild; fi
+              chown -R aurbuild:aurbuild "$pkgdir"
+              runuser -u aurbuild -- sh -c 'cd "$1" && makepkg --config "$2" --printsrcinfo > .SRCINFO' sh "$pkgdir" "$MAKEPKG_CONF"
+              chown -R "$owner_uid:$owner_gid" "$pkgdir"
+            else
+              (cd "$pkgdir" && makepkg --config "$MAKEPKG_CONF" --printsrcinfo > .SRCINFO)
+            fi
+          }
           checksum_for() { awk -v a="$1" '$2 == a { print $1 }' release/SHA256SUMS.txt; }
           source_sha="$(checksum_for "rs-modde-${VERSION}.tar.gz")"
           bin_sha="$(checksum_for "modde-${VERSION}-x86_64-linux.tar.gz")"; test -n "$bin_sha"
@@ -553,7 +565,7 @@ jobs:
               modde-git) ;;
               *) echo "unknown AUR package: $pkg" >&2; exit 1 ;;
             esac
-            (cd "aur-${pkg}" && makepkg --config "$MAKEPKG_CONF" --printsrcinfo > .SRCINFO)
+            print_srcinfo "aur-${pkg}"
             git -C "aur-${pkg}" add PKGBUILD .SRCINFO
             if git -C "aur-${pkg}" diff --cached --quiet; then echo "AUR ${pkg} already at ${VERSION}"; return 0; fi
             git -C "aur-${pkg}" -c user.email='ci@localhost' -c user.name='release bot' commit -m "${VERSION}"

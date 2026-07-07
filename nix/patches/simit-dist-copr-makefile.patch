@@ -44,6 +44,29 @@ index f63f0c8..d2e65c2 100644
 +    w.push_str("          set -- target/modde-release/root-artifacts/srpms/*.src.rpm; test \"$#\" -eq 1; ls -l \"$1\"\n");
      w.push_str("          SCRIPT\n");
  }
+@@ -1414,11 +1414,12 @@ fn push_publish_aur(w: &mut String, aur: &ResolvedAur, activated_remote: bool) {
+         w.push_str("          test -n \"${AUR_SSH_KEY:-}\"\n");
+     }
+     w.push_str(
+-        "          nix shell nixpkgs#git nixpkgs#openssh nixpkgs#pacman -c bash <<'SCRIPT'\n",
++        "          nix shell nixpkgs#git nixpkgs#openssh nixpkgs#pacman nixpkgs#shadow nixpkgs#util-linux -c bash <<'SCRIPT'\n",
+     );
+     w.push_str("          set -euo pipefail\n          . ./release-env\n");
+     w.push_str("          AUR_HOST='aur.archlinux.org'; AUR_SSH=\"$HOME/.ssh/aur\"\n");
+     w.push_str("          MAKEPKG_CONF=\"$(dirname \"$(dirname \"$(command -v makepkg)\")\")/etc/makepkg.conf\"; test -r \"$MAKEPKG_CONF\"\n");
++    w.push_str("          print_srcinfo() {\n            pkgdir=\"$1\"\n            if [ \"$(id -u)\" -eq 0 ]; then\n              owner_uid=\"$(id -u)\"; owner_gid=\"$(id -g)\"\n              if ! id -u aurbuild >/dev/null 2>&1; then useradd -m -r -s /bin/sh aurbuild; fi\n              chown -R aurbuild:aurbuild \"$pkgdir\"\n              runuser -u aurbuild -- sh -c 'cd \"$1\" && makepkg --config \"$2\" --printsrcinfo > .SRCINFO' sh \"$pkgdir\" \"$MAKEPKG_CONF\"\n              chown -R \"$owner_uid:$owner_gid\" \"$pkgdir\"\n            else\n              (cd \"$pkgdir\" && makepkg --config \"$MAKEPKG_CONF\" --printsrcinfo > .SRCINFO)\n            fi\n          }\n");
+     w.push_str("          checksum_for() { awk -v a=\"$1\" '$2 == a { print $1 }' release/SHA256SUMS.txt; }\n");
+     let source_archive = pkgbuild_source_archive(aur);
+     let bin_archive = pkgbuild_binary_archive(aur);
+@@ -1459,7 +1460,7 @@ fn push_publish_aur(w: &mut String, aur: &ResolvedAur, activated_remote: bool) {
+     w.push_str(
+         "              *) echo \"unknown AUR package: $pkg\" >&2; exit 1 ;;\n            esac\n",
+     );
+-    w.push_str("            (cd \"aur-${pkg}\" && makepkg --config \"$MAKEPKG_CONF\" --printsrcinfo > .SRCINFO)\n");
++    w.push_str("            print_srcinfo \"aur-${pkg}\"\n");
+     w.push_str("            git -C \"aur-${pkg}\" add PKGBUILD .SRCINFO\n");
+     w.push_str("            if git -C \"aur-${pkg}\" diff --cached --quiet; then echo \"AUR ${pkg} already at ${VERSION}\"; return 0; fi\n");
+     w.push_str("            git -C \"aur-${pkg}\" -c user.email='ci@localhost' -c user.name='release bot' commit -m \"${VERSION}\"\n");
 @@ -1501,7 +1501,7 @@ fn push_copr_publish(
      if activated_remote {
          push_active_or_skip_prelude(w);
@@ -71,6 +94,22 @@ index f63f0c8..d2e65c2 100644
              )
          );
          assert!(workflow.contains("COPR_PROJECT=\"caniko/rs-modde\""));
+@@ -2339,7 +2340,14 @@ mod tests {
+         assert!(workflow.contains(
+             "require_credential 'global/user secret' 'AUR_SSH_KEY' \"${AUR_SSH_KEY:-}\""
+         ));
+-        assert!(workflow.contains("makepkg --config \"$MAKEPKG_CONF\" --printsrcinfo > .SRCINFO"));
++        assert!(workflow.contains("nixpkgs#shadow nixpkgs#util-linux"));
++        assert!(workflow.contains("print_srcinfo \"aur-${pkg}\""));
++        assert!(workflow.contains("runuser -u aurbuild -- sh -c"));
++        assert!(
++            workflow.contains(
++                "(cd \"$pkgdir\" && makepkg --config \"$MAKEPKG_CONF\" --printsrcinfo > .SRCINFO)"
++            )
++        );
+         assert!(
+             workflow
+                 .contains("for pkg in modde modde-bin modde-git; do publish_pkg \"$pkg\"; done")
 diff --git a/tests/init_copr.rs b/tests/init_copr.rs
 index 89cfc1a..0924f6d 100644
 --- a/tests/init_copr.rs
