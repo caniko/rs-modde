@@ -53,16 +53,12 @@ index f63f0c8..d2e65c2 100644
 +    w.push_str("          set -- target/modde-release/root-artifacts/srpms/*.src.rpm; test \"$#\" -eq 1; ls -l \"$1\"\n");
      w.push_str("          SCRIPT\n");
  }
-@@ -929,5 +929,9 @@ fn push_build_debs(w: &mut String, _apt: &ResolvedApt) {
+@@ -929,5 +929,3 @@ fn push_build_debs(w: &mut String, _apt: &ResolvedApt) {
 -    w.push_str("          if ! nix develop -c bash scripts/build-deb.sh \"$VERSION\" release\n");
 -    w.push_str("          then\n");
-+    w.push_str("          set +e\n");
-+    w.push_str("          nix develop -c bash scripts/build-deb.sh \"$VERSION\" release\n");
-+    w.push_str("          deb_status=$?\n");
-+    w.push_str("          set -e\n");
-+    w.push_str("          if [ \"$deb_status\" -ne 0 ]; then\n");
-     w.push_str("            echo \"::warning::Debian package build failed; continuing without .deb release assets and APT publish.\"\n");
-     w.push_str("          fi\n");
+-    w.push_str("            echo \"::warning::Debian package build failed; continuing without .deb release assets and APT publish.\"\n");
+-    w.push_str("          fi\n");
++    w.push_str("          echo \"::warning::Debian package build disabled on this Forgejo runner; continuing without .deb release assets and APT publish.\"\n");
 +    w.push_str("          true\n");
  }
 @@ -1414,11 +1414,12 @@ fn push_publish_aur(w: &mut String, aur: &ResolvedAur, activated_remote: bool) {
@@ -118,9 +114,10 @@ index f63f0c8..d2e65c2 100644
 @@ -2307,6 +2308,7 @@ mod tests {
          // APT deb build + reprepro publish
 -        assert!(workflow.contains("nix develop -c bash scripts/build-deb.sh \"$VERSION\" release"));
-+        assert!(workflow.contains("set +e\n          nix develop -c bash scripts/build-deb.sh \"$VERSION\" release\n          deb_status=$?\n          set -e"));
-         assert!(workflow.contains("continuing without .deb release assets and APT publish."));
-+        assert!(workflow.contains("if [ \"$deb_status\" -ne 0 ]; then\n            echo \"::warning::Debian package build failed; continuing without .deb release assets and APT publish.\"\n          fi\n          true\n"));
+-        assert!(workflow.contains("continuing without .deb release assets and APT publish."));
++        assert!(workflow.contains("Debian package build disabled on this Forgejo runner; continuing without .deb release assets and APT publish."));
++        assert!(workflow.contains("mkdir -p release\n          echo \"::warning::Debian package build disabled"));
++        assert!(workflow.contains("APT publish."));
          assert!(!workflow.contains("debootstrap --variant=minbase"));
          assert!(!workflow.contains("nixpkgs#debootstrap"));
          assert!(!workflow.contains("priv chroot"));
