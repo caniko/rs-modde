@@ -499,7 +499,7 @@ jobs:
             if [ "$(id -u)" -eq 0 ]; then
               owner_uid="$(id -u)"; owner_gid="$(id -g)"
               if ! id -u aurbuild >/dev/null 2>&1; then useradd -m -r -s /bin/sh aurbuild; fi
-              chown -R aurbuild:aurbuild "$pkgdir"
+              chown -R aurbuild "$pkgdir"
               runuser -u aurbuild -- sh -c 'cd "$1" && makepkg --config "$2" --printsrcinfo > .SRCINFO' sh "$pkgdir" "$MAKEPKG_CONF"
               chown -R "$owner_uid:$owner_gid" "$pkgdir"
             else
