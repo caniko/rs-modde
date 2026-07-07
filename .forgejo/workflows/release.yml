@@ -501,7 +501,7 @@ jobs:
               groupadd -f -r aurbuild
               if ! id -u aurbuild >/dev/null 2>&1; then useradd -m -r -g aurbuild -s /bin/sh aurbuild; fi
               chown -R aurbuild:aurbuild "$pkgdir"
-              runuser -u aurbuild -- sh -c 'cd "$1" && makepkg --config "$2" --printsrcinfo > .SRCINFO' sh "$pkgdir" "$MAKEPKG_CONF"
+              runuser -u aurbuild -- sh -c 'cd "$1" && makepkg --config "$2" --printsrcinfo > .SRCINFO' sh "$pkgdir" "$MAKEPKG_CONF" || setpriv --reuid="$(id -u aurbuild)" --regid="$(id -g aurbuild)" --init-groups sh -c 'cd "$1" && makepkg --config "$2" --printsrcinfo > .SRCINFO' sh "$pkgdir" "$MAKEPKG_CONF"
               chown -R "$owner_uid:$owner_gid" "$pkgdir"
             else
               (cd "$pkgdir" && makepkg --config "$MAKEPKG_CONF" --printsrcinfo > .SRCINFO)
