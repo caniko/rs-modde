@@ -721,7 +721,7 @@ jobs:
           }
           if [ -z "${CHOCOLATEY_API_KEY:-}" ]; then publisher_missing chocolatey 'CHOCOLATEY_API_KEY unset'; fi
           ZIP="release/modde-${VERSION}-x86_64-windows.zip"; test -s "$ZIP" || publisher_missing chocolatey "missing $ZIP"
-          nix shell github:caniko/nixpkgs/add-chocolatey-scoop#chocolatey git+https://codeberg.org/caniko/simit -c simit dist chocolatey bump \
+          nix shell nixpkgs#cargo github:caniko/nixpkgs/add-chocolatey-scoop#chocolatey git+https://codeberg.org/caniko/simit -c simit dist chocolatey bump \
             --version "$VERSION" \
             --package-dir chocolatey-package \
             --archive "x64=$ZIP" \
