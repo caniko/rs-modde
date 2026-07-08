@@ -302,6 +302,7 @@
             postInstall = ''
               for bin in "$out"/bin/*; do
                 wrapProgram "$bin" \
+                  ${lib.optionalString pkgs.stdenv.isLinux "--prefix LD_LIBRARY_PATH : ${linuxLdPath} \\"}
                   --set-default SSL_CERT_FILE "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" \
                   --set-default NIX_SSL_CERT_FILE "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
               done
