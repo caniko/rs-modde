@@ -200,7 +200,7 @@ layer, not by separate per-game GPU profiles.
 | Field | Value |
 | ----- | ----- |
 | Proxy DLL | `dxgi.dll` |
-| Source mode | `github_release`, release tag `official:v0.9.1` |
+| Source mode | Any OptiScaler source with `FSR4_INT8/` and `FSR4_LATEST/` payloads; GOverlay builds are recommended for FSR4 variant switching |
 | Tested OptiScaler version | `0.9` |
 | FSR4 variant | selected by `hardware_tuning=auto` |
 | `emulate_fp8` | selected by `hardware_tuning=auto` |
@@ -251,12 +251,16 @@ modde tool configure optiscaler --game stellar-blade fsr4_variant=int8_402
 ```bash
 # Enable OptiScaler for Stellar Blade — modde picks the right profile for your GPU
 modde tool enable optiscaler --game stellar-blade
+modde tool releases optiscaler --game stellar-blade
+modde tool install-release optiscaler --game stellar-blade --tag <goverlay-tag> --asset <asset>
 modde tool apply optiscaler --game stellar-blade
 ```
 
 `modde tool apply` writes the `dxgi.dll` proxy and companion files into the game's
-`Binaries/Win64`. See [Tools & overlays](../guides/tools.md) and the OptiScaler source
-selector (official releases versus GOverlay builds) documented there.
+`Binaries/Win64`. For RDNA3/RDNA4 FSR4 variant selection, use an OptiScaler source
+that contains `FSR4_INT8/` and `FSR4_LATEST/`; recent GOverlay builds expose those
+payload directories. See [Tools & overlays](../guides/tools.md) for the OptiScaler
+source selector and release commands.
 
 ### Proton, overlays, and Wine DLL overrides
 

@@ -88,7 +88,6 @@ fn render_schema() -> String {
                 .into_iter()
                 .map(|spec| normalize_exported_spec(tool.tool_id(), spec))
                 .filter_map(export_setting_spec)
-                .map(|(key, spec)| (key.to_string(), spec))
                 .collect();
             (tool.tool_id().to_string(), settings)
         })
@@ -222,8 +221,8 @@ fn render_release_supporting_tools() -> String {
 
 fn export_setting_spec(
     spec: modde_games::tools::ToolSettingSpec,
-) -> Option<(&'static str, ExportedSettingSpec)> {
-    if should_skip_setting(spec.key) {
+) -> Option<(String, ExportedSettingSpec)> {
+    if should_skip_setting(&spec.key) {
         return None;
     }
 
@@ -248,7 +247,7 @@ fn export_setting_spec(
     };
 
     Some((
-        spec.key,
+        spec.key.into_owned(),
         ExportedSettingSpec {
             ty,
             description: spec.description.to_string(),

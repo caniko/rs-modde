@@ -114,13 +114,15 @@ pub(super) fn selected_fsr4_variant_source(
         _ => return None,
     };
     let selected = source_dir.join(dir).join(FSR4_DLL_NAME);
+    let has_root_payload = source_dir.join(FSR4_DLL_NAME).is_file();
     let has_variant_payloads =
         source_dir.join(FSR4_LATEST_DIR).is_dir() || source_dir.join(FSR4_INT8_DIR).is_dir();
     let expects_goverlay_payloads = matches!(
         config.get_str("source_mode"),
         Some(OPTISCALER_SOURCE_GOVERLAY_BUILDS | OPTISCALER_SOURCE_GOVERLAY_FGMOD)
     );
-    (selected.is_file() || has_variant_payloads || expects_goverlay_payloads).then_some(selected)
+    (selected.is_file() || has_variant_payloads || expects_goverlay_payloads || has_root_payload)
+        .then_some(selected)
 }
 
 pub(super) fn optipatcher_asi_source(source_dir: &Path) -> PathBuf {

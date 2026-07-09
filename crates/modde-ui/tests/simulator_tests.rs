@@ -1295,7 +1295,7 @@ fn tools_apply_button_disables_when_current_settings_are_applied() {
     state.entries[0].apply_pending = false;
 
     let mut ui = simulator(modde_ui::views::tools::view(&state));
-    ui.click("No changes")
+    ui.click("Up to date")
         .expect("already-applied apply button remains visible");
     let messages: Vec<_> = ui.into_messages().collect();
     assert!(
@@ -1696,6 +1696,8 @@ fn sample_tools_state(active_tool_id: &str) -> ToolState {
             apply_pending: true,
             apply_missing_inputs: Vec::new(),
             setting_history: Vec::new(),
+            config_checklist: Vec::new(),
+            dirty_keys: std::collections::HashSet::new(),
         }],
     }
 }
@@ -1767,5 +1769,7 @@ fn sample_tool_entry(tool_id: &str, display_name: &str) -> ToolUiEntry {
         apply_pending: true,
         apply_missing_inputs: Vec::new(),
         setting_history: Vec::new(),
+        config_checklist: Vec::new(),
+        dirty_keys: std::collections::HashSet::new(),
     }
 }

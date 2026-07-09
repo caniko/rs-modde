@@ -33,13 +33,10 @@ fn tools_actual_button_hover_toast_does_not_reset_scroll_position() {
         .button_hover_toast
         .pending
         .expect("hovering the described button should start hover toast state");
-    assert_eq!(
-        pending.description,
-        "Clear OptiScaler INI overrides so the selected release defaults are used."
-    );
+    assert_eq!(pending.description, "No INI overrides to reset.");
 
     harness.update_app(Message::ButtonHoverElapsed { id: pending.id });
-    harness.find("Clear OptiScaler INI overrides so the selected release defaults are used.");
+    harness.find("No INI overrides to reset.");
 
     assert_scroll_y_unchanged(&mut harness, before);
 }

@@ -33,6 +33,7 @@ pub(super) fn apply_for(
     ) {
         backup_optiscaler_install(context.map(|context| context.game_id.as_str()), &existing)?;
     }
+    remove_stale_proxy_dlls(&target_dir, dll_name)?;
 
     let mut applied = AppliedFiles::default();
 
@@ -133,6 +134,22 @@ pub(super) fn apply_for(
     }
 
     Ok(applied)
+}
+
+fn remove_stale_proxy_dlls(target_dir: &Path, selected_proxy: &str) -> Result<()> {
+    for proxy in OPTISCALER_PROXY_DLLS {
+        if proxy.eq_ignore_ascii_case(selected_proxy) {
+            continue;
+        }
+        let path = target_dir.join(proxy);
+        if path.is_file() {
+            std::fs::remove_file(&path).with_context(|| {
+                format!("failed to remove stale OptiScaler proxy {}", path.display())
+            })?;
+            info!(path = %path.display(), selected_proxy = %selected_proxy, "removed stale OptiScaler proxy");
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn preview_apply_for(
@@ -274,7 +291,7 @@ fn validate_optiscaler_config(config: &ToolConfig) {
         warn!(
             "RDNA3 GPU detected with FSR4 variant 'latest_fp8' (FP8 model). \
              The FP8 model is designed for RDNA4; RDNA3 GPUs require the INT8 model. \
-             Set fsr4_variant to 'int8_402' or select the 'community-dxgi-rdna3' profile."
+             Set hardware_tuning to 'auto' or manually set fsr4_variant to 'int8_402'."
         );
     }
 

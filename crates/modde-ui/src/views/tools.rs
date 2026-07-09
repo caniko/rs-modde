@@ -7,7 +7,7 @@ use iced::{Alignment, Element, Length, color};
 use modde_games::tools::ToolSettingKind;
 
 use crate::action_button::{ButtonAction, DescribedButtonExt};
-use crate::app::{Message, ToolHistoryUiEntry, ToolState, ToolUiEntry};
+use crate::app::{ChecklistStatus, Message, ToolHistoryUiEntry, ToolState, ToolUiEntry};
 use crate::semantics;
 use crate::views::tabs::{Tab, tab_bar};
 
@@ -132,6 +132,7 @@ fn tool_panel<'a>(entry: &'a ToolUiEntry, state: &'a ToolState) -> Element<'a, M
         header,
         text(entry.description.as_str()).size(13),
         tool_specific_actions(entry, state),
+        config_checklist_panel(entry),
         settings_panel(entry, state.show_advanced_settings),
         history_panel(entry),
         derived_facts_panel(entry),
@@ -177,6 +178,14 @@ fn tool_panel<'a>(entry: &'a ToolUiEntry, state: &'a ToolState) -> Element<'a, M
     }
 }
 
+fn has_ini_overrides(entry: &ToolUiEntry) -> bool {
+    entry
+        .settings
+        .get("ini_overrides")
+        .and_then(|v| v.as_object())
+        .is_some_and(|m| !m.is_empty())
+}
+
 fn optiscaler_state_actions(
     entry: &ToolUiEntry,
     game_dir_configured: bool,
@@ -215,7 +224,10 @@ fn optiscaler_state_actions(
             button(text("Reset config").size(12))
                 .style(button::danger)
                 .padding([4, 10])
-                .on_action(ButtonAction::ResetOptiScalerConfig),
+                .on_action_maybe(
+                    has_ini_overrides(entry).then_some(ButtonAction::ResetOptiScalerConfig),
+                    "No INI overrides to reset.",
+                ),
         ),
     ]
     .spacing(8)
@@ -324,8 +336,8 @@ fn optiscaler_release_asset_row<'a>(
 ) -> Element<'a, Message> {
     row![
         column![
-            text(spec.label).size(13),
-            text(spec.description).size(11).color(color!(0x888888)),
+            text(&*spec.label).size(13),
+            text(&*spec.description).size(11).color(color!(0x888888)),
         ]
         .spacing(2)
         .width(Length::FillPortion(1)),
@@ -382,6 +394,45 @@ fn optiscaler_release_action_row(state: &ToolState) -> Element<'_, Message> {
     .spacing(8)
     .align_y(Alignment::Center)
     .into()
+}
+
+fn config_checklist_panel(entry: &ToolUiEntry) -> Element<'_, Message> {
+    if entry.config_checklist.is_empty() {
+        return iced::widget::space::vertical()
+            .height(Length::Shrink)
+            .into();
+    }
+    let all_done = entry
+        .config_checklist
+        .iter()
+        .all(|item| item.status == ChecklistStatus::Done);
+    let header = row![
+        text("Setup Progress").size(14),
+        iced::widget::space::horizontal(),
+        text(if all_done { "All steps complete" } else { "" })
+            .size(12)
+            .color(color!(0x88CC88)),
+    ]
+    .align_y(Alignment::Center);
+    let mut rows = column![header].spacing(6);
+    for item in &entry.config_checklist {
+        let icon = match item.status {
+            ChecklistStatus::Done => text("✓").size(13).color(color!(0x88CC88)),
+            ChecklistStatus::Pending => text("○").size(13).color(color!(0xCCAA44)),
+            ChecklistStatus::Blocked => text("✗").size(13).color(color!(0xFF6666)),
+        };
+        let mut row_content = row![icon, text(item.label.as_str()).size(13)].spacing(8);
+        if let Some(hint) = &item.hint {
+            row_content =
+                row_content.push(text(format!("— {hint}")).size(12).color(color!(0x888888)));
+        }
+        rows = rows.push(row_content.align_y(Alignment::Center));
+    }
+    container(rows)
+        .padding(10)
+        .width(Length::Fill)
+        .style(container::rounded_box)
+        .into()
 }
 
 #[path = "tools_parts/panels.rs"]

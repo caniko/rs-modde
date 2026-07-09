@@ -261,6 +261,8 @@ fn test_tool_ui_entry(tool_id: &str) -> ToolUiEntry {
         apply_pending: false,
         apply_missing_inputs: Vec::new(),
         setting_history: Vec::new(),
+        config_checklist: Vec::new(),
+        dirty_keys: std::collections::HashSet::new(),
     }
 }
 
@@ -301,14 +303,11 @@ fn scroll_heavy_optiscaler_state() -> ToolState {
     let mut setting_specs = Vec::new();
 
     for index in 0..40 {
-        let key = Box::leak(format!("stress_setting_{index}").into_boxed_str());
-        let label = Box::leak(format!("Stress setting {index}").into_boxed_str());
-        let description = Box::leak(
-            format!("Long setting row used to make the tool panel scroll {index}.")
-                .into_boxed_str(),
-        );
+        let key = format!("stress_setting_{index}");
+        let label = format!("Stress setting {index}");
+        let description = format!("Long setting row used to make the tool panel scroll {index}.");
 
-        settings.insert(key.to_string(), serde_json::json!(false));
+        settings.insert(key.clone(), serde_json::json!(false));
         setting_specs.push(modde_games::tools::ToolSettingSpec::bool(
             key,
             label,

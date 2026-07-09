@@ -188,6 +188,8 @@ fn optiscaler_tools_state() -> ToolState {
             apply_pending: true,
             apply_missing_inputs: Vec::new(),
             setting_history: Vec::new(),
+            config_checklist: Vec::new(),
+            dirty_keys: std::collections::HashSet::new(),
         }],
     }
 }

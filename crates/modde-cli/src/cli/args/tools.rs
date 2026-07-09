@@ -205,6 +205,13 @@ pub(crate) enum ToolAction {
         #[arg(long)]
         game: String,
     },
+    /// Preview tool patches without writing to the game directory
+    Preview {
+        /// Tool ID
+        tool_id: String,
+        #[arg(long)]
+        game: String,
+    },
     /// Revert tool patches from the game directory
     Revert {
         /// Tool ID

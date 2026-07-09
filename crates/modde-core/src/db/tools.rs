@@ -33,35 +33,41 @@ impl ModdeDb {
             reason.trim()
         };
 
-        self.db
-            .execute(
-                "INSERT INTO tool_setting_nodes (node_id, game_id, tool_id, enabled, settings, reason)
-                 VALUES (?, ?, ?, ?, ?, ?)",
-                &vals![node_id.clone(), game_id, tool_id, enabled, settings_json, reason],
-            )
-            .await?;
+        let mut tx = self.db.begin().await?;
+        tx.execute(
+            "INSERT INTO tool_setting_nodes (node_id, game_id, tool_id, enabled, settings, reason)
+             VALUES (?, ?, ?, ?, ?, ?)",
+            &vals![
+                node_id.clone(),
+                game_id,
+                tool_id,
+                enabled,
+                settings_json,
+                reason
+            ],
+        )
+        .await?;
         if let Some(parent_node_id) = parent_node_id {
-            self.db
-                .execute(
-                    "INSERT INTO tool_setting_edges (parent_node_id, child_node_id)
-                     VALUES (?, ?)
-                     ON CONFLICT(parent_node_id, child_node_id) DO NOTHING",
-                    &vals![parent_node_id, node_id.clone()],
-                )
-                .await?;
-        }
-        self.db
-            .execute(
-                "INSERT INTO game_tools (game_id, tool_id, enabled, settings, updated_at, current_node_id)
-                 VALUES (?, ?, ?, ?, {NOW}, ?)
-                 ON CONFLICT(game_id, tool_id) DO UPDATE SET
-                     enabled = excluded.enabled,
-                     settings = excluded.settings,
-                     updated_at = excluded.updated_at,
-                     current_node_id = excluded.current_node_id",
-                &vals![game_id, tool_id, enabled, settings_json, node_id],
+            tx.execute(
+                "INSERT INTO tool_setting_edges (parent_node_id, child_node_id)
+                 VALUES (?, ?)
+                 ON CONFLICT(parent_node_id, child_node_id) DO NOTHING",
+                &vals![parent_node_id, node_id.clone()],
             )
             .await?;
+        }
+        tx.execute(
+            "INSERT INTO game_tools (game_id, tool_id, enabled, settings, updated_at, current_node_id)
+             VALUES (?, ?, ?, ?, {NOW}, ?)
+             ON CONFLICT(game_id, tool_id) DO UPDATE SET
+                 enabled = excluded.enabled,
+                 settings = excluded.settings,
+                 updated_at = excluded.updated_at,
+                 current_node_id = excluded.current_node_id",
+            &vals![game_id, tool_id, enabled, settings_json, node_id],
+        )
+        .await?;
+        tx.commit().await?;
         Ok(())
     }
 

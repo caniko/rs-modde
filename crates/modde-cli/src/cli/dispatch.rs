@@ -242,6 +242,11 @@ pub(crate) fn run_command(cli: Cli) -> Result<()> {
             db_sync!(commands::tool::handle_apply(&tool_id, &game));
         }
         Commands::Tool {
+            action: ToolAction::Preview { tool_id, game },
+        } => {
+            db_sync!(commands::tool::handle_preview(&tool_id, &game));
+        }
+        Commands::Tool {
             action: ToolAction::Revert { tool_id, game },
         } => {
             db_sync!(commands::tool::handle_revert(&tool_id, &game));

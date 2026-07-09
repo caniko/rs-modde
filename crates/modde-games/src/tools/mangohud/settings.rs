@@ -327,7 +327,7 @@ pub(super) fn mangohud_settings_schema() -> Vec<ToolSettingSpec> {
         ToolSettingSpec::bool("retro", "Retro", "Enable retro scaling flag."),
     ]);
     for spec in &mut specs {
-        spec.section = mangohud_setting_section(spec.key);
+        spec.section = mangohud_setting_section(&spec.key);
     }
     specs
 }

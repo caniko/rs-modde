@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use modde_core::resolver::GameId;
 use modde_core::settings::AppSettings;
+use modde_games::tools::ToolSettingSpec;
 
 use super::{FOMODWizardState, ToolOptionCatalog};
 
@@ -267,6 +268,20 @@ pub(super) fn empty_to_none(value: Option<&str>) -> Option<String> {
         .map(str::to_string)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChecklistStatus {
+    Done,
+    Pending,
+    Blocked,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConfigChecklistItem {
+    pub label: String,
+    pub status: ChecklistStatus,
+    pub hint: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct ToolUiEntry {
@@ -294,6 +309,8 @@ pub struct ToolUiEntry {
     pub apply_pending: bool,
     pub apply_missing_inputs: Vec<String>,
     pub setting_history: Vec<ToolHistoryUiEntry>,
+    pub config_checklist: Vec<ConfigChecklistItem>,
+    pub dirty_keys: HashSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -301,22 +318,53 @@ pub struct ToolHistoryUiEntry {
     pub node_id: String,
     pub label: String,
     pub reason: String,
+    pub human_reason: String,
     pub enabled: bool,
     pub is_current: bool,
 }
 
 impl ToolHistoryUiEntry {
-    pub(super) fn from_node(node: modde_core::db::ToolSettingHistoryNode) -> Self {
+    pub(super) fn from_node(
+        node: modde_core::db::ToolSettingHistoryNode,
+        setting_specs: &[modde_games::tools::ToolSettingSpec],
+    ) -> Self {
         let short_id = node.node_id.chars().take(18).collect::<String>();
         let state = if node.enabled { "enabled" } else { "disabled" };
+        let human_reason = Self::humanize_reason(&node.reason, setting_specs);
         Self {
             node_id: node.node_id,
             label: format!("{} - {state}", node.created_at),
             reason: node.reason,
+            human_reason,
             enabled: node.enabled,
             is_current: node.is_current,
         }
         .with_short_id(short_id)
+    }
+
+    fn humanize_reason(reason: &str, setting_specs: &[ToolSettingSpec]) -> String {
+        if let Some(key) = reason.strip_prefix("ui:set:") {
+            if let Some(spec) = setting_specs.iter().find(|s| s.key == key) {
+                return format!("Changed {}", spec.label);
+            }
+            let pretty = key
+                .strip_prefix("ini_overrides.")
+                .unwrap_or(key)
+                .replace('_', " ");
+            return format!("Changed {pretty}");
+        }
+        match reason {
+            "ui:apply" => "Applied configuration",
+            "ui:enable" => "Enabled",
+            "ui:disable" => "Disabled",
+            "ui:adopt" => "Adopted existing install",
+            "ui:reset" => "Reset config",
+            "ui:update" => "Updated release selection",
+            "ui:deactivate" => "Deactivated",
+            r if r.starts_with("restore:") => "Restored previous version",
+            other => other,
+        }
+        .to_string()
     }
 
     fn with_short_id(mut self, short_id: String) -> Self {

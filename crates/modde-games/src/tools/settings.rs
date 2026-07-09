@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 /// Declarative field type for rendering per-tool settings in the UI.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ToolSettingKind {
@@ -45,9 +47,9 @@ impl std::fmt::Display for ToolSelectOption {
 /// One user-facing setting exposed by a [`super::GameTool`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToolSettingSpec {
-    pub key: &'static str,
-    pub label: &'static str,
-    pub description: &'static str,
+    pub key: Cow<'static, str>,
+    pub label: Cow<'static, str>,
+    pub description: Cow<'static, str>,
     pub section: &'static str,
     pub advanced: bool,
     pub kind: ToolSettingKind,
@@ -57,11 +59,15 @@ impl ToolSettingSpec {
     const DEFAULT_SECTION: &'static str = "General";
 
     #[must_use]
-    pub fn bool(key: &'static str, label: &'static str, description: &'static str) -> Self {
+    pub fn bool(
+        key: impl Into<Cow<'static, str>>,
+        label: impl Into<Cow<'static, str>>,
+        description: impl Into<Cow<'static, str>>,
+    ) -> Self {
         Self {
-            key,
-            label,
-            description,
+            key: key.into(),
+            label: label.into(),
+            description: description.into(),
             section: Self::DEFAULT_SECTION,
             advanced: false,
             kind: ToolSettingKind::Bool,
@@ -70,14 +76,14 @@ impl ToolSettingSpec {
 
     #[must_use]
     pub fn tri_state_bool(
-        key: &'static str,
-        label: &'static str,
-        description: &'static str,
+        key: impl Into<Cow<'static, str>>,
+        label: impl Into<Cow<'static, str>>,
+        description: impl Into<Cow<'static, str>>,
     ) -> Self {
         Self {
-            key,
-            label,
-            description,
+            key: key.into(),
+            label: label.into(),
+            description: description.into(),
             section: Self::DEFAULT_SECTION,
             advanced: false,
             kind: ToolSettingKind::TriStateBool,
@@ -85,11 +91,15 @@ impl ToolSettingSpec {
     }
 
     #[must_use]
-    pub fn text(key: &'static str, label: &'static str, description: &'static str) -> Self {
+    pub fn text(
+        key: impl Into<Cow<'static, str>>,
+        label: impl Into<Cow<'static, str>>,
+        description: impl Into<Cow<'static, str>>,
+    ) -> Self {
         Self {
-            key,
-            label,
-            description,
+            key: key.into(),
+            label: label.into(),
+            description: description.into(),
             section: Self::DEFAULT_SECTION,
             advanced: false,
             kind: ToolSettingKind::Text,
@@ -97,11 +107,15 @@ impl ToolSettingSpec {
     }
 
     #[must_use]
-    pub fn path(key: &'static str, label: &'static str, description: &'static str) -> Self {
+    pub fn path(
+        key: impl Into<Cow<'static, str>>,
+        label: impl Into<Cow<'static, str>>,
+        description: impl Into<Cow<'static, str>>,
+    ) -> Self {
         Self {
-            key,
-            label,
-            description,
+            key: key.into(),
+            label: label.into(),
+            description: description.into(),
             section: Self::DEFAULT_SECTION,
             advanced: false,
             kind: ToolSettingKind::Path,
@@ -110,15 +124,15 @@ impl ToolSettingSpec {
 
     #[must_use]
     pub fn select(
-        key: &'static str,
-        label: &'static str,
-        description: &'static str,
+        key: impl Into<Cow<'static, str>>,
+        label: impl Into<Cow<'static, str>>,
+        description: impl Into<Cow<'static, str>>,
         options: &[&str],
     ) -> Self {
         Self {
-            key,
-            label,
-            description,
+            key: key.into(),
+            label: label.into(),
+            description: description.into(),
             section: Self::DEFAULT_SECTION,
             advanced: false,
             kind: ToolSettingKind::Select {
@@ -132,15 +146,15 @@ impl ToolSettingSpec {
 
     #[must_use]
     pub fn labeled_select(
-        key: &'static str,
-        label: &'static str,
-        description: &'static str,
+        key: impl Into<Cow<'static, str>>,
+        label: impl Into<Cow<'static, str>>,
+        description: impl Into<Cow<'static, str>>,
         options: &[(&str, &str)],
     ) -> Self {
         Self {
-            key,
-            label,
-            description,
+            key: key.into(),
+            label: label.into(),
+            description: description.into(),
             section: Self::DEFAULT_SECTION,
             advanced: false,
             kind: ToolSettingKind::Select {
@@ -154,17 +168,17 @@ impl ToolSettingSpec {
 
     #[must_use]
     pub fn number(
-        key: &'static str,
-        label: &'static str,
-        description: &'static str,
+        key: impl Into<Cow<'static, str>>,
+        label: impl Into<Cow<'static, str>>,
+        description: impl Into<Cow<'static, str>>,
         min: f64,
         max: f64,
         step: f64,
     ) -> Self {
         Self {
-            key,
-            label,
-            description,
+            key: key.into(),
+            label: label.into(),
+            description: description.into(),
             section: Self::DEFAULT_SECTION,
             advanced: false,
             kind: ToolSettingKind::Number { min, max, step },
@@ -172,11 +186,15 @@ impl ToolSettingSpec {
     }
 
     #[must_use]
-    pub fn read_only(key: &'static str, label: &'static str, description: &'static str) -> Self {
+    pub fn read_only(
+        key: impl Into<Cow<'static, str>>,
+        label: impl Into<Cow<'static, str>>,
+        description: impl Into<Cow<'static, str>>,
+    ) -> Self {
         Self {
-            key,
-            label,
-            description,
+            key: key.into(),
+            label: label.into(),
+            description: description.into(),
             section: Self::DEFAULT_SECTION,
             advanced: false,
             kind: ToolSettingKind::ReadOnly,

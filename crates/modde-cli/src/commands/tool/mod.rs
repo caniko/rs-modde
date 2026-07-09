@@ -382,6 +382,99 @@ pub async fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Preview tool patches without writing to the game directory.
+pub async fn handle_preview(tool_id: &str, game_id: &str) -> Result<()> {
+    let tool = modde_games::tools::resolve_tool(tool_id)
+        .ok_or_else(|| anyhow::anyhow!("unknown tool: '{tool_id}'"))?;
+
+    let game_plugin = modde_games::resolve_game_plugin(game_id)
+        .ok_or_else(|| anyhow::anyhow!("unsupported game: '{game_id}'"))?;
+
+    let install_dir = game_plugin.detect_install().ok_or_else(|| {
+        anyhow::anyhow!(
+            "could not detect install dir for {}",
+            game_plugin.display_name()
+        )
+    })?;
+
+    let db = ModdeDb::open().await.context("failed to open database")?;
+    let context = modde_games::tools::ToolGameContext::from_parts(
+        game_id,
+        game_plugin.display_name(),
+        Some(install_dir.clone()),
+        None,
+    );
+    let mut config = match db.load_tool_config(&GameId::from(game_id), tool_id).await? {
+        Some(row) => modde_games::tools::ToolConfig {
+            tool_id: row.tool_id,
+            enabled: row.enabled,
+            settings: serde_json::from_str(&row.settings_json).unwrap_or_default(),
+        },
+        None => tool.default_config_for(Some(&context)),
+    };
+
+    if tool_id == "optiscaler" {
+        modde_games::tools::optiscaler::apply_game_defaults(&mut config, Some(&context));
+    }
+
+    let preview = tool.preview_apply_for(&install_dir, Some(&context), &config)?;
+
+    println!(
+        "Preview {} for {} at {}",
+        tool.display_name(),
+        game_id,
+        install_dir.display()
+    );
+    println!("  Planned files: {}", preview.planned_files.len());
+    println!("  Changed files: {}", preview.changed_files.len());
+    println!("  Unchanged files: {}", preview.unchanged_files.len());
+
+    if !preview.missing_inputs.is_empty() {
+        println!("\nMissing inputs:");
+        for input in &preview.missing_inputs {
+            println!("  {input}");
+        }
+    }
+    if !preview.changed_files.is_empty() {
+        println!("\nWould write/update:");
+        for path in &preview.changed_files {
+            println!("  {}", path.display());
+        }
+    }
+    if !preview.unchanged_files.is_empty() {
+        println!("\nAlready current:");
+        for path in &preview.unchanged_files {
+            println!("  {}", path.display());
+        }
+    }
+
+    if tool_id == "optiscaler" {
+        let mut effective_config = config.clone();
+        modde_games::tools::optiscaler::apply_hardware_defaults(&mut effective_config);
+        println!("\nEffective OptiScaler settings:");
+        for key in [
+            "optiscaler_profile",
+            "hardware_tuning",
+            "fsr4_variant",
+            "emulate_fp8",
+        ] {
+            if let Some(value) = effective_config.settings.get(key) {
+                println!("  {key} = {value}");
+            }
+        }
+    }
+
+    let env = tool.env_vars(&config);
+    if !env.is_empty() {
+        println!("\nEnvironment preview:");
+        for (key, value) in env {
+            println!("  {key}={value}");
+        }
+    }
+
+    Ok(())
+}
+
 /// Revert tool patches from the game directory.
 pub async fn handle_revert(tool_id: &str, game_id: &str) -> Result<()> {
     let tool = modde_games::tools::resolve_tool(tool_id)

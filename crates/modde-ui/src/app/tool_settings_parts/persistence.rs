@@ -59,41 +59,14 @@ fn save_tool_setting_for_game_blocking(
         normalize_tool_setting_value(&config.settings, &key, value)
     };
     set_nested_tool_setting(&mut config.settings, &key, normalized);
-    if tool_id == "optiscaler"
-        && key == "optiscaler_profile"
-        && let Some(profile_id) = config.get_str("optiscaler_profile").map(str::to_string)
-    {
-        modde_games::tools::optiscaler::apply_profile_by_id(&mut config, &game_id, &profile_id);
-    }
-    if tool_id == "optiscaler"
-        && key == "release_tag"
-        && let Some(tag) = config.get_str("release_tag").map(str::to_string)
-    {
-        if let Some(channel) =
-            modde_games::tools::optiscaler::optiscaler_goverlay_channel_for_tag(&tag)
-        {
-            config.set("source_mode", serde_json::json!("goverlay_builds"));
-            config.set("goverlay_channel", serde_json::json!(channel));
-        } else {
-            config.set("source_mode", serde_json::json!("github_release"));
-        }
-    }
-    if tool_id == "optiscaler"
-        && matches!(
-            key.as_str(),
-            "source_mode" | "goverlay_channel" | "release_tag"
-        )
-    {
-        if key == "source_mode" || key == "goverlay_channel" {
-            if config.get_str("source_mode") == Some("goverlay_builds")
-                && config.get_str("goverlay_channel").is_none()
-            {
-                config.set("goverlay_channel", serde_json::json!("edge"));
-            }
-            config.set("release_tag", serde_json::json!(""));
-            config.set("release_asset", serde_json::json!(""));
-        }
-        sync_optiscaler_release_options(&mut option_catalog, &optiscaler_releases, &mut config);
+    if tool_id == "optiscaler" {
+        apply_optiscaler_setting_side_effects(
+            &mut config,
+            &game_id,
+            &key,
+            &mut option_catalog,
+            &optiscaler_releases,
+        );
     }
     save_tool_config_with_reason_blocking(
         &db,
@@ -109,6 +82,44 @@ fn save_tool_setting_for_game_blocking(
         status_message: format!("Updated {} setting", tool.display_name()),
         tool_option_catalog: Some(option_catalog),
     })
+}
+
+fn apply_optiscaler_setting_side_effects(
+    config: &mut modde_games::tools::ToolConfig,
+    game_id: &str,
+    key: &str,
+    option_catalog: &mut ToolOptionCatalog,
+    optiscaler_releases: &[modde_games::tools::ToolReleaseSummary],
+) {
+    if key == "optiscaler_profile"
+        && let Some(profile_id) = config.get_str("optiscaler_profile").map(str::to_string)
+    {
+        modde_games::tools::optiscaler::apply_profile_by_id(config, game_id, &profile_id);
+    }
+    if key == "release_tag"
+        && let Some(tag) = config.get_str("release_tag").map(str::to_string)
+    {
+        if let Some(channel) =
+            modde_games::tools::optiscaler::optiscaler_goverlay_channel_for_tag(&tag)
+        {
+            config.set("source_mode", serde_json::json!("goverlay_builds"));
+            config.set("goverlay_channel", serde_json::json!(channel));
+        } else {
+            config.set("source_mode", serde_json::json!("github_release"));
+        }
+    }
+    if matches!(key, "source_mode" | "goverlay_channel" | "release_tag") {
+        if key == "source_mode" || key == "goverlay_channel" {
+            if config.get_str("source_mode") == Some("goverlay_builds")
+                && config.get_str("goverlay_channel").is_none()
+            {
+                config.set("goverlay_channel", serde_json::json!("edge"));
+            }
+            config.set("release_tag", serde_json::json!(""));
+            config.set("release_asset", serde_json::json!(""));
+        }
+        sync_optiscaler_release_options(option_catalog, optiscaler_releases, config);
+    }
 }
 
 pub(crate) async fn toggle_tool_for_game(

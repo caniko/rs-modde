@@ -32,49 +32,18 @@ pub fn managed_paths_from_config(config: &ToolConfig) -> BTreeSet<String> {
 
 /// Apply game-specific `OptiScaler` defaults from community compatibility data.
 ///
-/// When no profile is explicitly selected, this auto-selects the best profile
-/// for the detected GPU architecture (RDNA3 → `*-rdna3`, others → default).
+/// When no profile is explicitly selected, this applies the game's default
+/// community profile. GPU-sensitive FSR4 settings are handled by the hardware
+/// tuning layer after profile defaults have been applied.
 pub fn apply_game_defaults(config: &mut ToolConfig, context: Option<&ToolGameContext>) {
     let Some(context) = context else {
         return;
     };
 
-    // Auto-select GPU-appropriate profile when user hasn't explicitly chosen one
-    if config.get_str("optiscaler_profile").is_none() {
-        if let Some(best) = select_best_profile_for_gpu(&context.game_id) {
-            apply_optiscaler_profile_metadata(config, best);
-            return;
-        }
-    }
-
     let Some(profile) = selected_or_default_profile(&context.game_id, config) else {
         return;
     };
     apply_optiscaler_profile_metadata(config, profile);
-}
-
-/// Select the best profile for the detected GPU architecture.
-///
-/// - RDNA3 → picks the `*-rdna3` variant if available, otherwise the default.
-/// - Non-AMD / unknown → picks the default (first) profile.
-fn select_best_profile_for_gpu(game_id: &str) -> Option<&'static OptiScalerProfile> {
-    let arch = crate::gpu::detect_gpu_arch();
-    let profiles = resolve_optiscaler_profiles(game_id);
-
-    if profiles.is_empty() {
-        return None;
-    }
-
-    match arch {
-        crate::gpu::GpuArch::RDNA3 => {
-            // Look for an RDNA3-specific profile (id ending in "-rdna3")
-            profiles.iter().find(|p| p.id.ends_with("-rdna3"))
-        }
-        _ => {
-            // For non-RDNA3 GPUs, pick the default (first) profile
-            Some(&profiles[0])
-        }
-    }
 }
 
 /// Apply a community-tested `OptiScaler` profile to a config.

@@ -123,16 +123,15 @@ mod tests {
         let _ = shared_data_dir();
         let profiles = resolve_optiscaler_profiles("stellar-blade");
 
-        assert_eq!(profiles.len(), 2);
+        assert_eq!(profiles.len(), 1);
         assert_eq!(profiles[0].id, "community-dxgi");
-        assert_eq!(profiles[1].id, "community-dxgi-rdna3");
         assert_eq!(profiles[0].proxy_dll, "dxgi.dll");
         assert_eq!(profiles[0].tested_optiscaler_version, "0.9");
         assert_eq!(profiles[0].source_mode, Some("github_release"));
         assert_eq!(profiles[0].goverlay_channel, None);
         assert!(profiles[0].enable_optipatcher);
         assert_eq!(profiles[0].fsr4_variant, Some("latest_fp8"));
-        assert!(profiles[0].emulate_fp8);
+        assert!(!profiles[0].emulate_fp8);
         assert!(!profiles[0].spoof_dlss);
         assert_eq!(
             default_optiscaler_profile("stellar-blade").map(|profile| profile.id),
@@ -153,7 +152,7 @@ mod tests {
         let first = resolve_optiscaler_profiles("stellar-blade");
         let second = resolve_optiscaler_profiles("stellar-blade");
 
-        assert_eq!(first.len(), 2);
+        assert_eq!(first.len(), 1);
         assert!(std::ptr::eq(first, second));
     }
 }

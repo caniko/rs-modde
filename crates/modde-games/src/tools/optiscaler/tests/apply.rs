@@ -68,6 +68,56 @@ fn optiscaler_int8_variant_copies_int8_and_ignores_fp8_env() {
 }
 
 #[test]
+fn optiscaler_apply_removes_stale_alternate_proxy_dlls() {
+    let source = tempfile::tempdir().expect("source");
+    let game = tempfile::tempdir().expect("game");
+    std::fs::write(source.path().join("OptiScaler.dll"), b"new dll").expect("source dll");
+    std::fs::write(source.path().join("OptiScaler.ini"), "[FSR]\n").expect("source ini");
+    std::fs::write(game.path().join("d3d12.dll"), b"old proxy").expect("stale proxy");
+
+    let mut config = OptiScaler.default_config();
+    config.set("source_mode", serde_json::json!("local_dir"));
+    config.set(
+        "local_source_dir",
+        serde_json::json!(source.path().display().to_string()),
+    );
+    config.set("proxy_dll", serde_json::json!("dxgi.dll"));
+
+    OptiScaler.apply(game.path(), &config).expect("apply");
+
+    assert!(game.path().join("dxgi.dll").is_file());
+    assert!(!game.path().join("d3d12.dll").exists());
+}
+
+#[test]
+fn optiscaler_preview_reports_missing_selected_fsr4_variant_for_root_only_payload() {
+    let source = tempfile::tempdir().expect("source");
+    let game = tempfile::tempdir().expect("game");
+    std::fs::write(source.path().join("OptiScaler.dll"), b"dll").expect("source dll");
+    std::fs::write(source.path().join("OptiScaler.ini"), "[FSR]\n").expect("source ini");
+    std::fs::write(source.path().join(FSR4_DLL_NAME), b"ambiguous").expect("root fsr4 dll");
+
+    let mut config = OptiScaler.default_config();
+    config.set("source_mode", serde_json::json!("local_dir"));
+    config.set(
+        "local_source_dir",
+        serde_json::json!(source.path().display().to_string()),
+    );
+    config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_INT8_402));
+
+    let preview = OptiScaler
+        .preview_apply_for(game.path(), None, &config)
+        .expect("preview");
+
+    assert!(
+        preview
+            .missing_inputs
+            .iter()
+            .any(|input| input.contains(FSR4_INT8_DIR) && input.contains(FSR4_DLL_NAME))
+    );
+}
+
+#[test]
 fn optiscaler_missing_optipatcher_is_reported_in_preview() {
     let source = tempfile::tempdir().expect("source");
     let game = tempfile::tempdir().expect("game");

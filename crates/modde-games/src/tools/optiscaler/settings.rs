@@ -1,6 +1,7 @@
 #![allow(clippy::wildcard_imports)]
 use super::*;
 use crate::tools::{ToolSelectOption, ToolSettingKind, ToolSettingSpec};
+use std::borrow::Cow;
 
 pub(super) fn settings_schema_for(
     context: Option<&ToolGameContext>,
@@ -146,16 +147,19 @@ pub(super) fn settings_schema_for(
             )
             .collect();
             specs.insert(
-            0,
-            ToolSettingSpec {
-                key: "optiscaler_profile",
-                label: "Profile",
-                description: "Community-tested OptiScaler profile to apply, or custom settings.",
-                section: "Profile",
-                advanced: false,
-                kind: ToolSettingKind::Select { options: profile_options },
-            },
-        );
+                0,
+                ToolSettingSpec {
+                    key: "optiscaler_profile".into(),
+                    label: "Profile".into(),
+                    description:
+                        "Community-tested OptiScaler profile to apply, or custom settings.".into(),
+                    section: "Profile",
+                    advanced: false,
+                    kind: ToolSettingKind::Select {
+                        options: profile_options,
+                    },
+                },
+            );
             specs.push(
                 ToolSettingSpec::read_only(
                     "optiscaler_profile_source_url",
@@ -216,7 +220,7 @@ pub(super) fn settings_schema_for(
             ToolSettingSpec::bool(
                 "emulate_fp8",
                 "Emulate FP8",
-                "Set DXIL_SPIRV_CONFIG=wmma_rdna3_workaround for the Latest (FP8) FSR4 variant.",
+                "Manual/testing escape hatch for the Latest (FP8) FSR4 variant.",
             )
             .section("Basic"),
         );
@@ -348,17 +352,20 @@ pub(super) fn optiscaler_ini_specs(config: &ToolConfig) -> Vec<ToolSettingSpec> 
         })
         .take(24)
         .map(|key| {
-            let leaked: &'static str = Box::leak(format!("ini_overrides.{key}").into_boxed_str());
-            let label: &'static str = Box::leak(key.into_boxed_str());
-            infer_optiscaler_ini_spec(leaked, label)
+            let full_key = format!("ini_overrides.{key}");
+            infer_optiscaler_ini_spec(full_key, key)
                 .section("Advanced")
                 .advanced()
         })
         .collect()
 }
 
-pub(super) fn infer_optiscaler_ini_spec(key: &'static str, label: &'static str) -> ToolSettingSpec {
-    let lower = label.to_ascii_lowercase();
+pub(super) fn infer_optiscaler_ini_spec(
+    key: impl Into<Cow<'static, str>>,
+    label: impl Into<Cow<'static, str>>,
+) -> ToolSettingSpec {
+    let label_cow = label.into();
+    let lower = label_cow.to_ascii_lowercase();
     if matches!(
         lower.as_str(),
         "fsr4update"
@@ -368,14 +375,21 @@ pub(super) fn infer_optiscaler_ini_spec(key: &'static str, label: &'static str) 
             | "force_latencyflex"
             | "enable_trace_logs"
     ) {
-        return ToolSettingSpec::tri_state_bool(key, label, "OptiScaler.ini override.");
+        return ToolSettingSpec::tri_state_bool(key, label_cow, "OptiScaler.ini override.");
     }
     if lower.ends_with("scale")
         || lower.ends_with("alpha")
         || lower.contains("sharpness")
         || lower.contains("bias")
     {
-        return ToolSettingSpec::number(key, label, "OptiScaler.ini override.", 0.0, 10.0, 0.05);
+        return ToolSettingSpec::number(
+            key,
+            label_cow,
+            "OptiScaler.ini override.",
+            0.0,
+            10.0,
+            0.05,
+        );
     }
-    ToolSettingSpec::text(key, label, "OptiScaler.ini override.")
+    ToolSettingSpec::text(key, label_cow, "OptiScaler.ini override.")
 }

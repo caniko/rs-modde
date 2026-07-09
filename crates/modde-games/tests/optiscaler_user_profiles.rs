@@ -79,16 +79,11 @@ fn optiscaler_user_profile_appears_for_built_in_game() {
     let _ = shared_data_dir();
 
     let profiles = resolve_optiscaler_profiles("stellar-blade");
-    assert_eq!(profiles.len(), 3);
+    assert_eq!(profiles.len(), 2);
     assert!(
         profiles
             .iter()
             .any(|profile| profile.id == "community-dxgi")
-    );
-    assert!(
-        profiles
-            .iter()
-            .any(|profile| profile.id == "community-dxgi-rdna3")
     );
     assert!(
         profiles

@@ -63,6 +63,9 @@ fn apply_tool_for_game_blocking(
             "managed_manifest",
             modde_games::tools::optiscaler::managed_manifest_json(&game_dir, &applied),
         );
+        if let serde_json::Value::Object(map) = &mut config.settings {
+            map.remove("force_config_reset");
+        }
     }
     let apply_signature = tool_apply_signature(&config.settings);
     config.set("_last_applied_settings", apply_signature);

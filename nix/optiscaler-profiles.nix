@@ -2,6 +2,5 @@
 {
   "stellar-blade" = [
     "community-dxgi"
-    "community-dxgi-rdna3"
   ];
 }

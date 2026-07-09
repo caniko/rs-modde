@@ -71,7 +71,7 @@ fn history_row<'a>(entry: &'a ToolUiEntry, node: &'a ToolHistoryUiEntry) -> Elem
     row![
         column![
             text(format!("{marker}: {}", node.label)).size(12),
-            text(format!("{} - {state}", node.reason))
+            text(format!("{} - {state}", node.human_reason))
                 .size(11)
                 .color(color!(0x888888)),
         ]
@@ -184,8 +184,7 @@ fn activation_readiness(
     let (can_apply, apply_disabled_reason) =
         apply_readiness(entry, game_dir_configured, tool_busy, tools_loading);
     if can_apply
-        || !entry.enabled
-            && apply_disabled_reason == "This tool is already applied for the current settings."
+        || !entry.enabled && apply_disabled_reason == "All settings are applied. Nothing to deploy."
     {
         return (true, "");
     }
@@ -269,20 +268,22 @@ fn apply_readiness(
         }
     }
     if !entry.apply_pending {
-        return (
-            false,
-            "This tool is already applied for the current settings.",
-        );
+        return (false, "All settings are applied. Nothing to deploy.");
     }
     (true, "")
 }
 
-fn apply_button_label(entry: &ToolUiEntry, tool_busy: bool) -> &'static str {
+fn apply_button_label(entry: &ToolUiEntry, tool_busy: bool) -> String {
     if tool_busy {
-        "Applying"
+        "Applying".to_string()
     } else if !entry.apply_pending && entry.apply_missing_inputs.is_empty() {
-        "No changes"
+        "Up to date".to_string()
     } else {
-        "Apply"
+        let dirty_count = entry.dirty_keys.len();
+        if dirty_count > 0 {
+            format!("Apply ({dirty_count})")
+        } else {
+            "Apply".to_string()
+        }
     }
 }

@@ -43,11 +43,10 @@ fn optiscaler_user_profile_override_emits_warning() {
     let _ = shared_data_dir();
 
     let profiles = resolve_optiscaler_profiles("stellar-blade");
-    assert_eq!(profiles.len(), 2);
+    assert_eq!(profiles.len(), 1);
     assert_eq!(
         profiles[0].name,
         "Community tested dxgi.dll (local override)"
     );
-    assert_eq!(profiles[1].id, "community-dxgi-rdna3");
     assert!(logs_contain("overrides built-in profile"));
 }

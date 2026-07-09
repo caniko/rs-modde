@@ -1,11 +1,9 @@
 use super::*;
 
-/// Verifies that `default_config_for` picks the best profile for the detected GPU.
-///
-/// On RDNA3 machines this will be `community-dxgi-rdna3`; on other GPUs it will
-/// be `community-dxgi`. This test checks fields that are common to both profiles.
+/// Verifies that `default_config_for` applies the default community profile and
+/// leaves GPU-specific FSR4 selection to the hardware tuning layer.
 #[test]
-fn stellar_blade_default_config_adds_best_profile_for_gpu() {
+fn stellar_blade_default_config_adds_default_profile_and_hardware_tuning() {
     let context = ToolGameContext::from_parts(
         "stellar-blade",
         "Stellar Blade",
@@ -14,11 +12,7 @@ fn stellar_blade_default_config_adds_best_profile_for_gpu() {
     );
     let config = OptiScaler.default_config_for(Some(&context));
 
-    let profile_id = config.get_str("optiscaler_profile").unwrap_or("");
-    assert!(
-        profile_id == "community-dxgi" || profile_id == "community-dxgi-rdna3",
-        "expected community-dxgi or community-dxgi-rdna3, got {profile_id:?}"
-    );
+    assert_eq!(config.get_str("optiscaler_profile"), Some("community-dxgi"));
 
     // Common profile fields
     assert_eq!(config.get_str("tested_optiscaler_version"), Some("0.9"));
@@ -34,17 +28,11 @@ fn stellar_blade_default_config_adds_best_profile_for_gpu() {
     assert!(config.get_bool("enable_optipatcher"));
     assert!(!config.get_bool("spoof_dlss"));
 
-    // FSR4 variant differs by profile
-    if profile_id == "community-dxgi" {
-        assert_eq!(
-            config.get_str("fsr4_variant"),
-            Some(FSR4_VARIANT_LATEST_FP8)
-        );
-        assert!(config.get_bool("emulate_fp8"));
-    } else {
-        assert_eq!(config.get_str("fsr4_variant"), Some(FSR4_VARIANT_INT8_402));
-        assert!(!config.get_bool("emulate_fp8"));
-    }
+    // Hardware tuning is applied after profile defaults; on this RDNA3 machine
+    // the effective default is the INT8 FSR4 payload with FP8 emulation disabled.
+    assert_eq!(config.get_str("hardware_tuning"), Some("auto"));
+    assert_eq!(config.get_str("fsr4_variant"), Some(FSR4_VARIANT_INT8_402));
+    assert!(!config.get_bool("emulate_fp8"));
 
     // Release tag and ini overrides
     assert_eq!(config.get_str("release_tag"), Some("official:v0.9.1"));
@@ -87,6 +75,27 @@ fn custom_profile_opt_out_prevents_community_defaults() {
     assert_eq!(config.get_str("release_tag"), Some("latest"));
     assert_eq!(config.get_str("proxy_dll"), Some("winmm.dll"));
     assert_eq!(config.get_str("tested_optiscaler_version"), None);
+}
+
+#[test]
+fn stale_stellar_blade_rdna3_profile_marker_falls_back_to_default_profile() {
+    let context = ToolGameContext::from_parts(
+        "stellar-blade",
+        "Stellar Blade",
+        Some(PathBuf::from("/fake/StellarBlade")),
+        None,
+    );
+    let mut config = OptiScaler.default_config();
+    config.set(
+        "optiscaler_profile",
+        serde_json::json!("community-dxgi-rdna3"),
+    );
+
+    apply_game_defaults(&mut config, Some(&context));
+
+    assert_eq!(config.get_str("optiscaler_profile"), Some("community-dxgi"));
+    assert_eq!(config.get_str("proxy_dll"), Some("dxgi.dll"));
+    assert_eq!(config.get_str("tested_optiscaler_version"), Some("0.9"));
 }
 
 #[test]
@@ -169,7 +178,7 @@ fn stellar_blade_with_explicit_profile_marker_can_preserve_custom_release() {
     );
     let mut config = OptiScaler.default_config();
 
-    // First call applies the best profile (community-dxgi or community-dxgi-rdna3)
+    // First call applies the default community profile.
     apply_game_defaults(&mut config, Some(&context));
     let profile_id = config
         .get_str("optiscaler_profile")
@@ -221,7 +230,7 @@ fn selecting_community_profile_applies_all_community_settings() {
         config.get_str("fsr4_variant"),
         Some(FSR4_VARIANT_LATEST_FP8)
     );
-    assert!(config.get_bool("emulate_fp8"));
+    assert!(!config.get_bool("emulate_fp8"));
     assert!(!config.get_bool("spoof_dlss"));
     assert_eq!(config.get_str("tested_optiscaler_version"), Some("0.9"));
     assert_eq!(
@@ -264,7 +273,7 @@ fn custom_profile_then_community_profile_overwrites_most_settings() {
         config.get_str("fsr4_variant"),
         Some(FSR4_VARIANT_LATEST_FP8)
     );
-    assert!(config.get_bool("emulate_fp8"));
+    assert!(!config.get_bool("emulate_fp8"));
     assert!(!config.get_bool("spoof_dlss"));
     assert_eq!(config.get_str("tested_optiscaler_version"), Some("0.9"));
     assert_eq!(

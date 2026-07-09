@@ -67,11 +67,12 @@ where
 pub use self::fomod_wizard_state::FOMODWizardState;
 pub(crate) use self::state::format_lock_reason;
 pub use self::state::{
-    AddCustomGameDraft, AddCustomGameDraftField, AddCustomGameState, DataTabConflicts,
-    DiagnosticsComputed, ExecutableDraft, ExecutableDraftField, ExecutableUiEntry,
-    ProfileContextSnapshot, ProfileLoadOutcome, ReorderDirection, SidebarGroup, ToolApplyResult,
-    ToolHistoryUiEntry, ToolLoadSnapshot, ToolReleaseSupport, ToolRevertResult,
-    ToolSettingWriteResult, ToolState, ToolUiEntry, View, WabbajackInstallerState, WabbajackTab,
+    AddCustomGameDraft, AddCustomGameDraftField, AddCustomGameState, ChecklistStatus,
+    ConfigChecklistItem, DataTabConflicts, DiagnosticsComputed, ExecutableDraft,
+    ExecutableDraftField, ExecutableUiEntry, ProfileContextSnapshot, ProfileLoadOutcome,
+    ReorderDirection, SidebarGroup, ToolApplyResult, ToolHistoryUiEntry, ToolLoadSnapshot,
+    ToolReleaseSupport, ToolRevertResult, ToolSettingWriteResult, ToolState, ToolUiEntry, View,
+    WabbajackInstallerState, WabbajackTab,
 };
 pub use self::tool_ops::parse_executable_environment;
 #[cfg(test)]

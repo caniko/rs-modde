@@ -35,7 +35,7 @@ pub(super) fn settings_panel(entry: &ToolUiEntry, show_advanced: bool) -> Elemen
     let advanced_count = entry
         .setting_specs
         .iter()
-        .filter(|spec| !is_extracted_optiscaler_release_setting(entry, spec.key))
+        .filter(|spec| !is_extracted_optiscaler_release_setting(entry, &spec.key))
         .filter(|spec| spec.advanced)
         .count();
     let header = row![
@@ -66,7 +66,7 @@ pub(super) fn settings_panel(entry: &ToolUiEntry, show_advanced: bool) -> Elemen
     let mut rows = column![header].spacing(10);
     let mut sections: Vec<(&str, Vec<&modde_games::tools::ToolSettingSpec>)> = Vec::new();
     for spec in &entry.setting_specs {
-        if is_extracted_optiscaler_release_setting(entry, spec.key) {
+        if is_extracted_optiscaler_release_setting(entry, &spec.key) {
             continue;
         }
         if spec.advanced && !show_advanced {
@@ -107,11 +107,23 @@ pub(super) fn setting_row<'a>(
     spec: &'a modde_games::tools::ToolSettingSpec,
 ) -> Element<'a, Message> {
     let control = setting_control(entry, spec);
+    let is_dirty = entry.dirty_keys.contains(&*spec.key);
+
+    let label_row = if is_dirty {
+        row![
+            text("●").size(13).color(color!(0xCCAA44)),
+            text(&*spec.label).size(13),
+        ]
+        .spacing(4)
+        .align_y(Alignment::Center)
+    } else {
+        row![text(&*spec.label).size(13)].align_y(Alignment::Center)
+    };
 
     row![
         column![
-            text(spec.label).size(13),
-            text(spec.description).size(11).color(color!(0x888888)),
+            label_row,
+            text(&*spec.description).size(11).color(color!(0x888888)),
         ]
         .spacing(2)
         .width(Length::FillPortion(1)),
@@ -126,8 +138,8 @@ pub(super) fn setting_control<'a>(
     entry: &'a ToolUiEntry,
     spec: &'a modde_games::tools::ToolSettingSpec,
 ) -> Element<'a, Message> {
-    let value = setting_value(&entry.settings, spec.key);
-    let setting_test_id = tool_setting_test_id(&entry.tool_id, spec.key);
+    let value = setting_value(&entry.settings, &spec.key);
+    let setting_test_id = tool_setting_test_id(&entry.tool_id, &spec.key);
     match &spec.kind {
         ToolSettingKind::Bool => {
             let current = setting_value_as_bool(value).unwrap_or(false);
@@ -149,15 +161,15 @@ pub(super) fn setting_control<'a>(
         ToolSettingKind::TriStateBool => {
             let selected = tri_state_label(value);
             row![
-                tri_state_button(entry, spec.key, "Auto", &selected),
-                tri_state_button(entry, spec.key, "On", &selected),
-                tri_state_button(entry, spec.key, "Off", &selected),
+                tri_state_button(entry, &spec.key, "Auto", &selected),
+                tri_state_button(entry, &spec.key, "On", &selected),
+                tri_state_button(entry, &spec.key, "Off", &selected),
             ]
             .spacing(6)
             .into()
         }
         ToolSettingKind::Text | ToolSettingKind::Path => {
-            text_input(spec.label, &setting_value_as_string(value))
+            text_input(&spec.label, &setting_value_as_string(value))
                 .id(semantics::widget_id(setting_test_id))
                 .on_input({
                     let tool_id = entry.tool_id.clone();
@@ -217,7 +229,7 @@ pub(super) fn setting_control<'a>(
             )
         }
         ToolSettingKind::ReadOnly => {
-            text(setting_value_as_string(value).if_empty(spec.description))
+            text(setting_value_as_string(value).if_empty(&spec.description))
                 .size(12)
                 .color(color!(0xAAAAAA))
                 .into()

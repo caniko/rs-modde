@@ -290,6 +290,7 @@ pub(super) fn dispatch_async(cli: Cli) -> Result<()> {
                 | ToolAction::Disable { .. }
                 | ToolAction::Configure { .. }
                 | ToolAction::Apply { .. }
+                | ToolAction::Preview { .. }
                 | ToolAction::Revert { .. } => {
                     unreachable!(
                         "these ToolAction variants are dispatched in the pre-tokio sync block"

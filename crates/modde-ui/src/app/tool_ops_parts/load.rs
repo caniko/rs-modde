@@ -246,14 +246,7 @@ pub(crate) fn build_tool_ui_entry_blocking(
     let normalized_settings = normalize_tool_settings_for_specs(&config.settings, &setting_specs);
     if release_config_normalized || normalized_settings != config.settings {
         config.settings = normalized_settings;
-        if let Ok(settings_json) = serde_json::to_string(&config.settings) {
-            let _ = crate::app::block_on(db.save_tool_config(
-                &typed_game_id,
-                tool.tool_id(),
-                config.enabled,
-                &settings_json,
-            ));
-        }
+        persist_normalized_config(db, &typed_game_id, tool, &config);
         setting_specs = tool.settings_schema_for(context, &config);
     }
     config.set("_game_id", serde_json::json!(game_id));
@@ -353,8 +346,17 @@ pub(crate) fn build_tool_ui_entry_blocking(
         crate::app::block_on(db.list_tool_setting_history(&typed_game_id, tool.tool_id(), 8))
             .unwrap_or_default()
             .into_iter()
-            .map(ToolHistoryUiEntry::from_node)
+            .map(|node| ToolHistoryUiEntry::from_node(node, &setting_specs))
             .collect();
+
+    let dirty_keys = compute_dirty_keys(&config, &setting_specs);
+    let config_checklist = build_config_checklist(
+        tool,
+        &config,
+        &applied_files,
+        apply_pending,
+        &apply_missing_inputs,
+    );
 
     ToolUiEntry {
         tool_id: tool.tool_id().to_string(),
@@ -381,5 +383,191 @@ pub(crate) fn build_tool_ui_entry_blocking(
         apply_pending,
         apply_missing_inputs,
         setting_history,
+        config_checklist,
+        dirty_keys,
     }
+}
+
+const INTERNAL_SETTING_KEYS: &[&str] = &[
+    "_game_id",
+    "_last_applied_settings",
+    "managed_manifest",
+    "force_config_reset",
+    "derived_executable_dir",
+    "derived_launcher",
+    "derived_steam_app_id",
+];
+
+fn compute_dirty_keys(
+    config: &modde_games::tools::ToolConfig,
+    setting_specs: &[modde_games::tools::ToolSettingSpec],
+) -> HashSet<String> {
+    let Some(last_applied) = config.settings.get("_last_applied_settings") else {
+        return setting_specs
+            .iter()
+            .filter(|spec| !INTERNAL_SETTING_KEYS.contains(&&*spec.key))
+            .filter(|spec| get_tool_setting_value(&config.settings, &spec.key).is_some())
+            .map(|spec| spec.key.to_string())
+            .collect();
+    };
+    let mut dirty = HashSet::new();
+    for spec in setting_specs {
+        if INTERNAL_SETTING_KEYS.contains(&&*spec.key) {
+            continue;
+        }
+        let current = get_tool_setting_value(&config.settings, &spec.key);
+        let applied = get_tool_setting_value(last_applied, &spec.key);
+        if current != applied {
+            dirty.insert(spec.key.to_string());
+        }
+    }
+    dirty
+}
+
+fn build_config_checklist(
+    tool: &dyn modde_games::tools::GameTool,
+    config: &modde_games::tools::ToolConfig,
+    applied_files: &[String],
+    apply_pending: bool,
+    apply_missing_inputs: &[String],
+) -> Vec<ConfigChecklistItem> {
+    if tool.tool_id() == "optiscaler" {
+        return build_optiscaler_checklist(
+            config,
+            applied_files,
+            apply_pending,
+            apply_missing_inputs,
+        );
+    }
+    let has_file_patching = matches!(tool.tool_id(), "reshade" | "optiscaler");
+    let mut items = Vec::new();
+    items.push(ConfigChecklistItem {
+        label: "Tool available".to_string(),
+        status: ChecklistStatus::Done,
+        hint: None,
+    });
+    if has_file_patching {
+        items.push(ConfigChecklistItem {
+            label: "Applied to game".to_string(),
+            status: if !apply_pending && applied_files.is_empty() {
+                ChecklistStatus::Pending
+            } else if apply_pending {
+                ChecklistStatus::Pending
+            } else {
+                ChecklistStatus::Done
+            },
+            hint: if apply_pending {
+                Some("Click Apply to deploy files".to_string())
+            } else {
+                None
+            },
+        });
+    }
+    items
+}
+
+fn build_optiscaler_checklist(
+    config: &modde_games::tools::ToolConfig,
+    applied_files: &[String],
+    apply_pending: bool,
+    apply_missing_inputs: &[String],
+) -> Vec<ConfigChecklistItem> {
+    let mut items = Vec::new();
+
+    let source_mode = config.get_str("source_mode").unwrap_or("goverlay_fgmod");
+    let has_source = !source_mode.is_empty();
+    items.push(ConfigChecklistItem {
+        label: "Source selected".to_string(),
+        status: if has_source {
+            ChecklistStatus::Done
+        } else {
+            ChecklistStatus::Blocked
+        },
+        hint: if has_source {
+            None
+        } else {
+            Some("Select a source mode in the Release panel".to_string())
+        },
+    });
+
+    let release_tag = config.get_str("release_tag").unwrap_or("");
+    let release_asset = config.get_str("release_asset").unwrap_or("");
+    let local_dir = config.get_str("local_source_dir").unwrap_or("");
+    let has_release = match source_mode {
+        "github_release" | "goverlay_builds" => {
+            !release_tag.is_empty() && !release_asset.is_empty()
+        }
+        "local_dir" => !local_dir.is_empty(),
+        "goverlay_fgmod" => true,
+        _ => false,
+    };
+    items.push(ConfigChecklistItem {
+        label: "Release installed".to_string(),
+        status: if has_release {
+            ChecklistStatus::Done
+        } else if has_source {
+            ChecklistStatus::Pending
+        } else {
+            ChecklistStatus::Blocked
+        },
+        hint: if !has_release && has_source {
+            Some("Select and install a release".to_string())
+        } else {
+            None
+        },
+    });
+
+    let has_missing = !apply_missing_inputs.is_empty();
+    items.push(ConfigChecklistItem {
+        label: "Configuration complete".to_string(),
+        status: if has_missing {
+            ChecklistStatus::Blocked
+        } else {
+            ChecklistStatus::Done
+        },
+        hint: if has_missing {
+            Some(format!("Missing: {}", apply_missing_inputs.join(", ")))
+        } else {
+            None
+        },
+    });
+
+    items.push(ConfigChecklistItem {
+        label: "Applied to game".to_string(),
+        status: if !apply_pending && !applied_files.is_empty() {
+            ChecklistStatus::Done
+        } else if applied_files.is_empty() {
+            ChecklistStatus::Pending
+        } else {
+            ChecklistStatus::Pending
+        },
+        hint: if apply_pending && !has_missing {
+            Some("Click Apply to deploy files".to_string())
+        } else {
+            None
+        },
+    });
+
+    items
+}
+
+fn persist_normalized_config(
+    db: &modde_core::db::ModdeDb,
+    game_id: &GameId,
+    tool: &dyn modde_games::tools::GameTool,
+    config: &modde_games::tools::ToolConfig,
+) {
+    let Ok(settings_json) = serde_json::to_string(&config.settings) else {
+        return;
+    };
+    tracing::debug!(
+        tool = tool.tool_id(),
+        "persisting normalized config during load"
+    );
+    let _ = crate::app::block_on(db.save_tool_config(
+        game_id,
+        tool.tool_id(),
+        config.enabled,
+        &settings_json,
+    ));
 }

@@ -207,7 +207,7 @@ impl GameTool for Proton {
             ),
         ];
         for spec in &mut specs {
-            spec.section = proton_setting_section(spec.key);
+            spec.section = proton_setting_section(&spec.key);
         }
         specs
     }

@@ -50,11 +50,11 @@ pub(crate) fn normalize_tool_settings_for_specs(
 ) -> serde_json::Value {
     let mut normalized = settings.clone();
     for spec in specs {
-        let Some(value) = get_tool_setting_value(&normalized, spec.key).cloned() else {
+        let Some(value) = get_tool_setting_value(&normalized, &spec.key).cloned() else {
             continue;
         };
         let value = normalize_tool_setting_for_kind(value, &spec.kind);
-        set_nested_tool_setting(&mut normalized, spec.key, value);
+        set_nested_tool_setting(&mut normalized, &spec.key, value);
     }
     normalized
 }
@@ -260,7 +260,7 @@ pub(crate) fn patch_tool_setting_options(
     option_catalog: &ToolOptionCatalog,
 ) {
     for spec in specs {
-        if let Some(options) = tool_options(option_catalog, tool_id, spec.key)
+        if let Some(options) = tool_options(option_catalog, tool_id, &spec.key)
             && !options.is_empty()
         {
             spec.kind = modde_games::tools::ToolSettingKind::Select {
