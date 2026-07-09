@@ -57,7 +57,14 @@ fn optiscaler_int8_variant_copies_int8_and_ignores_fp8_env() {
         std::fs::read(game.path().join(FSR4_DLL_NAME)).expect("deployed FSR4"),
         b"int8"
     );
-    assert!(OptiScaler.env_vars(&config).is_empty());
+    // PROTON_FSR4_UPGRADE is emitted for any FSR4 variant
+    assert_eq!(
+        OptiScaler.env_vars(&config).as_slice(),
+        [(
+            PROTON_FSR4_ENV_KEY.to_string(),
+            PROTON_FSR4_ENV_VALUE.to_string()
+        )]
+    );
 }
 
 #[test]
@@ -132,19 +139,31 @@ fn optiscaler_archive_payload_keeps_optipatcher_in_plugins() {
 }
 
 #[test]
-fn optiscaler_fp8_env_only_for_latest_fp8_emulation() {
+fn optiscaler_fp8_env_includes_proton_upgrade_and_emulation() {
     let mut config = OptiScaler.default_config();
+    config.set("hardware_tuning", serde_json::json!(HARDWARE_TUNING_MANUAL));
     config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_LATEST_FP8));
     config.set("emulate_fp8", serde_json::json!(true));
 
-    assert_eq!(
-        OptiScaler.env_vars(&config).as_slice(),
-        [(
-            FP8_EMULATION_ENV_KEY.to_string(),
-            FP8_EMULATION_ENV_VALUE.to_string()
-        )]
+    let env = OptiScaler.env_vars(&config);
+    assert!(
+        env.iter()
+            .any(|(k, v)| k == FP8_EMULATION_ENV_KEY && v == FP8_EMULATION_ENV_VALUE)
+    );
+    assert!(
+        env.iter()
+            .any(|(k, v)| k == PROTON_FSR4_ENV_KEY && v == PROTON_FSR4_ENV_VALUE)
     );
 
     config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_INT8_402));
-    assert!(OptiScaler.env_vars(&config).is_empty());
+    config.set("emulate_fp8", serde_json::json!(false));
+
+    let env_int8 = OptiScaler.env_vars(&config);
+    // PROTON_FSR4_UPGRADE still emitted for INT8 variant
+    assert!(!env_int8.iter().any(|(k, _)| k == FP8_EMULATION_ENV_KEY));
+    assert!(
+        env_int8
+            .iter()
+            .any(|(k, v)| k == PROTON_FSR4_ENV_KEY && v == PROTON_FSR4_ENV_VALUE)
+    );
 }

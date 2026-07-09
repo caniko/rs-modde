@@ -7,6 +7,8 @@ pub(super) fn apply_for(
     context: Option<&ToolGameContext>,
     config: &ToolConfig,
 ) -> Result<AppliedFiles> {
+    validate_optiscaler_config(config);
+
     let source_dir = resolve_source_dir(config).context(
         "optiscaler: choose a GitHub release, local directory, or install fgmod/goverlay",
     )?;
@@ -259,4 +261,35 @@ pub(super) fn preview_apply_for(
     }
 
     Ok(preview)
+}
+
+/// Validate the OptiScaler configuration and emit warnings for potential issues.
+fn validate_optiscaler_config(config: &ToolConfig) {
+    use tracing::warn;
+
+    let gpu_arch = crate::gpu::detect_gpu_arch();
+    let variant = config.get_str("fsr4_variant");
+
+    if gpu_arch == crate::gpu::GpuArch::RDNA3 && variant == Some(FSR4_VARIANT_LATEST_FP8) {
+        warn!(
+            "RDNA3 GPU detected with FSR4 variant 'latest_fp8' (FP8 model). \
+             The FP8 model is designed for RDNA4; RDNA3 GPUs require the INT8 model. \
+             Set fsr4_variant to 'int8_402' or select the 'community-dxgi-rdna3' profile."
+        );
+    }
+
+    if gpu_arch == crate::gpu::GpuArch::RDNA4 && variant == Some(FSR4_VARIANT_INT8_402) {
+        warn!(
+            "RDNA4 GPU detected with FSR4 variant 'int8_402' (INT8 model). \
+             RDNA4 GPUs natively support FP8; consider using 'latest_fp8' for better quality."
+        );
+    }
+
+    if variant.is_some() {
+        warn!(
+            "FSR4 is enabled — ensure PROTON_FSR4_UPGRADE=1 is set in your \
+             game's environment (Steam launch options, Heroic, etc.). \
+             Requires Proton 11+ / GE 10-34+ and Mesa 25.2+ for FSR4-FG."
+        );
+    }
 }

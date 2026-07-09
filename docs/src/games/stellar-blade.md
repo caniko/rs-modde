@@ -193,39 +193,64 @@ There is no bespoke Stellar Blade installer wizard — this is part of why the t
 
 ### OptiScaler — the `community-dxgi` profile
 
-Stellar Blade ships exactly one curated OptiScaler profile, **`community-dxgi`**
-("Community tested dxgi.dll"). It is the recommended way to add modern upscaling/frame
-generation. Its pinned settings, straight from the registry:
+Stellar Blade ships one curated OptiScaler game profile, **`community-dxgi`**.
+GPU-specific FSR4 choices are handled by OptiScaler's global `hardware_tuning`
+layer, not by separate per-game GPU profiles.
 
 | Field | Value |
 | ----- | ----- |
 | Proxy DLL | `dxgi.dll` |
 | Source mode | `github_release`, release tag `official:v0.9.1` |
 | Tested OptiScaler version | `0.9` |
-| FSR4 variant | `latest_fp8` |
-| `emulate_fp8` | `true` (FP8 emulation, for RDNA3 and other cards without native FP8) |
+| FSR4 variant | selected by `hardware_tuning=auto` |
+| `emulate_fp8` | selected by `hardware_tuning=auto` |
 | OptiPatcher | enabled |
 | `spoof_dlss` | `false` |
 | Companion files | copied |
 
 The profile uses **OptiPatcher to unlock the game's DLSS and DLSS-FG inputs without
-spoofing** a DLSS-capable GPU — so you get the DLSS/DLSS-FG code paths re-routed through
-OptiScaler/FSR rather than faking vendor detection. The `latest_fp8` FSR4 variant with
-`emulate_fp8 = true` is what lets RDNA3-class cards run the FP8 model via emulation.
+spoofing** a DLSS-capable GPU — so you get the DLSS/DLSS-FG code paths re-routed
+through OptiScaler/FSR rather than faking vendor detection.
 
-**Known OptiScaler gotchas for this title** (from the bundled profile notes):
+### RDNA3 requirements
+
+FSR4 on AMD RX 7000 series requires:
+
+- **Proton 11+** or **Proton GE 10-34+** (for FSR 4.1 / FFX SDK 2.2 support)
+- **Mesa 25.2+** (for FSR4 frame generation)
+- **`PROTON_FSR4_UPGRADE=1`** environment variable (auto-emitted by modde's env vars)
+- **Proton prefix set to Windows 11** (via `winecfg`)
+- For RDNA3 on Linux: the `DXIL_SPIRV_CONFIG=wmma_rdna3_workaround` env var is no longer
+  needed as of FSR 4.1.1+.
+
+### GPU auto-detection
+
+modde reads `/sys/class/drm/` to detect your GPU at apply time and finalizes
+FSR4 settings when `hardware_tuning=auto`:
+
+- **RDNA3 (RX 7000)** → `fsr4_variant=int8_402`, `emulate_fp8=false`
+- **RDNA4 (RX 9000)** → `fsr4_variant=latest_fp8`, `emulate_fp8=false`
+- **AMD legacy, NVIDIA, Intel, unknown** → preserve the configured/default FSR4 setting
+
+You can override the GPU tuning only by switching to manual mode:
+
+```bash
+modde tool configure optiscaler --game stellar-blade hardware_tuning=manual
+modde tool configure optiscaler --game stellar-blade fsr4_variant=int8_402
+```
+
+### Known gotchas
 
 - The game **may crash on first boot** with the proxy in place but work on the next launch
   — if the first launch dies, just relaunch before assuming a bad install.
 - If DLSSG/frame-gen HUD elements look wrong (interpolation artifacts on the HUD),
   **set the in-game sharpness slider to 0** as a workaround.
 
-Enable and apply it through the tools system:
+### Quick start
 
 ```bash
-# Enable OptiScaler for Stellar Blade and select the curated profile
+# Enable OptiScaler for Stellar Blade — modde picks the right profile for your GPU
 modde tool enable optiscaler --game stellar-blade
-modde tool configure optiscaler --game stellar-blade optiscaler_profile=community-dxgi
 modde tool apply optiscaler --game stellar-blade
 ```
 

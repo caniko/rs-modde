@@ -410,9 +410,10 @@ documents the recognized keys and their accepted values:
 | ---------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | `copy_companion_files`                   | bool                                                                          | Copy fakenvapi, nvngx wrapper, and other DLLs found next to OptiScaler      |
 | `dll_overrides`                          | text                                                                          | Comma/whitespace-separated Wine DLL override base names                     |
-| `emulate_fp8`                            | bool                                                                          | Set `DXIL_SPIRV_CONFIG=wmma_rdna3_workaround` for the Latest (FP8) FSR4 variant |
+| `emulate_fp8`                            | bool                                                                          | Manual FP8-emulation toggle; auto hardware tuning owns this value by default |
 | `enable_optipatcher`                     | bool                                                                          | Use OptiPatcher to unlock DLSS / DLSS frame-gen inputs without whole-game spoofing |
-| `fsr4_variant`                           | enum: `latest_fp8`, `int8_402`                                                | FSR4 payload copied as `amd_fidelityfx_upscaler_dx12.dll`                   |
+| `fsr4_variant`                           | enum: `latest_fp8`, `int8_402`                                                | FSR4 payload copied as `amd_fidelityfx_upscaler_dx12.dll`; auto hardware tuning owns this value by default |
+| `hardware_tuning`                        | enum: `auto`, `manual`                                                        | `auto` lets modde choose GPU-specific FSR4 settings; `manual` preserves explicit settings |
 | `ini_overrides.FSR.FGIndex`              | enum: `auto`, `0`, `1`                                                        | OptiScaler `[FSR] FGIndex` override                                          |
 | `ini_overrides.FSR.UpscalerIndex`        | enum: `auto`, `0`, `1`, `2`                                                   | OptiScaler `[FSR] UpscalerIndex` override                                    |
 | `ini_overrides.Menu.Scale`               | float (0.5 – 2, step 0.1)                                                     | OptiScaler `[Menu] Scale` override                                           |
@@ -564,7 +565,7 @@ pinned release asset applied on every activation.
         settings = {
           source_mode = "github_release";
           proxy_dll = "dxgi.dll";
-          fsr4_variant = "latest_fp8";
+          hardware_tuning = "auto";
           "ini_overrides.FSR.UpscalerIndex" = "auto";
           "ini_overrides.Menu.Scale" = 1.2;
         };

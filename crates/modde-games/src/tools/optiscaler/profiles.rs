@@ -31,14 +31,50 @@ pub fn managed_paths_from_config(config: &ToolConfig) -> BTreeSet<String> {
 }
 
 /// Apply game-specific `OptiScaler` defaults from community compatibility data.
+///
+/// When no profile is explicitly selected, this auto-selects the best profile
+/// for the detected GPU architecture (RDNA3 → `*-rdna3`, others → default).
 pub fn apply_game_defaults(config: &mut ToolConfig, context: Option<&ToolGameContext>) {
     let Some(context) = context else {
         return;
     };
+
+    // Auto-select GPU-appropriate profile when user hasn't explicitly chosen one
+    if config.get_str("optiscaler_profile").is_none() {
+        if let Some(best) = select_best_profile_for_gpu(&context.game_id) {
+            apply_optiscaler_profile_metadata(config, best);
+            return;
+        }
+    }
+
     let Some(profile) = selected_or_default_profile(&context.game_id, config) else {
         return;
     };
     apply_optiscaler_profile_metadata(config, profile);
+}
+
+/// Select the best profile for the detected GPU architecture.
+///
+/// - RDNA3 → picks the `*-rdna3` variant if available, otherwise the default.
+/// - Non-AMD / unknown → picks the default (first) profile.
+fn select_best_profile_for_gpu(game_id: &str) -> Option<&'static OptiScalerProfile> {
+    let arch = crate::gpu::detect_gpu_arch();
+    let profiles = resolve_optiscaler_profiles(game_id);
+
+    if profiles.is_empty() {
+        return None;
+    }
+
+    match arch {
+        crate::gpu::GpuArch::RDNA3 => {
+            // Look for an RDNA3-specific profile (id ending in "-rdna3")
+            profiles.iter().find(|p| p.id.ends_with("-rdna3"))
+        }
+        _ => {
+            // For non-RDNA3 GPUs, pick the default (first) profile
+            Some(&profiles[0])
+        }
+    }
 }
 
 /// Apply a community-tested `OptiScaler` profile to a config.
@@ -95,6 +131,8 @@ pub(super) fn apply_optiscaler_profile_metadata(
     config: &mut ToolConfig,
     profile: &OptiScalerProfile,
 ) {
+    let prev_id = config.get_str("optiscaler_profile").map(|s| s.to_string());
+
     config.set("optiscaler_profile", serde_json::json!(profile.id));
     config.set("optiscaler_profile_name", serde_json::json!(profile.name));
     config.set(
@@ -106,6 +144,83 @@ pub(super) fn apply_optiscaler_profile_metadata(
         serde_json::json!(profile.tested_optiscaler_version),
     );
     config.set("optiscaler_profile_notes", serde_json::json!(profile.notes));
+
+    // Apply operational settings only on first selection or when switching profiles.
+    // Re-applying the same profile preserves any manual overrides the user has set.
+    if prev_id.as_deref() != Some(profile.id) {
+        apply_optiscaler_profile_settings(config, profile);
+    }
+}
+
+/// Apply operational settings from a profile to the config.
+///
+/// Always applies the profile's operational settings, establishing them as
+/// the baseline. Users can override individual settings after profile selection.
+pub(super) fn apply_optiscaler_profile_settings(
+    config: &mut ToolConfig,
+    profile: &OptiScalerProfile,
+) {
+    config.set("proxy_dll", serde_json::json!(profile.proxy_dll));
+    config.set(
+        "copy_companion_files",
+        serde_json::json!(profile.copy_companion_files),
+    );
+    config.set(
+        "enable_optipatcher",
+        serde_json::json!(profile.enable_optipatcher),
+    );
+    if let Some(variant) = profile.fsr4_variant {
+        config.set("fsr4_variant", serde_json::json!(variant));
+    }
+    config.set("emulate_fp8", serde_json::json!(profile.emulate_fp8));
+    config.set("spoof_dlss", serde_json::json!(profile.spoof_dlss));
+
+    if let Some(mode) = profile.source_mode {
+        config.set("source_mode", serde_json::json!(mode));
+    }
+    if let Some(tag) = profile.release_tag {
+        config.set("release_tag", serde_json::json!(tag));
+    }
+    if let Some(asset) = profile.release_asset {
+        config.set("release_asset", serde_json::json!(asset));
+    }
+
+    if !profile.wine_dll_overrides.is_empty() {
+        config.set(
+            "dll_overrides",
+            serde_json::json!(profile.wine_dll_overrides.join(",")),
+        );
+    }
+
+    if !profile.ini_overrides.is_empty() {
+        config.set(
+            "ini_overrides",
+            ini_overrides_to_json(profile.ini_overrides),
+        );
+    }
+}
+
+/// Convert flat `OptiScalerIniOverride` slice (`"Section.Key"` → `"value"`) into
+/// the nested JSON format used by the config (`{"Section": {"Key": "value"}}`).
+fn ini_overrides_to_json(overrides: &[OptiScalerIniOverride]) -> serde_json::Value {
+    let mut root = serde_json::Map::new();
+    for o in overrides {
+        let parts: Vec<&str> = o.key.splitn(2, '.').collect();
+        if parts.len() == 2 {
+            let section = parts[0];
+            let key = parts[1];
+            let entry = root
+                .entry(section.to_string())
+                .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+            if let Some(obj) = entry.as_object_mut() {
+                obj.insert(
+                    key.to_string(),
+                    serde_json::Value::String(o.value.to_string()),
+                );
+            }
+        }
+    }
+    serde_json::Value::Object(root)
 }
 
 pub(super) fn apply_optiscaler_release_selection(

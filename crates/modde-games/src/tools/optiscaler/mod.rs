@@ -22,7 +22,8 @@ use tracing::info;
 use xxhash_rust::xxh64::Xxh64;
 
 use crate::optiscaler::{
-    OptiScalerProfile, default_optiscaler_profile, resolve_optiscaler_profiles,
+    OptiScalerIniOverride, OptiScalerProfile, default_optiscaler_profile,
+    resolve_optiscaler_profiles,
 };
 
 use super::{
@@ -35,6 +36,7 @@ mod archive;
 mod backup;
 mod config;
 mod fgmod;
+mod hardware;
 mod ini;
 mod paths;
 mod profiles;
@@ -51,6 +53,7 @@ pub use backup::{
     backup_optiscaler_install, latest_optiscaler_backup, restore_latest_optiscaler_backup,
 };
 pub use fgmod::{fgmod_restore_commands, fgmod_restore_commands_for_executable_dir};
+pub use hardware::apply_hardware_defaults;
 pub use ini::parse_optiscaler_ini;
 pub use paths::{cached_optipatcher_asi, cached_optipatcher_dir, cached_release_dir};
 pub use profiles::{
@@ -66,6 +69,7 @@ pub use releases::{
 pub use scan::{scan_optiscaler_install, scan_optiscaler_install_in_dir};
 
 use apply::*;
+use hardware::*;
 use ini::*;
 use paths::*;
 use profiles::*;
@@ -88,6 +92,8 @@ const OPTIPATCHER_REPO: &str = "optiscaler/OptiPatcher";
 const OPTIPATCHER_ASSET: &str = "OptiPatcher.asi";
 const FP8_EMULATION_ENV_KEY: &str = "DXIL_SPIRV_CONFIG";
 const FP8_EMULATION_ENV_VALUE: &str = "wmma_rdna3_workaround";
+pub(crate) const PROTON_FSR4_ENV_KEY: &str = "PROTON_FSR4_UPGRADE";
+pub(crate) const PROTON_FSR4_ENV_VALUE: &str = "1";
 
 pub static OPTISCALER: OptiScaler = OptiScaler;
 

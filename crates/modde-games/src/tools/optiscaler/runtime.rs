@@ -27,16 +27,28 @@ pub(super) fn detect_available() -> ToolAvailability {
 }
 
 pub(super) fn env_vars(config: &ToolConfig) -> SmallVec<[(String, String); 4]> {
+    let config = effective_config(config);
+    let mut vars: SmallVec<[(String, String); 4]> = SmallVec::new();
+
     if config.get_bool("emulate_fp8")
         && config.get_str("fsr4_variant") == Some(FSR4_VARIANT_LATEST_FP8)
     {
-        smallvec![(
+        vars.push((
             FP8_EMULATION_ENV_KEY.to_string(),
-            FP8_EMULATION_ENV_VALUE.to_string()
-        )]
-    } else {
-        SmallVec::new()
+            FP8_EMULATION_ENV_VALUE.to_string(),
+        ));
     }
+
+    // PROTON_FSR4_UPGRADE is required on Proton/Linux for FSR4 to work
+    // on both RDNA3 and RDNA4 GPUs. Harmless on Windows.
+    if config.get_str("fsr4_variant").is_some() {
+        vars.push((
+            PROTON_FSR4_ENV_KEY.to_string(),
+            PROTON_FSR4_ENV_VALUE.to_string(),
+        ));
+    }
+
+    vars
 }
 
 pub(super) fn wine_dll_overrides(config: &ToolConfig) -> SmallVec<[String; 4]> {
@@ -77,6 +89,7 @@ pub(super) fn default_config() -> ToolConfig {
     config.set("dll_overrides", serde_json::json!(""));
     config.set("copy_companion_files", serde_json::json!(true));
     config.set("enable_optipatcher", serde_json::json!(false));
+    config.set("hardware_tuning", serde_json::json!(HARDWARE_TUNING_AUTO));
     config.set("fsr4_variant", serde_json::json!(FSR4_VARIANT_LATEST_FP8));
     config.set("emulate_fp8", serde_json::json!(false));
     config.set("spoof_dlss", serde_json::json!(false));
@@ -87,6 +100,7 @@ pub(super) fn default_config() -> ToolConfig {
 pub(super) fn default_config_for(context: Option<&ToolGameContext>) -> ToolConfig {
     let mut config = default_config();
     apply_game_defaults(&mut config, context);
+    apply_hardware_defaults(&mut config);
     config
 }
 

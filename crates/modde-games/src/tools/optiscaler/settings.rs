@@ -6,6 +6,15 @@ pub(super) fn settings_schema_for(
     context: Option<&ToolGameContext>,
     config: &ToolConfig,
 ) -> Vec<ToolSettingSpec> {
+    let mut effective = config.clone();
+    apply_hardware_defaults(&mut effective);
+    let schema_config = if config.get_str("hardware_tuning") == Some(HARDWARE_TUNING_MANUAL) {
+        config
+    } else {
+        &effective
+    };
+    let hardware_auto = schema_config.get_str("hardware_tuning") != Some(HARDWARE_TUNING_MANUAL);
+
     let mut specs = vec![
     ToolSettingSpec::labeled_select(
         "source_mode",
@@ -35,14 +44,14 @@ pub(super) fn settings_schema_for(
         "release_tag",
         "Release tag",
         "OptiScaler release tag selected in the UI.",
-        std::slice::from_ref(&config.get_str("release_tag").unwrap_or("latest")),
+        std::slice::from_ref(&schema_config.get_str("release_tag").unwrap_or("latest")),
     )
     .section("Source"),
     ToolSettingSpec::select(
         "release_asset",
         "Release asset",
         "Release asset selected from GitHub.",
-        std::slice::from_ref(&config.get_str("release_asset").unwrap_or("")),
+        std::slice::from_ref(&schema_config.get_str("release_asset").unwrap_or("")),
     )
     .section("Source"),
     ToolSettingSpec::labeled_select(
@@ -75,15 +84,34 @@ pub(super) fn settings_schema_for(
     )
     .section("Basic"),
     ToolSettingSpec::labeled_select(
-        "fsr4_variant",
-        "FSR4 variant",
-        "FSR4 payload copied as amd_fidelityfx_upscaler_dx12.dll.",
+        "hardware_tuning",
+        "Hardware tuning",
+        "Auto lets modde choose GPU-specific FSR4 settings; Manual preserves your selected FSR4 settings.",
         &[
-            (FSR4_VARIANT_LATEST_FP8, "Latest (FP8)"),
-            (FSR4_VARIANT_INT8_402, "4.0.2c (INT8)"),
+            (HARDWARE_TUNING_AUTO, "Auto - tune for detected GPU"),
+            (HARDWARE_TUNING_MANUAL, "Manual - preserve FSR4 settings"),
         ],
     )
     .section("Basic"),
+    if hardware_auto {
+        ToolSettingSpec::read_only(
+            "fsr4_variant",
+            "FSR4 variant",
+            "FSR4 payload copied as amd_fidelityfx_upscaler_dx12.dll. Auto hardware tuning owns this value.",
+        )
+        .section("Basic")
+    } else {
+        ToolSettingSpec::labeled_select(
+            "fsr4_variant",
+            "FSR4 variant",
+            "FSR4 payload copied as amd_fidelityfx_upscaler_dx12.dll.",
+            &[
+                (FSR4_VARIANT_LATEST_FP8, "Latest (FP8)"),
+                (FSR4_VARIANT_INT8_402, "4.0.2c (INT8)"),
+            ],
+        )
+        .section("Basic")
+    },
     ToolSettingSpec::bool(
         "enable_optipatcher",
         "OptiPatcher",
@@ -170,12 +198,16 @@ pub(super) fn settings_schema_for(
         specs.retain(|spec| spec.key != "goverlay_channel");
     }
 
-    if config.get_str("fsr4_variant") == Some(FSR4_VARIANT_INT8_402) {
+    if hardware_auto || schema_config.get_str("fsr4_variant") == Some(FSR4_VARIANT_INT8_402) {
         specs.push(
             ToolSettingSpec::read_only(
                 "emulate_fp8",
                 "Emulate FP8",
-                "Only applies to the Latest (FP8) FSR4 variant.",
+                if hardware_auto {
+                    "Auto hardware tuning owns this value."
+                } else {
+                    "Only applies to the Latest (FP8) FSR4 variant."
+                },
             )
             .section("Basic"),
         );
@@ -191,7 +223,7 @@ pub(super) fn settings_schema_for(
     }
 
     specs.extend(goverlay_optiscaler_ini_specs());
-    specs.extend(optiscaler_ini_specs(config));
+    specs.extend(optiscaler_ini_specs(schema_config));
     specs
 }
 

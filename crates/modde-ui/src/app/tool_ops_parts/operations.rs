@@ -40,6 +40,7 @@ fn apply_tool_for_game_blocking(
     apply_derived_tool_settings(&mut config, context.as_ref());
     if tool_id == "optiscaler" {
         modde_games::tools::optiscaler::apply_game_defaults(&mut config, context.as_ref());
+        modde_games::tools::optiscaler::apply_hardware_defaults(&mut config);
     }
 
     let applied = tool

@@ -257,8 +257,9 @@ Archives are flattened so that `OptiScaler.dll`, `OptiScaler.ini`, companion DLL
 | `proxy_dll` | select | DLL OptiScaler is loaded as: `dxgi.dll` (default), `version.dll`, `dbghelp.dll`, `d3d12.dll`, `wininet.dll`, `winhttp.dll`, `winmm.dll`, `nvngx.dll`, or `OptiScaler.asi` |
 | `dll_overrides` | text | Extra Wine DLL override base names (comma/space separated) |
 | `copy_companion_files` | bool (default on) | Copy `fakenvapi.dll`, `nvngx-wrapper.dll`, and other DLLs found beside OptiScaler |
-| `fsr4_variant` | select | `latest_fp8` ("Latest (FP8)") or `int8_402` ("4.0.2c (INT8)") — copied as `amd_fidelityfx_upscaler_dx12.dll` |
-| `emulate_fp8` | bool | Only meaningful for the FP8 variant; exports `DXIL_SPIRV_CONFIG=wmma_rdna3_workaround` |
+| `hardware_tuning` | select | `auto` lets modde choose GPU-specific FSR4 settings; `manual` preserves explicit FSR4 settings |
+| `fsr4_variant` | select/read-only | `latest_fp8` ("Latest (FP8)") or `int8_402` ("4.0.2c (INT8)") — copied as `amd_fidelityfx_upscaler_dx12.dll`; read-only when `hardware_tuning=auto` |
+| `emulate_fp8` | bool/read-only | Only meaningful for the FP8 variant; read-only when `hardware_tuning=auto` |
 | `enable_optipatcher` | bool | Deploy `plugins/OptiPatcher.asi` to unlock DLSS/DLSS-FG inputs without whole-game spoofing |
 | `spoof_dlss` | bool | Fallback DXGI spoofing path for games that still need it |
 
@@ -266,7 +267,17 @@ There are also exposed OptiScaler `.ini` overrides (`ini_overrides.*`), e.g. the
 
 ### FSR4 variants and FP8 emulation
 
-`fsr4_variant` selects which FSR4 payload is copied as `amd_fidelityfx_upscaler_dx12.dll`: `latest_fp8` (FP8) or `int8_402` (INT8, 4.0.2c). The two payloads ship in `FSR4_LATEST/` and `FSR4_INT8/` directories inside the source. `emulate_fp8` only applies to the FP8 variant and, when set, exports `DXIL_SPIRV_CONFIG=wmma_rdna3_workaround` so FP8 paths run on RDNA3 via the WMMA workaround.
+`fsr4_variant` selects which FSR4 payload is copied as `amd_fidelityfx_upscaler_dx12.dll`: `latest_fp8` (FP8) or `int8_402` (INT8, 4.0.2c). The two payloads ship in `FSR4_LATEST/` and `FSR4_INT8/` directories inside the source.
+
+By default `hardware_tuning=auto` owns GPU-sensitive FSR4 settings after any game profile has been applied:
+
+| GPU | Auto tuning |
+| --- | --- |
+| AMD RDNA3 / RX 7000 | `fsr4_variant=int8_402`, `emulate_fp8=false` |
+| AMD RDNA4 / RX 9000 | `fsr4_variant=latest_fp8`, `emulate_fp8=false` |
+| AMD legacy, NVIDIA, Intel, unknown | Preserve the configured/default FSR4 setting |
+
+Set `hardware_tuning=manual` only when intentionally testing or overriding the GPU-specific default. In manual mode modde preserves `fsr4_variant` and `emulate_fp8`, but still warns about combinations known to be unsafe, such as RDNA3 with the FP8 FSR4 model.
 
 ### OptiPatcher and companion DLLs
 
@@ -288,7 +299,7 @@ OptiScaler carries the fgmod DLL-restore behaviour: fgmod deletes certain DLLs a
 
 ### Community profiles
 
-For some games modde ships community-tested OptiScaler profiles (game-owned metadata). Selecting a profile via `optiscaler_profile=<id>` applies its `proxy_dll`, source, FSR4 variant, OptiPatcher flag, `.ini` overrides, and records its tested version, source URL, and notes. Profiles never imply OptiScaler is enabled by default.
+For some games modde ships community-tested OptiScaler profiles (game-owned metadata). Selecting a profile via `optiscaler_profile=<id>` applies its `proxy_dll`, source, OptiPatcher flag, `.ini` overrides, and records its tested version, source URL, and notes. Profiles may carry historical FSR4 hints, but `hardware_tuning=auto` is the final authority for GPU-specific FSR4 settings. Profiles never imply OptiScaler is enabled by default.
 
 For **Stellar Blade** the default profile is `community-dxgi`, which uses `dxgi.dll` as the proxy and enables OptiPatcher so DLSS/DLSS-FG inputs are unlocked without spoofing. You can also define your own profiles in `~/.local/share/modde/games/<game_id>.optiscaler.toml` (an `[[optiscaler.profile]]` array); user profiles merge over built-ins of the same `id`.
 

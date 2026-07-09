@@ -123,8 +123,9 @@ mod tests {
         let _ = shared_data_dir();
         let profiles = resolve_optiscaler_profiles("stellar-blade");
 
-        assert_eq!(profiles.len(), 1);
+        assert_eq!(profiles.len(), 2);
         assert_eq!(profiles[0].id, "community-dxgi");
+        assert_eq!(profiles[1].id, "community-dxgi-rdna3");
         assert_eq!(profiles[0].proxy_dll, "dxgi.dll");
         assert_eq!(profiles[0].tested_optiscaler_version, "0.9");
         assert_eq!(profiles[0].source_mode, Some("github_release"));
@@ -152,7 +153,7 @@ mod tests {
         let first = resolve_optiscaler_profiles("stellar-blade");
         let second = resolve_optiscaler_profiles("stellar-blade");
 
-        assert_eq!(first.len(), 1);
+        assert_eq!(first.len(), 2);
         assert!(std::ptr::eq(first, second));
     }
 }

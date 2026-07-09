@@ -173,25 +173,46 @@ pub const SUBNAUTICA2: Ue4Game = Ue4Game::new(
 )
 .with_save_profiles(true);
 
-pub(crate) const STELLAR_BLADE_OPTISCALER_PROFILES: &[OptiScalerProfile] = &[OptiScalerProfile {
-    id: "community-dxgi",
-    name: "Community tested dxgi.dll",
-    source_url: "https://github.com/optiscaler/OptiScaler/wiki/Stellar-Blade",
-    tested_optiscaler_version: "0.9",
-    source_mode: Some("github_release"),
-    goverlay_channel: None,
-    proxy_dll: "dxgi.dll",
-    release_tag: Some("official:v0.9.1"),
-    release_asset: None,
-    wine_dll_overrides: &[],
-    copy_companion_files: true,
-    enable_optipatcher: true,
-    fsr4_variant: Some("latest_fp8"),
-    emulate_fp8: true,
-    spoof_dlss: false,
-    ini_overrides: &[],
-    notes: "Use OptiPatcher to unlock DLSS and DLSS-FG inputs without spoofing. The community compatibility notes report that the game may crash on first boot but work afterwards, and that setting the in-game sharpness slider to 0 can fix DLSSG HUD interpolation.",
-}];
+pub(crate) const STELLAR_BLADE_OPTISCALER_PROFILES: &[OptiScalerProfile] = &[
+    OptiScalerProfile {
+        id: "community-dxgi",
+        name: "Community tested dxgi.dll",
+        source_url: "https://github.com/optiscaler/OptiScaler/wiki/Stellar-Blade",
+        tested_optiscaler_version: "0.9",
+        source_mode: Some("github_release"),
+        goverlay_channel: None,
+        proxy_dll: "dxgi.dll",
+        release_tag: Some("official:v0.9.1"),
+        release_asset: None,
+        wine_dll_overrides: &[],
+        copy_companion_files: true,
+        enable_optipatcher: true,
+        fsr4_variant: Some("latest_fp8"),
+        emulate_fp8: true,
+        spoof_dlss: false,
+        ini_overrides: &[],
+        notes: "Use OptiPatcher to unlock DLSS and DLSS-FG inputs without spoofing. The community compatibility notes report that the game may crash on first boot but work afterwards, and that setting the in-game sharpness slider to 0 can fix DLSSG HUD interpolation.",
+    },
+    OptiScalerProfile {
+        id: "community-dxgi-rdna3",
+        name: "Community tested dxgi.dll (RDNA3)",
+        source_url: "https://github.com/optiscaler/OptiScaler/wiki/Stellar-Blade",
+        tested_optiscaler_version: "0.9",
+        source_mode: Some("github_release"),
+        goverlay_channel: None,
+        proxy_dll: "dxgi.dll",
+        release_tag: Some("official:v0.9.1"),
+        release_asset: None,
+        wine_dll_overrides: &[],
+        copy_companion_files: true,
+        enable_optipatcher: true,
+        fsr4_variant: Some("int8_402"),
+        emulate_fp8: false,
+        spoof_dlss: false,
+        ini_overrides: &[],
+        notes: "RDNA3 (RX 7000 series) — FSR4 via INT8 model. Requires Proton 11+ / GE 10-34+, Mesa 25.2+, and PROTON_FSR4_UPGRADE=1. Uses OptiPatcher to unlock DLSS and DLSS-FG inputs without spoofing.",
+    },
+];
 
 impl GamePlugin for Ue4Game {
     fn game_id(&self) -> &str {

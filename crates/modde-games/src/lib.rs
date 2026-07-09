@@ -12,6 +12,7 @@ pub mod cyberpunk;
 pub mod detection;
 pub mod gamebryo;
 pub mod generic;
+pub mod gpu;
 pub mod launcher;
 pub mod oblivion_remastered;
 pub mod optiscaler;
