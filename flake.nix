@@ -9,7 +9,7 @@
     nixpkgs.follows = "rs-harbor/nixpkgs";
     rust-overlay.follows = "rs-harbor/rust-overlay";
     crane.follows = "rs-harbor/crane";
-    flake-utils.follows = "rs-harbor/flake-utils";
+    flake-utils.url = "github:numtide/flake-utils";
 
     nix-appimage = {
       url = "github:ralismark/nix-appimage";
@@ -22,7 +22,7 @@
       inputs.nixpkgs.follows = "rs-harbor/nixpkgs";
       inputs.rust-overlay.follows = "rs-harbor/rust-overlay";
       inputs.crane.follows = "rs-harbor/crane";
-      inputs.flake-utils.follows = "rs-harbor/flake-utils";
+      inputs.flake-utils.url = "github:numtide/flake-utils";
     };
 
     plinth = {
