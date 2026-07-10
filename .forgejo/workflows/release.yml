@@ -25,17 +25,6 @@ name: release
     tags:
       - '[0-9]*'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Existing release tag to build without moving the tag.'
-        required: false
-        default: ''
-        type: string
-      force_publish:
-        description: 'Bypass release smoke checks and continue to publish.'
-        required: false
-        default: false
-        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -59,8 +48,7 @@ jobs:
       - name: Validate tag
         run: |
           set -euo pipefail
-          VERSION="${{ inputs.version }}"
-          if [ -z "$VERSION" ]; then VERSION="${GITHUB_REF_NAME:-${FORGE_REF_NAME:-${CODEBERG_REF_NAME:-}}}"; fi
+          VERSION="${GITHUB_REF_NAME:-${FORGE_REF_NAME:-${CODEBERG_REF_NAME:-}}}"
           if [ -z "$VERSION" ]; then ref="${GITHUB_REF:-${FORGE_REF:-${CODEBERG_REF:-}}}"; VERSION="${ref#refs/tags/}"; fi
           echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$'
           git fetch --force --tags origin "refs/tags/${VERSION}:refs/tags/${VERSION}"
@@ -129,15 +117,15 @@ jobs:
         run: |
           set -euo pipefail
           . ./release-env
-          git archive --format=tar.gz --prefix=rs-modde/ -o "rs-modde-${VERSION}.tar.gz" HEAD
+          git archive --format=tar.gz --prefix=rs-modde/ -o "rs-modde-v${VERSION}.tar.gz" HEAD
           nix shell nixpkgs#rpm nixpkgs#cargo nixpkgs#rustc -c bash <<'SCRIPT'
           set -euo pipefail
           tar xf rs-modde-*.tar.gz
           ( cd rs-modde && cargo vendor vendor > ../cargo-vendor-config.toml )
           tar czf vendor.tar.gz -C rs-modde vendor
-          rm -rf srpms && mkdir -p srpms
-          rpmbuild -bs dist/rpm/modde.spec --define "_sourcedir $(pwd)" --define "_srcrpmdir $(pwd)/srpms"
-          set -- srpms/*.src.rpm; test "$#" -eq 1; ls -l "$1"
+          rm -rf target/modde-release/root-artifacts/srpms && mkdir -p target/modde-release/root-artifacts/srpms
+          rpmbuild -bs dist/rpm/modde.spec --define "_sourcedir $(pwd)" --define "_srcrpmdir $(pwd)/target/modde-release/root-artifacts/srpms"
+          set -- target/modde-release/root-artifacts/srpms/*.src.rpm; test "$#" -eq 1; ls -l "$1"
           SCRIPT
       - name: Generate supply-chain reports
         run: |
@@ -205,44 +193,14 @@ jobs:
           nix run .#flatpak-cargo-generator -- Cargo.lock -o target/modde-release/root-artifacts/release/cargo-sources.json
           cp target/modde-release/root-artifacts/srpms/*.src.rpm target/modde-release/root-artifacts/release/ 2>/dev/null || true
           
-      - name: Build Debian packages
-        run: |
-          set -euo pipefail
-          . ./release-env
-          export VERSION IS_PRERELEASE
-          mkdir -p release
-          if ! nix develop -c bash scripts/build-deb.sh "$VERSION" release
-          then
-            echo "::warning::Debian package build failed; continuing without .deb release assets and APT publish."
-          fi
-      - name: Sign Windows Authenticode artifacts
-        env:
-          WINDOWS_SIGNING_PFX: ${{ secrets.WINDOWS_SIGNING_PFX }}
-          WINDOWS_SIGNING_PASS: ${{ secrets.WINDOWS_SIGNING_PASS }}
-          WINDOWS_SIGNING_SUBJECT: ${{ secrets.WINDOWS_SIGNING_SUBJECT }}
+          rm -rf release
+          cp -a target/modde-release/root-artifacts/release ./release
+      - name: Package Windows artifacts
         run: |
           set -euo pipefail
           . ./release-env
           for exe in release/windows-x86_64/modde.exe release/windows-x86_64/modde-ui.exe; do test -s "$exe"; done
-          if [ -n "${WINDOWS_SIGNING_PFX:-}" ] && [ -n "${WINDOWS_SIGNING_PASS:-}" ]; then
-            nix shell nixpkgs#osslsigncode nixpkgs#openssl -c bash <<'SCRIPT'
-          set -euo pipefail
-          umask 077
-          pfx_file="$(mktemp)"; pass_file="$(mktemp)"
-          trap 'rm -f "$pfx_file" "$pass_file"' EXIT
-          printf '%s' "$WINDOWS_SIGNING_PFX" | base64 --decode > "$pfx_file"
-          printf '%s' "$WINDOWS_SIGNING_PASS" > "$pass_file"
-          for exe in release/windows-x86_64/modde.exe release/windows-x86_64/modde-ui.exe; do
-            osslsigncode sign -pkcs12 "$pfx_file" -readpass "$pass_file" -h sha256 \
-              -n 'modde' -i 'https://modde.tartanoglu.com' -ts 'http://timestamp.digicert.com' \
-              -in "$exe" -out "${exe}.signed"
-            osslsigncode verify -in "${exe}.signed"
-            mv "${exe}.signed" "$exe"
-          done
-          SCRIPT
-          else
-            echo '::warning::WINDOWS_SIGNING_PFX/PASS unset; publishing unsigned Windows EXEs.'
-          fi
+          echo '::warning::Windows Authenticode signing disabled on this Forgejo runner; publishing unsigned Windows EXEs.'
           tar czf "release/modde-${VERSION}-x86_64-windows.tar.gz" -C release/windows-x86_64 modde.exe modde-ui.exe
           zip_out="$PWD/release/modde-${VERSION}-x86_64-windows.zip"
           nix shell nixpkgs#zip -c bash -c 'cd "$1" && shift && zip -q "$1" "$@"' _ release/windows-x86_64 "$zip_out" modde.exe modde-ui.exe
@@ -315,13 +273,10 @@ jobs:
           done < <(printf '%s\n' "${files[@]}" | LC_ALL=C sort -u)
           SCRIPT
       - name: Run release smoke checks
-        env:
-          FORCE_PUBLISH: ${{ inputs.force_publish }}
         run: |
           set -euo pipefail
           . ./release-env
           mkdir -p release
-          if [ "${FORCE_PUBLISH:-false}" = "true" ]; then echo "smoke bypassed" | tee release/smoke-report.txt; exit 0; fi
           nix run .#release-smoke -- "$VERSION" release
       - name: Publish Codeberg release
         env:
@@ -526,11 +481,24 @@ jobs:
             exit 1
           }
           if [ -z "${AUR_SSH_KEY:-}" ]; then publisher_missing aur 'AUR_SSH_KEY unset'; fi
-          nix shell nixpkgs#git nixpkgs#openssh nixpkgs#pacman -c bash <<'SCRIPT'
+          nix shell nixpkgs#git nixpkgs#openssh nixpkgs#pacman nixpkgs#shadow nixpkgs#util-linux -c bash <<'SCRIPT'
           set -euo pipefail
           . ./release-env
           AUR_HOST='aur.archlinux.org'; AUR_SSH="$HOME/.ssh/aur"
           MAKEPKG_CONF="$(dirname "$(dirname "$(command -v makepkg)")")/etc/makepkg.conf"; test -r "$MAKEPKG_CONF"
+          print_srcinfo() {
+            pkgdir="$1"
+            if [ "$(id -u)" -eq 0 ]; then
+              owner_uid="$(id -u)"; owner_gid="$(id -g)"
+              groupadd -f -r aurbuild
+              if ! id -u aurbuild >/dev/null 2>&1; then useradd -m -r -g aurbuild -s /bin/sh aurbuild; fi
+              chown -R aurbuild:aurbuild "$pkgdir"
+              runuser -u aurbuild -- sh -c 'cd "$1" && makepkg --config "$2" --printsrcinfo > .SRCINFO' sh "$pkgdir" "$MAKEPKG_CONF" || setpriv --reuid="$(id -u aurbuild)" --regid="$(id -g aurbuild)" --init-groups sh -c 'cd "$1" && makepkg --config "$2" --printsrcinfo > .SRCINFO' sh "$pkgdir" "$MAKEPKG_CONF"
+              chown -R "$owner_uid:$owner_gid" "$pkgdir"
+            else
+              (cd "$pkgdir" && makepkg --config "$MAKEPKG_CONF" --printsrcinfo > .SRCINFO)
+            fi
+          }
           checksum_for() { awk -v a="$1" '$2 == a { print $1 }' release/SHA256SUMS.txt; }
           source_sha="$(checksum_for "rs-modde-${VERSION}.tar.gz")"
           bin_sha="$(checksum_for "modde-${VERSION}-x86_64-linux.tar.gz")"; test -n "$bin_sha"
@@ -555,7 +523,7 @@ jobs:
               modde-git) ;;
               *) echo "unknown AUR package: $pkg" >&2; exit 1 ;;
             esac
-            (cd "aur-${pkg}" && makepkg --config "$MAKEPKG_CONF" --printsrcinfo > .SRCINFO)
+            print_srcinfo "aur-${pkg}"
             git -C "aur-${pkg}" add PKGBUILD .SRCINFO
             if git -C "aur-${pkg}" diff --cached --quiet; then echo "AUR ${pkg} already at ${VERSION}"; return 0; fi
             git -C "aur-${pkg}" -c user.email='ci@localhost' -c user.name='release bot' commit -m "${VERSION}"
@@ -715,7 +683,7 @@ jobs:
             exit 1
           }
           if [ -z "$COPR_LOGIN" ] || [ -z "$COPR_USERNAME" ] || [ -z "$COPR_TOKEN" ]; then publisher_missing copr 'COPR credentials unset'; fi
-          srpms=(srpms/*.src.rpm); if [ ! -e "${srpms[0]}" ]; then publisher_missing copr 'no SRPM to publish'; fi
+          srpms=(target/modde-release/root-artifacts/srpms/*.src.rpm); if [ ! -e "${srpms[0]}" ]; then publisher_missing copr 'no SRPM to publish'; fi
           mkdir -p ~/.config
           cat > ~/.config/copr <<EOF
           [copr-cli]
@@ -725,7 +693,7 @@ jobs:
           copr_url = https://copr.fedorainfracloud.org
           EOF
           chmod 600 ~/.config/copr
-          nix run .#copr-cli -- build --nowait "${COPR_PROJECT}" srpms/*.src.rpm
+          nix run .#copr-cli -- build --nowait "${COPR_PROJECT}" target/modde-release/root-artifacts/srpms/*.src.rpm
       - name: Publish Chocolatey package
         env:
           CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
@@ -745,7 +713,10 @@ jobs:
           }
           if [ -z "${CHOCOLATEY_API_KEY:-}" ]; then publisher_missing chocolatey 'CHOCOLATEY_API_KEY unset'; fi
           ZIP="release/modde-${VERSION}-x86_64-windows.zip"; test -s "$ZIP" || publisher_missing chocolatey "missing $ZIP"
-          nix shell github:caniko/nixpkgs/add-chocolatey-scoop#chocolatey -c simit dist chocolatey bump \
+          CHOCO_VERSION_FILTER="Id%20eq%20'modde'%20and%20Version%20eq%20'${VERSION}'"
+          if curl -fsSL "https://community.chocolatey.org/api/v2/Packages()?%24filter=${CHOCO_VERSION_FILTER}" | grep -q "<entry>"; then echo "Chocolatey ${VERSION} already published; skipping."; exit 0; fi
+          choco_log="$(mktemp)"; trap 'rm -f "$choco_log"' EXIT
+          if ! nix develop -c nix shell github:caniko/nixpkgs/add-chocolatey-scoop#chocolatey -c simit dist chocolatey bump \
             --version "$VERSION" \
             --package-dir chocolatey-package \
             --archive "x64=$ZIP" \
@@ -760,4 +731,10 @@ jobs:
             --choco-archive-pattern 'modde-{version}-{arch}-windows.zip' \
             --push \
             --push-source "$CHOCO_PUSH_SOURCE" \
-            --api-key-env CHOCOLATEY_API_KEY
+            --api-key-env CHOCOLATEY_API_KEY 2>&1 | tee "$choco_log"; then
+            if grep -q 'Chocolatey rejects duplicate version pushes' "$choco_log"; then
+              echo 'Chocolatey version already published; skipping duplicate push.'
+              exit 0
+            fi
+            exit 1
+          fi
