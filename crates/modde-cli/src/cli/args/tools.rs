@@ -257,6 +257,9 @@ pub(crate) enum ToolAction {
         /// Setting key=value pairs
         #[arg(last = true)]
         settings: Vec<String>,
+        /// Reset one or more settings to their defaults (repeatable)
+        #[arg(long = "reset-key")]
+        reset_keys: Vec<String>,
     },
     /// Guided setup for a game tool without opening the GUI
     Setup {

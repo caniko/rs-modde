@@ -296,9 +296,15 @@ pub(crate) fn run_command(cli: Cli) -> Result<()> {
                     tool_id,
                     game,
                     settings,
+                    reset_keys,
                 },
         } => {
-            db_sync!(commands::tool::handle_configure(&tool_id, &game, &settings));
+            db_sync!(commands::tool::handle_configure(
+                &tool_id,
+                &game,
+                &settings,
+                &reset_keys,
+            ));
         }
         Commands::Tool {
             action:

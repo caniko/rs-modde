@@ -1291,7 +1291,12 @@ pub async fn handle_disable(tool_id: &str, game_id: &str) -> Result<()> {
 }
 
 /// Configure a tool's settings.
-pub async fn handle_configure(tool_id: &str, game_id: &str, settings: &[String]) -> Result<()> {
+pub async fn handle_configure(
+    tool_id: &str,
+    game_id: &str,
+    settings: &[String],
+    reset_keys: &[String],
+) -> Result<()> {
     let tool = modde_games::tools::resolve_tool(tool_id)
         .ok_or_else(|| anyhow::anyhow!("unknown tool: '{tool_id}'"))?;
 
@@ -1326,6 +1331,32 @@ pub async fn handle_configure(tool_id: &str, game_id: &str, settings: &[String])
             modde_games::tools::optiscaler::apply_profile_by_id(&mut config, game_id, value);
         }
         println!("  {key} = {value}");
+    }
+
+    for reset_key in reset_keys {
+        let defaults = tool.default_config_for(context.as_ref());
+        let default_value = defaults.settings.get(reset_key).cloned();
+        let specs = tool.settings_schema_for(context.as_ref(), &config);
+        let spec = specs
+            .iter()
+            .find(|spec| spec.key.as_ref() == reset_key.as_str())
+            .ok_or_else(|| unknown_setting_error(reset_key, &specs))?;
+        match &spec.kind {
+            ToolSettingKind::ReadOnly => {
+                anyhow::bail!("cannot reset read-only setting '{reset_key}'");
+            }
+            _ => {}
+        }
+        if let Some(value) = default_value {
+            config.set(reset_key, value.clone());
+            println!("  {reset_key} = (default)");
+        } else {
+            config
+                .settings
+                .as_object_mut()
+                .map(|obj| obj.remove(reset_key));
+            println!("  {reset_key} = (removed)");
+        }
     }
 
     let settings_json = serde_json::to_string(&config.settings)?;
