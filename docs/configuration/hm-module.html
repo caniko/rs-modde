@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-313809ce.js";
+            window.path_to_searchindex_js = "../searchindex-7fd5fe23.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-050961cc.js"></script>
@@ -634,9 +634,10 @@ documents the recognized keys and their accepted values:</p>
 <tbody>
 <tr><td><code>copy_companion_files</code></td><td>bool</td><td>Copy fakenvapi, nvngx wrapper, and other DLLs found next to OptiScaler</td></tr>
 <tr><td><code>dll_overrides</code></td><td>text</td><td>Comma/whitespace-separated Wine DLL override base names</td></tr>
-<tr><td><code>emulate_fp8</code></td><td>bool</td><td>Set <code>DXIL_SPIRV_CONFIG=wmma_rdna3_workaround</code> for the Latest (FP8) FSR4 variant</td></tr>
+<tr><td><code>emulate_fp8</code></td><td>bool</td><td>Manual FP8-emulation toggle; auto hardware tuning owns this value by default</td></tr>
 <tr><td><code>enable_optipatcher</code></td><td>bool</td><td>Use OptiPatcher to unlock DLSS / DLSS frame-gen inputs without whole-game spoofing</td></tr>
-<tr><td><code>fsr4_variant</code></td><td>enum: <code>latest_fp8</code>, <code>int8_402</code></td><td>FSR4 payload copied as <code>amd_fidelityfx_upscaler_dx12.dll</code></td></tr>
+<tr><td><code>fsr4_variant</code></td><td>enum: <code>latest_fp8</code>, <code>int8_402</code></td><td>FSR4 payload copied as <code>amd_fidelityfx_upscaler_dx12.dll</code>; auto hardware tuning owns this value by default</td></tr>
+<tr><td><code>hardware_tuning</code></td><td>enum: <code>auto</code>, <code>manual</code></td><td><code>auto</code> lets modde choose GPU-specific FSR4 settings; <code>manual</code> preserves explicit settings</td></tr>
 <tr><td><code>ini_overrides.FSR.FGIndex</code></td><td>enum: <code>auto</code>, <code>0</code>, <code>1</code></td><td>OptiScaler <code>[FSR] FGIndex</code> override</td></tr>
 <tr><td><code>ini_overrides.FSR.UpscalerIndex</code></td><td>enum: <code>auto</code>, <code>0</code>, <code>1</code>, <code>2</code></td><td>OptiScaler <code>[FSR] UpscalerIndex</code> override</td></tr>
 <tr><td><code>ini_overrides.Menu.Scale</code></td><td>float (0.5 – 2, step 0.1)</td><td>OptiScaler <code>[Menu] Scale</code> override</td></tr>
@@ -778,7 +779,7 @@ pinned release asset applied on every activation.</p>
         settings = {
           source_mode = "github_release";
           proxy_dll = "dxgi.dll";
-          fsr4_variant = "latest_fp8";
+          hardware_tuning = "auto";
           "ini_overrides.FSR.UpscalerIndex" = "auto";
           "ini_overrides.Menu.Scale" = 1.2;
         };

@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-313809ce.js";
+            window.path_to_searchindex_js = "../searchindex-7fd5fe23.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-050961cc.js"></script>
@@ -355,9 +355,9 @@ installer paths respectively; Stellar Blade uses none of them.</li>
 <code>Partial</code>. Most installs are “extract pak, deploy to <code>~mods</code>”.</p>
 <h2 id="gaming-tools-that-matter"><a class="header" href="#gaming-tools-that-matter">Gaming tools that matter</a></h2>
 <h3 id="optiscaler--the-community-dxgi-profile"><a class="header" href="#optiscaler--the-community-dxgi-profile">OptiScaler — the <code>community-dxgi</code> profile</a></h3>
-<p>Stellar Blade ships exactly one curated OptiScaler profile, <strong><code>community-dxgi</code></strong>
-(“Community tested dxgi.dll”). It is the recommended way to add modern upscaling/frame
-generation. Its pinned settings, straight from the registry:</p>
+<p>Stellar Blade ships one curated OptiScaler game profile, <strong><code>community-dxgi</code></strong>.
+GPU-specific FSR4 choices are handled by OptiScaler’s global <code>hardware_tuning</code>
+layer, not by separate per-game GPU profiles.</p>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -365,10 +365,10 @@ generation. Its pinned settings, straight from the registry:</p>
 </thead>
 <tbody>
 <tr><td>Proxy DLL</td><td><code>dxgi.dll</code></td></tr>
-<tr><td>Source mode</td><td><code>github_release</code>, release tag <code>official:v0.9.1</code></td></tr>
+<tr><td>Source mode</td><td>Any OptiScaler source with <code>FSR4_INT8/</code> and <code>FSR4_LATEST/</code> payloads; GOverlay builds are recommended for FSR4 variant switching</td></tr>
 <tr><td>Tested OptiScaler version</td><td><code>0.9</code></td></tr>
-<tr><td>FSR4 variant</td><td><code>latest_fp8</code></td></tr>
-<tr><td><code>emulate_fp8</code></td><td><code>true</code> (FP8 emulation, for RDNA3 and other cards without native FP8)</td></tr>
+<tr><td>FSR4 variant</td><td>selected by <code>hardware_tuning=auto</code></td></tr>
+<tr><td><code>emulate_fp8</code></td><td>selected by <code>hardware_tuning=auto</code></td></tr>
 <tr><td>OptiPatcher</td><td>enabled</td></tr>
 <tr><td><code>spoof_dlss</code></td><td><code>false</code></td></tr>
 <tr><td>Companion files</td><td>copied</td></tr>
@@ -376,25 +376,55 @@ generation. Its pinned settings, straight from the registry:</p>
 </table>
 </div>
 <p>The profile uses <strong>OptiPatcher to unlock the game’s DLSS and DLSS-FG inputs without
-spoofing</strong> a DLSS-capable GPU — so you get the DLSS/DLSS-FG code paths re-routed through
-OptiScaler/FSR rather than faking vendor detection. The <code>latest_fp8</code> FSR4 variant with
-<code>emulate_fp8 = true</code> is what lets RDNA3-class cards run the FP8 model via emulation.</p>
-<p><strong>Known OptiScaler gotchas for this title</strong> (from the bundled profile notes):</p>
+spoofing</strong> a DLSS-capable GPU — so you get the DLSS/DLSS-FG code paths re-routed
+through OptiScaler/FSR rather than faking vendor detection.</p>
+<h3 id="rdna3-requirements"><a class="header" href="#rdna3-requirements">RDNA3 requirements</a></h3>
+<p>FSR4 on AMD RX 7000 series requires:</p>
+<ul>
+<li><strong>Proton 11+</strong> or <strong>Proton GE 10-34+</strong> (for FSR 4.1 / FFX SDK 2.2 support)</li>
+<li><strong>Mesa 25.2+</strong> (for FSR4 frame generation)</li>
+<li><strong><code>PROTON_FSR4_UPGRADE=1</code></strong> environment variable (auto-emitted by modde’s env vars)</li>
+<li><strong>Proton prefix set to Windows 11</strong> (via <code>winecfg</code>)</li>
+<li>For RDNA3 on Linux: the <code>DXIL_SPIRV_CONFIG=wmma_rdna3_workaround</code> env var is no longer
+needed as of FSR 4.1.1+.</li>
+</ul>
+<h3 id="gpu-auto-detection"><a class="header" href="#gpu-auto-detection">GPU auto-detection</a></h3>
+<p>modde reads <code>/sys/class/drm/</code> to detect your GPU at apply time and finalizes
+FSR4 settings when <code>hardware_tuning=auto</code>:</p>
+<ul>
+<li><strong>RDNA3 (RX 7000)</strong> → <code>fsr4_variant=int8_402</code>, <code>emulate_fp8=false</code></li>
+<li><strong>RDNA4 (RX 9000)</strong> → <code>fsr4_variant=latest_fp8</code>, <code>emulate_fp8=false</code></li>
+<li><strong>AMD legacy, NVIDIA, Intel, unknown</strong> → preserve the configured/default FSR4 setting</li>
+</ul>
+<p>You can override the GPU tuning only by switching to manual mode:</p>
+<pre><code class="language-bash">modde tool configure optiscaler --game stellar-blade hardware_tuning=manual
+modde tool configure optiscaler --game stellar-blade fsr4_variant=int8_402
+</code></pre>
+<h3 id="known-gotchas"><a class="header" href="#known-gotchas">Known gotchas</a></h3>
 <ul>
 <li>The game <strong>may crash on first boot</strong> with the proxy in place but work on the next launch
 — if the first launch dies, just relaunch before assuming a bad install.</li>
 <li>If DLSSG/frame-gen HUD elements look wrong (interpolation artifacts on the HUD),
 <strong>set the in-game sharpness slider to 0</strong> as a workaround.</li>
 </ul>
-<p>Enable and apply it through the tools system:</p>
-<pre><code class="language-bash"># Enable OptiScaler for Stellar Blade and select the curated profile
-modde tool enable optiscaler --game stellar-blade
-modde tool configure optiscaler --game stellar-blade optiscaler_profile=community-dxgi
-modde tool apply optiscaler --game stellar-blade
+<h3 id="quick-start"><a class="header" href="#quick-start">Quick start</a></h3>
+<pre><code class="language-bash"># Inspect the curated profile, cached sources, and effective settings.
+modde tool profiles optiscaler --game stellar-blade
+modde tool sources optiscaler --game stellar-blade
+modde tool settings optiscaler --game stellar-blade
+
+# Configure and apply OptiScaler. Does not upgrade/download unless --upgrade is passed.
+modde tool setup optiscaler --game stellar-blade --source auto --apply
+
+# If something looks wrong, print actionable findings and next commands.
+modde tool doctor --game stellar-blade optiscaler
 </code></pre>
-<p><code>modde tool apply</code> writes the <code>dxgi.dll</code> proxy and companion files into the game’s
-<code>Binaries/Win64</code>. See <a href="../guides/tools.html">Tools &amp; overlays</a> and the OptiScaler source
-selector (official releases versus GOverlay builds) documented there.</p>
+<p><code>modde tool setup ... --source auto</code> reuses the current source or an already cached
+GOverlay build with <code>FSR4_INT8/</code> and <code>FSR4_LATEST/</code> payloads. It does not select a
+newer build by default; pass <code>--upgrade</code> when you intentionally want the newest matching
+GOverlay release. <code>setup --apply</code> writes the <code>dxgi.dll</code> proxy and companion files into
+the game’s <code>Binaries/Win64</code>. See <a href="../guides/tools.html">Tools &amp; overlays</a> for diagnostics,
+preview, and exact release pinning commands.</p>
 <h3 id="proton-overlays-and-wine-dll-overrides"><a class="header" href="#proton-overlays-and-wine-dll-overrides">Proton, overlays, and Wine DLL overrides</a></h3>
 <p>The other tool IDs apply normally for this Proton game: <code>proton</code> (version mode, extra env,
 DLL-override mode), <code>mangohud</code>, <code>vkbasalt</code>, <code>gamemode</code>, and <code>reshade</code>. Because Stellar

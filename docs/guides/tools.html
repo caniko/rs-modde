@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-313809ce.js";
+            window.path_to_searchindex_js = "../searchindex-7fd5fe23.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-050961cc.js"></script>
@@ -220,17 +220,21 @@
 <pre><code class="language-bash"># Discovery
 modde tool list --game skyrim-se        # auto-detect known external tool executables
 modde tool status --game skyrim-se      # enabled/disabled + availability for all six tools
+modde tool doctor --game skyrim-se      # actionable checks and next commands
 
 # Lifecycle
 modde tool enable &lt;tool_id&gt;  --game skyrim-se
 modde tool disable &lt;tool_id&gt; --game skyrim-se
 modde tool configure &lt;tool_id&gt; --game skyrim-se -- key=value key=value ...
+modde tool settings &lt;tool_id&gt; --game skyrim-se
 
 # File patches (ReShade, OptiScaler)
 modde tool apply  &lt;tool_id&gt; --game skyrim-se
 modde tool revert &lt;tool_id&gt; --game skyrim-se
 
 # Release-backed tools (OptiScaler)
+modde tool profiles optiscaler --game skyrim-se
+modde tool sources  optiscaler --game skyrim-se
 modde tool releases &lt;tool_id&gt; --game skyrim-se
 modde tool install-release &lt;tool_id&gt; --game skyrim-se --tag &lt;tag&gt; --asset &lt;asset&gt;
 </code></pre>
@@ -384,6 +388,40 @@ modde tool install-release optiscaler --game stellar-blade \
   --tag official:v0.9.1 --asset OptiScaler.7z
 </code></pre>
 <p>Archives are flattened so that <code>OptiScaler.dll</code>, <code>OptiScaler.ini</code>, companion DLLs, <code>OptiPatcher.asi</code>, and the FSR4 payload directories land predictably in the cache. (<code>.7z</code> extraction shells out to <code>7zz</code>/<code>7z</code>.) Installing from a local archive path is also supported internally for offline pinning.</p>
+<h3 id="cli-first-setup"><a class="header" href="#cli-first-setup">CLI-first setup</a></h3>
+<p>The non-GUI path is <code>tool setup</code>, <code>tool show</code>, <code>tool doctor</code>, <code>tool diagnose</code>, <code>tool preview</code>, and <code>tool apply</code>. Discovery commands are read-only and all detailed inspection commands support <code>--json</code> for scripts.</p>
+<pre><code class="language-bash"># See what modde knows before changing anything.
+modde tool profiles optiscaler --game stellar-blade
+modde tool sources optiscaler --game stellar-blade
+modde tool settings optiscaler --game stellar-blade
+
+# Configure only. Does not download newer builds and does not apply files.
+modde tool setup optiscaler --game stellar-blade --source auto
+
+# Inspect saved/effective config, env vars, DLL overrides, and apply preview.
+modde tool show optiscaler --game stellar-blade
+
+# Get an actionable health summary and next commands.
+modde tool doctor --game stellar-blade optiscaler
+
+# Diagnose GPU tuning, source payloads, missing inputs, and active proxies.
+modde tool diagnose optiscaler --game stellar-blade
+
+# Apply once preview/diagnose are clean.
+modde tool setup optiscaler --game stellar-blade --source auto --apply
+</code></pre>
+<p><code>--source auto</code> is conservative: it reuses the current source if it is suitable, or a cached GOverlay build that already contains both <code>FSR4_INT8/</code> and <code>FSR4_LATEST/</code>. It does <strong>not</strong> upgrade or download by default. To intentionally select and install the newest matching release, pass <code>--upgrade</code>:</p>
+<pre><code class="language-bash">modde tool setup optiscaler --game stellar-blade --source goverlay-edge --upgrade --apply
+</code></pre>
+<p>You can also pin exact inputs without using the GUI:</p>
+<pre><code class="language-bash">modde tool setup optiscaler --game stellar-blade \
+  --profile community-dxgi \
+  --source goverlay-edge \
+  --release-tag goverlay-edge:edge-0.9.12.0323 \
+  --release-asset optiscaler-edge.7z \
+  --hardware-tuning auto \
+  --apply
+</code></pre>
 <h3 id="key-settings"><a class="header" href="#key-settings">Key settings</a></h3>
 <div class="table-wrapper">
 <table>
@@ -394,8 +432,9 @@ modde tool install-release optiscaler --game stellar-blade \
 <tr><td><code>proxy_dll</code></td><td>select</td><td>DLL OptiScaler is loaded as: <code>dxgi.dll</code> (default), <code>version.dll</code>, <code>dbghelp.dll</code>, <code>d3d12.dll</code>, <code>wininet.dll</code>, <code>winhttp.dll</code>, <code>winmm.dll</code>, <code>nvngx.dll</code>, or <code>OptiScaler.asi</code></td></tr>
 <tr><td><code>dll_overrides</code></td><td>text</td><td>Extra Wine DLL override base names (comma/space separated)</td></tr>
 <tr><td><code>copy_companion_files</code></td><td>bool (default on)</td><td>Copy <code>fakenvapi.dll</code>, <code>nvngx-wrapper.dll</code>, and other DLLs found beside OptiScaler</td></tr>
-<tr><td><code>fsr4_variant</code></td><td>select</td><td><code>latest_fp8</code> (“Latest (FP8)”) or <code>int8_402</code> (“4.0.2c (INT8)”) — copied as <code>amd_fidelityfx_upscaler_dx12.dll</code></td></tr>
-<tr><td><code>emulate_fp8</code></td><td>bool</td><td>Only meaningful for the FP8 variant; exports <code>DXIL_SPIRV_CONFIG=wmma_rdna3_workaround</code></td></tr>
+<tr><td><code>hardware_tuning</code></td><td>select</td><td><code>auto</code> lets modde choose GPU-specific FSR4 settings; <code>manual</code> preserves explicit FSR4 settings</td></tr>
+<tr><td><code>fsr4_variant</code></td><td>select/read-only</td><td><code>latest_fp8</code> (“Latest (FP8)”) or <code>int8_402</code> (“4.0.2c (INT8)”) — copied as <code>amd_fidelityfx_upscaler_dx12.dll</code>; read-only when <code>hardware_tuning=auto</code></td></tr>
+<tr><td><code>emulate_fp8</code></td><td>bool/read-only</td><td>Only meaningful for the FP8 variant; read-only when <code>hardware_tuning=auto</code></td></tr>
 <tr><td><code>enable_optipatcher</code></td><td>bool</td><td>Deploy <code>plugins/OptiPatcher.asi</code> to unlock DLSS/DLSS-FG inputs without whole-game spoofing</td></tr>
 <tr><td><code>spoof_dlss</code></td><td>bool</td><td>Fallback DXGI spoofing path for games that still need it</td></tr>
 </tbody>
@@ -403,7 +442,21 @@ modde tool install-release optiscaler --game stellar-blade \
 </div>
 <p>There are also exposed OptiScaler <code>.ini</code> overrides (<code>ini_overrides.*</code>), e.g. the in-game menu shortcut key, menu scale, the FSR upscaler/frame-generation backend indices, and fakenvapi/LatencyFlex toggles. Additional <code>.ini</code> keys discovered in the selected release’s <code>OptiScaler.ini</code> are surfaced as advanced overrides.</p>
 <h3 id="fsr4-variants-and-fp8-emulation"><a class="header" href="#fsr4-variants-and-fp8-emulation">FSR4 variants and FP8 emulation</a></h3>
-<p><code>fsr4_variant</code> selects which FSR4 payload is copied as <code>amd_fidelityfx_upscaler_dx12.dll</code>: <code>latest_fp8</code> (FP8) or <code>int8_402</code> (INT8, 4.0.2c). The two payloads ship in <code>FSR4_LATEST/</code> and <code>FSR4_INT8/</code> directories inside the source. <code>emulate_fp8</code> only applies to the FP8 variant and, when set, exports <code>DXIL_SPIRV_CONFIG=wmma_rdna3_workaround</code> so FP8 paths run on RDNA3 via the WMMA workaround.</p>
+<p><code>fsr4_variant</code> selects which FSR4 payload is copied as <code>amd_fidelityfx_upscaler_dx12.dll</code>: <code>latest_fp8</code> (FP8) or <code>int8_402</code> (INT8, 4.0.2c). The two payloads ship in <code>FSR4_LATEST/</code> and <code>FSR4_INT8/</code> directories inside the source.</p>
+<p>By default <code>hardware_tuning=auto</code> owns GPU-sensitive FSR4 settings after any game profile has been applied:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>GPU</th><th>Auto tuning</th></tr>
+</thead>
+<tbody>
+<tr><td>AMD RDNA3 / RX 7000</td><td><code>fsr4_variant=int8_402</code>, <code>emulate_fp8=false</code></td></tr>
+<tr><td>AMD RDNA4 / RX 9000</td><td><code>fsr4_variant=latest_fp8</code>, <code>emulate_fp8=false</code></td></tr>
+<tr><td>AMD legacy, NVIDIA, Intel, unknown</td><td>Preserve the configured/default FSR4 setting</td></tr>
+</tbody>
+</table>
+</div>
+<p>Set <code>hardware_tuning=manual</code> only when intentionally testing or overriding the GPU-specific default. In manual mode modde preserves <code>fsr4_variant</code> and <code>emulate_fp8</code>, but still warns about combinations known to be unsafe, such as RDNA3 with the FP8 FSR4 model.</p>
 <h3 id="optipatcher-and-companion-dlls"><a class="header" href="#optipatcher-and-companion-dlls">OptiPatcher and companion DLLs</a></h3>
 <p>When <code>enable_optipatcher</code> is on, apply deploys <code>plugins/OptiPatcher.asi</code> and sets <code>Plugins.LoadAsiPlugins=true</code> in the merged <code>.ini</code>. If the patcher is not cached, <code>install-release</code> fetches the latest <code>OptiPatcher.asi</code> from <code>optiscaler/OptiPatcher</code>. With <code>copy_companion_files</code> on, any extra <code>.dll</code> next to OptiScaler (fakenvapi, nvngx wrapper, etc.) is copied alongside the proxy.</p>
 <h3 id="install-scanning-and-backups"><a class="header" href="#install-scanning-and-backups">Install scanning and backups</a></h3>
@@ -414,11 +467,9 @@ modde tool install-release optiscaler --game stellar-blade \
 <h3 id="fgmod-restore"><a class="header" href="#fgmod-restore">fgmod restore</a></h3>
 <p>OptiScaler carries the fgmod DLL-restore behaviour: fgmod deletes certain DLLs at launch (<code>dxgi.dll</code>, <code>winmm.dll</code>, <code>nvngx.dll</code>, <code>_nvngx.dll</code>, <code>nvngx-wrapper.dll</code>, <code>dlss-enabler.dll</code>, <code>OptiScaler.dll</code>). modde’s launch wrapper scans the staging <code>mods/&lt;mod&gt;/bin/x64</code> directories and restores any of those DLLs into the executable directory so a re-deploy does not leave the game broken.</p>
 <h3 id="community-profiles"><a class="header" href="#community-profiles">Community profiles</a></h3>
-<p>For some games modde ships community-tested OptiScaler profiles (game-owned metadata). Selecting a profile via <code>optiscaler_profile=&lt;id&gt;</code> applies its <code>proxy_dll</code>, source, FSR4 variant, OptiPatcher flag, <code>.ini</code> overrides, and records its tested version, source URL, and notes. Profiles never imply OptiScaler is enabled by default.</p>
+<p>For some games modde ships community-tested OptiScaler profiles (game-owned metadata). Selecting a profile via <code>optiscaler_profile=&lt;id&gt;</code> applies its <code>proxy_dll</code>, source, OptiPatcher flag, <code>.ini</code> overrides, and records its tested version, source URL, and notes. Profiles may carry historical FSR4 hints, but <code>hardware_tuning=auto</code> is the final authority for GPU-specific FSR4 settings. Profiles never imply OptiScaler is enabled by default.</p>
 <p>For <strong>Stellar Blade</strong> the default profile is <code>community-dxgi</code>, which uses <code>dxgi.dll</code> as the proxy and enables OptiPatcher so DLSS/DLSS-FG inputs are unlocked without spoofing. You can also define your own profiles in <code>~/.local/share/modde/games/&lt;game_id&gt;.optiscaler.toml</code> (an <code>[[optiscaler.profile]]</code> array); user profiles merge over built-ins of the same <code>id</code>.</p>
-<pre><code class="language-bash">modde tool enable optiscaler --game stellar-blade
-modde tool configure optiscaler --game stellar-blade -- optiscaler_profile=community-dxgi
-modde tool apply optiscaler --game stellar-blade
+<pre><code class="language-bash">modde tool setup optiscaler --game stellar-blade --source auto --apply
 </code></pre>
 <p>See the deeper deployment notes in the supported-game page for <a href="../games/stellar-blade.html">Stellar Blade</a> and <a href="../games/cyberpunk2077.html">Cyberpunk 2077</a>.</p>
 <hr>
