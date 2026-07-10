@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-7fd5fe23.js";
+            window.path_to_searchindex_js = "searchindex-d988db20.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-050961cc.js"></script>
@@ -11571,14 +11571,118 @@ and the full named-executable surface (the same storage <code>modde exec</code> 
 <p>Disable a tool or overlay.</p>
 <pre><code class="language-bash">modde tool disable &lt;tool_id&gt; --game &lt;id&gt;
 </code></pre>
-<h3 id="tool-configure"><a class="header" href="#tool-configure"><code>tool configure</code></a></h3>
-<p>Configure tool settings as <code>key=value</code> pairs.</p>
-<pre><code class="language-bash">modde tool configure &lt;tool_id&gt; --game &lt;id&gt; -- &lt;key=value&gt;...
+<h3 id="tool-show"><a class="header" href="#tool-show"><code>tool show</code></a></h3>
+<p>Show saved and effective configuration for a tool.</p>
+<pre><code class="language-bash">modde tool show &lt;tool_id&gt; --game &lt;id&gt; [--json]
 </code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--json</code></td><td>Emit machine-readable JSON</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="tool-diagnose"><a class="header" href="#tool-diagnose"><code>tool diagnose</code></a></h3>
+<p>Diagnose a tool setup for a game (GPU tuning, source payloads, proxies).</p>
+<pre><code class="language-bash">modde tool diagnose &lt;tool_id&gt; --game &lt;id&gt; [--json]
+</code></pre>
+<h3 id="tool-doctor"><a class="header" href="#tool-doctor"><code>tool doctor</code></a></h3>
+<p>Check one tool — or all tools — and print actionable next steps.</p>
+<pre><code class="language-bash">modde tool doctor --game &lt;id&gt; [tool_id] [--json] [--fix]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--json</code></td><td>Emit machine-readable JSON with a health score (0-100)</td></tr>
+<tr><td><code>--fix</code></td><td>Automatically apply the first recommended fix command</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="tool-settings"><a class="header" href="#tool-settings"><code>tool settings</code></a></h3>
+<p>List all settings with their types, saved values, effective values, and allowed
+values.</p>
+<pre><code class="language-bash">modde tool settings &lt;tool_id&gt; --game &lt;id&gt; [--json]
+</code></pre>
+<p>Settings are grouped by section. Non-applied hardware tuning defaults are shown
+as effective values when they differ from saved values.</p>
+<h3 id="tool-profiles"><a class="header" href="#tool-profiles"><code>tool profiles</code></a></h3>
+<p>List community profiles for a tool and game (currently OptiScaler only).</p>
+<pre><code class="language-bash">modde tool profiles &lt;tool_id&gt; --game &lt;id&gt; [--json]
+</code></pre>
+<h3 id="tool-sources"><a class="header" href="#tool-sources"><code>tool sources</code></a></h3>
+<p>List cached and current install sources for a release-backed tool (currently
+OptiScaler only).</p>
+<pre><code class="language-bash">modde tool sources &lt;tool_id&gt; --game &lt;id&gt; [--json]
+</code></pre>
+<p>Reports whether each cached source has <code>FSR4_INT8/</code>, <code>FSR4_LATEST/</code>, and
+<code>OptiScaler.dll</code> payloads.</p>
+<h3 id="tool-configure"><a class="header" href="#tool-configure"><code>tool configure</code></a></h3>
+<p>Configure tool settings as <code>key=value</code> pairs, or reset settings to defaults.</p>
+<pre><code class="language-bash">modde tool configure &lt;tool_id&gt; --game &lt;id&gt; -- &lt;key=value&gt;...
+modde tool configure &lt;tool_id&gt; --game &lt;id&gt; --reset-key &lt;key&gt;
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--reset-key</code></td><td>Reset a setting to its tool-defined default</td></tr>
+</tbody>
+</table>
+</div>
+<p>Values are parsed by type: <code>true</code>/<code>false</code>/<code>1</code>/<code>0</code> for booleans, numbers for
+numeric settings, exact values for selects. Read-only settings cannot be set or
+reset.</p>
+<h3 id="tool-setup"><a class="header" href="#tool-setup"><code>tool setup</code></a></h3>
+<p>Guided setup for a game tool without opening the GUI (currently OptiScaler
+only).</p>
+<pre><code class="language-bash">modde tool setup &lt;tool_id&gt; --game &lt;id&gt; --source auto [--apply] [--dry-run] [--upgrade]
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--source</code></td><td><code>auto</code></td><td>Source to use: <code>auto</code>, <code>goverlay-edge</code>, <code>goverlay-stable</code>, <code>official</code>, <code>fgmod</code>, <code>local</code></td></tr>
+<tr><td><code>--profile</code></td><td>—</td><td>OptiScaler profile ID, e.g. <code>community-dxgi</code></td></tr>
+<tr><td><code>--release-tag</code></td><td>—</td><td>Exact release tag to pin, e.g. <code>goverlay-edge:edge-...</code></td></tr>
+<tr><td><code>--release-asset</code></td><td>—</td><td>Exact release asset filename</td></tr>
+<tr><td><code>--local-source-dir</code></td><td>—</td><td>Local source directory when <code>--source local</code></td></tr>
+<tr><td><code>--hardware-tuning</code></td><td><code>auto</code></td><td><code>auto</code> or <code>manual</code></td></tr>
+<tr><td><code>--upgrade</code></td><td>—</td><td>Download and install the newest matching release</td></tr>
+<tr><td><code>--apply</code></td><td>—</td><td>Apply files after validating the preview</td></tr>
+<tr><td><code>--dry-run</code></td><td>—</td><td>Show the plan without saving config or applying files</td></tr>
+<tr><td><code>--yes</code></td><td>—</td><td>Skip future confirmation prompts</td></tr>
+</tbody>
+</table>
+</div>
 <h3 id="tool-apply"><a class="header" href="#tool-apply"><code>tool apply</code></a></h3>
 <p>Apply tool patches to the game directory (DLLs, configs).</p>
-<pre><code class="language-bash">modde tool apply &lt;tool_id&gt; --game &lt;id&gt;
+<pre><code class="language-bash">modde tool apply &lt;tool_id&gt; --game &lt;id&gt; [--dry-run]
 </code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Flag</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>--dry-run</code></td><td>Show what would be written without applying</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="tool-preview"><a class="header" href="#tool-preview"><code>tool preview</code></a></h3>
+<p>Preview tool patches without writing to the game directory.</p>
+<pre><code class="language-bash">modde tool preview &lt;tool_id&gt; --game &lt;id&gt;
+</code></pre>
+<p>Shows planned, changed, and unchanged files as well as missing inputs.</p>
 <h3 id="tool-revert"><a class="header" href="#tool-revert"><code>tool revert</code></a></h3>
 <p>Revert tool patches from the game directory.</p>
 <pre><code class="language-bash">modde tool revert &lt;tool_id&gt; --game &lt;id&gt;
@@ -11625,6 +11729,20 @@ modde tool install-release optiscaler --game cyberpunk2077 \
   --tag v0.7.7 --asset OptiScaler_v0.7.7.7z
 </code></pre>
 <p>See the <a href="#tools--overlays">tools guide</a> for what each overlay does.</p>
+<hr>
+<h2 id="modde-dev"><a class="header" href="#modde-dev"><code>modde dev</code></a></h2>
+<p>Developer utilities and generation commands.</p>
+<h3 id="dev-completions"><a class="header" href="#dev-completions"><code>dev completions</code></a></h3>
+<p>Generate shell completion scripts.</p>
+<pre><code class="language-bash">modde dev completions &lt;shell&gt;
+</code></pre>
+<p>Supported shells: <code>bash</code>, <code>zsh</code>, <code>fish</code>, <code>powershell</code>, <code>elvish</code>.</p>
+<pre><code class="language-bash"># Install for bash:
+modde dev completions bash &gt; /etc/bash_completion.d/modde
+
+# Install for zsh (oh-my-zsh):
+modde dev completions zsh &gt; "${fpath[1]}/_modde"
+</code></pre>
 <hr>
 <h2 id="modde-fomod"><a class="header" href="#modde-fomod"><code>modde fomod</code></a></h2>
 <p>FOMOD installer utilities. See the <a href="#fomod-installer">FOMOD guide</a>.</p>
