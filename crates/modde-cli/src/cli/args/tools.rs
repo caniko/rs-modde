@@ -270,7 +270,7 @@ pub(crate) enum ToolAction {
         tool_id: String,
         #[arg(long)]
         game: String,
-        /// OptiScaler profile ID, e.g. community-dxgi
+        /// `OptiScaler` profile ID, e.g. community-dxgi
         #[arg(long)]
         profile: Option<String>,
         /// Source: auto, goverlay-edge, goverlay-stable, official, fgmod, local
@@ -282,7 +282,7 @@ pub(crate) enum ToolAction {
         /// Release asset to select/install, e.g. optiscaler-edge.7z
         #[arg(long)]
         release_asset: Option<String>,
-        /// Local OptiScaler source directory when --source local
+        /// Local `OptiScaler` source directory when --source local
         #[arg(long)]
         local_source_dir: Option<PathBuf>,
         /// Hardware tuning policy: auto or manual

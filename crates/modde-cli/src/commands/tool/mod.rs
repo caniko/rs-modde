@@ -17,6 +17,7 @@ pub use exec::{
 pub use releases::{handle_install_release, handle_install_release_from_path, handle_releases};
 
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ToolSetupOptions {
     pub tool_id: String,
     pub game: String,
@@ -704,7 +705,7 @@ pub async fn handle_doctor(
     );
     let stored = db.load_tool_configs(&GameId::from(game_id)).await?;
     let tools = modde_games::tools::all_tools()
-        .into_iter()
+        .iter()
         .copied()
         .filter(|tool| tool_id.is_none_or(|wanted| wanted == tool.tool_id()))
         .collect::<Vec<_>>();
@@ -1381,11 +1382,8 @@ pub async fn handle_configure(
             .iter()
             .find(|spec| spec.key.as_ref() == reset_key.as_str())
             .ok_or_else(|| unknown_setting_error(reset_key, &specs))?;
-        match &spec.kind {
-            ToolSettingKind::ReadOnly => {
-                anyhow::bail!("cannot reset read-only setting '{reset_key}'");
-            }
-            _ => {}
+        if spec.kind == ToolSettingKind::ReadOnly {
+            anyhow::bail!("cannot reset read-only setting '{reset_key}'");
         }
         if let Some(value) = default_value {
             config.set(reset_key, value.clone());
