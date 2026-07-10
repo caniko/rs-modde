@@ -114,6 +114,14 @@ fn cli_tool_doctor_help() {
 }
 
 #[test]
+fn cli_tool_doctor_fix_help() {
+    modde()
+        .args(["tool", "doctor", "--fix", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
 fn cli_tool_settings_help() {
     modde()
         .args(["tool", "settings", "--help"])

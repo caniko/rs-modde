@@ -1,0 +1,18 @@
+---
+source: crates/modde-cli/tests/cli_help_snapshots.rs
+expression: "stdout(&[\"tool\", \"doctor\", \"--help\"])"
+---
+Check one tool, or all tools, and print actionable next steps
+
+Usage: modde tool doctor [OPTIONS] --game <GAME> [TOOL_ID]
+
+Arguments:
+  [TOOL_ID]  Optional tool ID. When omitted, checks all tools
+
+Options:
+      --data-dir <DATA_DIR>          Override data directory (default: ~/.local/share/modde or $`MODDE_DATA_DIR`) [env: MODDE_DATA_DIR=]
+      --game <GAME>                  
+      --heap-profile <HEAP_PROFILE>  Write a DHAT heap profile. Requires the `heap-profile` cargo feature [env: MODDE_HEAP_PROFILE=]
+      --json                         Emit machine-readable JSON
+      --fix                          Apply the first recommended fix automatically (safe, conservative)
+  -h, --help                         Print help
