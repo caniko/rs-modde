@@ -74,8 +74,8 @@ pub fn scan_optiscaler_install_in_dir(
         let is_companion = OPTISCALER_COMPANION_FILES
             .iter()
             .any(|known| known.eq_ignore_ascii_case(name))
-            || lower.starts_with("libxess")
-            || lower.starts_with("amd_fidelityfx");
+            || ((lower.starts_with("libxess") || lower.starts_with("amd_fidelityfx"))
+                && lower.ends_with(".dll"));
         if path.is_file() && is_companion {
             companion_files.push(path.clone());
             push_detected_file(executable_dir, &path, managed_paths, &mut recognized_files);

@@ -73,3 +73,25 @@ fn scanner_matches_stellar_blade_root_relative_managed_manifest() {
         "managed; version v0.9.1; proxy dxgi.dll"
     );
 }
+
+#[test]
+fn scanner_ignores_backup_files_that_look_like_fidelityfx_dlls() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    std::fs::write(tmp.path().join("dxgi.dll"), b"optiscaler").expect("proxy");
+    std::fs::write(tmp.path().join("amd_fidelityfx_vk.dll"), b"managed").expect("dll");
+    std::fs::write(tmp.path().join("amd_fidelityfx_vk.dll.b"), b"backup").expect("backup");
+
+    let mut managed = BTreeSet::new();
+    managed.insert("dxgi.dll".to_string());
+    managed.insert("amd_fidelityfx_vk.dll".to_string());
+
+    let state = scan_optiscaler_install_in_dir(tmp.path(), &managed).expect("scan");
+
+    assert_eq!(state.status, OptiScalerInstallStatus::Managed);
+    assert_eq!(state.recognized_files.len(), 2);
+    assert!(state.recognized_files.iter().all(|file| {
+        file.rel_path
+            .extension()
+            .is_some_and(|extension| extension == "dll")
+    }));
+}
