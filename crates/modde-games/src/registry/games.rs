@@ -157,7 +157,7 @@ pub static GAME_REGISTRY: &[GameRegistration] = &[
         save_dependency_analyzer: None,
         collision_classifier: Some(cyberpunk_collision_classifier),
         hot_deploy: HotDeploySupport::Experimental,
-        optiscaler_profiles: &[],
+        optiscaler_profiles: crate::cyberpunk::CYBERPUNK_OPTISCALER_PROFILES,
     },
     GameRegistration {
         game_id: "stellar-blade",

@@ -13,6 +13,7 @@ use anyhow::{Context, Result};
 
 use smallvec::SmallVec;
 
+use crate::optiscaler::OptiScalerProfile;
 use crate::policies::{BareLayoutPolicy, ContentPolicy, DllOverridePolicy, StagingDllSearch};
 use crate::traits::{ContentCategory, GamePlugin, HotDeployCapability, ModSafety};
 
@@ -20,6 +21,26 @@ use crate::traits::{ContentCategory, GamePlugin, HotDeployCapability, ModSafety}
 pub struct Cyberpunk2077;
 
 pub static CYBERPUNK2077: Cyberpunk2077 = Cyberpunk2077;
+
+pub(crate) const CYBERPUNK_OPTISCALER_PROFILES: &[OptiScalerProfile] = &[OptiScalerProfile {
+    id: "community-dxgi",
+    name: "Community tested dxgi.dll",
+    source_url: "https://github.com/optiscaler/OptiScaler/wiki/Cyberpunk-2077",
+    tested_optiscaler_version: "0.9",
+    source_mode: Some("github_release"),
+    goverlay_channel: None,
+    proxy_dll: "dxgi.dll",
+    release_tag: Some("official:v0.9.1"),
+    release_asset: None,
+    wine_dll_overrides: &[],
+    copy_companion_files: true,
+    enable_optipatcher: true,
+    fsr4_variant: Some("latest_fp8"),
+    emulate_fp8: false,
+    spoof_dlss: false,
+    ini_overrides: &[],
+    notes: "Use OptiPatcher to unlock DLSS and DLSS-FG inputs without spoofing. Cyberpunk 2077's DLSS path is the primary OptiScaler input. The game may need DLSS-FG toggled on in the in-game menu for frame generation to activate.",
+}];
 
 /// File extensions that indicate a mod alters game logic.
 const CYBERPUNK_SAVE_BREAKING_EXT: &[&str] = &["reds", "lua", "tweak", "xl", "yaml", "yls"];
