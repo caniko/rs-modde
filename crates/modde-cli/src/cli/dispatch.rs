@@ -313,6 +313,8 @@ pub(crate) fn run_command(cli: Cli) -> Result<()> {
                     hardware_tuning,
                     upgrade,
                     apply,
+                    dry_run,
+                    yes,
                 },
         } => {
             db_sync!(commands::tool::handle_setup(
@@ -327,13 +329,20 @@ pub(crate) fn run_command(cli: Cli) -> Result<()> {
                     hardware_tuning,
                     upgrade,
                     apply,
+                    dry_run,
+                    yes,
                 }
             ));
         }
         Commands::Tool {
-            action: ToolAction::Apply { tool_id, game },
+            action:
+                ToolAction::Apply {
+                    tool_id,
+                    game,
+                    dry_run,
+                },
         } => {
-            db_sync!(commands::tool::handle_apply(&tool_id, &game));
+            db_sync!(commands::tool::handle_apply(&tool_id, &game, dry_run));
         }
         Commands::Tool {
             action: ToolAction::Preview { tool_id, game },

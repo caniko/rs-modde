@@ -27,6 +27,9 @@ pub struct ToolSetupOptions {
     pub hardware_tuning: String,
     pub upgrade: bool,
     pub apply: bool,
+    pub dry_run: bool,
+    #[allow(dead_code)]
+    pub yes: bool,
 }
 
 struct LoadedTool<'a> {
@@ -913,6 +916,49 @@ fn tool_doctor_report(
         ));
     }
 
+    // Per-tool specific findings
+    match tool.tool_id() {
+        "reshade" => {
+            let has_source = config.get_str("source_dir").is_some_and(|d| !d.is_empty());
+            if config.enabled && !has_source {
+                findings.push(serde_json::json!({
+                    "severity": "error",
+                    "message": "ReShade source_dir is not set; configure a path to your ReShade DLLs",
+                }));
+                recommended.push(format!(
+                    "modde tool configure reshade --game {game_id} -- source_dir=/path/to/reshade"
+                ));
+            }
+        }
+        "proton" => {
+            let has_runner = config
+                .get_str("version_mode")
+                .is_some_and(|m| m != "launcher_default")
+                || config
+                    .get_str("selected_version")
+                    .is_some_and(|v| !v.is_empty());
+            if config.enabled && !has_runner {
+                findings.push(serde_json::json!({
+                    "severity": "info",
+                    "message": "Proton runner uses launcher default; no specific version pinned",
+                }));
+            }
+        }
+        "mangohud" | "vkbasalt" | "gamemode" => {
+            let installed = availability
+                .get("available")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
+            if config.enabled && !installed {
+                findings.push(serde_json::json!({
+                    "severity": "error",
+                    "message": format!("{} is enabled but not installed", tool.display_name()),
+                }));
+            }
+        }
+        _ => {}
+    }
+
     let mut scan_json = serde_json::Value::Null;
     if tool.tool_id() == "optiscaler" {
         let managed = modde_games::tools::optiscaler::managed_paths_from_config(config);
@@ -1261,6 +1307,23 @@ pub async fn handle_setup(options: ToolSetupOptions) -> Result<()> {
         );
     }
 
+    if options.dry_run {
+        println!("[dry-run] OptiScaler setup for {}", options.game);
+        print_optiscaler_effective_summary(&options.tool_id, &loaded.config);
+        println!(
+            "  Source: {} / {} / {}",
+            loaded.config.get_str("source_mode").unwrap_or(""),
+            loaded.config.get_str("release_tag").unwrap_or(""),
+            loaded.config.get_str("release_asset").unwrap_or("")
+        );
+        println!(
+            "  Preview: {} changed, {} unchanged",
+            preview.changed_files.len(),
+            preview.unchanged_files.len()
+        );
+        return Ok(());
+    }
+
     save_tool_config(&db, &options.game, &options.tool_id, &loaded.config).await?;
     println!("Configured OptiScaler for {}", options.game);
     print_optiscaler_effective_summary(&options.tool_id, &loaded.config);
@@ -1529,7 +1592,7 @@ fn dirs_home() -> Option<PathBuf> {
 }
 
 /// Apply tool patches to the game directory.
-pub async fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
+pub async fn handle_apply(tool_id: &str, game_id: &str, dry_run: bool) -> Result<()> {
     let tool = modde_games::tools::resolve_tool(tool_id)
         .ok_or_else(|| anyhow::anyhow!("unknown tool: '{tool_id}'"))?;
 
@@ -1561,6 +1624,37 @@ pub async fn handle_apply(tool_id: &str, game_id: &str) -> Result<()> {
     };
     if tool_id == "optiscaler" {
         modde_games::tools::optiscaler::apply_game_defaults(&mut config, Some(&context));
+    }
+
+    if dry_run {
+        let preview = tool.preview_apply_for(&install_dir, Some(&context), &config)?;
+        println!(
+            "[dry-run] {} for {} at {}",
+            tool.display_name(),
+            game_id,
+            install_dir.display()
+        );
+        if preview.changed_files.is_empty() {
+            println!(
+                "  All {} planned file(s) already current",
+                preview.planned_files.len()
+            );
+        } else {
+            println!(
+                "  Would write/update {} file(s):",
+                preview.changed_files.len()
+            );
+            for f in &preview.changed_files {
+                println!("    {}", f.display());
+            }
+        }
+        if !preview.missing_inputs.is_empty() {
+            println!("  Missing inputs:");
+            for input in &preview.missing_inputs {
+                println!("    {input}");
+            }
+        }
+        return Ok(());
     }
 
     let applied = tool.apply_for(&install_dir, Some(&context), &config)?;

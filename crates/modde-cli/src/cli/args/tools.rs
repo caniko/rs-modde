@@ -288,6 +288,12 @@ pub(crate) enum ToolAction {
         /// Apply files after configuring and validating preview
         #[arg(long)]
         apply: bool,
+        /// Show what would be done without saving config or applying files
+        #[arg(long)]
+        dry_run: bool,
+        /// Skip confirmation prompts (no-op for now, reserved for future interactive prompts)
+        #[arg(long)]
+        yes: bool,
     },
     /// Apply tool patches to the game directory (`ReShade` DLLs, `OptiScaler`, etc.)
     Apply {
@@ -295,6 +301,9 @@ pub(crate) enum ToolAction {
         tool_id: String,
         #[arg(long)]
         game: String,
+        /// Show what would be written without actually applying
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Preview tool patches without writing to the game directory
     Preview {

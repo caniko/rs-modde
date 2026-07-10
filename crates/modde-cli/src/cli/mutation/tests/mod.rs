@@ -189,6 +189,7 @@ fn tool_apply() -> Commands {
         action: ToolAction::Apply {
             tool_id: "mangohud".into(),
             game: "skyrim-se".into(),
+            dry_run: false,
         },
     }
 }
@@ -206,6 +207,8 @@ fn tool_setup() -> Commands {
             hardware_tuning: "auto".into(),
             upgrade: false,
             apply: false,
+            dry_run: false,
+            yes: false,
         },
     }
 }
