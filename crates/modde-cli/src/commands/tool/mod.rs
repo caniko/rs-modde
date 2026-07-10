@@ -1,10 +1,11 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
 use modde_core::db::ModdeDb;
 use modde_core::resolver::GameId;
-use modde_games::tools::{GameTool, ToolConfig, ToolGameContext, ToolSettingKind};
+use modde_games::tools::{GameTool, ToolConfig, ToolGameContext, ToolSettingKind, ToolSettingSpec};
 
 mod exec;
 mod releases;
@@ -459,29 +460,59 @@ pub async fn handle_settings(tool_id: &str, game_id: &str, json: bool) -> Result
         loaded.tool.display_name(),
         loaded.game_plugin.display_name()
     );
-    for spec in specs {
-        let saved = loaded
-            .config
-            .settings
-            .get(spec.key.as_ref())
-            .map_or("unset".to_string(), json_value_display);
-        let effective_value = effective
-            .settings
-            .get(spec.key.as_ref())
-            .map_or("unset".to_string(), json_value_display);
-        println!("  {} ({})", spec.key, setting_kind_label(&spec.kind));
-        println!("    {}", spec.label);
-        println!("    saved: {saved}");
-        if effective_value != saved {
-            println!("    effective: {effective_value}");
-        }
-        if let ToolSettingKind::Select { options } = &spec.kind {
-            let values = options
-                .iter()
-                .map(|option| option.value.as_str())
-                .collect::<Vec<_>>()
-                .join(", ");
-            println!("    allowed: {values}");
+
+    // Group settings by section
+    let mut grouped: BTreeMap<&str, Vec<&ToolSettingSpec>> = BTreeMap::new();
+    for spec in &specs {
+        grouped.entry(spec.section).or_default().push(spec);
+    }
+    for (section, section_specs) in &grouped {
+        let advanced_count = section_specs.iter().filter(|s| s.advanced).count();
+        let basic_count = section_specs.len() - advanced_count;
+        println!(
+            "\n  [{}{}{}]",
+            section,
+            if basic_count > 0 {
+                format!(" ({basic_count})")
+            } else {
+                String::new()
+            },
+            if advanced_count > 0 {
+                format!(", {advanced_count} advanced")
+            } else {
+                String::new()
+            },
+        );
+        for spec in section_specs {
+            let saved = loaded
+                .config
+                .settings
+                .get(spec.key.as_ref())
+                .map_or("unset".to_string(), json_value_display);
+            let effective_value = effective
+                .settings
+                .get(spec.key.as_ref())
+                .map_or("unset".to_string(), json_value_display);
+            let advanced = if spec.advanced { " (advanced)" } else { "" };
+            println!(
+                "    {} ({}){}",
+                spec.key,
+                setting_kind_label(&spec.kind),
+                advanced
+            );
+            println!("      {}", spec.label);
+            println!("      saved: {saved}");
+            if effective_value != saved {
+                println!("      effective: {effective_value}");
+            }
+            if let ToolSettingKind::Select { options } = &spec.kind {
+                let values = options
+                    .iter()
+                    .map(|option| option.value.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                println!("      allowed: {values}");
+            }
         }
     }
     Ok(())
@@ -489,7 +520,19 @@ pub async fn handle_settings(tool_id: &str, game_id: &str, json: bool) -> Result
 
 pub async fn handle_profiles(tool_id: &str, game_id: &str, json: bool) -> Result<()> {
     if tool_id != "optiscaler" {
-        anyhow::bail!("profiles are currently supported only for optiscaler");
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "game": game_id,
+                    "tool": tool_id,
+                    "profiles": [],
+                }))?
+            );
+        } else {
+            println!("No profiles defined for {tool_id}");
+        }
+        return Ok(());
     }
     let profiles = modde_games::optiscaler::resolve_optiscaler_profiles(game_id);
     let default_id =
@@ -555,7 +598,19 @@ pub async fn handle_profiles(tool_id: &str, game_id: &str, json: bool) -> Result
 
 pub async fn handle_sources(tool_id: &str, game_id: &str, json: bool) -> Result<()> {
     if tool_id != "optiscaler" {
-        anyhow::bail!("sources are currently supported only for optiscaler");
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "game": game_id,
+                    "tool": tool_id,
+                    "sources": [],
+                }))?
+            );
+        } else {
+            println!("No release sources defined for {tool_id}");
+        }
+        return Ok(());
     }
     let db = ModdeDb::open().await.context("failed to open database")?;
     let loaded = load_tool_for_game(&db, tool_id, game_id).await?;
@@ -674,11 +729,46 @@ pub async fn handle_doctor(tool_id: Option<&str>, game_id: &str, json: bool) -> 
         .collect::<Result<Vec<_>>>()?;
 
     if json {
+        let total_score: u64 = reports
+            .iter()
+            .map(|r| {
+                let status = r
+                    .get("status")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("ok");
+                match status {
+                    "ok" => 100,
+                    "warning" => 75,
+                    "error" => {
+                        let error_count = r
+                            .get("findings")
+                            .and_then(serde_json::Value::as_array)
+                            .map(|f| {
+                                f.iter()
+                                    .filter(|finding| {
+                                        finding.get("severity").and_then(serde_json::Value::as_str)
+                                            == Some("error")
+                                    })
+                                    .count() as u64
+                            })
+                            .unwrap_or(0);
+                        50u64.saturating_sub(error_count.saturating_sub(1) * 25)
+                    }
+                    _ => 50,
+                }
+            })
+            .sum::<u64>();
+        let overall = if reports.is_empty() {
+            100
+        } else {
+            total_score / reports.len() as u64
+        };
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
                 "game": game_id,
                 "installDir": install_dir,
+                "health": overall,
                 "reports": reports,
             }))?
         );
