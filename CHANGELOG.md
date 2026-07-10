@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-10
+
+### Added
+
+- **CLI**: New discovery commands: `tool doctor`, `tool settings`, `tool
+  profiles`, `tool sources` — all read-only, all with `--json`.
+- **CLI**: `tool doctor --fix` automatically applies the first recommended
+  fix command when issues are detected.
+- **CLI**: `tool setup` for guided OptiScaler configuration without the GUI.
+- **CLI**: `tool show` and `tool diagnose` for inspecting saved/effective
+  config and GPU-specific diagnostics.
+- **CLI**: `--dry-run` flag for `tool setup` and `tool apply` — preview what
+  would change without writing or saving.
+- **CLI**: `configure --reset-key <key>` to restore a single setting to its
+  tool-defined default.
+- **CLI**: `modde dev completions <shell>` — generates shell completion scripts
+  for bash, zsh, fish, powershell, and elvish.
+- **OptiScaler**: Global `hardware_tuning` layer auto-selects FSR4 variant
+  (`int8_402` for RDNA3, `latest_fp8` for RDNA4).
+- **OptiScaler**: `community-dxgi` profile for Cyberpunk 2077.
+- **OptiScaler**: Stale proxy cleanup and root-only FSR4 payload validation.
+- **Tools guide**: Documented CLI-first workflow for setup, diagnose, and
+  hardware tuning.
+
+### Changed
+
+- **OptiScaler**: Removed built-in `community-dxgi-rdna3` profile; stale stored
+  references fall back to `community-dxgi`.
+- **OptiScaler**: FSR4 variant switching prefers sources with explicit
+  `FSR4_INT8/` and `FSR4_LATEST/` directories.
+- **CLI**: `tool setup --source auto` is conservative — no upgrade or download
+  unless `--upgrade` is passed; reuses cached suitable sources otherwise.
+- **Cargo**: Workspace version bumped to 0.7.0; inter-crate dependency pins
+  updated to match.
+
+### Fixed
+
+- **OptiScaler**: Scanner no longer classifies backup files
+  (`amd_fidelityfx_vk.dll.b`) as unmanaged companions — requires `.dll`
+  extension for the `amd_fidelityfx` and `libxess` prefix checks.
+
 ## [0.6.0] - 2026-07-06
 
 ### Changed
@@ -256,7 +297,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Diagnostics**: Form 43 detection, missing master detection, shadowed mod detection, load order validation
 - **Nix**: Flake with binary, docs, and website outputs; home-manager module for declarative configuration
 
-[Unreleased]: https://codeberg.org/caniko/rs-modde/compare/0.6.0...HEAD
+[Unreleased]: https://codeberg.org/caniko/rs-modde/compare/0.7.0...HEAD
+[0.7.0]: https://codeberg.org/caniko/rs-modde/compare/0.6.0...0.7.0
 [0.6.0]: https://codeberg.org/caniko/rs-modde/compare/0.5.0...0.6.0
 [0.5.0]: https://codeberg.org/caniko/rs-modde/compare/0.4.0...0.5.0
 [0.4.0]: https://codeberg.org/caniko/rs-modde/compare/0.3.8...0.4.0
