@@ -1,10 +1,10 @@
-//! GPU architecture detection for automatic OptiScaler FSR4 variant selection.
+//! GPU architecture detection for automatic `OptiScaler` FSR4 variant selection.
 //!
 //! Reads `/sys/class/drm/` on Linux to identify the primary GPU vendor and
 //! architecture generation (RDNA3, RDNA4, etc.). Falls back gracefully to
 //! `Unknown` on non-Linux or when detection fails.
 
-/// Identified GPU architecture relevant to OptiScaler FSR4 variant selection.
+/// Identified GPU architecture relevant to `OptiScaler` FSR4 variant selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuArch {
     /// AMD RDNA 3 (RX 7000 series). FSR4 via INT8 model.
@@ -68,7 +68,7 @@ fn detect_gpu_arch_impl() -> Option<GpuArch> {
                 // Intel
                 return Some(GpuArch::Intel);
             }
-            _ => continue,
+            _ => {}
         }
     }
 

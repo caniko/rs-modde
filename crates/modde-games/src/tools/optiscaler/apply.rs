@@ -280,7 +280,7 @@ pub(super) fn preview_apply_for(
     Ok(preview)
 }
 
-/// Validate the OptiScaler configuration and emit warnings for potential issues.
+/// Validate the `OptiScaler` configuration and emit warnings for potential issues.
 fn validate_optiscaler_config(config: &ToolConfig) {
     use tracing::warn;
 

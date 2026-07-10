@@ -100,7 +100,9 @@ pub(super) fn apply_optiscaler_profile_metadata(
     config: &mut ToolConfig,
     profile: &OptiScalerProfile,
 ) {
-    let prev_id = config.get_str("optiscaler_profile").map(|s| s.to_string());
+    let prev_id = config
+        .get_str("optiscaler_profile")
+        .map(std::string::ToString::to_string);
 
     config.set("optiscaler_profile", serde_json::json!(profile.id));
     config.set("optiscaler_profile_name", serde_json::json!(profile.name));

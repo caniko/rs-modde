@@ -323,7 +323,7 @@ fn optiscaler_profile_applies_metadata_and_operational_settings() {
     assert_eq!(config.get_str("release_tag"), Some("v1.2.3"));
     assert_eq!(config.get_str("release_asset"), Some("OptiScaler.7z"));
     assert_eq!(config.get_str("proxy_dll"), Some("winmm.dll"));
-    assert!(config.get_bool("copy_companion_files") == false);
+    assert!(!config.get_bool("copy_companion_files"));
     assert!(config.get_bool("enable_optipatcher"));
     assert_eq!(config.get_str("fsr4_variant"), Some(FSR4_VARIANT_INT8_402));
     assert!(config.get_bool("emulate_fp8"));
