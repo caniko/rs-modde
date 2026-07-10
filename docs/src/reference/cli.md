@@ -1172,21 +1172,131 @@ Disable a tool or overlay.
 modde tool disable <tool_id> --game <id>
 ```
 
+### `tool show`
+
+Show saved and effective configuration for a tool.
+
+```bash
+modde tool show <tool_id> --game <id> [--json]
+```
+
+| Flag     | Description                            |
+| -------- | -------------------------------------- |
+| `--json` | Emit machine-readable JSON             |
+
+### `tool diagnose`
+
+Diagnose a tool setup for a game (GPU tuning, source payloads, proxies).
+
+```bash
+modde tool diagnose <tool_id> --game <id> [--json]
+```
+
+### `tool doctor`
+
+Check one tool — or all tools — and print actionable next steps.
+
+```bash
+modde tool doctor --game <id> [tool_id] [--json] [--fix]
+```
+
+| Flag     | Description                                             |
+| -------- | ------------------------------------------------------- |
+| `--json` | Emit machine-readable JSON with a health score (0-100)  |
+| `--fix`  | Automatically apply the first recommended fix command   |
+
+### `tool settings`
+
+List all settings with their types, saved values, effective values, and allowed
+values.
+
+```bash
+modde tool settings <tool_id> --game <id> [--json]
+```
+
+Settings are grouped by section. Non-applied hardware tuning defaults are shown
+as effective values when they differ from saved values.
+
+### `tool profiles`
+
+List community profiles for a tool and game (currently OptiScaler only).
+
+```bash
+modde tool profiles <tool_id> --game <id> [--json]
+```
+
+### `tool sources`
+
+List cached and current install sources for a release-backed tool (currently
+OptiScaler only).
+
+```bash
+modde tool sources <tool_id> --game <id> [--json]
+```
+
+Reports whether each cached source has `FSR4_INT8/`, `FSR4_LATEST/`, and
+`OptiScaler.dll` payloads.
+
 ### `tool configure`
 
-Configure tool settings as `key=value` pairs.
+Configure tool settings as `key=value` pairs, or reset settings to defaults.
 
 ```bash
 modde tool configure <tool_id> --game <id> -- <key=value>...
+modde tool configure <tool_id> --game <id> --reset-key <key>
 ```
+
+| Flag           | Description                                      |
+| -------------- | ------------------------------------------------ |
+| `--reset-key`  | Reset a setting to its tool-defined default      |
+
+Values are parsed by type: `true`/`false`/`1`/`0` for booleans, numbers for
+numeric settings, exact values for selects. Read-only settings cannot be set or
+reset.
+
+### `tool setup`
+
+Guided setup for a game tool without opening the GUI (currently OptiScaler
+only).
+
+```bash
+modde tool setup <tool_id> --game <id> --source auto [--apply] [--dry-run] [--upgrade]
+```
+
+| Flag            | Default  | Description                                              |
+| --------------- | -------- | -------------------------------------------------------- |
+| `--source`      | `auto`   | Source to use: `auto`, `goverlay-edge`, `goverlay-stable`, `official`, `fgmod`, `local` |
+| `--profile`     | —        | OptiScaler profile ID, e.g. `community-dxgi`             |
+| `--release-tag` | —        | Exact release tag to pin, e.g. `goverlay-edge:edge-...`  |
+| `--release-asset` | —      | Exact release asset filename                             |
+| `--local-source-dir` | —    | Local source directory when `--source local`             |
+| `--hardware-tuning` | `auto` | `auto` or `manual`                                     |
+| `--upgrade`      | —        | Download and install the newest matching release         |
+| `--apply`        | —        | Apply files after validating the preview                 |
+| `--dry-run`      | —        | Show the plan without saving config or applying files    |
+| `--yes`          | —        | Skip future confirmation prompts                         |
 
 ### `tool apply`
 
 Apply tool patches to the game directory (DLLs, configs).
 
 ```bash
-modde tool apply <tool_id> --game <id>
+modde tool apply <tool_id> --game <id> [--dry-run]
 ```
+
+| Flag       | Description                                  |
+| ---------- | -------------------------------------------- |
+| `--dry-run`| Show what would be written without applying  |
+
+### `tool preview`
+
+Preview tool patches without writing to the game directory.
+
+```bash
+modde tool preview <tool_id> --game <id>
+```
+
+Shows planned, changed, and unchanged files as well as missing inputs.
 
 ### `tool revert`
 
@@ -1240,6 +1350,30 @@ modde tool install-release optiscaler --game cyberpunk2077 \
 ```
 
 See the [tools guide](../guides/tools.md) for what each overlay does.
+
+---
+
+## `modde dev`
+
+Developer utilities and generation commands.
+
+### `dev completions`
+
+Generate shell completion scripts.
+
+```bash
+modde dev completions <shell>
+```
+
+Supported shells: `bash`, `zsh`, `fish`, `powershell`, `elvish`.
+
+```bash
+# Install for bash:
+modde dev completions bash > /etc/bash_completion.d/modde
+
+# Install for zsh (oh-my-zsh):
+modde dev completions zsh > "${fpath[1]}/_modde"
+```
 
 ---
 
