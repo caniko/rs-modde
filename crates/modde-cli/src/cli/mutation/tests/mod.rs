@@ -132,6 +132,7 @@ fn tool_doctor() -> Commands {
             tool_id: Some("optiscaler".into()),
             game: "stellar-blade".into(),
             json: false,
+            fix: false,
         },
     }
 }

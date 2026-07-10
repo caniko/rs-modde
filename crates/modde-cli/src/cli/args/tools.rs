@@ -203,6 +203,9 @@ pub(crate) enum ToolAction {
         /// Emit machine-readable JSON
         #[arg(long)]
         json: bool,
+        /// Apply the first recommended fix automatically (safe, conservative)
+        #[arg(long)]
+        fix: bool,
     },
     /// List settings, current values, effective values, and allowed values
     Settings {

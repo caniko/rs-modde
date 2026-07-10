@@ -681,7 +681,12 @@ pub async fn handle_sources(tool_id: &str, game_id: &str, json: bool) -> Result<
     Ok(())
 }
 
-pub async fn handle_doctor(tool_id: Option<&str>, game_id: &str, json: bool) -> Result<()> {
+pub async fn handle_doctor(
+    tool_id: Option<&str>,
+    game_id: &str,
+    json: bool,
+    fix: bool,
+) -> Result<()> {
     let db = ModdeDb::open().await.context("failed to open database")?;
     let game_plugin = modde_games::resolve_game_plugin(game_id)
         .ok_or_else(|| anyhow::anyhow!("unsupported game: '{game_id}'"))?;
@@ -776,7 +781,7 @@ pub async fn handle_doctor(tool_id: Option<&str>, game_id: &str, json: bool) -> 
     }
 
     println!("Tool doctor for {} ({game_id})", game_plugin.display_name());
-    for report in reports {
+    for report in &reports {
         println!(
             "  {}: {}",
             report
@@ -818,6 +823,41 @@ pub async fn handle_doctor(tool_id: Option<&str>, game_id: &str, json: bool) -> 
             }
         }
     }
+
+    if fix && !reports.is_empty() {
+        let all_cmds: Vec<&str> = reports
+            .iter()
+            .filter_map(|r| {
+                r.get("recommendedCommands")
+                    .and_then(serde_json::Value::as_array)
+            })
+            .flatten()
+            .filter_map(serde_json::Value::as_str)
+            .collect();
+        if let Some(first) = all_cmds.first() {
+            println!("\n  Running fix: {first}");
+            let mut parts = first.split_whitespace();
+            let Some(exe) = parts.next() else {
+                anyhow::bail!("fix command is empty");
+            };
+            let args: Vec<&str> = parts.collect();
+            let status = std::process::Command::new(exe)
+                .args(&args)
+                .status()
+                .context("failed to run fix command")?;
+            if status.success() {
+                println!("  Fix applied successfully.");
+            } else {
+                anyhow::bail!(
+                    "fix command exited with code {}",
+                    status.code().unwrap_or(-1)
+                );
+            }
+        } else {
+            println!("\n  No fixes needed.");
+        }
+    }
+
     Ok(())
 }
 

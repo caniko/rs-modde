@@ -242,12 +242,14 @@ pub(crate) fn run_command(cli: Cli) -> Result<()> {
                     tool_id,
                     game,
                     json,
+                    fix,
                 },
         } => {
             db_sync!(commands::tool::handle_doctor(
                 tool_id.as_deref(),
                 &game,
-                json
+                json,
+                fix,
             ));
         }
         Commands::Tool {
