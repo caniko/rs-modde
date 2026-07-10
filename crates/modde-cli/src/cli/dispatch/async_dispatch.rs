@@ -286,9 +286,16 @@ pub(super) fn dispatch_async(cli: Cli) -> Result<()> {
                 }
                 ToolAction::List { .. }
                 | ToolAction::Status { .. }
+                | ToolAction::Show { .. }
+                | ToolAction::Diagnose { .. }
+                | ToolAction::Doctor { .. }
+                | ToolAction::Settings { .. }
+                | ToolAction::Profiles { .. }
+                | ToolAction::Sources { .. }
                 | ToolAction::Enable { .. }
                 | ToolAction::Disable { .. }
                 | ToolAction::Configure { .. }
+                | ToolAction::Setup { .. }
                 | ToolAction::Apply { .. }
                 | ToolAction::Preview { .. }
                 | ToolAction::Revert { .. } => {

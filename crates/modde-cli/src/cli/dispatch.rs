@@ -217,6 +217,70 @@ pub(crate) fn run_command(cli: Cli) -> Result<()> {
             db_sync!(commands::tool::handle_status(&game));
         }
         Commands::Tool {
+            action:
+                ToolAction::Show {
+                    tool_id,
+                    game,
+                    json,
+                },
+        } => {
+            db_sync!(commands::tool::handle_show(&tool_id, &game, json));
+        }
+        Commands::Tool {
+            action:
+                ToolAction::Diagnose {
+                    tool_id,
+                    game,
+                    json,
+                },
+        } => {
+            db_sync!(commands::tool::handle_diagnose(&tool_id, &game, json));
+        }
+        Commands::Tool {
+            action:
+                ToolAction::Doctor {
+                    tool_id,
+                    game,
+                    json,
+                },
+        } => {
+            db_sync!(commands::tool::handle_doctor(
+                tool_id.as_deref(),
+                &game,
+                json
+            ));
+        }
+        Commands::Tool {
+            action:
+                ToolAction::Settings {
+                    tool_id,
+                    game,
+                    json,
+                },
+        } => {
+            db_sync!(commands::tool::handle_settings(&tool_id, &game, json));
+        }
+        Commands::Tool {
+            action:
+                ToolAction::Profiles {
+                    tool_id,
+                    game,
+                    json,
+                },
+        } => {
+            db_sync!(commands::tool::handle_profiles(&tool_id, &game, json));
+        }
+        Commands::Tool {
+            action:
+                ToolAction::Sources {
+                    tool_id,
+                    game,
+                    json,
+                },
+        } => {
+            db_sync!(commands::tool::handle_sources(&tool_id, &game, json));
+        }
+        Commands::Tool {
             action: ToolAction::Enable { tool_id, game },
         } => {
             db_sync!(commands::tool::handle_enable(&tool_id, &game));
@@ -235,6 +299,36 @@ pub(crate) fn run_command(cli: Cli) -> Result<()> {
                 },
         } => {
             db_sync!(commands::tool::handle_configure(&tool_id, &game, &settings));
+        }
+        Commands::Tool {
+            action:
+                ToolAction::Setup {
+                    tool_id,
+                    game,
+                    profile,
+                    source,
+                    release_tag,
+                    release_asset,
+                    local_source_dir,
+                    hardware_tuning,
+                    upgrade,
+                    apply,
+                },
+        } => {
+            db_sync!(commands::tool::handle_setup(
+                commands::tool::ToolSetupOptions {
+                    tool_id,
+                    game,
+                    profile,
+                    source,
+                    release_tag,
+                    release_asset,
+                    local_source_dir,
+                    hardware_tuning,
+                    upgrade,
+                    apply,
+                }
+            ));
         }
         Commands::Tool {
             action: ToolAction::Apply { tool_id, game },

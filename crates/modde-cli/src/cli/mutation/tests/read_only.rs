@@ -72,6 +72,36 @@ fn tool_list_is_read_only() {
 }
 
 #[test]
+fn tool_show_is_read_only() {
+    assert!(!command_mutates_state(&tool_show()));
+}
+
+#[test]
+fn tool_diagnose_is_read_only() {
+    assert!(!command_mutates_state(&tool_diagnose()));
+}
+
+#[test]
+fn tool_doctor_is_read_only() {
+    assert!(!command_mutates_state(&tool_doctor()));
+}
+
+#[test]
+fn tool_settings_is_read_only() {
+    assert!(!command_mutates_state(&tool_settings()));
+}
+
+#[test]
+fn tool_profiles_is_read_only() {
+    assert!(!command_mutates_state(&tool_profiles()));
+}
+
+#[test]
+fn tool_sources_is_read_only() {
+    assert!(!command_mutates_state(&tool_sources()));
+}
+
+#[test]
 fn patcher_list_is_read_only() {
     assert!(!command_mutates_state(&patcher_list()));
 }

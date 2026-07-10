@@ -174,6 +174,66 @@ pub(crate) enum ToolAction {
         #[arg(long)]
         game: String,
     },
+    /// Show saved and effective configuration for a tool
+    Show {
+        /// Tool ID
+        tool_id: String,
+        #[arg(long)]
+        game: String,
+        /// Emit machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Diagnose a tool setup for a game
+    Diagnose {
+        /// Tool ID
+        tool_id: String,
+        #[arg(long)]
+        game: String,
+        /// Emit machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Check one tool, or all tools, and print actionable next steps
+    Doctor {
+        /// Optional tool ID. When omitted, checks all tools.
+        tool_id: Option<String>,
+        #[arg(long)]
+        game: String,
+        /// Emit machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// List settings, current values, effective values, and allowed values
+    Settings {
+        /// Tool ID
+        tool_id: String,
+        #[arg(long)]
+        game: String,
+        /// Emit machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// List community profiles for a tool and game
+    Profiles {
+        /// Tool ID currently supported: optiscaler
+        tool_id: String,
+        #[arg(long)]
+        game: String,
+        /// Emit machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// List cached/current install sources for a release-backed tool
+    Sources {
+        /// Tool ID currently supported: optiscaler
+        tool_id: String,
+        #[arg(long)]
+        game: String,
+        /// Emit machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
     /// Enable a gaming tool/overlay for a game
     Enable {
         /// Tool ID (mangohud, vkbasalt, gamemode, reshade, optiscaler, proton)
@@ -197,6 +257,37 @@ pub(crate) enum ToolAction {
         /// Setting key=value pairs
         #[arg(last = true)]
         settings: Vec<String>,
+    },
+    /// Guided setup for a game tool without opening the GUI
+    Setup {
+        /// Tool ID currently supported: optiscaler
+        tool_id: String,
+        #[arg(long)]
+        game: String,
+        /// OptiScaler profile ID, e.g. community-dxgi
+        #[arg(long)]
+        profile: Option<String>,
+        /// Source: auto, goverlay-edge, goverlay-stable, official, fgmod, local
+        #[arg(long, default_value = "auto")]
+        source: String,
+        /// Release tag to select, e.g. goverlay-edge:edge-2026.07.08-6db79966
+        #[arg(long)]
+        release_tag: Option<String>,
+        /// Release asset to select/install, e.g. optiscaler-edge.7z
+        #[arg(long)]
+        release_asset: Option<String>,
+        /// Local OptiScaler source directory when --source local
+        #[arg(long)]
+        local_source_dir: Option<PathBuf>,
+        /// Hardware tuning policy: auto or manual
+        #[arg(long, default_value = "auto")]
+        hardware_tuning: String,
+        /// Install/select the newest matching release. Without this, setup reuses cached/current sources.
+        #[arg(long)]
+        upgrade: bool,
+        /// Apply files after configuring and validating preview
+        #[arg(long)]
+        apply: bool,
     },
     /// Apply tool patches to the game directory (`ReShade` DLLs, `OptiScaler`, etc.)
     Apply {

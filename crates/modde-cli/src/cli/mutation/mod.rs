@@ -65,6 +65,12 @@ pub(super) fn command_mutates_state(cmd: &Commands) -> bool {
             action,
             ToolAction::List { .. }
                 | ToolAction::Status { .. }
+                | ToolAction::Show { .. }
+                | ToolAction::Diagnose { .. }
+                | ToolAction::Doctor { .. }
+                | ToolAction::Settings { .. }
+                | ToolAction::Profiles { .. }
+                | ToolAction::Sources { .. }
                 | ToolAction::Preview { .. }
                 | ToolAction::Releases { .. }
                 | ToolAction::ListExecutables { .. }

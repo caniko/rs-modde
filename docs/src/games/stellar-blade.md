@@ -249,18 +249,24 @@ modde tool configure optiscaler --game stellar-blade fsr4_variant=int8_402
 ### Quick start
 
 ```bash
-# Enable OptiScaler for Stellar Blade — modde picks the right profile for your GPU
-modde tool enable optiscaler --game stellar-blade
-modde tool releases optiscaler --game stellar-blade
-modde tool install-release optiscaler --game stellar-blade --tag <goverlay-tag> --asset <asset>
-modde tool apply optiscaler --game stellar-blade
+# Inspect the curated profile, cached sources, and effective settings.
+modde tool profiles optiscaler --game stellar-blade
+modde tool sources optiscaler --game stellar-blade
+modde tool settings optiscaler --game stellar-blade
+
+# Configure and apply OptiScaler. Does not upgrade/download unless --upgrade is passed.
+modde tool setup optiscaler --game stellar-blade --source auto --apply
+
+# If something looks wrong, print actionable findings and next commands.
+modde tool doctor --game stellar-blade optiscaler
 ```
 
-`modde tool apply` writes the `dxgi.dll` proxy and companion files into the game's
-`Binaries/Win64`. For RDNA3/RDNA4 FSR4 variant selection, use an OptiScaler source
-that contains `FSR4_INT8/` and `FSR4_LATEST/`; recent GOverlay builds expose those
-payload directories. See [Tools & overlays](../guides/tools.md) for the OptiScaler
-source selector and release commands.
+`modde tool setup ... --source auto` reuses the current source or an already cached
+GOverlay build with `FSR4_INT8/` and `FSR4_LATEST/` payloads. It does not select a
+newer build by default; pass `--upgrade` when you intentionally want the newest matching
+GOverlay release. `setup --apply` writes the `dxgi.dll` proxy and companion files into
+the game's `Binaries/Win64`. See [Tools & overlays](../guides/tools.md) for diagnostics,
+preview, and exact release pinning commands.
 
 ### Proton, overlays, and Wine DLL overrides
 

@@ -35,17 +35,21 @@ All tool commands take `--game <game_id>`. The verbs are the same across every t
 # Discovery
 modde tool list --game skyrim-se        # auto-detect known external tool executables
 modde tool status --game skyrim-se      # enabled/disabled + availability for all six tools
+modde tool doctor --game skyrim-se      # actionable checks and next commands
 
 # Lifecycle
 modde tool enable <tool_id>  --game skyrim-se
 modde tool disable <tool_id> --game skyrim-se
 modde tool configure <tool_id> --game skyrim-se -- key=value key=value ...
+modde tool settings <tool_id> --game skyrim-se
 
 # File patches (ReShade, OptiScaler)
 modde tool apply  <tool_id> --game skyrim-se
 modde tool revert <tool_id> --game skyrim-se
 
 # Release-backed tools (OptiScaler)
+modde tool profiles optiscaler --game skyrim-se
+modde tool sources  optiscaler --game skyrim-se
 modde tool releases <tool_id> --game skyrim-se
 modde tool install-release <tool_id> --game skyrim-se --tag <tag> --asset <asset>
 ```
@@ -250,6 +254,50 @@ modde tool install-release optiscaler --game stellar-blade \
 
 Archives are flattened so that `OptiScaler.dll`, `OptiScaler.ini`, companion DLLs, `OptiPatcher.asi`, and the FSR4 payload directories land predictably in the cache. (`.7z` extraction shells out to `7zz`/`7z`.) Installing from a local archive path is also supported internally for offline pinning.
 
+### CLI-first setup
+
+The non-GUI path is `tool setup`, `tool show`, `tool doctor`, `tool diagnose`, `tool preview`, and `tool apply`. Discovery commands are read-only and all detailed inspection commands support `--json` for scripts.
+
+```bash
+# See what modde knows before changing anything.
+modde tool profiles optiscaler --game stellar-blade
+modde tool sources optiscaler --game stellar-blade
+modde tool settings optiscaler --game stellar-blade
+
+# Configure only. Does not download newer builds and does not apply files.
+modde tool setup optiscaler --game stellar-blade --source auto
+
+# Inspect saved/effective config, env vars, DLL overrides, and apply preview.
+modde tool show optiscaler --game stellar-blade
+
+# Get an actionable health summary and next commands.
+modde tool doctor --game stellar-blade optiscaler
+
+# Diagnose GPU tuning, source payloads, missing inputs, and active proxies.
+modde tool diagnose optiscaler --game stellar-blade
+
+# Apply once preview/diagnose are clean.
+modde tool setup optiscaler --game stellar-blade --source auto --apply
+```
+
+`--source auto` is conservative: it reuses the current source if it is suitable, or a cached GOverlay build that already contains both `FSR4_INT8/` and `FSR4_LATEST/`. It does **not** upgrade or download by default. To intentionally select and install the newest matching release, pass `--upgrade`:
+
+```bash
+modde tool setup optiscaler --game stellar-blade --source goverlay-edge --upgrade --apply
+```
+
+You can also pin exact inputs without using the GUI:
+
+```bash
+modde tool setup optiscaler --game stellar-blade \
+  --profile community-dxgi \
+  --source goverlay-edge \
+  --release-tag goverlay-edge:edge-0.9.12.0323 \
+  --release-asset optiscaler-edge.7z \
+  --hardware-tuning auto \
+  --apply
+```
+
 ### Key settings
 
 | Key | Type | Notes |
@@ -304,9 +352,7 @@ For some games modde ships community-tested OptiScaler profiles (game-owned meta
 For **Stellar Blade** the default profile is `community-dxgi`, which uses `dxgi.dll` as the proxy and enables OptiPatcher so DLSS/DLSS-FG inputs are unlocked without spoofing. You can also define your own profiles in `~/.local/share/modde/games/<game_id>.optiscaler.toml` (an `[[optiscaler.profile]]` array); user profiles merge over built-ins of the same `id`.
 
 ```bash
-modde tool enable optiscaler --game stellar-blade
-modde tool configure optiscaler --game stellar-blade -- optiscaler_profile=community-dxgi
-modde tool apply optiscaler --game stellar-blade
+modde tool setup optiscaler --game stellar-blade --source auto --apply
 ```
 
 See the deeper deployment notes in the supported-game page for [Stellar Blade](../games/stellar-blade.md) and [Cyberpunk 2077](../games/cyberpunk2077.md).

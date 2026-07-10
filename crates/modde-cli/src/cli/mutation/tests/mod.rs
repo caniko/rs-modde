@@ -106,6 +106,66 @@ fn tool_list() -> Commands {
     }
 }
 
+fn tool_show() -> Commands {
+    Commands::Tool {
+        action: ToolAction::Show {
+            tool_id: "optiscaler".into(),
+            game: "stellar-blade".into(),
+            json: false,
+        },
+    }
+}
+
+fn tool_diagnose() -> Commands {
+    Commands::Tool {
+        action: ToolAction::Diagnose {
+            tool_id: "optiscaler".into(),
+            game: "stellar-blade".into(),
+            json: false,
+        },
+    }
+}
+
+fn tool_doctor() -> Commands {
+    Commands::Tool {
+        action: ToolAction::Doctor {
+            tool_id: Some("optiscaler".into()),
+            game: "stellar-blade".into(),
+            json: false,
+        },
+    }
+}
+
+fn tool_settings() -> Commands {
+    Commands::Tool {
+        action: ToolAction::Settings {
+            tool_id: "optiscaler".into(),
+            game: "stellar-blade".into(),
+            json: false,
+        },
+    }
+}
+
+fn tool_profiles() -> Commands {
+    Commands::Tool {
+        action: ToolAction::Profiles {
+            tool_id: "optiscaler".into(),
+            game: "stellar-blade".into(),
+            json: false,
+        },
+    }
+}
+
+fn tool_sources() -> Commands {
+    Commands::Tool {
+        action: ToolAction::Sources {
+            tool_id: "optiscaler".into(),
+            game: "stellar-blade".into(),
+            json: false,
+        },
+    }
+}
+
 fn patcher_list() -> Commands {
     Commands::Patcher {
         action: PatcherAction::List {
@@ -129,6 +189,23 @@ fn tool_apply() -> Commands {
         action: ToolAction::Apply {
             tool_id: "mangohud".into(),
             game: "skyrim-se".into(),
+        },
+    }
+}
+
+fn tool_setup() -> Commands {
+    Commands::Tool {
+        action: ToolAction::Setup {
+            tool_id: "optiscaler".into(),
+            game: "stellar-blade".into(),
+            profile: None,
+            source: "auto".into(),
+            release_tag: None,
+            release_asset: None,
+            local_source_dir: None,
+            hardware_tuning: "auto".into(),
+            upgrade: false,
+            apply: false,
         },
     }
 }

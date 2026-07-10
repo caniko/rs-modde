@@ -44,6 +44,11 @@ fn tool_apply_is_mutating() {
 }
 
 #[test]
+fn tool_setup_is_mutating() {
+    assert!(command_mutates_state(&tool_setup()));
+}
+
+#[test]
 fn patcher_add_command_is_mutating() {
     assert!(command_mutates_state(&Commands::Patcher {
         action: PatcherAction::AddCommand {

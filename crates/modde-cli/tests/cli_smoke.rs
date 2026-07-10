@@ -88,6 +88,56 @@ fn cli_skill_help() {
 }
 
 #[test]
+fn cli_tool_setup_help() {
+    modde().args(["tool", "setup", "--help"]).assert().success();
+}
+
+#[test]
+fn cli_tool_show_help() {
+    modde().args(["tool", "show", "--help"]).assert().success();
+}
+
+#[test]
+fn cli_tool_diagnose_help() {
+    modde()
+        .args(["tool", "diagnose", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_tool_doctor_help() {
+    modde()
+        .args(["tool", "doctor", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_tool_settings_help() {
+    modde()
+        .args(["tool", "settings", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_tool_profiles_help() {
+    modde()
+        .args(["tool", "profiles", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_tool_sources_help() {
+    modde()
+        .args(["tool", "sources", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
 fn cli_wabbajack_search_help() {
     modde()
         .args(["wabbajack", "search", "--help"])
