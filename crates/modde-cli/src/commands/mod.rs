@@ -2,6 +2,7 @@
 pub mod backup;
 pub mod bisect;
 pub mod collisions;
+pub mod completions;
 pub mod config;
 pub mod crash;
 pub mod deploy;

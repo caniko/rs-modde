@@ -165,6 +165,7 @@ url = "2"
 
 # CLI
 clap = { version = "4", features = ["derive", "env"] }
+clap_complete = "4"
 
 # FOMOD
 fomod-oxide = { version = "0.1", features = ["json"] }

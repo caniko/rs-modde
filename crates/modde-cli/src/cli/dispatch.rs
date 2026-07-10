@@ -22,6 +22,9 @@ pub(crate) fn run_command(cli: Cli) -> Result<()> {
 
     match cli.command {
         Commands::Dev {
+            action: DevAction::Completions { shell },
+        } => return commands::completions::handle_completions(&shell),
+        Commands::Dev {
             action: DevAction::ExportToolSchema { out },
         } => return commands::nix_schema::handle_export(&out),
         #[cfg(feature = "screenshot")]

@@ -53,6 +53,11 @@ pub(crate) enum ExecAction {
 
 #[derive(Subcommand)]
 pub(crate) enum DevAction {
+    /// Generate shell completion scripts (bash, zsh, fish, powershell, nushell)
+    Completions {
+        /// Shell to generate completions for
+        shell: String,
+    },
     #[command(hide = true)]
     ExportToolSchema {
         #[arg(long, default_value = "nix/tool-schema.nix")]

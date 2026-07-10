@@ -127,6 +127,7 @@ modde-games = { workspace = true }
 modde-ui = { workspace = true }
 modde-oracle-api = { workspace = true, optional = true }
 clap = { workspace = true }
+clap_complete = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }

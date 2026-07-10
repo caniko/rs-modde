@@ -138,6 +138,14 @@ fn cli_tool_profiles_help() {
 }
 
 #[test]
+fn cli_dev_completions_help() {
+    modde()
+        .args(["dev", "completions", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
 fn cli_tool_sources_help() {
     modde()
         .args(["tool", "sources", "--help"])
