@@ -82,7 +82,7 @@ jobs:
         run: nix develop -c cargo test -p modde-sources
 
       - name: Check cargo-deny tool
-        run: nix develop -c cargo-deny --version
+        run: nix develop -c command -v cargo-deny
 
       - name: Deny dependency policy
         run: nix develop -c cargo deny check bans licenses sources

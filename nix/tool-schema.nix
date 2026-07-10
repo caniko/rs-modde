@@ -734,24 +734,18 @@
       description = "Comma or whitespace separated Wine DLL override base names.";
       advanced = false;
     };
-    "emulate_fp8" = {
-      type = "bool";
-      default = null;
-      description = "Set DXIL_SPIRV_CONFIG=wmma_rdna3_workaround for the Latest (FP8) FSR4 variant.";
-      advanced = false;
-    };
     "enable_optipatcher" = {
       type = "bool";
       default = null;
       description = "Use OptiPatcher to unlock DLSS and DLSS frame generation inputs without whole-game spoofing in supported games.";
       advanced = false;
     };
-    "fsr4_variant" = {
+    "hardware_tuning" = {
       type = "enum";
       default = null;
-      description = "FSR4 payload copied as amd_fidelityfx_upscaler_dx12.dll.";
+      description = "Auto lets modde choose GPU-specific FSR4 settings; Manual preserves your selected FSR4 settings.";
       advanced = false;
-      values = [ "latest_fp8" "int8_402" ];
+      values = [ "auto" "manual" ];
     };
     "ini_overrides.FSR.FGIndex" = {
       type = "enum";
