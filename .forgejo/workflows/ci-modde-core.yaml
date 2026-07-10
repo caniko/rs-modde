@@ -43,4 +43,4 @@ jobs:
         run: nix develop -c cargo clippy -p modde-core --all-targets -- --deny warnings
 
       - name: Package crate
-        run: nix develop -c cargo package -p modde-core --allow-dirty
+        run: nix develop -c cargo package -p modde-core --allow-dirty --list
