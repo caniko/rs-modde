@@ -1,6 +1,6 @@
 use anyhow::Result;
-use clap_complete::{Shell, generate};
 use clap::CommandFactory;
+use clap_complete::{Shell, generate};
 
 use crate::cli::args::Cli;
 

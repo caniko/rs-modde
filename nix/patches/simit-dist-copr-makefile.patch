@@ -303,38 +303,3 @@ index 89cfc1a..0924f6d 100644
      assert!(!project.path().join("demo.spec").exists());
      assert!(!project.path().join(".copr").exists());
  }
-diff --git a/src/render/ci.rs b/src/render/ci.rs
-index 34ecea3..2a63cd8 100644
---- a/src/render/ci.rs
-+++ b/src/render/ci.rs
-@@ -660,7 +660,7 @@ fn ci_workflow_multi_job(
-                 q.push_str("      - name: Check cargo-audit tool\n        run: nix develop -c command -v cargo-audit\n\n");
-             }
-             if options.with_deny {
--                q.push_str("      - name: Check cargo-deny tool\n        run: nix develop -c command -v cargo-deny\n\n");
-+                q.push_str("      - name: Check cargo-deny tool\n        run: nix develop -c cargo-deny --version\n\n");
-             }
-             if !q.is_empty() {
-                 capture(STEP_QUALITY_TOOLS, &q);
-@@ -2064,7 +2064,7 @@ fn push_quality_tool_install_steps(workflow: &mut String, runtime: Runtime, opti
-             workflow.push_str("      - name: Check cargo-deny tool\n");
-             workflow.push_str("        run: ");
-             workflow.push_str(prefix);
--            workflow.push_str("command -v cargo-deny");
-+            workflow.push_str("cargo-deny --version");
-             workflow.push_str("\n\n");
-         }
-     }
-diff --git a/tests/init_ci.rs b/tests/init_ci.rs
-index a0b14b1..cd3473e 100644
---- a/tests/init_ci.rs
-+++ b/tests/init_ci.rs
-@@ -510,7 +510,7 @@ fn forgejo_nix_runtime_uses_devshell_quality_tools_without_cargo_install() {
-     assert!(ci.contains("      - name: Check cargo-audit tool\n"));
-     assert!(ci.contains("run: nix develop -c command -v cargo-audit"));
-     assert!(ci.contains("      - name: Check cargo-deny tool\n"));
--    assert!(ci.contains("run: nix develop -c command -v cargo-deny"));
-+    assert!(ci.contains("run: nix develop -c cargo-deny --version"));
-     assert!(!ci.contains("nix develop -c cargo install cargo-audit"));
-     assert!(!ci.contains("nix develop -c cargo install cargo-deny"));
- }
