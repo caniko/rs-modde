@@ -1,7 +1,6 @@
 ---
 name: add-ue4-game
 description: Add a UE4 or UE5 game through modde's data-driven UE game support.
-user_invocable: true
 ---
 
 **Cross-repository work:** If scope spans repositories, invoke `$graphify` before discovery, planning, or edits. Query an existing graph; build/update a merged graph when missing, stale, or incomplete. Reuse a current graph for the same repository set.

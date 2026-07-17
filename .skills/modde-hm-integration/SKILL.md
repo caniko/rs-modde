@@ -1,7 +1,6 @@
 ---
 name: modde-hm-integration
 description: Add or update modde Home Manager integration, including Wabbajack manual archives.
-user_invocable: true
 ---
 
 **Cross-repository work:** If scope spans repositories, invoke `$graphify` before discovery, planning, or edits. Query an existing graph; build/update a merged graph when missing, stale, or incomplete. Reuse a current graph for the same repository set.
