@@ -154,6 +154,22 @@
         "type": "github"
       }
     },
+    "flake-compat_4": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1767039857,
+        "narHash": "sha256-vNpUSpF5Nuw8xvDLj2KCwwksIbjua2LZCqhV1LNRDns=",
+        "owner": "NixOS",
+        "repo": "flake-compat",
+        "rev": "5edf11c44bc78a0d334f6334cdaf7d60d732daab",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": "nixpkgs-lib"
@@ -355,6 +371,28 @@
     "git-hooks": {
       "inputs": {
         "flake-compat": "flake-compat_2",
+        "nixpkgs": [
+          "nix-manager-core",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1783008725,
+        "narHash": "sha256-jGiy6+sxjNWXSjp25uoJuNfyH9zBK1PEDY0lVoL4ibQ=",
+        "owner": "cachix",
+        "repo": "git-hooks.nix",
+        "rev": "bca82caa46d5ec0f5d422c61fb1e30bc51313cbe",
+        "type": "github"
+      },
+      "original": {
+        "owner": "cachix",
+        "repo": "git-hooks.nix",
+        "type": "github"
+      }
+    },
+    "git-hooks_2": {
+      "inputs": {
+        "flake-compat": "flake-compat_3",
         "gitignore": "gitignore",
         "nixpkgs": [
           "simit",
@@ -375,9 +413,9 @@
         "type": "github"
       }
     },
-    "git-hooks_2": {
+    "git-hooks_3": {
       "inputs": {
-        "flake-compat": "flake-compat_3",
+        "flake-compat": "flake-compat_4",
         "gitignore": "gitignore_2",
         "nixpkgs": "nixpkgs_2"
       },
@@ -502,6 +540,38 @@
         "owner": "ralismark",
         "repo": "nix-appimage",
         "type": "github"
+      }
+    },
+    "nix-manager-core": {
+      "inputs": {
+        "crane": [
+          "crane"
+        ],
+        "git-hooks": "git-hooks",
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "rs-harbor": [
+          "rs-harbor"
+        ],
+        "rust-overlay": [
+          "rust-overlay"
+        ],
+        "treefmt-nix": "treefmt-nix"
+      },
+      "locked": {
+        "lastModified": 1784352313,
+        "narHash": "sha256-msurgxV6ik7v31nqvkrK6Q4MrMLqJaoHAP7PVERLyUE=",
+        "ref": "trunk",
+        "rev": "bca559b54dc9c4cea36a0fa1ca7dad8dded3d9ff",
+        "revCount": 35,
+        "type": "git",
+        "url": "https://codeberg.org/caniko/nix-manager-core.git"
+      },
+      "original": {
+        "ref": "trunk",
+        "type": "git",
+        "url": "https://codeberg.org/caniko/nix-manager-core.git"
       }
     },
     "nix-opencode-lsp": {
@@ -864,6 +934,7 @@
         "flake-utils": "flake-utils",
         "home-manager": "home-manager",
         "nix-appimage": "nix-appimage",
+        "nix-manager-core": "nix-manager-core",
         "nixpkgs": [
           "rs-harbor",
           "nixpkgs"
@@ -1124,7 +1195,7 @@
           "crane"
         ],
         "flake-utils": "flake-utils_7",
-        "git-hooks": "git-hooks",
+        "git-hooks": "git-hooks_2",
         "nixpkgs": [
           "rs-harbor",
           "nixpkgs"
@@ -1137,7 +1208,7 @@
           "rs-harbor",
           "rust-overlay"
         ],
-        "treefmt-nix": "treefmt-nix"
+        "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
         "lastModified": 1783721987,
@@ -1307,7 +1378,7 @@
     "treefmt-nix": {
       "inputs": {
         "nixpkgs": [
-          "simit",
+          "nix-manager-core",
           "nixpkgs"
         ]
       },
@@ -1326,6 +1397,27 @@
       }
     },
     "treefmt-nix_2": {
+      "inputs": {
+        "nixpkgs": [
+          "simit",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1780220602,
+        "narHash": "sha256-eynAfOmbmxJnkp7YewvCEbShNnnYJ9gLLqkzsYtBPeM=",
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "rev": "db947814a175b7ca6ded66e21383d938df01c227",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "type": "github"
+      }
+    },
+    "treefmt-nix_3": {
       "inputs": {
         "nixpkgs": "nixpkgs_4"
       },
@@ -1351,7 +1443,7 @@
         "flake-utils": [
           "flake-utils"
         ],
-        "git-hooks": "git-hooks_2",
+        "git-hooks": "git-hooks_3",
         "nixpkgs": [
           "nixpkgs"
         ],
@@ -1360,7 +1452,7 @@
         "rust-overlay": [
           "rust-overlay"
         ],
-        "treefmt-nix": "treefmt-nix_2"
+        "treefmt-nix": "treefmt-nix_3"
       },
       "locked": {
         "lastModified": 1782836544,

@@ -9,6 +9,7 @@ members = [
   "crates/modde-oracle-api",
   "crates/modde-oracle",
   "crates/modde-xtask",
+  "crates/modde-manager",
 ]
 
 [workspace.package]
@@ -176,6 +177,7 @@ modde-sources = { version = "0.7.0", path = "crates/modde-sources" }
 modde-games = { version = "0.7.0", path = "crates/modde-games" }
 modde-ui = { version = "0.7.0", path = "crates/modde-ui" }
 modde-oracle-api = { version = "0.7.0", path = "crates/modde-oracle-api" }
+nix-manager-core = { git = "https://codeberg.org/caniko/nix-manager-core.git", branch = "trunk" }
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

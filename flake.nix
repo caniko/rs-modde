@@ -45,6 +45,14 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    nix-manager-core = {
+      url = "git+https://codeberg.org/caniko/nix-manager-core.git?ref=trunk";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rs-harbor.follows = "rs-harbor";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.crane.follows = "crane";
+    };
   };
 
   outputs = {
@@ -58,6 +66,7 @@
     rust-overlay,
     flake-utils,
     nix-appimage,
+    nix-manager-core,
     ...
   }: let
     mkOutputs = {
@@ -242,6 +251,7 @@
             ./Cargo.toml
             ./README.md
             ./crates
+            ./crates/modde-manager
             ./docs/capability-matrix.toml
             ./docs/src/reference/parity.md
             ./docs/src/games/supported-games.md
@@ -285,6 +295,12 @@
             cargoExtraArgs = "--locked --package modde --package modde-ui --bins";
             doCheck = false;
           };
+        managerPackageArgs =
+          commonArgs
+          // {
+            cargoExtraArgs = "--locked --package modde-manager --bin modde-manager";
+            doCheck = false;
+          };
         oraclePackageArgs =
           commonArgs
           // {
@@ -293,6 +309,7 @@
           };
 
         cargoArtifacts = craneLib.buildDepsOnly nativePackageArgs;
+        managerCargoArtifacts = craneLib.buildDepsOnly managerPackageArgs;
         oracleCargoArtifacts = craneLib.buildDepsOnly oraclePackageArgs;
 
         modde = craneLib.buildPackage (nativePackageArgs
@@ -316,6 +333,16 @@
               description = "Cross-platform game mod manager";
               license = with licenses; [gpl3Only];
               platforms = platforms.linux ++ platforms.darwin;
+            };
+          });
+        modde-manager = craneLib.buildPackage (managerPackageArgs
+          // {
+            cargoArtifacts = managerCargoArtifacts;
+            meta = with pkgs.lib; {
+              description = "Declarative post-setup game-client manager";
+              license = licenses.gpl3Only;
+              platforms = platforms.linux ++ platforms.darwin;
+              mainProgram = "modde-manager";
             };
           });
         modde-oracle = craneLib.buildPackage (oraclePackageArgs
@@ -469,7 +496,7 @@
       in {
         packages =
           {
-            inherit modde modde-oracle docs website site;
+            inherit modde modde-manager modde-oracle docs website site;
             copr-cli = coprCli;
             default = modde;
             rs-harbor = rs-harbor.packages.${system}.rs-harbor;
@@ -649,7 +676,7 @@
                     };
                   };
                 })
-                self.homeManagerModules.modde
+                (import ./nix/hm-module.nix self)
                 {
                   programs.modde =
                     {
@@ -1911,6 +1938,17 @@
       });
   in
     {
+      lib.mkManager = {
+        pkgs,
+        package,
+        config,
+      }:
+        nix-manager-core.lib.mkDeclarativeManager {
+          inherit pkgs config package;
+          managerPackage = package;
+          managerBinary = "modde-manager";
+        };
+
       linuxDistributionSupport = {
         policy = "major-distro-families";
         cargo_features = {
@@ -1976,7 +2014,7 @@
         };
         out_of_scope = ["opensuse-obs" "snap" "alpine-musl"];
       };
-      homeManagerModules.modde = import ./nix/hm-module.nix self;
+      homeManagerModules.modde = import ./nix/hm-runtime-module.nix self;
       lib = {
         inherit mkOutputs;
       };
