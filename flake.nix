@@ -1947,6 +1947,7 @@
           inherit pkgs config package;
           managerPackage = package;
           managerBinary = "modde-manager";
+          extraRuntimePackages = [pkgs.git pkgs.procps];
         };
 
       linuxDistributionSupport = {

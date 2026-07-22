@@ -560,11 +560,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1784352313,
-        "narHash": "sha256-msurgxV6ik7v31nqvkrK6Q4MrMLqJaoHAP7PVERLyUE=",
+        "lastModified": 1784621761,
+        "narHash": "sha256-+ywuvzxC7XQhxKIY/YY8W1UOiQ07CU6uMDNAZ3sv7rQ=",
         "ref": "trunk",
-        "rev": "bca559b54dc9c4cea36a0fa1ca7dad8dded3d9ff",
-        "revCount": 35,
+        "rev": "8f8272cf94423e01f8c434fc28f20c8f99768297",
+        "revCount": 37,
         "type": "git",
         "url": "https://codeberg.org/caniko/nix-manager-core.git"
       },

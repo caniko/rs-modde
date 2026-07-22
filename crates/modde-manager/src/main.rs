@@ -88,6 +88,11 @@ struct AddonRepo {
     id: String,
     #[serde(default = "default_branch")]
     branch: String,
+    /// Git repository containing the addon. Ascension's repositories default
+    /// to the official GitHub organisation, while compatibility addons may be
+    /// maintained elsewhere (for example GitLab).
+    #[serde(default)]
+    repository: Option<String>,
     #[serde(default)]
     directories: Vec<AddonDirectory>,
 }
@@ -441,7 +446,12 @@ fn update_all(config: &Config) -> Result<()> {
         assert_stopped(instance)?;
         let mut lock = read_lock(instance)?;
         for addon in &instance.addons {
-            let checkout = ensure_checkout(instance, &addon.id, &addon.branch)?;
+            let checkout = ensure_checkout(
+                instance,
+                &addon.id,
+                &addon.branch,
+                addon.repository.as_deref(),
+            )?;
             let revision = git_output(&checkout, &["rev-parse", "HEAD"])?;
             lock.repositories.insert(
                 addon.id.clone(),
@@ -588,9 +598,16 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn ensure_checkout(instance: &Instance, id: &str, branch: &str) -> Result<PathBuf> {
+fn ensure_checkout(
+    instance: &Instance,
+    id: &str,
+    branch: &str,
+    repository: Option<&str>,
+) -> Result<PathBuf> {
     let path = checkout_path(instance, id);
-    let url = format!("https://github.com/Ascension-Addons/{id}.git");
+    let url = repository
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!("https://github.com/Ascension-Addons/{id}.git"));
     fs::create_dir_all(state_dir(instance).join("repos"))?;
     if path.join(".git").is_dir() {
         run_git(&path, &["fetch", "--prune", "origin", branch])?;
