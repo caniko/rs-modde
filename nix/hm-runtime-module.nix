@@ -37,7 +37,7 @@ in {
     enable = lib.mkEnableOption "modde game mod manager";
     package = lib.mkOption {
       type = lib.types.package;
-      default = flake.packages.${pkgs.system}.modde;
+      default = flake.packages.${pkgs.stdenv.hostPlatform.system}.modde;
       description = "The modde package to install.";
     };
     nexus.apiKeyFile = lib.mkOption {
