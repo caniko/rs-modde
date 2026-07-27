@@ -199,6 +199,12 @@ a fresh ed25519 key pair, store the private half as the `modde_apt_repo_ssh_key`
 canix runner credential (surfaced to CI as `APT_REPO_SSH_KEY`), and register the
 new public half as a write-access deploy key on `caniko/apt-modde`.
 
+The repository bootstrap is complete, but the first APT publication must not
+run until the matching public key is confirmed on that repository. Validate the
+attachment with the Codeberg deploy-key view and an SSH `git ls-remote`/push
+preflight using the managed credential; do not replace this per-repository key
+with the general Codeberg account token.
+
 ## Windows Code Signing
 
 Windows release artifacts are Authenticode-signed after the Nix

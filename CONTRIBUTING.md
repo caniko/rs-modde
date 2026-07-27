@@ -178,16 +178,17 @@ release should treat such a skip as a release blocker for that channel.
 | Nix flake / home-manager | flake outputs | n/a (consumed directly from the repo) | Live |
 | Attic cache | `https://attic.candee.baby/canix` | always | Live |
 | Fedora COPR | SRPM upload | always; prereleases land in `caniko/rs-modde-testing` | Wired, not publicly discoverable |
-| Debian/Ubuntu APT | `.deb` via reprepro pushed to `caniko/apt-modde` | stable only; `modde_apt_repo_ssh_key` | Staged, host not provisioned |
+| Debian/Ubuntu APT | `.deb` via Simit's APT publisher to `caniko/apt-modde` | stable only; `modde_apt_repo_ssh_key` | Bootstrapped; deploy key pending |
 | Arch AUR | `modde`, `modde-bin`, `modde-git` PKGBUILDs | stable only; `AUR_SSH_KEY` | Staged, not pushed |
 | Flathub | `com.tartanoglu.modde` manifest PR | stable only; `FLATHUB_TOKEN` | Staged, submission not accepted |
 | crates.io | per-crate `cargo publish` | stable only | Stable-only |
 | Homebrew tap | `caniko/homebrew-modde` formula | stable only | Staged |
 | winget | `Caniko.Modde` PR to `microsoft/winget-pkgs` | stable only; `WINGET_PAT` | Staged |
-| Scoop | `caniko/scoop-modde` bucket | stable only; `SCOOP_BUCKET_TOKEN` | Staged |
+| Scoop | `caniko/scoop-modde` bucket | stable only; `CODEBERG_TOKEN` | Wired; first release pending |
 
 Only the Nix flake, home-manager module, and the Attic cache are live for end
-users today. The honest per-channel status that ships to users lives in
+users today; APT and Scoop are bootstrapped and await the first successful
+release publication. The honest per-channel status that ships to users lives in
 [docs/src/getting-started/installation.md](docs/src/getting-started/installation.md);
 keep that page and this table consistent when a channel goes live.
 
@@ -201,12 +202,16 @@ Channel notes worth remembering across releases:
 - **Windows binaries are repackaged as `.zip`** alongside the `.tar.gz` for
   winget and Scoop, which do not accept `.tar.gz`. The Scoop `hash` matches the
   downloaded `.zip`, not the binaries inside it.
-- **APT publishes over SSH**, not an HTTPS token: the runner pushes a
-  reprepro-built tree to the `pages` branch of `caniko/apt-modde` using the
-  `modde_apt_repo_ssh_key` deploy key (write access), pinning `codeberg.org`'s
-  host key and using `--force-with-lease`. The repository signing key
-  fingerprint and key-rotation procedure are documented in
-  [SECURITY.md](SECURITY.md).
+- **APT publishes over SSH**, not an HTTPS token: Simit's `dist apt publish`
+  command builds the history-preserving `reprepro` tree and pushes the `pages`
+  branch of `caniko/apt-modde` using the `modde_apt_repo_ssh_key` deploy key
+  (write access), with temporary host-key and GPG handling. The public Pages
+  endpoint is `https://apt.modde.tartanoglu.com/`; the repository signing-key
+  fingerprint and key-rotation procedure are documented in [SECURITY.md](SECURITY.md).
+- **Scoop uses the shared Codeberg credential**: Simit's release template maps
+  the `CODEBERG_TOKEN` Actions secret to its bucket-publish environment, and
+  updates `caniko/scoop-modde/bucket/modde.json` from the tagged Codeberg
+  release ZIP.
 - **macOS/Windows artifacts are experimental.** They build in CI but there is no
   published Codeberg release asset for them yet; do not advertise them as
   shipped.

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Release**: Centralized Debian/Ubuntu APT and Scoop publication in Simit's
+  release-stack templates, with `caniko/apt-modde` Pages and
+  `caniko/scoop-modde` as the configured downstream repositories.
+- **Release**: Local release helpers now delegate to the same Simit APT
+  publisher and resolve canix-managed credentials from the current workspace.
+
 ## [0.7.0] - 2026-07-10
 
 ### Added

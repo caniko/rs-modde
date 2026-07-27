@@ -2,7 +2,7 @@
   description = "modde — cross-platform game mod manager";
 
   inputs = {
-    rs-harbor.url = "git+https://codeberg.org/caniko/rs-harbor.git?ref=trunk&rev=9bfa8bdb0ecb22d7bc11448665f7fbaebae7a759";
+    rs-harbor.url = "git+https://codeberg.org/caniko/rs-harbor.git?ref=trunk&rev=a3e5f76326f0f02de230cb2fba66fa3c1c7171cb";
 
     rs-harbor-macos-sdk-pin.url = "git+ssh://git@codeberg.org/caniko/rs-harbor-macos-sdk-pin.git";
 
@@ -17,7 +17,7 @@
     };
 
     simit = {
-      url = "git+https://codeberg.org/caniko/simit?ref=refs/tags/0.17.6";
+      url = "git+https://codeberg.org/caniko/simit?ref=refs/tags/0.17.10";
       inputs.rs-harbor.follows = "rs-harbor";
       inputs.nixpkgs.follows = "rs-harbor/nixpkgs";
       inputs.rust-overlay.follows = "rs-harbor/rust-overlay";
@@ -90,7 +90,7 @@
         cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         moddeVersion = cargoToml.workspace.package.version or cargoToml.package.version;
         simitPackage = simit.packages.${system}.default.overrideAttrs (old: {
-          patches = (old.patches or []) ++ [./nix/patches/simit-dist-copr-makefile.patch];
+          patches = (old.patches or []) ++ [./nix/patches/simit-rs-modde-workflow.patch];
         });
         plinthProject = plinth.packages.${system}.plinth-project;
         visualRubric = visual-rubric.packages.${system}.default;
@@ -2021,6 +2021,11 @@
       };
       simitConfig = {
         release.publish.enforcement = "activated-remote";
+        release.publish.channels = {
+          apt = "required";
+          scoop = "required";
+          homebrew = "staged";
+        };
         release.smoke.command = "nix run .#release-smoke --";
         release.codeberg = {
           repo = "caniko/rs-modde";
@@ -2147,6 +2152,7 @@
         scoop = {
           name = "modde";
           bucket_url = "https://codeberg.org/caniko/scoop-modde.git";
+          bucket_token_secret = "CODEBERG_TOKEN";
           download_repo = "caniko/rs-modde";
           description = "Cross-platform game mod manager";
           homepage = "https://modde.tartanoglu.com";
@@ -2202,6 +2208,11 @@
         };
         apt = {
           repo_url = "ssh://git@codeberg.org/caniko/apt-modde.git";
+          public_url = "https://apt.modde.tartanoglu.com/";
+          pages = {
+            provider = "codeberg-git-pages";
+            runner = "atlas-nix-trusted";
+          };
           label = "modde";
           # cargo-target=deb-name (cargo-deb names the file after [metadata.deb].name)
           packages = ["modde=modde"];

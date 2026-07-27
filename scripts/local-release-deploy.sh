@@ -12,6 +12,7 @@ fi
 
 repo="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$repo"
+canix_root="${CANIX_ROOT:-/data/nvme0/can/canix}"
 
 release_root="${MODDE_LOCAL_RELEASE_ROOT:-$repo/target/modde-release/$version}"
 release_dir="${MODDE_LOCAL_RELEASE_DIR:-$release_root/release}"
@@ -417,10 +418,10 @@ publish_homebrew() {
 publish_apt() {
   is_prerelease && { record_skipped "APT prerelease"; return 0; }
   require_local_secret_for_publish "APT" APT_REPO_GPG_KEY \
-    '/data/nvme0/can/Projects/canix/age/secrets/modules/repos/apt/modde_apt_repo_gpg_key.age' \
+    "$canix_root/age/secrets/root/modules/repos/apt/modde_apt_repo_gpg_key.age" \
     'export APT_REPO_GPG_KEY=...; gpg --show-keys --with-fingerprint <(printf %s "$APT_REPO_GPG_KEY")' || return 0
   require_local_secret_for_publish "APT" APT_REPO_SSH_KEY \
-    '/data/nvme0/can/Projects/canix/age/secrets/modules/repos/apt/modde_apt_repo_ssh_key.age' \
+    "$canix_root/age/secrets/root/modules/repos/apt/modde_apt_repo_ssh_key.age" \
     'ssh -i <(printf %s "$APT_REPO_SSH_KEY") -T git@codeberg.org' || return 0
   shopt -s nullglob
   local debs=("$release_dir"/*.deb)
@@ -486,7 +487,7 @@ publish_aur() {
 
 publish_copr() {
   require_local_secret_for_publish "COPR" COPR_LOGIN 'canix runtime secret can_coppr_login' 'test -n "$COPR_LOGIN"' || return 0
-  require_local_secret_for_publish "COPR" COPR_USERNAME '/data/nvme0/can/Projects/canix/age/secrets/modules/repos/coppr/username' 'test -n "$COPR_USERNAME"' || return 0
+  require_local_secret_for_publish "COPR" COPR_USERNAME "$canix_root/age/secrets/root/modules/repos/coppr/username" 'test -n "$COPR_USERNAME"' || return 0
   require_local_secret_for_publish "COPR" COPR_TOKEN 'canix runtime secret can_coppr_token' 'test -n "$COPR_TOKEN"' || return 0
   shopt -s nullglob
   local srpms=("$srpm_dir"/*.src.rpm)

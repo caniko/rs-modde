@@ -57,7 +57,7 @@ load_runtime_secret() {
 }
 
 load_canix_release_inputs() {
-  local canix_root="${CANIX_ROOT:-/data/nvme0/can/Projects/canix}"
+  local canix_root="${CANIX_ROOT:-/data/nvme0/can/canix}"
 
   load_runtime_secret CODEBERG_TOKEN can_codeberg_token
   load_runtime_secret MINISIGN_SECRET_KEY can_minisign_secret_key
@@ -73,10 +73,10 @@ load_canix_release_inputs() {
   load_runtime_secret APT_REPO_GPG_KEY can_modde_apt_repo_gpg_key
   load_runtime_secret APT_REPO_SSH_KEY can_modde_apt_repo_ssh_key
 
-  load_env_file MODDE_APT_REPO_GPG_KEY_ID "$canix_root/age/secrets/modules/repos/apt/modde_apt_repo_gpg_key.fingerprint"
-  load_env_file MODDE_APT_REPO_GPG_FINGERPRINT "$canix_root/age/secrets/modules/repos/apt/modde_apt_repo_gpg_key.fingerprint"
-  load_env_file MODDE_APT_REPO_GPG_PUBLIC_KEY "$canix_root/age/secrets/modules/repos/apt/modde_apt_repo_gpg_key.asc"
-  load_env_file COPR_USERNAME "$canix_root/age/secrets/modules/repos/coppr/username"
+  load_env_file MODDE_APT_REPO_GPG_KEY_ID "$canix_root/age/secrets/root/modules/repos/apt/modde_apt_repo_gpg_key.fingerprint"
+  load_env_file MODDE_APT_REPO_GPG_FINGERPRINT "$canix_root/age/secrets/root/modules/repos/apt/modde_apt_repo_gpg_key.fingerprint"
+  load_env_file MODDE_APT_REPO_GPG_PUBLIC_KEY "$canix_root/age/secrets/root/modules/repos/apt/modde_apt_repo_gpg_key.asc"
+  load_env_file COPR_USERNAME "$canix_root/age/secrets/root/modules/repos/coppr/username"
 
   if ! has_env APT_REPO_GPG_KEY && has_env MODDE_APT_REPO_GPG_KEY; then
     APT_REPO_GPG_KEY="$MODDE_APT_REPO_GPG_KEY"
@@ -89,6 +89,10 @@ load_canix_release_inputs() {
   if ! has_env APT_REPO_GPG_KEY_ID && has_env MODDE_APT_REPO_GPG_KEY_ID; then
     APT_REPO_GPG_KEY_ID="$MODDE_APT_REPO_GPG_KEY_ID"
     export APT_REPO_GPG_KEY_ID
+  fi
+  if ! has_env SCOOP_BUCKET_TOKEN && has_env CODEBERG_TOKEN; then
+    SCOOP_BUCKET_TOKEN="$CODEBERG_TOKEN"
+    export SCOOP_BUCKET_TOKEN
   fi
 }
 

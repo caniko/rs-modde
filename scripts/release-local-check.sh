@@ -65,15 +65,29 @@ check_cosign_degrade() {
 }
 
 check_workflow_contract() {
-  grep -F 'bash scripts/build-deb.sh "$VERSION" release' .forgejo/workflows/release.yml >/dev/null \
-    && ok "workflow uses no-sudo cargo-deb builder for Debian packages" \
-    || missing+=("workflow:no-sudo Debian package builder")
+  grep -F 'nix develop -c simit dist apt build --version "$VERSION" --release-dir release' .forgejo/workflows/release.yml >/dev/null \
+    && ok "workflow uses Simit for Debian package builds" \
+    || missing+=("workflow:Simit Debian package builder")
+
+  grep -F 'nix develop -c simit dist apt publish --version "$VERSION" --release-dir release --push' .forgejo/workflows/release.yml >/dev/null \
+    && ok "workflow uses Simit for APT publication" \
+    || missing+=("workflow:Simit APT publisher")
+
+  grep -F 'nix develop -c simit dist scoop bump --version "$VERSION"' .forgejo/workflows/release.yml >/dev/null \
+    && grep -F 'SCOOP_BUCKET_TOKEN: ${{ secrets.CODEBERG_TOKEN }}' .forgejo/workflows/release.yml >/dev/null \
+    && ok "workflow uses Simit for Scoop publication" \
+    || missing+=("workflow:Simit Scoop publisher")
+
+  ! grep -F 'bash scripts/build-deb.sh' .forgejo/workflows/release.yml >/dev/null \
+    && ! grep -F 'reprepro -b' .forgejo/workflows/release.yml >/dev/null \
+    && ok "workflow contains no project-local APT implementation" \
+    || missing+=("workflow:project-local APT implementation")
 
   grep -F 'keyless Sigstore failed and COSIGN_PRIVATE_KEY unset; continuing without cosign signature or attestation' .forgejo/workflows/release.yml >/dev/null \
     && ok "workflow keeps missing cosign fallback warning-only" \
     || missing+=("workflow:cosign warning-only fallback")
 
-  grep -F 'nix run .#copr-cli -- build --nowait "${COPR_PROJECT}" srpms/*.src.rpm' .forgejo/workflows/release.yml >/dev/null \
+  grep -F 'nix run .#copr-cli -- build --nowait "${COPR_PROJECT}" target/modde-release/root-artifacts/srpms/*.src.rpm' .forgejo/workflows/release.yml >/dev/null \
     && ok "workflow uses local COPR CLI flake app" \
     || missing+=("workflow:local COPR CLI app")
 
@@ -82,10 +96,10 @@ check_workflow_contract() {
     && ok "workflow passes local result paths to nix path-info for Attic" \
     || missing+=("workflow:Attic local result paths")
 
-  grep -F 'Attic login failed; skipping optional Nix closure cache push' .forgejo/workflows/release.yml >/dev/null \
-    && grep -F 'Attic push failed; continuing release without optional Nix closure cache push' .forgejo/workflows/release.yml >/dev/null \
-    && ok "workflow keeps Attic cache push warning-only" \
-    || missing+=("workflow:Attic warning-only fallback")
+  grep -F 'Attic login failed for configured Nix closure cache publishing.' .forgejo/workflows/release.yml >/dev/null \
+    && grep -F 'Attic push failed for configured Nix closure cache publishing.' .forgejo/workflows/release.yml >/dev/null \
+    && ok "workflow fails closed when configured Attic publishing fails" \
+    || missing+=("workflow:Attic failure contract")
 
   grep -F 'skipping cosign verification because release signing degrades to warning-only' scripts/smoke/smoke-signatures.sh >/dev/null \
     && ok "smoke keeps missing cosign verification warning-only" \
