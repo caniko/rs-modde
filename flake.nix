@@ -2,7 +2,7 @@
   description = "modde — cross-platform game mod manager";
 
   inputs = {
-    rs-harbor.url = "git+https://codeberg.org/caniko/rs-harbor.git?ref=trunk&rev=a3e5f76326f0f02de230cb2fba66fa3c1c7171cb";
+    rs-harbor.url = "github:caniko/rs-harbor/0.1.0";
 
     rs-harbor-macos-sdk-pin.url = "git+ssh://git@codeberg.org/caniko/rs-harbor-macos-sdk-pin.git";
 
@@ -85,7 +85,10 @@
         };
         lib = nixpkgs.lib;
 
-        toolchain = rs-harbor.lib.mkToolchain {inherit pkgs;};
+        toolchain = rs-harbor.lib.mkToolchain {
+          inherit pkgs;
+          cache.enable = false;
+        };
         inherit (toolchain) craneLib;
         cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         moddeVersion = cargoToml.workspace.package.version or cargoToml.package.version;
@@ -365,7 +368,10 @@
         aarch64LinuxTargetSuffix =
           lib.strings.replaceStrings ["-"] ["_"] aarch64LinuxTarget;
         pkgsAarch64Linux = pkgs.pkgsCross.aarch64-multiplatform;
-        toolchainAarch64 = rs-harbor.lib.mkToolchain {pkgs = pkgsAarch64Linux;};
+        toolchainAarch64 = rs-harbor.lib.mkToolchain {
+          pkgs = pkgsAarch64Linux;
+          cache.enable = false;
+        };
         craneLibAarch64 = toolchainAarch64.craneLib;
         darwinSigtool = pkgs.darwin.sigtool;
         # Ad-hoc sign the cross-built Mach-O binaries. sigtool's `codesign`
@@ -2027,12 +2033,12 @@
           homebrew = "staged";
         };
         release.smoke.command = "nix run .#release-smoke --";
-        release.codeberg = {
+        release.github = {
           repo = "caniko/rs-modde";
           target_branch = "trunk";
-          token_secret = "CODEBERG_TOKEN";
         };
         release.artifacts = {
+          runner = "ubuntu-24.04";
           version_attr = "modde";
           substituters = ["https://attic.candee.baby/canix" "https://cache.nixos.org"];
           trusted_public_keys = ["canix:lPzPzKrmYqW5Rxa5r0uQWvCqD3S5nx0h2eCy7XD5JM8=" "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="];
@@ -2211,7 +2217,7 @@
           public_url = "https://apt.modde.tartanoglu.com/";
           pages = {
             provider = "codeberg-git-pages";
-            runner = "atlas-nix-trusted";
+            runner = "ubuntu-24.04";
           };
           label = "modde";
           # cargo-target=deb-name (cargo-deb names the file after [metadata.deb].name)

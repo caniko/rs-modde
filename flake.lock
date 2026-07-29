@@ -208,7 +208,7 @@
     },
     "flake-utils_10": {
       "inputs": {
-        "systems": "systems_10"
+        "systems": "systems_11"
       },
       "locked": {
         "lastModified": 1731533236,
@@ -280,7 +280,7 @@
     },
     "flake-utils_5": {
       "inputs": {
-        "systems": "systems_5"
+        "systems": "systems_6"
       },
       "locked": {
         "lastModified": 1731533236,
@@ -298,7 +298,7 @@
     },
     "flake-utils_6": {
       "inputs": {
-        "systems": "systems_6"
+        "systems": "systems_7"
       },
       "locked": {
         "lastModified": 1731533236,
@@ -316,7 +316,7 @@
     },
     "flake-utils_7": {
       "inputs": {
-        "systems": "systems_7"
+        "systems": "systems_8"
       },
       "locked": {
         "lastModified": 1731533236,
@@ -334,7 +334,7 @@
     },
     "flake-utils_8": {
       "inputs": {
-        "systems": "systems_8"
+        "systems": "systems_9"
       },
       "locked": {
         "lastModified": 1731533236,
@@ -352,7 +352,7 @@
     },
     "flake-utils_9": {
       "inputs": {
-        "systems": "systems_9"
+        "systems": "systems_10"
       },
       "locked": {
         "lastModified": 1731533236,
@@ -542,6 +542,28 @@
         "type": "github"
       }
     },
+    "nix-bundle": {
+      "inputs": {
+        "nixpkgs": [
+          "rs-harbor",
+          "nixpkgs"
+        ],
+        "utils": "utils"
+      },
+      "locked": {
+        "lastModified": 1756736056,
+        "narHash": "sha256-8YFhvulVX3iS4TYnKisA9zSImJeFN21G75HOUUFjzuE=",
+        "owner": "nix-community",
+        "repo": "nix-bundle",
+        "rev": "eff01593f62794d458ec714090091419194ab64d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "nix-bundle",
+        "type": "github"
+      }
+    },
     "nix-manager-core": {
       "inputs": {
         "crane": [
@@ -589,11 +611,11 @@
         "rev": "a45718d96cdde0101ef8c20942fada0b188745f0",
         "revCount": 1,
         "type": "git",
-        "url": "ssh://git@codeberg.org/caniko/nix-opencode-lsp.git"
+        "url": "https://codeberg.org/caniko/nix-opencode-lsp.git"
       },
       "original": {
         "type": "git",
-        "url": "ssh://git@codeberg.org/caniko/nix-opencode-lsp.git"
+        "url": "https://codeberg.org/caniko/nix-opencode-lsp.git"
       }
     },
     "nix-pklx": {
@@ -1009,25 +1031,25 @@
         "crane": "crane_2",
         "flake-parts": "flake-parts",
         "meta-harbor": "meta-harbor",
+        "nix-bundle": "nix-bundle",
         "nix-opencode-lsp": "nix-opencode-lsp",
         "nixpkgs": "nixpkgs",
         "osxcross": "osxcross_2",
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1784356708,
-        "narHash": "sha256-VsvQ1OLWBHKD5ZyKOy8D3D0BkygZU/ciRLilN5Iraj0=",
-        "ref": "trunk",
-        "rev": "a3e5f76326f0f02de230cb2fba66fa3c1c7171cb",
-        "revCount": 139,
-        "type": "git",
-        "url": "https://codeberg.org/caniko/rs-harbor.git"
+        "lastModified": 1785297809,
+        "narHash": "sha256-ztPfmEQgoW1LBU3p91dkgjhqI8wrbczZ2hIWBaQyKoE=",
+        "owner": "caniko",
+        "repo": "rs-harbor",
+        "rev": "d4b24d5a103db35b6c90eb520a95a3f414cd04fb",
+        "type": "github"
       },
       "original": {
-        "ref": "trunk",
-        "rev": "a3e5f76326f0f02de230cb2fba66fa3c1c7171cb",
-        "type": "git",
-        "url": "https://codeberg.org/caniko/rs-harbor.git"
+        "owner": "caniko",
+        "ref": "0.1.0",
+        "repo": "rs-harbor",
+        "type": "github"
       }
     },
     "rs-harbor_3": {
@@ -1255,6 +1277,21 @@
         "type": "github"
       }
     },
+    "systems_11": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
+      }
+    },
     "systems_2": {
       "locked": {
         "lastModified": 1681028828,
@@ -1432,6 +1469,24 @@
       "original": {
         "owner": "numtide",
         "repo": "treefmt-nix",
+        "type": "github"
+      }
+    },
+    "utils": {
+      "inputs": {
+        "systems": "systems_5"
+      },
+      "locked": {
+        "lastModified": 1731533236,
+        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
         "type": "github"
       }
     },
