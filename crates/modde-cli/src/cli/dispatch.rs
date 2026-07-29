@@ -58,6 +58,33 @@ pub(crate) fn run_command(cli: Cli) -> Result<()> {
             }
             return Ok(());
         }
+        #[cfg(feature = "screenshot")]
+        Commands::Dev {
+            action:
+                DevAction::Visual {
+                    output,
+                    manifest,
+                    report,
+                    rubric_bin,
+                    preset,
+                    width,
+                    height,
+                    scale,
+                    theme,
+                },
+        } => {
+            return commands::visual::run(commands::visual::VisualArgs {
+                output,
+                manifest,
+                report,
+                rubric_bin,
+                preset,
+                width,
+                height,
+                scale,
+                theme,
+            });
+        }
         Commands::Config { action } => {
             return match action {
                 ConfigAction::Show => commands::config::handle_show(),

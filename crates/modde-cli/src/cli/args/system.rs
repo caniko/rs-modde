@@ -93,6 +93,38 @@ pub(crate) enum DevAction {
         #[arg(long, default_value = "Dark")]
         theme: String,
     },
+    /// Capture the complete offscreen matrix and run the shared visual rubric.
+    #[cfg(feature = "screenshot")]
+    #[command(hide = true)]
+    Visual {
+        /// Capture output directory.
+        #[arg(long, default_value = "target/visual/captures")]
+        output: PathBuf,
+        /// Versioned capture manifest path.
+        #[arg(long, default_value = "target/visual/capture_manifest.json")]
+        manifest: PathBuf,
+        /// Producer report path.
+        #[arg(long, default_value = "target/visual/run_report.json")]
+        report: PathBuf,
+        /// Configured visual-rubric executable.
+        #[arg(long, default_value = "visual-rubric")]
+        rubric_bin: PathBuf,
+        /// Rubric preset applied to every captured screen.
+        #[arg(long, default_value = "ui-regression")]
+        preset: String,
+        /// Logical window width in points.
+        #[arg(long, default_value_t = 1280.0)]
+        width: f32,
+        /// Logical window height in points.
+        #[arg(long, default_value_t = 800.0)]
+        height: f32,
+        /// `HiDPI` scale factor.
+        #[arg(long, default_value_t = 2.0)]
+        scale: f32,
+        /// modde theme name.
+        #[arg(long, default_value = "Dark")]
+        theme: String,
+    },
 }
 
 #[cfg(feature = "screenshot")]

@@ -33,6 +33,8 @@ pub mod tool;
 pub mod uninstall;
 pub mod update;
 pub mod verify;
+#[cfg(feature = "screenshot")]
+pub mod visual;
 pub mod wabbajack;
 
 use std::path::PathBuf;
