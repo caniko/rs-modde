@@ -2,7 +2,7 @@
   description = "modde — cross-platform game mod manager";
 
   inputs = {
-    rs-harbor.url = "git+https://codeberg.org/caniko/rs-harbor.git?ref=trunk&rev=a3e5f76326f0f02de230cb2fba66fa3c1c7171cb";
+    rs-harbor.url = "git+https://codeberg.org/caniko/rs-harbor.git?ref=trunk&rev=c26b735eede8078f795651c4a9cbf0be8733b221";
 
     rs-harbor-macos-sdk-pin.url = "git+ssh://git@codeberg.org/caniko/rs-harbor-macos-sdk-pin.git";
 
@@ -85,7 +85,7 @@
         };
         lib = nixpkgs.lib;
 
-        toolchain = rs-harbor.lib.mkToolchain {inherit pkgs;};
+        toolchain = rs-harbor.lib.mkToolchain {inherit pkgs; toolchainProfile = "nightly";};
         inherit (toolchain) craneLib;
         cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         moddeVersion = cargoToml.workspace.package.version or cargoToml.package.version;
@@ -365,7 +365,7 @@
         aarch64LinuxTargetSuffix =
           lib.strings.replaceStrings ["-"] ["_"] aarch64LinuxTarget;
         pkgsAarch64Linux = pkgs.pkgsCross.aarch64-multiplatform;
-        toolchainAarch64 = rs-harbor.lib.mkToolchain {pkgs = pkgsAarch64Linux;};
+        toolchainAarch64 = rs-harbor.lib.mkToolchain {pkgs = pkgsAarch64Linux; toolchainProfile = "nightly";};
         craneLibAarch64 = toolchainAarch64.craneLib;
         darwinSigtool = pkgs.darwin.sigtool;
         # Ad-hoc sign the cross-built Mach-O binaries. sigtool's `codesign`
