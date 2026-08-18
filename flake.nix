@@ -4,7 +4,7 @@
   inputs = {
     rs-harbor.url = "git+https://github.com/caniko/rs-harbor.git?ref=trunk&rev=77d0a937c760e6ced8b7ec8fc5a214f550abe35e";
 
-    rs-harbor-macos-sdk-pin.url = "git+ssh://git@codeberg.org/caniko/rs-harbor-macos-sdk-pin.git";
+    rs-harbor-macos-sdk-pin.url = "git+https://github.com/caniko/rs-harbor-macos-sdk-pin.git";
 
     nixpkgs.follows = "rs-harbor/nixpkgs";
     rust-overlay.follows = "rs-harbor/rust-overlay";

@@ -1027,17 +1027,17 @@
     },
     "rs-harbor-macos-sdk-pin": {
       "locked": {
-        "lastModified": 1779004173,
-        "narHash": "sha256-CLTVNszR21O3Bd05fQ12rdm/89bcL7z7xp0NT3TAUVY=",
-        "ref": "refs/heads/main",
-        "rev": "df59522ba6dd77ed83f5e2c40104086a4792e0c0",
-        "revCount": 1,
+        "lastModified": 1786509959,
+        "narHash": "sha256-aDtcd04EE5L76HTGQ36fvGlj5E6sN0C1nFUjvbblC/o=",
+        "ref": "refs/heads/trunk",
+        "rev": "ee425cadb48ff129de12a8e427e0767aa5dae685",
+        "revCount": 5,
         "type": "git",
-        "url": "ssh://git@codeberg.org/caniko/rs-harbor-macos-sdk-pin.git"
+        "url": "https://github.com/caniko/rs-harbor-macos-sdk-pin.git"
       },
       "original": {
         "type": "git",
-        "url": "ssh://git@codeberg.org/caniko/rs-harbor-macos-sdk-pin.git"
+        "url": "https://github.com/caniko/rs-harbor-macos-sdk-pin.git"
       }
     },
     "rs-harbor_2": {
