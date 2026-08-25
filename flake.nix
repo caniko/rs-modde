@@ -23,6 +23,7 @@
       inputs.rust-overlay.follows = "rs-harbor/rust-overlay";
       inputs.crane.follows = "rs-harbor/crane";
       inputs.flake-utils.url = "github:numtide/flake-utils";
+      inputs.plinth.follows = "plinth";
     };
 
     plinth = {
