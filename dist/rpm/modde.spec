@@ -6,7 +6,7 @@ Release:        1%{?dist}
 Summary:        Cross-platform game mod manager
 
 License:        GPL-3.0-only
-URL:            https://codeberg.org/caniko/rs-modde
+URL:            https://github.com/caniko/rs-modde
 Source0:        %{url}/archive/v%{version}.tar.gz#/rs-modde-v%{version}.tar.gz
 Source1:        vendor.tar.gz
 

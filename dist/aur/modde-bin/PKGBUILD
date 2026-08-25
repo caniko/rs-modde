@@ -5,15 +5,15 @@ pkgver=0.4.0
 pkgrel=1
 pkgdesc='Cross-platform game mod manager'
 arch=('x86_64')
-url='https://codeberg.org/caniko/rs-modde'
+url='https://github.com/caniko/rs-modde'
 license=('GPL-3.0-only')
 depends=('dbus' 'gcc-libs' 'glibc>=2.38' 'libxkbcommon' 'openssl' 'sqlite' 'vulkan-icd-loader' 'wayland')
 makedepends=('patchelf')
 provides=('modde')
 conflicts=('modde' 'modde-git')
 source=(
-  "modde-${pkgver//_/-}-x86_64-linux.tar.gz::https://codeberg.org/caniko/rs-modde/releases/download/${pkgver//_/-}/modde-${pkgver//_/-}-x86_64-linux.tar.gz"
-  "rs-modde-${pkgver//_/-}.tar.gz::https://codeberg.org/caniko/rs-modde/releases/download/${pkgver//_/-}/rs-modde-${pkgver//_/-}.tar.gz"
+  "modde-${pkgver//_/-}-x86_64-linux.tar.gz::https://github.com/caniko/rs-modde/releases/download/${pkgver//_/-}/modde-${pkgver//_/-}-x86_64-linux.tar.gz"
+  "rs-modde-${pkgver//_/-}.tar.gz::https://github.com/caniko/rs-modde/releases/download/${pkgver//_/-}/rs-modde-${pkgver//_/-}.tar.gz"
 )
 sha256sums=('SKIP'
             'SKIP')

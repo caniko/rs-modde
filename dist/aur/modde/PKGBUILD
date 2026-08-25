@@ -5,12 +5,12 @@ pkgver=0.4.0
 pkgrel=1
 pkgdesc='Cross-platform game mod manager'
 arch=('x86_64')
-url='https://codeberg.org/caniko/rs-modde'
+url='https://github.com/caniko/rs-modde'
 license=('GPL-3.0-only')
 depends=('dbus' 'gcc-libs' 'glibc' 'libxkbcommon' 'openssl' 'sqlite' 'vulkan-icd-loader' 'wayland')
 makedepends=('cargo' 'cmake' 'pkgconf' 'rust')
 conflicts=('modde-bin' 'modde-git')
-source=("rs-modde-${pkgver//_/-}.tar.gz::https://codeberg.org/caniko/rs-modde/archive/${pkgver//_/-}.tar.gz")
+source=("rs-modde-${pkgver//_/-}.tar.gz::https://github.com/caniko/rs-modde/archive/${pkgver//_/-}.tar.gz")
 sha256sums=('SKIP')
 
 build() {

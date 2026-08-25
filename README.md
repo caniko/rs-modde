@@ -2,7 +2,7 @@
 
 <!-- simit:badges:start -->
 
-![CI](https://img.shields.io/badge/CI-drift-2088ff) [![Nix](https://img.shields.io/badge/Nix-managed-5277c3)](flake.nix) [![docs](https://img.shields.io/badge/docs-enabled-6f42c1)](docs) [![crates.io](https://img.shields.io/badge/crates.io-ready-f46623)](https://crates.io/crates/modde) [![release](https://img.shields.io/badge/release-configured-2ea44f)](.forgejo/workflows/release.yml) [![artifacts](https://img.shields.io/badge/artifacts-configured-2ea44f)](.forgejo/workflows/release.yml) [![Homebrew](https://img.shields.io/badge/Homebrew-configured-2ea44f)](https://codeberg.org/caniko/homebrew-modde.git) [![Chocolatey](https://img.shields.io/badge/Chocolatey-configured-7b3f99)](https://community.chocolatey.org/) [![Scoop](https://img.shields.io/badge/Scoop-configured-2ea44f)](https://codeberg.org/caniko/scoop-modde.git) [![AUR](https://img.shields.io/badge/AUR-configured-1793d1)](dist/aur) [![COPR](https://img.shields.io/badge/COPR-configured-3f51b5)](.copr/Makefile) [![apt](https://img.shields.io/badge/apt-configured-a81d33)](dist/apt/conf/distributions) [![Flatpak](https://img.shields.io/badge/Flatpak-configured-4a86cf)](https://github.com/flathub/com.tartanoglu.modde) [![winget](https://img.shields.io/badge/winget-configured-0078d4)](https://github.com/microsoft/winget-pkgs/tree/master/manifests/c/Caniko/Modde)
+![CI](https://img.shields.io/badge/CI-drift-2088ff) [![Nix](https://img.shields.io/badge/Nix-managed-5277c3)](flake.nix) [![docs](https://img.shields.io/badge/docs-enabled-6f42c1)](docs) [![crates.io](https://img.shields.io/badge/crates.io-ready-f46623)](https://crates.io/crates/modde) [![release](https://img.shields.io/badge/release-configured-2ea44f)](.forgejo/workflows/release.yml) [![artifacts](https://img.shields.io/badge/artifacts-configured-2ea44f)](.forgejo/workflows/release.yml) [![Homebrew](https://img.shields.io/badge/Homebrew-configured-2ea44f)](https://codeberg.org/caniko/homebrew-modde.git) [![Chocolatey](https://img.shields.io/badge/Chocolatey-configured-7b3f99)](https://community.chocolatey.org/) [![Scoop](https://img.shields.io/badge/Scoop-configured-2ea44f)](https://github.com/caniko/scoop-modde.git) [![AUR](https://img.shields.io/badge/AUR-configured-1793d1)](dist/aur) [![COPR](https://img.shields.io/badge/COPR-configured-3f51b5)](.copr/Makefile) [![apt](https://img.shields.io/badge/apt-configured-a81d33)](dist/apt/conf/distributions) [![Flatpak](https://img.shields.io/badge/Flatpak-configured-4a86cf)](https://github.com/flathub/com.tartanoglu.modde) [![winget](https://img.shields.io/badge/winget-configured-0078d4)](https://github.com/microsoft/winget-pkgs/tree/master/manifests/c/Caniko/Modde)
 
 <!-- simit:badges:end -->
 
@@ -195,7 +195,7 @@ per-distro package lists.
 ### From source
 
 ```bash
-git clone https://codeberg.org/caniko/rs-modde.git
+git clone https://github.com/caniko/rs-modde.git
 cd rs-modde
 nix develop . -c cargo build --release
 # Binaries at target/release/modde and target/release/modde-ui
@@ -379,4 +379,4 @@ See [SECURITY.md](SECURITY.md) for the security policy.
 
 GPL-3.0-only
 
-[issues]: https://codeberg.org/caniko/rs-modde/issues
+[issues]: https://github.com/caniko/rs-modde/issues
