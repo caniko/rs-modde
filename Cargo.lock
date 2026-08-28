@@ -4185,7 +4185,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 [[package]]
 name = "nix-manager-core"
 version = "0.3.0"
-source = "git+https://github.com/caniko/nix-manager-core.git?branch=trunk#06eef7cdcbaf81a9a233aedb15063c62d040ec83"
+source = "git+https://github.com/caniko/nix-manager-core.git?branch=trunk#ef2ed19e4747eac70daaea338e147c972e5d5f75"
 dependencies = [
  "anyhow",
  "chrono",
